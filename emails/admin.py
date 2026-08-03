@@ -42,8 +42,11 @@ class GeneralEmailSettingsAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         # Singleton: Hinzufügen sperren, wenn bereits 1 Datensatz existiert
-        if self.model.objects.exists():
-            return False
+        try:
+            if self.model.objects.exists():
+                return False
+        except Exception:
+            pass
         return super().has_add_permission(request)
 
     def has_delete_permission(self, request, obj=None):
