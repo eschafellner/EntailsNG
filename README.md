@@ -51,13 +51,13 @@ Sobald der Server gestartet ist, öffne deinen Internet-Browser (z. B. Chrome, F
 Für Testzwecke wurden bereits vorgefertigte Benutzerkonten angelegt:
 
 * **Administrator / Helfer Account**:
-  * **Benutzername:** `admin`
-  * **Passwort:** `password`
+  * **Benutzername:** `sadmin`
+  * **Passwort:** `adminpwd`
   * *(Besitzt Mitarbeiter-Rechte für den Helfer-Scanner und den Admin-Bereich)*
 
 * **Normaler Teilnehmer / Spieler Account**:
   * **Benutzername:** `gamer1`
-  * **Passwort:** `password`
+  * **Passwort:** `guestpwd`
 
 ---
 

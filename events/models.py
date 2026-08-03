@@ -162,6 +162,14 @@ class EventRegistration(models.Model):
         return f"{self.user.username} -> {self.event.title} ({self.get_payment_status_display()})"
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        old_payment_status = None
+        if not is_new:
+            try:
+                old_payment_status = EventRegistration.objects.get(pk=self.pk).payment_status
+            except EventRegistration.DoesNotExist:
+                pass
+
         super().save(*args, **kwargs)
 
         # Automatische Aktualisierung des zugewiesenen Sitzplatzes bei Statusänderung
@@ -179,3 +187,29 @@ class EventRegistration(models.Model):
                         seat.ReservationStatus.PRE_RESERVED
                     )
                     seat.save(update_fields=['reservation_status'])
+
+        # Automatische Zahlungsbestätigungs-E-Mail senden, wenn der Status auf PAID wechselt
+        if self.payment_status == self.PaymentStatus.PAID and old_payment_status != self.PaymentStatus.PAID:
+            self.send_payment_confirmation_email()
+
+    def send_payment_confirmation_email(self):
+        """Sendet die automatische E-Mail-Zahlungsbestätigung an den Gast."""
+        try:
+            from emails.services import send_system_email
+            seat = self.seats.first()
+            seat_label = seat.seat_label if seat else "Noch kein Sitzplatz"
+
+            context_data = {
+                'username': self.user.username,
+                'full_name': self.user.get_full_name() or self.user.username,
+                'event_title': self.event.title,
+                'amount': f"{self.paid_amount:.2f}",
+                'payment_reference': getattr(self, 'payment_reference', f"REG-{self.id}"),
+                'seat_label': seat_label,
+                'ticket_type': self.ticket_type.name if self.ticket_type else "Standard Ticket",
+            }
+            send_system_email('payment_confirmation', self.user.email, context_data)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Fehler beim Auslösen der Zahlungsbestätigung: {e}")
+
