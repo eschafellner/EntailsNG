@@ -22,7 +22,7 @@ if ! command -v python3 &> /dev/null; then
     echo -e "${RED}❌ Python 3 konnte nicht gefunden werden! Bitte installiere Python 3.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✓ Python 3 ist installiert (${shell_python_ver:-vorhanden}).${NC}\n"
+echo -e "${GREEN}✓ Python 3 ist installiert.${NC}\n"
 
 # 2. Virtuelle Umgebung (.venv) anlegen
 echo -e "${YELLOW}[2/5] Richte isolierte Umgebung (.venv) ein...${NC}"
@@ -41,16 +41,23 @@ pip install --upgrade pip --quiet 2>/dev/null || true
 pip install django django-tinymce psycopg2-binary pillow --quiet
 echo -e "${GREEN}✓ Alle Abhängigkeiten wurden erfolgreich installiert.${NC}\n"
 
-# 4. Datenbank einrichten
-echo -e "${YELLOW}[4/5] Richte Datenbank-Struktur ein...${NC}"
-# Standardmäßig SQLite nutzen, falls kein PostgreSQL gestartet ist, damit der Test sofort klappt
+# 4. Datenbank einrichten (PostgreSQL als Standard)
+echo -e "${YELLOW}[4/5] Richte PostgreSQL Datenbank-Struktur ein...${NC}"
+
+# Automatische Erkennung ob PostgreSQL erreichbar ist
 if [ -z "$DB_ENGINE" ]; then
-    export DB_ENGINE=sqlite
+    if python3 -c "import socket; s = socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 5432)); s.close()" 2>/dev/null; then
+        export DB_ENGINE=postgresql
+        echo -e "${GREEN}✓ PostgreSQL Datenbank auf Port 5432 erkannt.${NC}"
+    else
+        export DB_ENGINE=sqlite
+        echo -e "${YELLOW}ℹ️ PostgreSQL nicht auf Port 5432 erreichbar. Nutze Entwicklungs-Fallback.${NC}"
+    fi
 fi
 
 python manage.py migrate --noinput
 
-# Falls noch keine Daten vorhanden sind, Demo-Daten laden
+# Falls Vorab-Daten vorhanden sind, laden
 if [ -f "initial_data.json" ]; then
     echo -e "${YELLOW}   Lade Vorab-Daten (Test-Events, Sitzpläne, Demo-User)...${NC}"
     python manage.py loaddata initial_data.json --quiet 2>/dev/null || python manage.py loaddata initial_data.json

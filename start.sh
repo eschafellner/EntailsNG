@@ -19,9 +19,13 @@ fi
 
 source .venv/bin/activate
 
-# Standardmäßig SQLite für lokale Tests nutzen, wenn kein DB_ENGINE vorgegeben ist
+# Automatische Erkennung der PostgreSQL Datenbank
 if [ -z "$DB_ENGINE" ]; then
-    export DB_ENGINE=sqlite
+    if python3 -c "import socket; s = socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 5432)); s.close()" 2>/dev/null; then
+        export DB_ENGINE=postgresql
+    else
+        export DB_ENGINE=sqlite
+    fi
 fi
 
 echo -e "${BLUE}=====================================================${NC}"

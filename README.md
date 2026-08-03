@@ -1,4 +1,8 @@
-# 🚀 EntailsNG – Event & LAN-Party Management System
+<p align="center">
+  <img src="static/images/entailsng-logo.png" alt="EntailsNG Logo" width="650">
+</p>
+
+# 🚀 EntailsNG – LAN Event Management CMS (Next Generation)
 
 Willkommen bei **EntailsNG**, der modernen Neuauflage des LAN-Party-Managementsystems für Community-Treffen, Esports-Events und LAN-Partys mit bis zu 1.000 Gästen!
 
@@ -14,7 +18,7 @@ Dieses Repository wurde so vorbereitet, dass auch **weniger IT-affine Kolleginne
 ```bash
 ./install.sh
 ```
-*Das Skript richtet automatisch die isolierte Python-Umgebung ein, installiert alle benötigten Pakete und bereitet die Test-Datenbank vor.*
+*Das Skript richtet automatisch die isolierte Python-Umgebung ein, installiert alle benötigten Pakete und stellt die Datenbank-Struktur sowie die Demo-Daten bereit.*
 
 ---
 
@@ -57,20 +61,23 @@ Für Testzwecke wurden bereits vorgefertigte Benutzerkonten angelegt:
 
 ---
 
-## 🛑 Server beenden
-Um den Server wieder zu beenden, gehe zurück in das Terminal-Fenster und drücke gleichzeitig die Tasten **`[STRG]` + `[C]`**.
+## 🐘 Datenbank-Betrieb (PostgreSQL)
+
+EntailsNG ist für den **PostgreSQL-Betrieb** ausgelegt.
+
+### PostgreSQL Datenbank starten:
+- **Über Docker / Podman**:
+  ```bash
+  docker-compose up -d
+  ```
+- **Nativ auf Linux (Fedora)**:
+  ```bash
+  sudo systemctl start postgresql
+  ```
+
+*Hinweis: Wenn PostgreSQL gestartet ist, wird automatisch die PostgreSQL-Datenbank verwendet.*
 
 ---
 
-## 🐘 Für Fortgeschrittene: PostgreSQL Datenbank nutzen (Produktivbetrieb)
-
-Der Testbetrieb startet standardmäßig mit einer SQLite-Datenbank. Wenn du mit einer produktiven PostgreSQL-Datenbank testen möchtest:
-
-1. Starte PostgreSQL via Docker/Podman:
-   ```bash
-   docker-compose up -d
-   ```
-2. Importiere die Daten in PostgreSQL:
-   ```bash
-   python scripts/setup_postgres.py
-   ```
+## 🛑 Server beenden
+Um den Server wieder zu beenden, gehe zurück in das Terminal-Fenster und drücke gleichzeitig die Tasten **`[STRG]` + `[C]`**.
