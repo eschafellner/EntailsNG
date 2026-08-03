@@ -1,0 +1,438 @@
+{% extends 'base.html' %}
+
+{% block title %}Sitzplan – Haag-networX{% endblock %}
+
+{% block content %}
+<div class="card" style="padding: 16px; border-radius: 12px; position: relative;">
+
+  {% if event %}
+    <!-- ======================================================================
+         A. HEADER, LEGENDE & CONTROLS
+         ====================================================================== -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+      <div>
+        <p class="eyebrow" style="margin-bottom: 2px;">Saalplan – {{ event.title }}</p>
+        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 28px;">Sitzplatzübersicht</h1>
+      </div>
+
+      <!-- Responsive Farb-Legende -->
+      <div style="display: flex; gap: 12px; font-size: 11px; font-family: 'JetBrains Mono', monospace; align-items: center; background: var(--paper); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); flex-wrap: wrap;">
+        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; border-radius: 2px; display: inline-block;"></span> Frei</span>
+        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; border-radius: 2px; display: inline-block;"></span> Vorgemerkt</span>
+        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 2px; display: inline-block;"></span> Belegt</span>
+        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(56, 189, 248, 0.3); border: 1px solid #38bdf8; border-radius: 2px; display: inline-block;"></span> Dein Clan</span>
+        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: #f8ab2d; border: 2px solid #ffffff; border-radius: 2px; display: inline-block; box-shadow: 0 0 6px #f8ab2d;"></span> Dein Platz</span>
+        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: #374151; border: 1px solid #4b5563; border-radius: 2px; display: inline-block;"></span> Gesperrt</span>
+      </div>
+    </div>
+
+    <!-- Zoom & Reset Steuerung (Touch-freundlich) -->
+    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px;">
+      <button type="button" id="btn-zoom-in" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-width: 40px; min-height: 40px;">🔍 +</button>
+      <button type="button" id="btn-zoom-out" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-width: 40px; min-height: 40px;">🔍 -</button>
+      <button type="button" id="btn-zoom-reset" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 40px;">Reset</button>
+    </div>
+
+    <!-- Lade-Indikator -->
+    <div id="seating-status" style="text-align: center; padding: 40px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+      Sitzplan wird geladen...
+    </div>
+
+    <!-- RESPONSIVER VIEWPORT CONTAINER (Hellerer Hintergrund #161e2e) -->
+    <div id="viewport" style="width: 100%; height: clamp(350px, 60vh, 600px); overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #161e2e; position: relative; cursor: grab; touch-action: pan-y pinch-zoom;">
+
+      <!-- Transform-Canvas Wrapper -->
+      <div id="pan-canvas" style="position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: transform 0.05s ease-out; padding: 20px;">
+        <div id="seating-grid" style="display: grid; gap: 4px; user-select: none;"></div>
+      </div>
+
+    </div>
+
+    <!-- ======================================================================
+         NATIVE RESERVIERUNGS-BESTÄTIGUNG (RESPONSIVES MODAL)
+         ====================================================================== -->
+    <div id="reserve-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px;">
+      <div style="position: relative; background: #ffffff; padding: 24px 20px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); text-align: center; max-width: 360px; width: 100%; border: 1px solid var(--line);">
+
+        <button type="button" onclick="closeReserveModal()" style="position: absolute; top: -10px; right: -10px; background: #ef4444; color: #ffffff; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
+          ✕
+        </button>
+
+        <h3 style="margin: 0 0 8px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; text-transform: uppercase; color: #111827;">
+          {{ txt_seat_confirm_title }}
+        </h3>
+
+        <p id="reserve-modal-text" style="margin: 0 0 20px 0; font-size: 13px; color: #4b5563; font-family: 'JetBrains Mono', monospace; line-height: 1.5;">
+        </p>
+
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button type="button" onclick="closeReserveModal()" style="background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 12px 16px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer; flex: 1; min-height: 44px;">
+            {{ txt_seat_confirm_no }}
+          </button>
+
+          <button type="button" id="btn-confirm-reserve" style="background: #0284c7; color: #ffffff; border: none; padding: 12px 16px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer; flex: 1; min-height: 44px;">
+            {{ txt_seat_confirm_yes }}
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  {% else %}
+    <div style="text-align: center; padding: 48px 24px;">
+      <p class="eyebrow" style="margin-bottom: 8px;">Saalplan</p>
+      <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; margin-top: 0; margin-bottom: 16px; color: var(--ink);">
+        Derzeit gibt es kein aktives/geplantes Event
+      </h2>
+      <p style="color: var(--muted); font-size: 15px; max-width: 500px; margin: 0 auto; line-height: 1.6;">
+        Schau gerne bald wieder vorbei! Sobald die nächste Veranstaltung angekündigt wird, kannst du dir hier deinen Sitzplatz reservieren.
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+
+{% if event %}
+<script>
+let currentScale = 1;
+let pointX = 0;
+let pointY = 0;
+let startX = 0;
+let startY = 0;
+let isPanning = false;
+
+// Touch-spezifische Variablen
+let initialTouchDistance = null;
+let initialScale = 1;
+
+let targetSeatX = null;
+let targetSeatY = null;
+
+const eventId = "{{ event.id }}";
+const isUserLoggedIn = {{ request.user.is_authenticated|yesno:"true,false" }};
+const rawConfirmText = "{{ txt_seat_confirm_question|escapejs }}";
+
+document.addEventListener('DOMContentLoaded', function() {
+  loadSeatingData();
+
+  // Bei Ändern der Fenstergröße Plan neu einpassen
+  window.addEventListener('resize', () => {
+    if (window.lastSeatingData) fitToViewport(window.lastSeatingData);
+  });
+});
+
+function loadSeatingData() {
+  fetch(`/seating/api/plan/${eventId}/`)
+    .then(response => {
+      if (!response.ok) throw new Error("Sitzplan konnte nicht geladen werden.");
+      return response.json();
+    })
+    .then(data => {
+      window.lastSeatingData = data;
+      document.getElementById('seating-status').style.display = 'none';
+      renderGrid(data);
+      initPanZoom(data);
+    })
+    .catch(err => {
+      document.getElementById('seating-status').innerText = err.message;
+    });
+}
+
+function renderGrid(data) {
+  const grid = document.getElementById('seating-grid');
+  grid.innerHTML = '';
+
+  let minX = 0, minY = 0, maxX = data.columns - 1, maxY = data.rows - 1;
+  if (data.cells && data.cells.length > 0) {
+    minX = Math.min(...data.cells.map(c => c.x));
+    minY = Math.min(...data.cells.map(c => c.y));
+    maxX = Math.max(...data.cells.map(c => c.x), data.columns - 1);
+    maxY = Math.max(...data.cells.map(c => c.y), data.rows - 1);
+  }
+
+  const totalCols = (maxX - minX) + 1;
+  grid.style.gridTemplateColumns = `repeat(${totalCols}, 32px)`;
+
+  const cellMap = {};
+  data.cells.forEach(c => {
+    cellMap[`${c.x}_${c.y}`] = c;
+  });
+
+  // Performance-Optimierung für bis zu 1000 Plätze: DocumentFragment zur Vermeidung einzelner Reflows
+  const fragment = document.createDocumentFragment();
+
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const cellData = cellMap[`${x}_${y}`];
+      const cellEl = document.createElement('div');
+
+      cellEl.style.width = '32px';
+      cellEl.style.height = '32px';
+      cellEl.style.borderRadius = '4px';
+      cellEl.style.display = 'flex';
+      cellEl.style.alignItems = 'center';
+      cellEl.style.justifyContent = 'center';
+      cellEl.style.fontSize = '10px';
+      cellEl.style.fontWeight = 'bold';
+      cellEl.style.fontFamily = "'JetBrains Mono', monospace";
+      cellEl.style.boxSizing = 'border-box';
+
+      if (!cellData || cellData.cell_type === 'EMPTY') {
+        cellEl.style.background = 'transparent';
+
+      } else if (cellData.cell_type === 'SEAT') {
+        const seatLabel = cellData.seat_label || `${x},${y}`;
+        cellEl.innerText = seatLabel;
+        let tooltipText = "";
+
+        if (cellData.status === 'FREE') {
+          cellEl.style.background = 'rgba(34, 197, 94, 0.15)';
+          cellEl.style.border = '1px solid #22c55e';
+          cellEl.style.color = '#4ade80';
+          tooltipText = `Platz ${seatLabel}: Frei`;
+
+          if (isUserLoggedIn) {
+            cellEl.style.cursor = 'pointer';
+            cellEl.onclick = function(e) {
+              e.stopPropagation();
+              openReserveModal(x, y, seatLabel);
+            };
+          }
+
+        } else if (cellData.status === 'PRE_RESERVED' || cellData.status === 'RESERVED') {
+          const currentUsername = "{{ request.user.username|escapejs }}";
+          const isOwnSeat = currentUsername && (cellData.occupied_by === currentUsername);
+          const isSameClan = data.user_clan_name && cellData.clan_name && (data.user_clan_name === cellData.clan_name);
+          const occupantText = cellData.clan_name
+            ? `${cellData.occupied_by || 'Unbekannt'} (${cellData.clan_name})`
+            : (cellData.occupied_by || 'Unbekannt');
+
+          if (isOwnSeat) {
+            // BESONDERE HERVORHEBUNG: Eigener Sitzplatz (Goldgelb mit Glow)
+            cellEl.style.background = '#f8ab2d';
+            cellEl.style.border = '2px solid #ffffff';
+            cellEl.style.color = '#332719';
+            cellEl.style.boxShadow = '0 0 10px #f8ab2d';
+            cellEl.style.zIndex = '5';
+            cellEl.title = `Dein reservierter Sitzplatz: ${seatLabel}`;
+          } else if (isSameClan) {
+            // Hervorhebung in Blau-Ton für eigene Clan-Mitglieder
+            cellEl.style.background = 'rgba(56, 189, 248, 0.3)';
+            cellEl.style.border = '1px solid #38bdf8';
+            cellEl.style.color = '#7dd3fc';
+          } else if (cellData.status === 'PRE_RESERVED') {
+            cellEl.style.background = 'rgba(234, 179, 8, 0.2)';
+            cellEl.style.border = '1px solid #eab308';
+            cellEl.style.color = '#fde047';
+          } else {
+            cellEl.style.background = 'rgba(239, 68, 68, 0.2)';
+            cellEl.style.border = '1px solid #ef4444';
+            cellEl.style.color = '#fca5a5';
+          }
+
+          if (!isOwnSeat) {
+            const statusLabel = cellData.status === 'PRE_RESERVED' ? 'Vorreserviert von' : 'Belegt von';
+            tooltipText = `Platz ${seatLabel}: ${statusLabel} ${occupantText}`;
+          }
+
+        } else {
+          cellEl.style.background = '#374151';
+          cellEl.style.border = '1px solid #4b5563';
+          cellEl.style.color = '#9ca3af';
+          tooltipText = 'Platz gesperrt';
+        }
+
+        if (tooltipText) {
+          cellEl.title = tooltipText;
+        }
+
+      } else if (cellData.cell_type === 'DOOR') {
+        cellEl.style.background = 'rgba(56, 189, 248, 0.2)';
+        cellEl.style.border = '1px dashed #38bdf8';
+        cellEl.style.color = '#38bdf8';
+        cellEl.innerText = cellData.text_label || '🚪';
+        cellEl.title = 'TÜR / EINGANG';
+
+      } else {
+        cellEl.style.background = '#1f2937';
+        cellEl.style.border = '1px solid #374151';
+        cellEl.style.color = '#9ca3af';
+        cellEl.innerText = cellData.text_label || '';
+      }
+
+      fragment.appendChild(cellEl);
+    }
+  }
+
+  grid.appendChild(fragment);
+}
+
+/* MODAL STEUERUNG */
+function openReserveModal(x, y, seatLabel) {
+  targetSeatX = x;
+  targetSeatY = y;
+  const modal = document.getElementById('reserve-modal');
+  const modalText = document.getElementById('reserve-modal-text');
+  modalText.innerText = rawConfirmText.replace('{seat}', seatLabel);
+  modal.style.display = 'flex';
+}
+
+function closeReserveModal() {
+  const modal = document.getElementById('reserve-modal');
+  if (modal) modal.style.display = 'none';
+  targetSeatX = null;
+  targetSeatY = null;
+}
+
+document.getElementById('btn-confirm-reserve').onclick = function() {
+  if (targetSeatX === null || targetSeatY === null) return;
+
+  fetch(`/seating/api/reserve/${eventId}/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify({ x: targetSeatX, y: targetSeatY })
+  })
+  .then(res => res.json())
+  .then(data => {
+    closeReserveModal();
+    if (data.status === 'success') {
+      loadSeatingData();
+    } else {
+      alert(data.message || 'Fehler bei der Reservierung.');
+    }
+  })
+  .catch(err => {
+    closeReserveModal();
+    alert('Netzwerkfehler bei der Reservierung.');
+  });
+};
+
+/* PAN & ZOOM IMPLEMENTIERUNG MIT MAUS & TOUCH (PINCH-TO-ZOOM) */
+function initPanZoom(data) {
+  const viewport = document.getElementById('viewport');
+  const canvas = document.getElementById('pan-canvas');
+
+  function updateTransform() {
+    canvas.style.transform = `translate(${pointX}px, ${pointY}px) scale(${currentScale})`;
+  }
+
+  window.fitToViewport = function(planData = data) {
+    const viewportWidth = viewport.clientWidth;
+    const viewportHeight = viewport.clientHeight;
+
+    let minX = 0, minY = 0, maxX = planData.columns - 1, maxY = planData.rows - 1;
+    if (planData.cells && planData.cells.length > 0) {
+      minX = Math.min(...planData.cells.map(c => c.x));
+      minY = Math.min(...planData.cells.map(c => c.y));
+      maxX = Math.max(...planData.cells.map(c => c.x), planData.columns - 1);
+      maxY = Math.max(...planData.cells.map(c => c.y), planData.rows - 1);
+    }
+
+    const totalCols = (maxX - minX) + 1;
+    const totalRows = (maxY - minY) + 1;
+
+    const gridWidth = (totalCols * 36) + 40;
+    const gridHeight = (totalRows * 36) + 40;
+
+    const scaleX = viewportWidth / gridWidth;
+    const scaleY = viewportHeight / gridHeight;
+
+    currentScale = Math.min(scaleX, scaleY, 1);
+
+    pointX = (viewportWidth - (gridWidth * currentScale)) / 2;
+    pointY = (viewportHeight - (gridHeight * currentScale)) / 2;
+
+    updateTransform();
+  };
+
+  fitToViewport();
+
+  // --- MAUS EVENTS ---
+  viewport.addEventListener('mousedown', function(e) {
+    startX = e.clientX - pointX;
+    startY = e.clientY - pointY;
+    isPanning = true;
+    viewport.style.cursor = 'grabbing';
+  });
+
+  window.addEventListener('mouseup', function() {
+    isPanning = false;
+    viewport.style.cursor = 'grab';
+  });
+
+  window.addEventListener('mousemove', function(e) {
+    if (!isPanning) return;
+    e.preventDefault();
+    pointX = e.clientX - startX;
+    pointY = e.clientY - startY;
+    updateTransform();
+  });
+
+  viewport.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    const xs = (e.clientX - pointX) / currentScale;
+    const ys = (e.clientY - pointY) / currentScale;
+    const delta = e.deltaY < 0 ? 1.1 : 0.9;
+    const newScale = Math.min(Math.max(0.15, currentScale * delta), 3);
+
+    pointX = e.clientX - xs * newScale;
+    pointY = e.clientY - ys * newScale;
+    currentScale = newScale;
+
+    updateTransform();
+  }, { passive: false });
+
+  // --- TOUCH EVENTS (FOR MOBILES) ---
+  function getTouchDistance(touches) {
+    return Math.hypot(
+      touches[0].clientX - touches[1].clientX,
+      touches[0].clientY - touches[1].clientY
+    );
+  }
+
+  viewport.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) {
+      // 1 Finger: Pan (Verschieben)
+      isPanning = true;
+      startX = e.touches[0].clientX - pointX;
+      startY = e.touches[0].clientY - pointY;
+    } else if (e.touches.length === 2) {
+      // 2 Finger: Pinch-Zoom
+      isPanning = false;
+      initialTouchDistance = getTouchDistance(e.touches);
+      initialScale = currentScale;
+    }
+  }, { passive: true });
+
+  viewport.addEventListener('touchmove', function(e) {
+    if (isPanning && e.touches.length === 1) {
+      e.preventDefault();   // nur beim aktiven Verschieben
+      pointX = e.touches[0].clientX - startX;
+      pointY = e.touches[0].clientY - startY;
+      updateTransform();
+    } else if (e.touches.length === 2 && initialTouchDistance) {
+      e.preventDefault();
+      const currentDistance = getTouchDistance(e.touches);
+      const scaleFactor = currentDistance / initialTouchDistance;
+      currentScale = Math.min(Math.max(0.15, initialScale * scaleFactor), 3);
+      updateTransform();
+    }
+  }, { passive: false });   // WICHTIG: passive muss false sein für preventDefault
+
+  viewport.addEventListener('touchend', function(e) {
+    if (e.touches.length < 2) initialTouchDistance = null;
+    if (e.touches.length === 0) isPanning = false;
+  });
+
+  // Controls
+  document.getElementById('btn-zoom-in').onclick = () => { currentScale = Math.min(currentScale * 1.2, 3); updateTransform(); };
+  document.getElementById('btn-zoom-out').onclick = () => { currentScale = Math.max(currentScale * 0.8, 0.15); updateTransform(); };
+  document.getElementById('btn-zoom-reset').onclick = () => { fitToViewport(); };
+}
+</script>
+{% endif %}
+
+{% endblock %}

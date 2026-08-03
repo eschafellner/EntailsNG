@@ -1,0 +1,193 @@
+{% load static %}<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}EntailsNG{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  {% block extra_head %}{% endblock %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<a class="skip-link" href="#main-content">Zum Inhalt springen</a>
+
+<!-- ================= DESKTOP SIDEBAR ================= -->
+<aside class="sidebar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+        <polyline points="2 17 12 22 22 17"></polyline>
+        <polyline points="2 12 12 17 22 12"></polyline>
+      </svg>
+    </span>
+    <span class="brand-name">
+      Entails<span class="brand-accent">NG</span>
+      <small>Event Control</small>
+    </span>
+  </div>
+
+  <p class="nav-label">Navigation</p>
+  <nav class="side-nav" aria-label="Hauptnavigation">
+    {% for item in nav_items %}
+      {% with nav_url=item.get_url %}
+        <a href="{{ nav_url|default:'#' }}"
+           class="nav-item{% if nav_url and request.path == nav_url %} active{% endif %}"
+           {% if not nav_url %}aria-disabled="true"{% endif %}>
+          <span class="nav-item-content">
+            {% if item.icon_svg %}
+              {{ item.icon_svg|safe }}
+            {% else %}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+              </svg>
+            {% endif %}
+            <span>{{ item.title }}</span>
+          </span>
+          {% if item.badge_text %}
+            <span class="nav-badge">{{ item.badge_text }}</span>
+          {% endif %}
+        </a>
+      {% endwith %}
+    {% endfor %}
+  </nav>
+
+  <div class="sidebar-foot">
+    {% if user.is_authenticated %}
+      {% if user.is_staff %}
+        <a href="{% url 'checkin_scanner' %}" style="display: block; margin-bottom: 10px; background: rgba(2, 132, 199, 0.2); color: #38bdf8; border: 1px solid #0284c7; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; font-family: 'JetBrains Mono', monospace; text-decoration: none; text-align: center;">
+          📱 Helfer Scanner
+        </a>
+      {% endif %}
+      <a href="{% url 'profile' %}" class="user-name" style="display: block; text-decoration: none; color: #fffaf2; transition: color 0.2s;" title="Mein Profil öffnen">👤 {{ user.username }}</a>
+      <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="user-logout">Abmelden</button>
+      </form>
+    {% else %}
+      <a href="{% url 'login' %}" class="btn-login">Anmelden</a>
+    {% endif %}
+  </div>
+
+</aside>
+
+<!-- ================= HAUPTINHALT ================= -->
+<main class="main-wrapper" id="main-content">
+  {% if messages %}
+    <ul class="message-list">
+      {% for message in messages %}
+        <li class="message message-{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<!-- ================= MOBILE BOTTOM NAV ================= -->
+<nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
+  {% for item in nav_items|slice:":4" %}
+    {% with nav_url=item.get_url %}
+      <a href="{{ nav_url|default:'#' }}"
+         class="mobile-item{% if nav_url and request.path == nav_url %} active{% endif %}">
+        {% if item.icon_svg %}
+          {{ item.icon_svg|safe }}
+        {% else %}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+          </svg>
+        {% endif %}
+        <span>{{ item.title }}</span>
+      </a>
+    {% endwith %}
+  {% endfor %}
+
+  {% if nav_items|length > 4 %}
+    <button type="button" class="mobile-item mobile-more-btn"
+            aria-controls="mobile-menu-overlay" aria-expanded="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="1"></circle>
+        <circle cx="19" cy="12" r="1"></circle>
+        <circle cx="5" cy="12" r="1"></circle>
+      </svg>
+      <span>Mehr</span>
+    </button>
+  {% endif %}
+</nav>
+
+<!-- ================= MOBILE MEHR-MENÜ ================= -->
+{% if nav_items|length > 4 %}
+<div id="mobile-menu-overlay" class="mobile-menu-overlay" hidden>
+  <div class="mobile-menu-modal" role="dialog" aria-modal="true"
+       aria-label="Weitere Menüpunkte">
+    <div class="mobile-menu-header">
+      <span>Weitere Menüpunkte</span>
+      <button type="button" class="mobile-menu-close" aria-label="Schließen">
+        &times;
+      </button>
+    </div>
+    <div class="mobile-menu-body">
+      {% for item in nav_items|slice:"4:" %}
+        {% with nav_url=item.get_url %}
+          <a href="{{ nav_url|default:'#' }}"
+             class="mobile-modal-item{% if nav_url and request.path == nav_url %} active{% endif %}">
+            {% if item.icon_svg %}
+              {{ item.icon_svg|safe }}
+            {% else %}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+              </svg>
+            {% endif %}
+            <span>{{ item.title }}</span>
+          </a>
+        {% endwith %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var overlay = document.getElementById('mobile-menu-overlay');
+  if (!overlay) return;
+
+  var trigger = document.querySelector('.mobile-more-btn');
+  var closeBtn = overlay.querySelector('.mobile-menu-close');
+  var modal = overlay.querySelector('.mobile-menu-modal');
+
+  function setOpen(open) {
+    overlay.hidden = !open;
+    overlay.classList.toggle('active', open);
+    if (trigger) trigger.setAttribute('aria-expanded', String(open));
+    if (open && closeBtn) closeBtn.focus();
+    else if (trigger) trigger.focus();
+  }
+
+  if (trigger) trigger.addEventListener('click', function () {
+    setOpen(overlay.hidden);
+  });
+  if (closeBtn) closeBtn.addEventListener('click', function () {
+    setOpen(false);
+  });
+  overlay.addEventListener('click', function () { setOpen(false); });
+  if (modal) modal.addEventListener('click', function (e) {
+    e.stopPropagation();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !overlay.hidden) setOpen(false);
+  });
+})();
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

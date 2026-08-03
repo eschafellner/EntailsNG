@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Sitzplan Editor - {{ plan.name }}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #1e293b; padding: 15px 20px; border-radius: 8px; }
+        .tools { display: flex; gap: 10px; margin-bottom: 20px; background: #1e293b; padding: 15px; border-radius: 8px; }
+        .tool-btn { padding: 8px 16px; border: 2px solid transparent; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; }
+        .tool-btn.active { border-color: white; transform: scale(1.05); }
+        .grid-container { overflow: auto; background: #1e293b; padding: 20px; border-radius: 8px; display: inline-block; }
+        .grid { display: grid; gap: 3px; }
+        .cell { width: 32px; height: 32px; background: #334155; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; user-select: none; }
+        .cell:hover { opacity: 0.8; outline: 2px solid white; }
+
+        /* Kachel-Farben */
+        .cell.EMPTY { background: #334155; }
+        .cell.SEAT { background: #22c55e; }
+        .cell.WALL { background: #64748b; }
+        .cell.DOOR { background: #8b5cf6; }
+        .cell.LABEL { background: #0284c7; }
+        .cell.BLOCKED { background: #000000; color: #ef4444; border: 1px solid #ef4444; }
+
+        .save-btn { background: #2563eb; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .back-btn { color: #94a3b8; text-decoration: none; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <a href="/admin/seating/seatingplan/" class="back-btn">← Zurück zum Admin</a>
+        <h2>🎨 Sitzplan-Editor: {{ plan.name }} ({{ plan.columns }}x{{ plan.rows }})</h2>
+    </div>
+    <button class="save-btn" onclick="savePlan()">💾 Layout Speichern</button>
+</div>
+
+<div class="tools">
+    <button class="tool-btn active" style="background:#22c55e" onclick="setTool('SEAT', this)">🟢 Sitzplatz (Frei)</button>
+    <button class="tool-btn" style="background:#64748b" onclick="setTool('WALL', this)">⬛ Wand</button>
+    <button class="tool-btn" style="background:#8b5cf6" onclick="setTool('DOOR', this)">🟣 Tür</button>
+    <button class="tool-btn" style="background:#0284c7" onclick="setTool('LABEL', this)">🔵 Beschriftung</button>
+    <button class="tool-btn" style="background:#334155" onclick="setTool('EMPTY', this)">⚪ Löschen / Gang</button>
+</div>
+
+<div class="grid-container">
+    <div id="grid" class="grid" style="grid-template-columns: repeat({{ plan.columns }}, 32px);"></div>
+</div>
+
+<script>
+    const planId = {{ plan.id }};
+    const columns = {{ plan.columns }};
+    const rows = {{ plan.rows }};
+    const initialCells = {{ cells_json|safe }};
+    const csrfToken = "{{ csrf_token }}";
+
+    let currentTool = 'SEAT';
+    let isMouseDown = false;
+    let seatCounter = 1;
+    let isPromptOpen = false; // Verhindert Mehrfach-Prompts
+
+    const gridData = {};
+
+    // Initialisiere Leergitter
+    for (let y = 1; y <= rows; y++) {
+        for (let x = 1; x <= columns; x++) {
+            gridData[`${x}_${y}`] = { x, y, cell_type: 'EMPTY', seat_label: '', text_label: '' };
+        }
+    }
+
+    // Laden der bestehenden Kacheln
+    initialCells.forEach(c => {
+        gridData[`${c.x}_${c.y}`] = c;
+    });
+
+    const gridEl = document.getElementById('grid');
+
+    function renderGrid() {
+        gridEl.innerHTML = '';
+        for (let y = 1; y <= rows; y++) {
+            for (let x = 1; x <= columns; x++) {
+                const data = gridData[`${x}_${y}`];
+                const cell = document.createElement('div');
+                cell.className = `cell ${data.cell_type}`;
+                cell.dataset.x = x;
+                cell.dataset.y = y;
+
+                if (data.cell_type === 'SEAT') cell.innerText = data.seat_label || `S${data.x}`;
+                if (data.cell_type === 'LABEL') cell.innerText = data.text_label || 'T';
+
+                // Einzelklick vs. Dragging unterscheiden
+                cell.addEventListener('mousedown', (e) => {
+                    isMouseDown = true;
+                    applyTool(x, y, cell, true); // true = echter Klick
+                });
+
+                cell.addEventListener('mouseenter', () => {
+                    if (isMouseDown && !isPromptOpen) {
+                        applyTool(x, y, cell, false); // false = nur Drüberfahren/Ziehen
+                    }
+                });
+
+                gridEl.appendChild(cell);
+            }
+        }
+    }
+
+    document.addEventListener('mouseup', () => isMouseDown = false);
+
+    function setTool(tool, btn) {
+        currentTool = tool;
+        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+function applyTool(x, y, el, isDirectClick) {
+        if (isPromptOpen) return;
+
+        const item = gridData[`${x}_${y}`];
+
+        // 1. NEU: GESPERRT-Werkzeug (BLOCKED)
+        if (currentTool === 'BLOCKED') {
+            item.cell_type = 'SEAT';
+            item.reservation_status = 'BLOCKED';
+            if (!item.seat_label) item.seat_label = `P${seatCounter++}`;
+            el.className = `cell BLOCKED`;
+            el.innerText = item.seat_label;
+            return;
+        }
+
+        // 2. BEI BESCHRIFTUNG (LABEL): Nur bei direktem Einzel-Klick abfragen
+        if (currentTool === 'LABEL') {
+            if (!isDirectClick) return;
+
+            isPromptOpen = true;
+            isMouseDown = false;
+
+            setTimeout(() => {
+                const txt = prompt("Text für Beschriftung:", item.text_label || "Bühne");
+                if (txt !== null && txt.trim() !== "") {
+                    item.cell_type = 'LABEL';
+                    item.text_label = txt;
+                    el.className = `cell LABEL`;
+                    el.innerText = txt;
+                }
+                isPromptOpen = false;
+            }, 50);
+            return;
+        }
+
+        // 3. Normale Werkzeuge (Sitzplatz, Wand, Tür, Löschen)
+        item.cell_type = currentTool;
+        item.reservation_status = 'FREE'; // Zurücksetzen falls vorher gesperrt war
+
+        if (currentTool === 'SEAT') {
+            if (!item.seat_label) item.seat_label = `P${seatCounter++}`;
+        }
+
+        el.className = `cell ${currentTool}`;
+        if (currentTool === 'SEAT') el.innerText = item.seat_label;
+        if (currentTool === 'LABEL') el.innerText = item.text_label || 'T';
+        if (currentTool === 'EMPTY' || currentTool === 'WALL' || currentTool === 'DOOR') el.innerText = '';
+    }
+
+    function savePlan() {
+        const cellsArray = Object.values(gridData).filter(c => c.cell_type !== 'EMPTY');
+
+        fetch(`/seating/editor/${planId}/save/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ cells: cellsArray })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.message);
+        })
+        .catch(err => alert("Fehler beim Speichern: " + err));
+    }
+
+    renderGrid();
+</script>
+
+</body>
+</html>

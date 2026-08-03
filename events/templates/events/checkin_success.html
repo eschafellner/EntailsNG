@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Check-in Erfolgreich – EntailsNG{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 32px;">
+  <div style="width: 64px; height: 64px; background: rgba(34, 197, 94, 0.15); border: 2px solid #22c55e; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; font-size: 32px; color: #22c55e;">
+    ✓
+  </div>
+
+  <h1 style="font-family: 'Barlow Condensed', sans-serif; font-size: 32px; margin-bottom: 8px;">
+    {% if already_checked_in %}Bereits Eingecheckt{% else %}Check-in Erfolgreich!{% endif %}
+  </h1>
+
+  <p style="color: var(--muted); font-size: 15px; font-family: 'JetBrains Mono', monospace; margin-bottom: 24px;">
+    Gast: <strong style="color: var(--ink);">{{ registration.user.username }}</strong> ({{ registration.user.get_full_name|default:registration.user.username }})
+  </p>
+
+  <div style="background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 20px; text-align: left; margin-bottom: 24px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; font-family: 'JetBrains Mono', monospace;">
+      <div>
+        <span style="color: var(--muted); display: block; font-size: 11px;">VERANSTALTUNG</span>
+        <strong>{{ registration.event.title }}</strong>
+      </div>
+      <div>
+        <span style="color: var(--muted); display: block; font-size: 11px;">ZAHLUNGSSTATUS</span>
+        <strong style="color: #22c55e;">✔ {{ registration.get_payment_status_display }}</strong>
+      </div>
+      <div>
+        <span style="color: var(--muted); display: block; font-size: 11px;">TICKET</span>
+        <strong>{{ registration.ticket_type.name|default:"Standard Ticket" }}</strong>
+      </div>
+      <div>
+        <span style="color: var(--muted); display: block; font-size: 11px;">CHECK-IN ZEIT</span>
+        <strong>{{ registration.checked_in_at|date:"H:i:s" }} Uhr</strong>
+      </div>
+    </div>
+  </div>
+
+  <a href="{% url 'dashboard' %}" class="btn-login" style="display: inline-block; width: auto; padding: 10px 24px; text-decoration: none;">
+    Zurück zum Dashboard
+  </a>
+</div>
+{% endblock %}

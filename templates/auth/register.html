@@ -1,0 +1,75 @@
+{% load static %}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Registrieren – Haag-networX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="brand-mark">HNX</div>
+        <h1>Konto erstellen</h1>
+        <p style="color: var(--muted); font-size: 14px;">Erstelle dein Konto, um dich für die LAN-Party anzumelden und dir deinen Platz zu sichern.</p>
+      </div>
+
+      {% if form.errors %}
+        <div class="error-list">
+          <strong>Bitte korrigiere folgende Fehler:</strong>
+          <ul>
+            {% for field in form %}
+              {% for error in field.errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            {% endfor %}
+            {% for error in form.non_field_errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <form method="post" action="{% url 'register' %}">
+        {% csrf_token %}
+
+        <div class="form-group">
+          <label for="id_username">Benutzername (Nick):</label>
+          <input type="text" name="username" id="id_username" class="form-control" value="{{ form.username.value|default:'' }}" required autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="id_email">E-Mail-Adresse:</label>
+          <input type="email" name="email" id="id_email" class="form-control" value="{{ form.email.value|default:'' }}" required>
+        </div>
+
+        <div class="form-group">
+          <label for="id_birthday">Geburtsdatum:</label>
+          <input type="date" name="birthday" id="id_birthday" class="form-control" value="{{ form.birthday.value|default:'' }}" required>
+        </div>
+
+        <div class="form-group">
+          <label for="id_password1">Passwort:</label>
+          <input type="password" name="password1" id="id_password1" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label for="id_password2">Passwort bestätigen:</label>
+          <input type="password" name="password2" id="id_password2" class="form-control" required>
+        </div>
+
+        <button type="submit" class="primary-btn auth-btn">Konto erstellen & Anmelden</button>
+      </form>
+
+      <div class="auth-footer">
+        Du hast bereits ein Konto? <a href="{% url 'login' %}">Hier anmelden</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

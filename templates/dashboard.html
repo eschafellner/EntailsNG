@@ -1,0 +1,490 @@
+{% extends 'base.html' %}
+
+{% block title %}Übersicht – Haag-networX{% endblock %}
+
+{% block content %}
+
+{% if show_onboarding_ticket %}
+<!-- ======================================================================
+     ONBOARDING TICKET (DARK TECH PATTERN DESIGN)
+     ====================================================================== -->
+<div class="card onboarding-ticket" style="padding: 0; overflow: hidden; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 12px; background: #111827; color: #f9fafb; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);">
+  <div class="ticket-grid">
+
+    <!-- LINKER BEREICH: Event Infos & Versteckter QR Code -->
+    <div style="padding: 24px; display: flex; justify-content: space-between; align-items: center; border-right: 2px dashed #374151; position: relative; background-color: #111827; background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px); background-size: 20px 20px;">
+
+      <!-- Dekorative Ticket-Aussparungen (Kerben) -->
+      <div style="position: absolute; top: -10px; right: -10px; width: 20px; height: 20px; background: var(--bg, #0b0f17); border-radius: 50%;"></div>
+      <div style="position: absolute; bottom: -10px; right: -10px; width: 20px; height: 20px; background: var(--bg, #0b0f17); border-radius: 50%;"></div>
+
+      <div>
+        <p class="eyebrow" style="margin: 0 0 6px 0; color: #22c55e; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 1px;">
+          ● {{ txt_ticket_eyebrow }}
+        </p>
+        <h2 style="margin: 0 0 10px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 30px; text-transform: uppercase; color: #ffffff; letter-spacing: 0.5px;">
+          {% if upcoming_event %}{{ upcoming_event.title }}{% else %}{{ txt_ticket_default_title }}{% endif %}
+        </h2>
+
+        <div style="display: flex; gap: 20px; font-size: 13px; color: #9ca3af; font-family: 'JetBrains Mono', monospace; flex-wrap: wrap;">
+          <span>👤 <strong style="color: #e5e7eb;">Gast:</strong> {{ request.user.username|default:"Gast" }}</span>
+          <span>🪑 <strong style="color: #e5e7eb;">Sitzplatz:</strong> {{ user_seat_label|default:"Noch nicht reserviert" }}</span>
+        </div>
+      </div>
+
+<!-- INTERAKTIVER QR-CODE / CHECK-IN / ZAHLUNGS-STATUS -->
+{% if is_user_registered and user_registration %}
+<div style="margin-left: 16px; flex-shrink: 0; text-align: center;">
+
+  {% if user_registration.is_checked_in %}
+    <!-- ZUSTAND A: BEREITS EINGECHECKMENT -->
+    <div style="background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #22c55e; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; display: inline-flex; align-items: center; gap: 6px;">
+      <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block;"></span>
+      ✓ EINGECHECKMENT
+    </div>
+
+  {% elif user_registration.payment_status == 'PAID' %}
+    <!-- ZUSTAND B: BEZAHLT & NOCH NICHT EINGECHECKMENT (BUTTON ZUM MODAL) -->
+    <button type="button" onclick="openQrModal()" style="background: #1f2937; color: #38bdf8; border: 1px solid #0284c7; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; cursor: pointer; transition: all 0.2s ease;">
+      📲 QR-Code anzeigen
+    </button>
+
+    <!-- FULLSCREEN MODAL (Zentriert über den gesamten Bildschirm) -->
+    <div id="qr-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px;">
+
+      <!-- Modal Karte -->
+      <div style="position: relative; background: #ffffff; padding: 32px 24px 24px 24px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); text-align: center; max-width: 340px; width: 100%; border: 1px solid var(--line);">
+
+        <!-- X-Schließen-Button (Rechts oben außerhalb der Karte schwebend) -->
+        <button type="button" onclick="closeQrModal()" style="position: absolute; top: -14px; right: -14px; background: #ef4444; color: #ffffff; border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4); transition: transform 0.2s ease;">
+          ✕
+        </button>
+
+        <h3 style="margin: 0 0 6px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; text-transform: uppercase; color: #111827;">
+          EINLASS QR-CODE
+        </h3>
+        <p style="margin: 0 0 20px 0; font-size: 12px; color: #6b7280; font-family: 'JetBrains Mono', monospace;">
+          Vorlegen beim Check-in vor Ort
+        </p>
+
+        <!-- Großer QR-Code (240x240px für schnelle Lesbarkeit) -->
+        {% url 'process_checkin' registration_id=user_registration.id token=user_registration.checkin_token as checkin_path %}
+        {% with full_url=request.scheme|add:"://"|add:request.get_host|add:checkin_path %}
+          <div style="background: #ffffff; padding: 12px; border-radius: 12px; border: 2px solid #f3f4f6; display: inline-block;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={{ full_url|urlencode }}" alt="Check-In QR" style="display: block; width: 220px; height: 220px; margin: 0 auto;">
+          </div>
+        {% endwith %}
+
+        <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #374151; font-weight: bold; display: block; margin-top: 16px;">
+          GUEST: {{ request.user.username }}
+        </span>
+      </div>
+
+    </div>
+
+    <!-- JavaScript für Modal Steuerungen -->
+    <script>
+      function openQrModal() {
+        const modal = document.getElementById('qr-modal');
+        if (modal) {
+          modal.style.display = 'flex';
+        }
+      }
+
+      function closeQrModal() {
+        const modal = document.getElementById('qr-modal');
+        if (modal) {
+          modal.style.display = 'none';
+        }
+      }
+
+      // Schließen per ESC-Taste
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeQrModal();
+        }
+      });
+    </script>
+
+  {% else %}
+    <!-- ZUSTAND C: ANGEMELDET, ABER NOCH NICHT BEZAHLT (UNPAID / CANCELLED) -->
+    <div style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #eab308; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; display: inline-flex; align-items: center; gap: 6px;" title="Der QR-Code wird nach Zahlungseingang freigeschaltet.">
+      <span style="width: 8px; height: 8px; background: #eab308; border-radius: 50%; display: inline-block;"></span>
+      ⏳ ZAHLUNG OFFEN
+    </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+    </div>
+
+    <!-- RECHTER BEREICH: Countdown / Status Anzeige -->
+    <div style="padding: 24px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #1f2937; text-align: center; background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 0); background-size: 12px 12px;">
+
+      {% if upcoming_event and upcoming_event.start_date %}
+        <p class="eyebrow" style="margin: 0 0 10px 0; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #9ca3af; letter-spacing: 1px;">
+          {{ txt_ticket_countdown_label }}
+        </p>
+
+        <!-- Live Countdown -->
+        <div id="ticket-countdown" style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: bold; color: #ffffff; display: flex; gap: 8px;">
+          <div><span id="cd-days">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">Tage</small></div>:
+          <div><span id="cd-hours">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">Std</small></div>:
+          <div><span id="cd-minutes">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">Min</small></div>:
+          <div><span id="cd-seconds">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">Sek</small></div>
+        </div>
+      {% else %}
+        <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9ca3af; line-height: 1.5; text-align: center;">
+          {{ txt_ticket_no_event }}
+        </p>
+      {% endif %}
+
+    </div>
+
+  </div>
+</div>
+
+<!-- Countdown Script -->
+{% if upcoming_event and upcoming_event.start_date %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const eventDateStr = "{{ upcoming_event.start_date|date:'c' }}";
+  const targetDate = new Date(eventDateStr).getTime();
+
+  function updateCountdown() {
+    const now = new Date().getTime();
+    const difference = targetDate - now;
+
+    if (difference <= 0) {
+      document.getElementById('ticket-countdown').innerHTML = "<span style='color: #22c55e; font-size: 16px;'>EVENT LÄUFT!</span>";
+      return;
+    }
+
+    const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+    document.getElementById('cd-days').innerText = String(days).padStart(2, '0');
+    document.getElementById('cd-hours').innerText = String(hours).padStart(2, '0');
+    document.getElementById('cd-minutes').innerText = String(minutes).padStart(2, '0');
+    document.getElementById('cd-seconds').innerText = String(seconds).padStart(2, '0');
+  }
+
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+});
+</script>
+{% endif %}
+
+{% endif %}
+
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+<!-- ======================================================================
+     DYNAMISCHE 4-STUFEN STATUSBAR
+     ====================================================================== -->
+{% if upcoming_event and pinned_news %}
+<!-- ======================================================================
+     STICKY ANKÜNDIGUNGS-BANNER (PUNKT 2)
+     ====================================================================== -->
+<div class="card" style="padding: 16px 20px; margin-bottom: 24px; border-radius: 12px; background: rgba(248, 171, 45, 0.12); border: 1px solid var(--signal); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <span style="font-size: 24px;">📢</span>
+    <div>
+      <strong style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; color: var(--ink); display: block;">
+        {{ pinned_news.title }}
+      </strong>
+      <p style="margin: 2px 0 0 0; font-size: 13px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+        {{ pinned_news.content|striptags|truncatechars:120 }}
+      </p>
+    </div>
+  </div>
+  <a href="{% url 'news_list' %}" style="background: var(--signal); color: var(--navy); padding: 8px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+    Details lesen →
+  </a>
+</div>
+{% endif %}
+
+  <!-- ======================================================================
+       ZWEISPALTIGER BEREICH: NEWS (2/3 BREITE) & SITZPLATZ/STATUS (1/3 BREITE)
+       ====================================================================== -->
+  <div class="dash-split">
+
+    <!-- ------------------------------------------------------------------
+         LINKES ELEMENT: NEWS WIDGET (2/3 BREITE)
+         ------------------------------------------------------------------ -->
+    <section class="card" style="display: flex; flex-direction: column; justify-content: space-between; padding: 24px;">
+
+      <!-- Oberer Teil: Titel & Artikel -->
+      <div>
+        <p class="eyebrow" style="margin-bottom: 4px;">Aktuelles & Ankündigungen</p>
+        <h3 style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; margin-top: 0; margin-bottom: 20px; color: var(--ink);">
+          News
+        </h3>
+
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          {% for article in latest_news %}
+            <div style="border-bottom: 1px solid var(--line); padding-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  {% if article.is_pinned %}
+                    <span style="background: rgba(248, 171, 45, 0.2); border: 1px solid var(--signal); color: var(--signal-deep); font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: bold; padding: 2px 6px; border-radius: 4px;">📌 WICHTIG</span>
+                  {% endif %}
+                  <strong style="font-size: 16px; color: var(--ink); font-family: 'Barlow Condensed', sans-serif;">
+                    {{ article.title }}
+                  </strong>
+                </div>
+                {% if article.created_at %}
+                  <small style="color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace;">
+                    {{ article.created_at|date:"d.m.Y" }}
+                  </small>
+                {% endif %}
+              </div>
+              <p style="font-size: 14px; color: var(--muted); margin: 0 0 8px 0; line-height: 1.5;">
+                {{ article.content|striptags|truncatechars:180 }}
+              </p>
+              <a href="{% url 'news_list' %}" style="font-size: 12px; color: var(--signal-deep); font-weight: 600; text-decoration: underline; font-family: 'JetBrains Mono', monospace;">
+                Weiterlesen →
+              </a>
+            </div>
+          {% empty %}
+            <p style="color: var(--muted); font-size: 13px; margin: 0; font-family: 'JetBrains Mono', monospace;">
+              Aktuell gibt es keine News.
+            </p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Unterer Teil: Alle News Link -->
+      <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--line);">
+        <a href="{% url 'news_list' %}" style="font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--muted); text-transform: uppercase; text-decoration: none;">
+          Alle News & Ankündigungen anzeigen →
+        </a>
+      </div>
+
+    </section>
+
+
+    <!-- ======================================================================
+        RECHTES ELEMENT: SITZPLATZBUCHUNG & STATUS MODUL (1/3 BREITE)
+        ====================================================================== -->
+    <div class="card" style="padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); display: flex; flex-direction: column; justify-content: space-between; gap: 20px;">
+
+      <div>
+        <p class="eyebrow" style="margin: 0 0 4px 0; color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase;">
+          {{ txt_seat_card_title }}
+        </p>
+
+        <!-- Sitzplatz Info -->
+        <div style="margin-bottom: 16px;">
+          {% if user_seat_label %}
+            <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+              Dein Platz: <span style="color: #22c55e;">{{ user_seat_label }}</span>
+            </h3>
+          {% else %}
+            <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+              Kein Sitzplatz gewählt
+            </h3>
+          {% endif %}
+        </div>
+
+        <!-- SITZPLAN MINI-MAP VORSCHAU (PUNKT 3) -->
+        {% if upcoming_event %}
+          <div style="background: #161e2e; border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 20px; text-align: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #9ca3af; text-transform: uppercase;">Saalplan-Vorschau</span>
+              <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #38bdf8;">LIVE</span>
+            </div>
+            
+            <!-- Dynamic Mini-Map Render -->
+            <div id="minimap-container" style="display: inline-grid; gap: 3px; max-width: 100%; overflow: hidden; padding: 8px; background: #0b0f17; border-radius: 6px;">
+              <div style="font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+                Mini-Map lädt...
+              </div>
+            </div>
+          </div>
+
+          <!-- Countdown & Mini-Map Fetch Script -->
+          <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            fetch(`/seating/api/plan/{{ upcoming_event.id }}/`)
+              .then(res => res.json())
+              .then(data => {
+                const container = document.getElementById('minimap-container');
+                if (!data.cells || data.cells.length === 0) {
+                  container.innerHTML = '<span style="font-size: 11px; color: #9ca3af; font-family: \'JetBrains Mono\';">Saalplan noch nicht konfiguriert</span>';
+                  return;
+                }
+
+                // Zentriere den Mini-Map Ausschnitt auf den Platz des Nutzers, falls reserviert
+                let targetCell = null;
+                const currentUsername = "{{ request.user.username|escapejs }}";
+                if (currentUsername) {
+                  targetCell = data.cells.find(c => c.occupied_by === currentUsername);
+                }
+
+                const allX = data.cells.map(c => c.x);
+                const allY = data.cells.map(c => c.y);
+                const planMinX = Math.min(...allX);
+                const planMaxX = Math.max(...allX);
+                const planMinY = Math.min(...allY);
+                const planMaxY = Math.max(...allY);
+
+                let minX, maxX, minY, maxY;
+                const maxColsToShow = 14;
+                const maxRowsToShow = 8;
+
+                if (targetCell) {
+                  // Zentriere genau auf den eigenen Sitzplatz innerhalb der Saalplangrenzen
+                  minX = Math.max(planMinX, Math.min(planMaxX - maxColsToShow + 1, targetCell.x - Math.floor(maxColsToShow / 2)));
+                  maxX = Math.min(planMaxX, minX + maxColsToShow - 1);
+                  minY = Math.max(planMinY, Math.min(planMaxY - maxRowsToShow + 1, targetCell.y - Math.floor(maxRowsToShow / 2)));
+                  maxY = Math.min(planMaxY, minY + maxRowsToShow - 1);
+                } else {
+                  // Standard-Übersicht oben links
+                  minX = planMinX;
+                  maxX = Math.min(planMinX + maxColsToShow - 1, planMaxX);
+                  minY = planMinY;
+                  maxY = Math.min(planMinY + maxRowsToShow - 1, planMaxY);
+                }
+
+                const cols = (maxX - minX) + 1;
+                container.style.gridTemplateColumns = `repeat(${cols}, 14px)`;
+                container.innerHTML = '';
+
+                const cellMap = {};
+                data.cells.forEach(c => cellMap[`${c.x}_${c.y}`] = c);
+
+                for (let y = minY; y <= maxY; y++) {
+                  for (let x = minX; x <= maxX; x++) {
+                    const cell = cellMap[`${x}_${y}`];
+                    const div = document.createElement('div');
+                    div.style.width = '14px';
+                    div.style.height = '14px';
+                    div.style.borderRadius = '3px';
+                    div.style.boxSizing = 'border-box';
+
+                    if (!cell || cell.cell_type === 'EMPTY') {
+                      div.style.background = 'transparent';
+                    } else if (cell.cell_type === 'SEAT') {
+                      const isOwnCell = currentUsername && (cell.occupied_by === currentUsername);
+                      if (isOwnCell) {
+                        // Stark hervorgehobener eigener Platz mit Pulsier-Effekt & Gold-Farbton
+                        div.style.background = '#f8ab2d';
+                        div.style.border = '2px solid #ffffff';
+                        div.style.boxShadow = '0 0 10px #f8ab2d';
+                        div.style.transform = 'scale(1.2)';
+                        div.style.zIndex = '10';
+                        div.title = `Dein Platz: ${cell.seat_label || (cell.x + ',' + cell.y)}`;
+                      } else if (cell.status === 'FREE') {
+                        div.style.background = 'rgba(34, 197, 94, 0.4)';
+                        div.style.border = '1px solid #22c55e';
+                      } else if (cell.status === 'PRE_RESERVED') {
+                        div.style.background = 'rgba(234, 179, 8, 0.4)';
+                        div.style.border = '1px solid #eab308';
+                      } else {
+                        div.style.background = 'rgba(239, 68, 68, 0.4)';
+                        div.style.border = '1px solid #ef4444';
+                      }
+                    } else {
+                      div.style.background = '#374151';
+                    }
+                    container.appendChild(div);
+                  }
+                }
+              })
+              .catch(() => {});
+          });
+          </script>
+        {% endif %}
+
+        <!-- SITZPLATZ-BELEGUNGSQUOTE & CAPACITY PROGRESS BAR (PUNKT 1) -->
+        {% if upcoming_event and event_total_seats > 0 %}
+          <div style="background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; border-radius: 10px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+              <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase;">
+                Saalbelegung
+              </span>
+              <strong style="font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--ink);">
+                {{ event_reserved_seats }} / {{ event_total_seats }} Plätze ({{ event_capacity_percent }}%)
+              </strong>
+            </div>
+
+            <!-- Custom Progress Bar -->
+            <div style="width: 100%; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden;">
+              <div style="width: {{ event_capacity_percent }}%; height: 100%; background: linear-gradient(90deg, #0284c7, #22c55e); border-radius: 4px; transition: width 0.4s ease;"></div>
+            </div>
+          </div>
+        {% endif %}
+
+        <!-- Anmeldestatus (Aus der alten Statusleiste integriert) -->
+        <div style="background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; border-radius: 10px; margin-bottom: 20px;">
+          <span style="display: block; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase; margin-bottom: 6px;">
+            {{ txt_status_your_status }}
+          </span>
+
+          {% if user_status_step == 4 %}
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: #22c55e; font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: rgba(34, 197, 94, 0.12); padding: 4px 8px; border-radius: 6px; border: 1px solid #22c55e;">
+              <span style="width: 7px; height: 7px; background: #22c55e; border-radius: 50%; display: inline-block;"></span>
+              ✓ {{ txt_status_step_4 }}
+            </span>
+          {% elif user_status_step == 3 %}
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: #38bdf8; font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: rgba(56, 189, 248, 0.12); padding: 4px 8px; border-radius: 6px; border: 1px solid #0284c7;">
+              <span style="width: 7px; height: 7px; background: #38bdf8; border-radius: 50%; display: inline-block;"></span>
+              💳 {{ txt_status_step_3 }}
+            </span>
+          {% elif user_status_step == 2 %}
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: #eab308; font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: rgba(234, 179, 8, 0.12); padding: 4px 8px; border-radius: 6px; border: 1px solid #eab308;">
+              <span style="width: 7px; height: 7px; background: #eab308; border-radius: 50%; display: inline-block;"></span>
+              ⏳ {{ txt_status_step_2 }}
+            </span>
+          {% else %}
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: var(--line); padding: 4px 8px; border-radius: 6px;">
+              <span style="width: 7px; height: 7px; background: var(--muted); border-radius: 50%; display: inline-block;"></span>
+              {{ txt_status_step_1 }}
+            </span>
+          {% endif %}
+
+          {% if request.user.is_authenticated and user_status_step < 2 and upcoming_event %}
+            <form action="{% url 'register_for_event' upcoming_event.id %}" method="post" style="margin-top: 10px;">
+              {% csrf_token %}
+              <button type="submit" style="width: 100%; background: #22c55e; color: #ffffff; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
+                {{ txt_status_btn_register }}
+              </button>
+            </form>
+          {% endif %}
+        </div>
+
+        <!-- Statusbezogene Hinweistexte -->
+        {% if not upcoming_event %}
+          <p style="margin: 0 0 16px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
+            ℹ️ {{ txt_seat_no_event }}
+          </p>
+        {% elif not is_user_registered %}
+          <p style="margin: 0 0 16px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #eab308;">
+            ⚠️ {{ txt_seat_not_registered }}
+          </p>
+        {% endif %}
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line);">
+        <a href="{% url 'seating_plan' %}" class="btn" style="display: block; text-align: center; background: var(--line); color: var(--ink); text-decoration: none; padding: 10px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; border: 1px solid var(--line);">
+          🗺️ {{ txt_seat_btn_open }}
+        </a>
+
+        {% if upcoming_event and is_user_registered %}
+          <a href="{% url 'seating_plan' %}" style="display: block; text-align: center; background: #0284c7; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+            💺 {{ txt_seat_btn_reserve }}
+          </a>
+        {% endif %}
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

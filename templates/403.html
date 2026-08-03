@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}403 – Zugriff verweigert – EntailsNG{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 40px 24px;">
+  <div style="font-family: 'Barlow Condensed', sans-serif; font-size: 80px; font-weight: 800; line-height: 1; color: #eab308; margin-bottom: 8px;">
+    403
+  </div>
+
+  <h1 style="font-family: 'Barlow Condensed', sans-serif; font-size: 32px; margin-bottom: 12px; color: var(--ink);">
+    Zugriff verweigert
+  </h1>
+
+  <p style="color: var(--muted); font-size: 15px; font-family: 'JetBrains Mono', monospace; line-height: 1.6; margin-bottom: 28px;">
+    Du hast nicht die erforderlichen Rechte, um auf diese Seite zuzugreifen.
+  </p>
+
+  <a href="{% url 'dashboard' %}" class="btn-login" style="display: inline-block; width: auto; padding: 12px 24px; text-decoration: none; font-weight: bold;">
+    ← Zurück zur Startseite
+  </a>
+</div>
+{% endblock %}

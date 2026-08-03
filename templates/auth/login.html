@@ -1,0 +1,52 @@
+{% load static %}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anmelden – Haag-networX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="brand-mark">HNX</div>
+        <h1>Willkommen zurück</h1>
+        <p style="color: var(--muted); font-size: 14px;">Melde dich an, um auf deine Anmeldungen und Sitzplätze zuzugreifen.</p>
+      </div>
+
+      {% if form.errors %}
+        <div class="error-msg">
+          Benutzername oder Passwort ist falsch. Bitte versuche es erneut.
+        </div>
+      {% endif %}
+
+      <form method="post" action="{% url 'login' %}">
+        {% csrf_token %}
+        <div class="form-group">
+          <label for="id_username">Benutzername</label>
+          <input type="text" name="username" id="id_username" class="form-control" required autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="id_password">Passwort</label>
+          <input type="password" name="password" id="id_password" class="form-control" required>
+        </div>
+
+        <button type="submit" class="primary-btn auth-btn">Anmelden</button>
+      </form>
+
+      <div class="auth-footer">
+        Noch kein Konto? <a href="{% url 'register' %}">Jetzt registrieren</a>
+              <div class="sub-link">
+          <a href="{% url 'password_reset' %}">Passwort vergessen?</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

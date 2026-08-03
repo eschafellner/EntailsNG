@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ clan.name }} – Clanprofil – EntailsNG{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header Banner Card -->
+  <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
+      <div style="display: flex; align-items: center; gap: 20px;">
+        {% if clan.logo %}
+          <img src="{{ clan.logo.url }}" alt="{{ clan.name }}" style="width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 2px solid var(--line);">
+        {% else %}
+          <div style="width: 72px; height: 72px; background: var(--navy); color: var(--signal); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: bold;">
+            {{ clan.name|slice:":2"|upper }}
+          </div>
+        {% endif %}
+
+        <div>
+          <p class="eyebrow" style="margin-bottom: 4px;">Clanprofil</p>
+          <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px;">
+            {{ clan.name }}
+          </h1>
+          {% if clan.website %}
+            <p style="margin: 4px 0 0 0; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+              🌐 <a href="{{ clan.website }}" target="_blank" rel="noopener" style="color: var(--signal-deep); text-decoration: underline;">{{ clan.website }}</a>
+            </p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        {% if is_clan_admin %}
+          <a href="{% url 'clan_edit' slug=clan.slug %}" style="background: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+            ✏️ Clan bearbeiten
+          </a>
+        {% endif %}
+
+        {% if current_clan_membership and current_clan_membership.status == 'ACCEPTED' %}
+          <form method="post" action="{% url 'clan_leave' slug=clan.slug %}" onsubmit="return confirm('Möchtest du den Clan {{ clan.name }} wirklich verlassen?');">
+            {% csrf_token %}
+            <button type="submit" style="background: #dc2626; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+              🚪 Clan verlassen
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- PENDING REQUESTS SECTION FOR CLAN ADMINS -->
+  {% if is_clan_admin and pending_memberships %}
+    <div class="card" style="padding: 24px; border-radius: 12px; background: rgba(234, 179, 8, 0.1); border: 1px solid #eab308;">
+      <p class="eyebrow" style="color: #b45309; margin-bottom: 4px;">Admin-Verwaltung</p>
+      <h3 style="font-family: 'Barlow Condensed', sans-serif; font-size: 24px; margin-top: 0; margin-bottom: 16px; color: #78350f;">
+        Offene Beitrittsanfragen ({{ pending_memberships|length }})
+      </h3>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        {% for req in pending_memberships %}
+          <div style="background: var(--paper); border: 1px solid #fde047; padding: 14px 18px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <strong style="font-family: 'JetBrains Mono', monospace; font-size: 14px;">{{ req.user.username }}</strong>
+              <small style="color: var(--muted); font-size: 12px; display: block;">Angefragt am: {{ req.created_at|date:"d.m.Y H:i" }} Uhr</small>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <form method="post" action="{% url 'clan_manage_request' slug=clan.slug membership_id=req.id %}">
+                {% csrf_token %}
+                <button type="submit" name="action" value="accept" style="background: #22c55e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+                  ✓ Akzeptieren
+                </button>
+                <button type="submit" name="action" value="reject" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+                  ✕ Ablehnen
+                </button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- MITGLIEDERLISTE (VOLLE BREITE) -->
+  <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+    <p class="eyebrow" style="margin-bottom: 4px;">Roster</p>
+    <h3 style="font-family: 'Barlow Condensed', sans-serif; font-size: 24px; margin-top: 0; margin-bottom: 20px;">
+      Clan-Mitglieder ({{ members_with_seats|length }})
+    </h3>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      {% for item in members_with_seats %}
+        <div style="background: var(--panel); border: 1px solid var(--line); padding: 14px 18px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <strong style="font-size: 15px; font-family: 'JetBrains Mono', monospace;">{{ item.user.username }}</strong>
+              {% if item.membership.role == 'ADMIN' %}
+                <span style="background: rgba(37, 99, 235, 0.15); border: 1px solid #2563eb; color: #2563eb; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: bold;">
+                  👑 Clan-Admin
+                </span>
+              {% endif %}
+            </div>
+            <small style="color: var(--muted); font-size: 12px; font-family: 'JetBrains Mono', monospace;">
+              Beigetreten: {{ item.membership.created_at|date:"d.m.Y" }}
+            </small>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+            <!-- Sitzplatz Info -->
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink); background: var(--paper); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line);">
+              🪑 {{ item.seat_label|default:"Kein Sitzplatz" }}
+            </span>
+
+            <!-- Admin Actions for Member -->
+            {% if is_clan_admin and item.user != request.user %}
+              <form method="post" action="{% url 'clan_manage_member' slug=clan.slug membership_id=item.membership.id %}" style="display: inline-flex; gap: 6px;">
+                {% csrf_token %}
+                {% if item.membership.role != 'ADMIN' %}
+                  <button type="submit" name="action" value="promote" title="Zum Admin befördern" style="background: var(--line); color: var(--ink); border: 1px solid var(--line); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer;">
+                    👑 Admin machen
+                  </button>
+                {% endif %}
+                <button type="submit" name="action" value="kick" onclick="return confirm('Mitglied {{ item.user.username }} wirklich aus dem Clan entfernen?');" title="Aus Clan entfernen" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer;">
+                  🗑️ Kick
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- BEITRITTS-OPTIONEN (FÜR GÄSTE DIE NOCH NICHT IM CLAN SIND) -->
+  {% if not user_membership and user.is_authenticated %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+      <!-- PASSWORT BEITRITT -->
+      <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+        <p class="eyebrow" style="margin-bottom: 4px;">Direktbeitritt</p>
+        <h3 style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; margin-top: 0; margin-bottom: 12px;">
+          Mit Passwort beitreten
+        </h3>
+
+        <form method="post" action="{% url 'clan_join_password' slug=clan.slug %}">
+          {% csrf_token %}
+          <div class="form-group">
+            <label for="id_password">Clan-Passwort:</label>
+            <input type="password" name="password" id="id_password" class="form-control" placeholder="Passwort eingeben" required>
+          </div>
+          <button type="submit" style="background: #22c55e; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 13px; cursor: pointer; width: 100%;">
+            🔑 Sofort beitreten
+          </button>
+        </form>
+      </div>
+
+      <!-- ANFRAGE STELLEN -->
+      <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+        <p class="eyebrow" style="margin-bottom: 4px;">Bewerbung</p>
+        <h3 style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; margin-top: 0; margin-bottom: 12px;">
+          Beitrittsanfrage stellen
+        </h3>
+        <p style="font-size: 13px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-bottom: 16px;">
+          Du kennst das Passwort nicht? Sende dem Clan-Admin eine Beitrittsanfrage.
+        </p>
+
+        {% if current_clan_membership and current_clan_membership.status == 'PENDING' %}
+          <div style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #eab308; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: bold; text-align: center;">
+            ⏳ Beitrittsanfrage gesendet (Warte auf Admin-Bestätigung)
+          </div>
+        {% else %}
+          <form method="post" action="{% url 'clan_request_join' slug=clan.slug %}">
+            {% csrf_token %}
+            <button type="submit" style="background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 13px; cursor: pointer; width: 100%;">
+              📩 Anfrage senden
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+  {% elif user_membership and user_membership.clan != clan %}
+    <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+      <p style="margin: 0; font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
+        ℹ️ Du bist aktuell Mitglied im Clan <strong>{{ user_membership.clan.name }}</strong>. Du musst deinen Clan verlassen, bevor du einem neuen beitreten kannst.
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}News & Ankündigungen – Haag-networX{% endblock %}
+
+{% block content %}
+<div class="card">
+  <p class="eyebrow">Aktuelles</p>
+  <h1>News & Ankündigungen</h1>
+  <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">
+
+  <div class="news-feed" style="display: flex; flex-direction: column; gap: 20px;">
+    {% for article in articles %}
+      <article class="card" style="background: var(--paper); border: 1px solid var(--line); padding: 20px;">
+        <header style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+          <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px;">{{ article.title }}</h2>
+          <small style="color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+            {{ article.created_at|date:"d.m.Y H:i" }} Uhr {% if article.author %}von {{ article.author.username }}{% endif %}
+          </small>
+        </header>
+        <div style="font-size: 15px; line-height: 1.6; color: var(--ink);">
+          {{ article.content|linebreaks }}
+        </div>
+      </article>
+    {% empty %}
+      <p style="color: var(--muted);">Aktuell gibt es keine veröffentlichten News.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

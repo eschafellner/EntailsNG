@@ -1,0 +1,19 @@
+# Python / Virtual Environment
+staticfiles/
+media/
+db.sqlite3
+__pycache__/
+*.pyc
+.venv/
+
+# SQLite Datenbank (nicht ins Git, damit jeder Tester eine frische DB hat)
+*.sqlite3
+db.sqlite3
+
+# Django-Geheimnisse / Umgebungsvariablen
+.env
+
+# IDE / Editor Einstellungen
+.vscode/
+.idea/
+*.swp
