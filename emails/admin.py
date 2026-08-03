@@ -1,20 +1,28 @@
 from django.contrib import admin, messages
 from django.shortcuts import redirect, render
 from django.urls import path
+from .dns_checker import check_domain_dns_health
 from .models import EmailTemplate, GeneralEmailSettings
 from .services import send_test_email
 
 
 @admin.register(GeneralEmailSettings)
 class GeneralEmailSettingsAdmin(admin.ModelAdmin):
-    list_display = ('__str__', 'sender_email', 'is_enabled', 'is_sandbox')
+    list_display = ('__str__', 'sender_email', 'domain_name', 'is_enabled', 'is_sandbox')
 
     fieldsets = (
         (
             'Allgemeine E-Mail Einstellungen',
             {
-                'fields': ('sender_email', 'sender_name', 'is_enabled'),
+                'fields': ('sender_email', 'sender_name', 'reply_to_email', 'is_enabled'),
                 'description': 'Grundlegende Absender-Informationen und Hauptschalter für den E-Mail-Versand.',
+            },
+        ),
+        (
+            'Domain-Verwaltung & DNS-Check',
+            {
+                'fields': ('domain_name',),
+                'description': 'Eure Haupt-Domain für die DNS-Zustellbarkeitsprüfung (SPF, DMARC, MX, DKIM).',
             },
         ),
         (
@@ -25,7 +33,7 @@ class GeneralEmailSettingsAdmin(admin.ModelAdmin):
             },
         ),
         (
-            'SMTP-Server Einstellungen (Optional)',
+            'Eigener SMTP-Mailserver / Hoster (Optional)',
             {
                 'fields': (
                     'smtp_host',
@@ -35,7 +43,7 @@ class GeneralEmailSettingsAdmin(admin.ModelAdmin):
                     'smtp_use_tls',
                 ),
                 'classes': ('collapse',),
-                'description': 'Eigenen SMTP-Server konfigurieren. Wenn leer, werden die Standard-Systemeinstellungen verwendet.',
+                'description': 'Hinterlegt hier die SMTP-Zugangsdaten eures eigenen Mailservers oder Hosters (z. B. Postfix, Exchange, Hetzner, Strato).',
             },
         ),
     )
@@ -61,8 +69,26 @@ class GeneralEmailSettingsAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.send_test_email_view),
                 name='emails_send_test_email',
             ),
+            path(
+                'check-dns-health/',
+                self.admin_site.admin_view(self.check_dns_health_view),
+                name='emails_check_dns_health',
+            ),
         ]
         return custom_urls + urls
+
+    def check_dns_health_view(self, request):
+        settings = GeneralEmailSettings.load()
+        domain = settings.domain_name or (settings.sender_email.split('@')[-1] if '@' in settings.sender_email else '')
+        dns_result = check_domain_dns_health(domain)
+
+        context = {
+            'title': 'Domain-Health Check & DNS-Assistent',
+            'domain': domain,
+            'dns_result': dns_result,
+            'opts': self.model._meta,
+        }
+        return render(request, 'emails/admin_dns_check.html', context)
 
     def send_test_email_view(self, request):
         settings = GeneralEmailSettings.load()

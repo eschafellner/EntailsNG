@@ -16,6 +16,19 @@ class GeneralEmailSettings(models.Model):
         verbose_name="Absender Name",
         help_text="Anzeigename des Absenders (z. B. EntailsNG Team).",
     )
+    reply_to_email = models.EmailField(
+        blank=True,
+        default='',
+        verbose_name="Antwort E-Mail-Adresse (Reply-To)",
+        help_text="Ziel-Adresse, wenn Gäste auf System-E-Mails antworten (z. B. support@verein.de). Leer lassen = Absender-Adresse.",
+    )
+    domain_name = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        verbose_name="E-Mail Versand-Domain",
+        help_text="Eure Haupt-Domain für den DNS-Health Check (z. B. lan-party.de).",
+    )
 
     is_enabled = models.BooleanField(
         default=True,

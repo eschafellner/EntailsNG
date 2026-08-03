@@ -61,6 +61,7 @@ def send_system_email(template_key, recipient_email, context_data):
     text_content = strip_tags(html_content)
 
     sender = f"{settings.sender_name} <{settings.sender_email}>"
+    reply_to = [settings.reply_to_email] if settings.reply_to_email else None
 
     # 5. E-Mail versenden (Eigenes SMTP-Setup oder Django-Standard)
     try:
@@ -79,6 +80,7 @@ def send_system_email(template_key, recipient_email, context_data):
             body=text_content,
             from_email=sender,
             to=[target_recipient],
+            reply_to=reply_to,
             connection=connection,
         )
         msg.attach_alternative(html_content, "text/html")

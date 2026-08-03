@@ -1,0 +1,83 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 20px 0; font-family: system-ui, -apple-system, sans-serif;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h2>🔍 Domain-Health Check & DNS-Assistent</h2>
+    <a href="{% url 'admin:emails_generalemailsettings_changelist' %}" class="button" style="padding: 8px 16px; text-decoration: none;">
+      ← Zurück zu den Einstellungen
+    </a>
+  </div>
+
+  <p>Hier wird der Live-Status eurer E-Mail Versand-Domain <strong>{{ domain }}</strong> im globalen DNS-Netzwerk geprüft.</p>
+
+  {% if dns_result.status == 'error' %}
+    <div style="background: #ef444422; border: 1px solid #ef4444; color: #f87171; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+      ⚠️ {{ dns_result.message }} Bitte hinterlege eine Domain (z. B. <code>lan-party.de</code>) in den Einstellungen.
+    </div>
+  {% else %}
+
+  <!-- Status Dashboard Cards -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 30px;">
+    
+    <!-- SPF Status -->
+    <div style="background: var(--darkened-bg, #1f2937); border-radius: 8px; padding: 16px; border: 1px solid {% if dns_result.spf.valid %}#10b981{% else %}#f59e0b{% endif %};">
+      <div style="font-size: 0.85rem; color: #9ca3af;">SPF RECORD (VERSAND)</div>
+      <div style="font-size: 1.25rem; font-weight: bold; margin: 8px 0; color: {% if dns_result.spf.valid %}#10b981{% else %}#f59e0b{% endif %};">
+        {% if dns_result.spf.valid %}🟢 Gültig{% else %}⚠️ Fehlt im DNS{% endif %}
+      </div>
+      <div style="font-size: 0.8rem; color: #cbd5e1;">{{ dns_result.spf.details }}</div>
+    </div>
+
+    <!-- DMARC Status -->
+    <div style="background: var(--darkened-bg, #1f2937); border-radius: 8px; padding: 16px; border: 1px solid {% if dns_result.dmarc.valid %}#10b981{% else %}#3b82f6{% endif %};">
+      <div style="font-size: 0.85rem; color: #9ca3af;">DMARC SCHUTZ</div>
+      <div style="font-size: 1.25rem; font-weight: bold; margin: 8px 0; color: {% if dns_result.dmarc.valid %}#10b981{% else %}#3b82f6{% endif %};">
+        {% if dns_result.dmarc.valid %}🟢 Vorhanden{% else %}ℹ️ Optional / Empfohlen{% endif %}
+      </div>
+      <div style="font-size: 0.8rem; color: #cbd5e1;">{{ dns_result.dmarc.details }}</div>
+    </div>
+
+    <!-- MX Status -->
+    <div style="background: var(--darkened-bg, #1f2937); border-radius: 8px; padding: 16px; border: 1px solid {% if dns_result.mx.valid %}#10b981{% else %}#ef4444{% endif %};">
+      <div style="font-size: 0.85rem; color: #9ca3af;">MX EMPFANGS-SERVER</div>
+      <div style="font-size: 1.25rem; font-weight: bold; margin: 8px 0; color: {% if dns_result.mx.valid %}#10b981{% else %}#ef4444{% endif %};">
+        {% if dns_result.mx.valid %}🟢 Vorhanden{% else %}🔴 Nicht gefunden{% endif %}
+      </div>
+      <div style="font-size: 0.8rem; color: #cbd5e1;">{{ dns_result.mx.details }}</div>
+    </div>
+
+    <!-- DKIM Status -->
+    <div style="background: var(--darkened-bg, #1f2937); border-radius: 8px; padding: 16px; border: 1px solid {% if dns_result.dkim.valid %}#10b981{% else %}#9ca3af{% endif %};">
+      <div style="font-size: 0.85rem; color: #9ca3af;">DKIM SIGNATUR</div>
+      <div style="font-size: 1.25rem; font-weight: bold; margin: 8px 0; color: {% if dns_result.dkim.valid %}#10b981{% else %}#9ca3af{% endif %};">
+        {% if dns_result.dkim.valid %}🟢 Signiert{% else %}ℹ️ Vom Hoster verwaltet{% endif %}
+      </div>
+      <div style="font-size: 0.8rem; color: #cbd5e1;">{{ dns_result.dkim.details }}</div>
+    </div>
+
+  </div>
+
+  <!-- DNS Copy-Paste Assistant -->
+  <div style="background: var(--darkened-bg, #1f2937); border-radius: 8px; padding: 24px; border: 1px solid var(--border-color, #374151); margin-bottom: 24px;">
+    <h3 style="margin-top: 0; color: #38bdf8;">📋 DNS-Assistent (Empfohlene Kopier-Vorlagen für euren Domain-Hoster)</h3>
+    <p style="color: #9ca3af;">Fügt diese TXT-Einträge bei eurem Domain-Registrar (z. B. Hetzner, Strato, ALL-INKL, Netcup, HostEurope) ein, damit E-Mails garantiert ankommen:</p>
+
+    <!-- SPF Copy Box -->
+    <div style="margin-bottom: 16px; background: #111827; padding: 16px; border-radius: 6px; border-left: 4px solid #10b981;">
+      <div style="font-weight: bold; margin-bottom: 4px;">1. SPF TXT-Eintrag für {{ domain }}</div>
+      <div style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 8px;">Typ: <code>TXT</code> | Name: <code>@</code> (oder leer) | Wert:</div>
+      <code style="display: block; background: #000000; padding: 8px 12px; border-radius: 4px; color: #4ade80; font-family: monospace;">{{ dns_result.spf.recommended }}</code>
+    </div>
+
+    <!-- DMARC Copy Box -->
+    <div style="background: #111827; padding: 16px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+      <div style="font-weight: bold; margin-bottom: 4px;">2. DMARC TXT-Eintrag für _dmarc.{{ domain }}</div>
+      <div style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 8px;">Typ: <code>TXT</code> | Name: <code>_dmarc</code> | Wert:</div>
+      <code style="display: block; background: #000000; padding: 8px 12px; border-radius: 4px; color: #60a5fa; font-family: monospace;">{{ dns_result.dmarc.recommended }}</code>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}
