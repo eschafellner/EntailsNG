@@ -10,26 +10,61 @@ Dieses Repository wurde so vorbereitet, dass auch **weniger IT-affine Kolleginne
 
 ---
 
-## ⚡ Schnellstartanleitung (in 2 Schritten)
+## 💡 Warum eine virtuelle Umgebung (`.venv`) sinnvoll ist
 
-### 1. Schritt: Installation ausführen
-Öffne ein Terminal in diesem Ordner und führe folgenden Befehl aus:
+Eine **virtuelle Umgebung** (Virtual Environment) erstellt einen isolierten "Sandkasten" für Python. Das bietet folgende Vorteile:
 
-```bash
-./install.sh
-```
-*Das Skript richtet automatisch die isolierte Python-Umgebung ein, installiert alle benötigten Pakete und stellt die Datenbank-Struktur sowie die Demo-Daten bereit.*
+* 🛡️ **Keine Konflikte:** Alle benötigten Bibliotheken (Django, TinyMCE etc.) werden nur in diesen Projektordner installiert, ohne das globale Betriebssystem zu verändern.
+* 🔄 **Saubere Installation:** Sollte etwas schiefgehen, kann der Ordner `.venv` einfach gelöscht und mit einem Befehl neu angelegt werden.
+* 📦 **Identische Umgebung:** Alle Entwickler und Tester arbeiten exakt mit denselben Paketversionen.
 
 ---
 
-### 2. Schritt: Server starten
-Führe danach einfach folgendes Startskript aus:
+## ⚡ Einrichtungsanleitung (Nach Betriebssystem aufgeteilt)
 
+### 🐧 Für Linux-User (Fedora / Ubuntu / Debian)
+
+#### Option 1: Automatisch (1-Klick)
+Öffne ein Terminal im Projektordner und führe aus:
 ```bash
-./start.sh
+./install.sh   # Einmalige Einrichtung
+./start.sh     # Server starten
 ```
 
-Fertig! Der Server läuft nun.
+#### Option 2: Manuell im Terminal
+```bash
+# 1. Virtuelle Umgebung anlegen & aktivieren
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 2. Abhängigkeiten installieren
+pip install -r requirements.txt
+
+# 3. Datenbank strukturieren & Server starten
+python manage.py migrate
+python manage.py runserver
+```
+
+---
+
+### 🪟 Für Windows-User (PowerShell / Eingabeaufforderung)
+
+#### Manuelle Einrichtung in der PowerShell:
+```powershell
+# 1. Virtuelle Umgebung anlegen
+python -m venv .venv
+
+# 2. Virtuelle Umgebung aktivieren
+.venv\Scripts\Activate.ps1
+# (Falls Eingabeaufforderung / CMD genutzt wird: .venv\Scripts\activate.bat)
+
+# 3. Abhängigkeiten installieren
+pip install -r requirements.txt
+
+# 4. Datenbank strukturieren & Server starten
+python manage.py migrate
+python manage.py runserver
+```
 
 ---
 
@@ -42,7 +77,7 @@ Sobald der Server gestartet ist, öffne deinen Internet-Browser (z. B. Chrome, F
 | **🌐 Hauptseite / Dashboard** | [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Hauptübersicht mit aktuellem Event, Ticket-Status, News & Saalplan-Vorschau. |
 | **🗺️ Interaktiver Sitzplan** | [http://127.0.0.1:8000/seating/](http://127.0.0.1:8000/seating/) | 2D-Saalplan mit Zoom & Verschieben (Performance-optimiert für bis zu 1.000 Plätze). |
 | **📱 Helfer Check-in Scanner** | [http://127.0.0.1:8000/checkin/scanner/](http://127.0.0.1:8000/checkin/scanner/) | Vor-Ort Einlass-Tool für Helfer mit Kamera-QR-Scan & Ton-Feedback *(Nur für Mitarbeiter)*. |
-| **🛠️ Admin-Verwaltung** | [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/) | Django Verwaltungsoberfläche für Events, Sitzpläne, Freigaben & User. |
+| **🛠️ Admin-Verwaltung** | [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/) | Django Verwaltungsoberfläche für Events, Sitzpläne, E-Mail-Konfiguration & User. |
 
 ---
 
@@ -74,8 +109,6 @@ EntailsNG ist für den **PostgreSQL-Betrieb** ausgelegt.
   ```bash
   sudo systemctl start postgresql
   ```
-
-*Hinweis: Wenn PostgreSQL gestartet ist, wird automatisch die PostgreSQL-Datenbank verwendet.*
 
 ---
 
