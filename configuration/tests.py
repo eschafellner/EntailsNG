@@ -64,6 +64,7 @@ class ConfigurationModelTests(TestCase):
 
         config = GeneralConfiguration.load()
         config.ticket_enabled = False
+        config.ticket_days_before_event = 0
         config.save()
 
         self.assertFalse(should_show_onboarding_ticket())
@@ -71,3 +72,26 @@ class ConfigurationModelTests(TestCase):
         config.ticket_enabled = True
         config.save()
         self.assertTrue(should_show_onboarding_ticket())
+
+    def test_general_configuration_days_before_event(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from configuration.models import GeneralConfiguration
+        from configuration.services import should_show_onboarding_ticket
+        from events.models import Event
+
+        config = GeneralConfiguration.load()
+        config.ticket_days_before_event = 1  # Nur 1 Tag vor Event
+        config.save()
+
+        # Event startet in 2 Tagen und 17 Stunden (65 Stunden)
+        future_event = Event(
+            title="Zukunfts-LAN",
+            slug="zukunfts-lan",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=2, hours=17),
+            end_date=timezone.now() + timedelta(days=4),
+        )
+
+        # Ticket darf bei x=1 Tag NICHT angezeigt werden
+        self.assertFalse(should_show_onboarding_ticket(upcoming_event=future_event))

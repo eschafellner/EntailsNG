@@ -18,9 +18,23 @@ def should_show_onboarding_ticket(user=None, upcoming_event=None, user_registrat
     if config.ticket_days_before_event > 0:
         if not upcoming_event or not upcoming_event.start_date:
             return False
-        days_until_event = (upcoming_event.start_date.date() - timezone.now().date()).days
+
+        now = timezone.now()
+        # Präzise Datums- & Zeitdifferenz in Tagen (lokale Zeitzone berücksichtigend)
+        local_now_date = timezone.localtime(now).date()
+        local_event_date = timezone.localtime(upcoming_event.start_date).date()
+        days_until_event = (local_event_date - local_now_date).days
+
+        # Wenn der zeitliche Abstand in Tagen größer ist als der konfigurierte Wert X
         if days_until_event > config.ticket_days_before_event:
             return False
+
+        # Zusätzliche Prüfung auf Stunden-Ebene (falls Event in der Zukunft liegt)
+        if upcoming_event.start_date > now:
+            remaining_seconds = (upcoming_event.start_date - now).total_seconds()
+            max_seconds = config.ticket_days_before_event * 86400
+            if remaining_seconds > max_seconds:
+                return False
 
     # 3. Prüfen, ob Ticket nur angezeigt wird, wenn der Gast bezahlt hat
     if config.ticket_requires_payment:
