@@ -172,3 +172,60 @@ class ProfileViewTests(TestCase):
         # Verify user can login with new password
         login_success = self.client.login(username='profuser', password='BrandNewPass123!')
         self.assertTrue(login_success)
+
+
+class AuthBackendAndLockoutTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='authuser',
+            email='authuser@example.com',
+            password='CorrectPassword123!',
+        )
+
+    def test_login_via_username(self):
+        login_success = self.client.login(username='authuser', password='CorrectPassword123!')
+        self.assertTrue(login_success)
+
+    def test_login_via_email(self):
+        login_success = self.client.login(username='authuser@example.com', password='CorrectPassword123!')
+        self.assertTrue(login_success)
+
+    def test_unique_email_registration(self):
+        response = self.client.post(
+            reverse('register'),
+            {
+                'username': 'anotheruser',
+                'email': 'authuser@example.com',  # Bereits vergeben!
+                'birthday': '2000-01-01',
+                'password1': 'StrongPass123!',
+                'password2': 'StrongPass123!',
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response.context['form'],
+            'email',
+            'Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.',
+        )
+
+    def test_account_lockout_after_5_failed_attempts(self):
+        # 4 fehlgeschlagene Logins durchführen
+        for _ in range(4):
+            self.client.login(username='authuser', password='WrongPassword')
+            self.user.refresh_from_db()
+            self.assertEqual(self.user.failed_login_attempts, _ + 1)
+            self.assertFalse(self.user.is_locked())
+
+        # 5. fehlgeschlagener Versuch -> Konto wird für 15 Minuten gesperrt
+        response = self.client.post(
+            reverse('login'),
+            {'username': 'authuser', 'password': 'WrongPassword'},
+        )
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_login_attempts, 5)
+        self.assertTrue(self.user.is_locked())
+
+        # Selbst mit richtigem Passwort schlägt der Login während der Sperre fehl
+        login_during_lock = self.client.login(username='authuser', password='CorrectPassword123!')
+        self.assertFalse(login_during_lock)

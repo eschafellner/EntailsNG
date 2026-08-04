@@ -20,8 +20,12 @@
       </div>
 
       {% if form.errors %}
-        <div class="error-msg">
-          Benutzername oder Passwort ist falsch. Bitte versuche es erneut.
+        <div class="error-msg" style="margin-bottom: 16px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 12px; border-radius: 8px; font-size: 13px; line-height: 1.4;">
+          {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+          {% empty %}
+            <div>Benutzername/E-Mail-Adresse oder Passwort ist falsch. Bitte versuche es erneut.</div>
+          {% endfor %}
         </div>
       {% endif %}
 

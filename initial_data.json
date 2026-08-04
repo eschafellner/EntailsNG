@@ -327,6 +327,8 @@
     "date_joined": "2026-07-21T19:16:45Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -346,6 +348,8 @@
     "date_joined": "2026-07-21T19:19:03Z",
     "role": "ADMIN",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -365,6 +369,8 @@
     "date_joined": "2026-07-23T09:33:15Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -384,6 +390,8 @@
     "date_joined": "2026-07-23T18:50:30Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -403,6 +411,8 @@
     "date_joined": "2026-07-23T18:56:34Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -422,6 +432,8 @@
     "date_joined": "2026-07-23T18:56:54Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -441,6 +453,8 @@
     "date_joined": "2026-07-23T19:30:49Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -460,6 +474,8 @@
     "date_joined": "2026-07-24T09:34:03.439Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -479,6 +495,8 @@
     "date_joined": "2026-07-24T09:39:38.396Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -498,6 +516,8 @@
     "date_joined": "2026-07-24T19:42:31.350Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -517,6 +537,8 @@
     "date_joined": "2026-07-24T20:18:51.277Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -536,6 +558,8 @@
     "date_joined": "2026-07-24T20:22:12.773Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -555,6 +579,8 @@
     "date_joined": "2026-07-25T13:37:42.966Z",
     "role": "USER",
     "birthday": null,
+    "failed_login_attempts": 0,
+    "locked_until": null,
     "groups": [],
     "user_permissions": []
   }
@@ -1685,6 +1711,22 @@
   "fields": {
     "key": "pw_reset_complete_text",
     "text": "Dein Passwort wurde erfolgreich geändert. Du kannst dich jetzt anmelden."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 98,
+  "fields": {
+    "key": "auth_account_locked",
+    "text": "Dein Konto wurde wegen 5 fehlerhafter Anmeldeversuche für 15 Minuten gesperrt. Du kannst dein Passwort zurücksetzen, um die Sperre aufzuheben."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 99,
+  "fields": {
+    "key": "auth_email_exists",
+    "text": "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet."
   }
 },
 {

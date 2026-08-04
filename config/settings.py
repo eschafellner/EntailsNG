@@ -155,3 +155,7 @@ AUTH_USER_MODEL = 'users.User'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 LOGIN_URL = '/login/'
+
+AUTHENTICATION_BACKENDS = [
+    'users.auth_backends.EmailOrUsernameBackend',
+]

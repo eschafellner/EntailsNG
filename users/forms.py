@@ -23,6 +23,14 @@ class CustomUserCreationForm(UserCreationForm):
         model = User
         fields = ("username", "email", "birthday")
 
+    def clean_email(self):
+        email = self.cleaned_data.get('email', '').strip()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError(
+                "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet."
+            )
+        return email
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # CSS-Klasse auch für den Usernamen setzen
@@ -46,6 +54,43 @@ class UserProfileForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ("email", "birthday")
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email', '').strip()
+        query = User.objects.filter(email__iexact=email)
+        if self.instance and self.instance.pk:
+            query = query.exclude(pk=self.instance.pk)
+        if query.exists():
+            raise forms.ValidationError(
+                "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet."
+            )
+        return email
+
+
+from django.contrib.auth.forms import AuthenticationForm
+
+class CustomAuthenticationForm(AuthenticationForm):
+    username = forms.CharField(
+        label="Benutzername oder E-Mail-Adresse",
+        widget=forms.TextInput(attrs={"class": "form-control", "autofocus": True}),
+    )
+    password = forms.CharField(
+        label="Passwort",
+        widget=forms.PasswordInput(attrs={"class": "form-control"}),
+    )
+
+    def clean(self):
+        try:
+            return super().clean()
+        except forms.ValidationError:
+            if getattr(self.request, 'account_locked', False):
+                raise forms.ValidationError(
+                    "Dein Konto wurde wegen 5 fehlerhafter Anmeldeversuche für 15 Minuten gesperrt. "
+                    "Du kannst dein Passwort zurücksetzen, um die Sperre sofort aufzuheben."
+                )
+            raise forms.ValidationError(
+                "Benutzername/E-Mail-Adresse oder Passwort ist falsch. Bitte versuche es erneut."
+            )
 
 
 class CustomPasswordResetForm(forms.Form):

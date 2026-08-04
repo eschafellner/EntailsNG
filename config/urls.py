@@ -4,7 +4,8 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
-from users.forms import CustomPasswordResetForm
+from users import views
+from users.forms import CustomAuthenticationForm, CustomPasswordResetForm
 
 urlpatterns = [
     # 1. Startseite / Haupt-Dashboard
@@ -17,7 +18,10 @@ urlpatterns = [
     path('', include('users.urls')),
     path(
         'login/',
-        auth_views.LoginView.as_view(template_name='auth/login.html'),
+        auth_views.LoginView.as_view(
+            template_name='auth/login.html',
+            authentication_form=CustomAuthenticationForm,
+        ),
         name='login',
     ),
     path(
@@ -44,9 +48,7 @@ urlpatterns = [
     ),
     path(
         'password-reset-confirm/<uidb64>/<token>/',
-        auth_views.PasswordResetConfirmView.as_view(
-            template_name='auth/password_reset_confirm.html'
-        ),
+        views.CustomPasswordResetConfirmView.as_view(),
         name='password_reset_confirm',
     ),
     path(

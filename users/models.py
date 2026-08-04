@@ -16,17 +16,41 @@ class User(AbstractUser):
         verbose_name="Rolle"
     )
 
-    # Das einzige zusätzliche Stammdaten-Feld für den MVP:
+    # Stammdaten-Feld
     birthday = models.DateField(
-        null=True,
-        blank=True,
-        verbose_name="Geburtsdatum"
+        null=True, blank=True, verbose_name="Geburtsdatum"
     )
 
-
+    # Sicherheit & Login-Sperre
+    failed_login_attempts = models.PositiveIntegerField(
+        default=0, verbose_name="Fehlgeschlagene Anmeldeversuche"
+    )
+    locked_until = models.DateTimeField(
+        null=True, blank=True, verbose_name="Gesperrt bis"
+    )
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
+
+    def is_locked(self):
+        from django.utils import timezone
+        if self.locked_until and timezone.now() < self.locked_until:
+            return True
+        return False
+
+    def register_failed_login(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        self.failed_login_attempts += 1
+        if self.failed_login_attempts >= 5:
+            self.locked_until = timezone.now() + timedelta(minutes=15)
+        self.save(update_fields=['failed_login_attempts', 'locked_until'])
+
+    def reset_lockout(self):
+        if self.failed_login_attempts > 0 or self.locked_until is not None:
+            self.failed_login_attempts = 0
+            self.locked_until = None
+            self.save(update_fields=['failed_login_attempts', 'locked_until'])
 
 
 class EmailVerificationCode(models.Model):

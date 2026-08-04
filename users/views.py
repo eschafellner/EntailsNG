@@ -11,7 +11,18 @@ from events.models import EventRegistration
 from .forms import CustomUserCreationForm, UserProfileForm
 from .models import EmailVerificationCode
 
+from django.contrib.auth.views import PasswordResetConfirmView
+
 User = get_user_model()
+
+
+class CustomPasswordResetConfirmView(PasswordResetConfirmView):
+    template_name = 'auth/password_reset_confirm.html'
+
+    def form_valid(self, form):
+        user = form.save()
+        user.reset_lockout()
+        return super().form_valid(form)
 
 
 def register_view(request):
@@ -84,7 +95,7 @@ def verify_email_view(request):
                 del request.session['pending_verification_user_id']
 
             # Automatisch einloggen & zum Dashboard weiterleiten
-            login(request, user)
+            login(request, user, backend='users.auth_backends.EmailOrUsernameBackend')
             messages.success(
                 request,
                 request.GET.get('msg') or "E-Mail erfolgreich verifiziert! Willkommen bei EntailsNG.",
