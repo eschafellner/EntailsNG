@@ -265,35 +265,38 @@ def feature_flags(request):
         context['event_reserved_seats'] = reserved_seats
         context['event_capacity_percent'] = capacity_percent
 
-    if not (request.user.is_authenticated and upcoming_event):
-        return context
-
-    registration = (
-        EventRegistration.objects.filter(
-            event=upcoming_event, user=request.user
+    if request.user.is_authenticated and upcoming_event:
+        registration = (
+            EventRegistration.objects.filter(
+                event=upcoming_event, user=request.user
+            )
+            .select_related('user')
+            .first()
         )
-        .select_related('user')
-        .first()
+        if registration:
+            context['user_registration'] = registration
+            context['is_user_registered'] = True
+
+            if registration.is_checked_in:
+                context['user_status_step'] = 4
+            elif registration.payment_status == EventRegistration.PaymentStatus.PAID:
+                context['user_status_step'] = 3
+            else:
+                context['user_status_step'] = 2
+
+            cell = SeatingCell.objects.filter(
+                plan__event=upcoming_event, registration__user=request.user
+            ).first()
+            if cell:
+                context['user_seat_label'] = (
+                    cell.seat_label or f'Pos ({cell.x},{cell.y})'
+                )
+
+    from .services import should_show_onboarding_ticket
+    context['show_onboarding_ticket'] = should_show_onboarding_ticket(
+        user=request.user,
+        upcoming_event=upcoming_event,
+        user_registration=context.get('user_registration'),
     )
-    if registration is None:
-        return context
-
-    context['user_registration'] = registration
-    context['is_user_registered'] = True
-
-    if registration.is_checked_in:
-        context['user_status_step'] = 4
-    elif registration.payment_status == EventRegistration.PaymentStatus.PAID:
-        context['user_status_step'] = 3
-    else:
-        context['user_status_step'] = 2
-
-    cell = SeatingCell.objects.filter(
-        plan__event=upcoming_event, registration__user=request.user
-    ).first()
-    if cell:
-        context['user_seat_label'] = (
-            cell.seat_label or f'Pos ({cell.x},{cell.y})'
-        )
 
     return context

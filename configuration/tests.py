@@ -57,3 +57,17 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(data['status'], 'healthy')
         self.assertEqual(data['database'], 'ok')
         self.assertEqual(data['cache'], 'ok')
+
+    def test_general_configuration_ticket_toggle(self):
+        from configuration.models import GeneralConfiguration
+        from configuration.services import should_show_onboarding_ticket
+
+        config = GeneralConfiguration.load()
+        config.ticket_enabled = False
+        config.save()
+
+        self.assertFalse(should_show_onboarding_ticket())
+
+        config.ticket_enabled = True
+        config.save()
+        self.assertTrue(should_show_onboarding_ticket())

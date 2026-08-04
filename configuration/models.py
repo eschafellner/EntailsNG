@@ -139,3 +139,49 @@ class FeatureFlag(models.Model):
         cache.delete('feature_flags_dict')
 
 
+class GeneralConfiguration(models.Model):
+    """
+    Zentrale allgemeine Konfiguration für Systemeinstellungen (z. B. Ticket-Anzeige).
+    Singleton-Muster: Es existiert nur 1 Datensatz in der Datenbank (pk=1).
+    """
+
+    ticket_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Ticket anzeigen",
+        help_text="Schaltet die Anzeige des Ticket-Bereichs auf dem Dashboard generell ein oder aus.",
+    )
+    ticket_days_before_event = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Ticket nur anzeigen X Tage vor Event-Start",
+        help_text="Anzahl der Tage vor dem Event. Bei > 0 wird das Ticket erst in diesem Zeitraum vor Event-Start angezeigt (0 = immer anzeigen).",
+    )
+    ticket_requires_payment = models.BooleanField(
+        default=False,
+        verbose_name="Ticket nur anzeigen, wenn der Gast eingezahlt hat",
+        help_text="Wenn aktiviert, sieht der Gast die Ticket-Karte auf dem Dashboard erst, nachdem seine Zahlung verbucht wurde.",
+    )
+
+    class Meta:
+        verbose_name = "Allgemeine Konfiguration"
+        verbose_name_plural = "Allgemeine Konfiguration"
+
+    def __str__(self):
+        return "Allgemeine Konfiguration"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+        cache.delete('general_configuration')
+
+    def delete(self, *args, **kwargs):
+        pass  # Verhindert das Löschen der Einstellungen
+
+    @classmethod
+    def load(cls):
+        conf = cache.get('general_configuration')
+        if conf is None:
+            conf, _ = cls.objects.get_or_create(pk=1)
+            cache.set('general_configuration', conf, 300)
+        return conf
+
+
