@@ -15,8 +15,8 @@
     <div class="auth-card">
       <div class="auth-header">
         <div class="brand-mark">HNX</div>
-        <h1>Willkommen zurück</h1>
-        <p style="color: var(--muted); font-size: 14px;">Melde dich an, um auf deine Anmeldungen und Sitzplätze zuzugreifen.</p>
+        <h1>{{ txt_auth_login_title }}</h1>
+        <p style="color: var(--muted); font-size: 14px;">{{ txt_auth_login_subtitle }}</p>
       </div>
 
       {% if form.errors %}
@@ -28,20 +28,20 @@
       <form method="post" action="{% url 'login' %}">
         {% csrf_token %}
         <div class="form-group">
-          <label for="id_username">Benutzername</label>
+          <label for="id_username">{{ txt_auth_username_label }}</label>
           <input type="text" name="username" id="id_username" class="form-control" required autofocus>
         </div>
 
         <div class="form-group">
-          <label for="id_password">Passwort</label>
+          <label for="id_password">{{ txt_auth_password_label }}</label>
           <input type="password" name="password" id="id_password" class="form-control" required>
         </div>
 
-        <button type="submit" class="primary-btn auth-btn">Anmelden</button>
+        <button type="submit" class="primary-btn auth-btn">{{ txt_auth_login_btn }}</button>
       </form>
 
       <div class="auth-footer">
-        Noch kein Konto? <a href="{% url 'register' %}">Jetzt registrieren</a>
+        {{ txt_auth_no_account }} <a href="{% url 'register' %}">{{ txt_auth_register_link }}</a>
               <div class="sub-link">
           <a href="{% url 'password_reset' %}">Passwort vergessen?</a>
         </div>

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card">
   <p class="eyebrow">Aktuelles</p>
-  <h1>News & Ankündigungen</h1>
+  <h1>{{ txt_news_list_title }}</h1>
   <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">
 
   <div class="news-feed" style="display: flex; flex-direction: column; gap: 20px;">
@@ -22,7 +22,7 @@
         </div>
       </article>
     {% empty %}
-      <p style="color: var(--muted);">Aktuell gibt es keine veröffentlichten News.</p>
+      <p style="color: var(--muted);">{{ txt_news_list_empty }}</p>
     {% endfor %}
   </div>
 </div>

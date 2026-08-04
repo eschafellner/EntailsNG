@@ -5,14 +5,14 @@
 {% block content %}
 <article class="card">
   <p class="eyebrow">{{ event_info.subtitle|default:"Alle Fakten im Überblick" }}</p>
-  <h1>{{ event_info.title|default:"Veranstaltungsinformationen" }}</h1>
+  <h1>{{ event_info.title|default:txt_info_title }}</h1>
   <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">
 
   <div class="event-content" style="line-height: 1.7; color: var(--ink);">
     {% if event_info and event_info.content %}
       {{ event_info.content|safe }}
     {% else %}
-      <p style="color: var(--muted);">Derzeit sind noch keine Detailinformationen hinterlegt.</p>
+      <p style="color: var(--muted);">{{ txt_info_empty }}</p>
     {% endif %}
   </div>
 </article>

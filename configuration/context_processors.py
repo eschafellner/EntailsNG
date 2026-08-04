@@ -7,6 +7,8 @@ from seating.models import SeatingCell
 
 # Standardtexte an einer Stelle. Fehlende Keys werden per Management-Command
 # angelegt, nicht bei jedem Request.
+# Standardtexte an einer Stelle. Fehlende Keys werden per Management-Command
+# angelegt, nicht bei jedem Request.
 DEFAULT_TEXTS = {
     'seat_card_title': 'SITZPLATZBUCHUNG',
     'seat_btn_open': 'Sitzplan öffnen',
@@ -41,6 +43,78 @@ DEFAULT_TEXTS = {
 
     # Clan-Modul
     'clan_logo_help': 'Maximal 300x300 Pixel. Erlaubte Formate: .jpg, .jpeg, .png',
+    'clan_list_title': 'Clans & Teams',
+    'clan_create_btn': '+ Clan gründen',
+    'clan_list_empty': 'Bisher wurden noch keine Clans gegründet.',
+    'clan_members_header': 'Mitglieder',
+    'clan_join_btn': 'Clan beitreten',
+    'clan_leave_btn': 'Clan verlassen',
+
+    # Navigation / Header & Footer
+    'nav_login': 'Anmelden',
+    'nav_register': 'Registrieren',
+    'nav_logout': 'Abmelden',
+    'nav_profile': 'Profil',
+    'nav_admin': 'Admin',
+    'nav_scanner': 'Helfer Scanner',
+    'footer_copyright': '© 2026 EntailsNG – LAN Event Management CMS',
+
+    # Dashboard Modul
+    'dash_news_eyebrow': 'Aktuelles & Ankündigungen',
+    'dash_news_title': 'News',
+    'dash_news_pinned': '📌 WICHTIG',
+    'dash_news_read_more': 'Weiterlesen →',
+    'dash_news_all_link': 'Alle News & Ankündigungen anzeigen →',
+    'dash_news_empty': 'Aktuell gibt es keine News.',
+    'dash_seat_preview_label': 'Saalplan-Vorschau',
+    'dash_seat_live_badge': 'LIVE',
+    'dash_seat_occupancy_label': 'Saalbelegung',
+    'dash_seat_your_seat': 'Dein Platz:',
+    'dash_seat_no_seat_selected': 'Kein Sitzplatz gewählt',
+    'dash_seat_not_reserved': 'Noch nicht reserviert',
+    'dash_qr_modal_title': 'EINLASS QR-CODE',
+    'dash_qr_modal_subtitle': 'Vorlegen beim Check-in vor Ort',
+    'dash_qr_checked_in': '✓ EINGECHECKMENT',
+    'dash_qr_btn_show': '📲 QR-Code anzeigen',
+    'dash_qr_payment_pending': '⏳ ZAHLUNG OFFEN',
+
+    # Auth & Profil Modul
+    'auth_login_title': 'Anmelden',
+    'auth_login_subtitle': 'Gib deine Zugangsdaten ein, um dich einzuloggen.',
+    'auth_username_label': 'Benutzername',
+    'auth_password_label': 'Passwort',
+    'auth_login_btn': 'Anmelden',
+    'auth_no_account': 'Noch kein Konto?',
+    'auth_register_link': 'Hier registrieren',
+    'auth_register_title': 'Konto erstellen',
+    'auth_register_subtitle': 'Erstelle ein Konto, um an LAN-Partys teilzunehmen und Sitzplätze zu reservieren.',
+    'profile_title': 'Mein Profil',
+    'profile_save_btn': 'Profil speichern',
+    'profile_clan_header': 'Clan Zugehörigkeit',
+    'profile_no_clan': 'Du bist aktuell in keinem Clan.',
+
+    # News Modul
+    'news_list_title': 'News & Ankündigungen',
+    'news_list_empty': 'Aktuell sind keine News-Beiträge vorhanden.',
+
+    # Info Modul
+    'info_title': 'Event Information',
+    'info_empty': 'Für dieses Event wurden noch keine Detail-Informationen hinterlegt.',
+
+    # Sitzplan Modul
+    'seating_plan_title': 'Sitzplan',
+    'seat_legend_free': 'Frei',
+    'seat_legend_prereserved': 'Vorgemerkt',
+    'seat_legend_reserved': 'Reserviert (Bezahlt)',
+    'seat_legend_taken': 'Besetzt (Andere)',
+    'seat_legend_own': 'Dein Platz',
+    'seat_stage_label': 'Bühne / Leinwand',
+
+    # Helfer Check-in Scanner Modul
+    'scanner_title': 'Vor-Ort Einlass Check-in Scanner',
+    'scanner_cam_active': 'Kamera-Scanner aktiv...',
+    'checkin_success_title': 'Einlass erfolgreich!',
+    'checkin_failed_title': 'Einlass fehlgeschlagen!',
 }
 
 # Template-Variable -> Übersetzungsschlüssel
@@ -68,6 +142,10 @@ TEXT_KEYS = {
     'txt_status_no_event': 'status_no_event',
     'txt_clan_logo_help': 'clan_logo_help',
 }
+
+# Füge dynamisch txt_<key> für alle DEFAULT_TEXTS hinzu
+for _k in DEFAULT_TEXTS.keys():
+    TEXT_KEYS[f'txt_{_k}'] = _k
 
 TRANSLATION_CACHE_KEY = 'system_translations'
 FEATURE_FLAGS_CACHE_KEY = 'feature_flags_dict'
@@ -135,8 +213,12 @@ def feature_flags(request):
         'user_seat_label': None,
     }
 
+    tr_dict = {key: texts.get(key) or default for key, default in DEFAULT_TEXTS.items()}
+    context['tr'] = tr_dict
+    context['translations'] = tr_dict
+
     for var_name, key in TEXT_KEYS.items():
-        context[var_name] = texts.get(key) or DEFAULT_TEXTS[key]
+        context[var_name] = texts.get(key) or DEFAULT_TEXTS.get(key, '')
 
     upcoming_event = Event.objects.filter(is_active=True).first()
     context['upcoming_event'] = upcoming_event
