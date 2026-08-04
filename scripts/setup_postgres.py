@@ -30,6 +30,10 @@ def main():
         print("\n❌ Fehler beim Importieren der Daten.")
         sys.exit(1)
 
+    print("\n3. Ergänze alle aktuellen System-Übersetzungen & E-Mail-Templates...")
+    subprocess.run([python_bin, "manage.py", "seed_translations"])
+    subprocess.run([python_bin, "manage.py", "seed_email_templates"])
+
     print("\n✅ Migration erfolgreich abgeschlossen!")
     print("Alle Anwendungsdaten wurden verlustfrei in die PostgreSQL-Datenbank übertragen.")
 

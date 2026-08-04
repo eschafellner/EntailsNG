@@ -1088,6 +1088,470 @@
   }
 },
 {
+  "model": "configuration.systemtranslation",
+  "pk": 23,
+  "fields": {
+    "key": "clan_list_title",
+    "text": "Clans & Teams"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 24,
+  "fields": {
+    "key": "clan_create_btn",
+    "text": "+ Clan gründen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 25,
+  "fields": {
+    "key": "clan_list_empty",
+    "text": "Bisher wurden noch keine Clans gegründet."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 26,
+  "fields": {
+    "key": "clan_members_header",
+    "text": "Mitglieder"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 27,
+  "fields": {
+    "key": "clan_join_btn",
+    "text": "Clan beitreten"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 28,
+  "fields": {
+    "key": "clan_leave_btn",
+    "text": "Clan verlassen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 29,
+  "fields": {
+    "key": "nav_login",
+    "text": "Anmelden"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 30,
+  "fields": {
+    "key": "nav_register",
+    "text": "Registrieren"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 31,
+  "fields": {
+    "key": "nav_logout",
+    "text": "Abmelden"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 32,
+  "fields": {
+    "key": "nav_profile",
+    "text": "Profil"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 33,
+  "fields": {
+    "key": "nav_admin",
+    "text": "Admin"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 34,
+  "fields": {
+    "key": "nav_scanner",
+    "text": "Helfer Scanner"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 35,
+  "fields": {
+    "key": "footer_copyright",
+    "text": "© 2026 EntailsNG – LAN Event Management CMS"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 36,
+  "fields": {
+    "key": "dash_news_eyebrow",
+    "text": "Aktuelles & Ankündigungen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 37,
+  "fields": {
+    "key": "dash_news_title",
+    "text": "News"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 38,
+  "fields": {
+    "key": "dash_news_pinned",
+    "text": "📌 WICHTIG"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 39,
+  "fields": {
+    "key": "dash_news_read_more",
+    "text": "Weiterlesen →"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 40,
+  "fields": {
+    "key": "dash_news_all_link",
+    "text": "Alle News & Ankündigungen anzeigen →"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 41,
+  "fields": {
+    "key": "dash_news_empty",
+    "text": "Aktuell gibt es keine News."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 42,
+  "fields": {
+    "key": "dash_seat_preview_label",
+    "text": "Saalplan-Vorschau"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 43,
+  "fields": {
+    "key": "dash_seat_live_badge",
+    "text": "LIVE"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 44,
+  "fields": {
+    "key": "dash_seat_occupancy_label",
+    "text": "Saalbelegung"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 45,
+  "fields": {
+    "key": "dash_seat_your_seat",
+    "text": "Dein Platz:"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 46,
+  "fields": {
+    "key": "dash_seat_no_seat_selected",
+    "text": "Kein Sitzplatz gewählt"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 47,
+  "fields": {
+    "key": "dash_seat_not_reserved",
+    "text": "Noch nicht reserviert"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 48,
+  "fields": {
+    "key": "dash_qr_modal_title",
+    "text": "EINLASS QR-CODE"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 49,
+  "fields": {
+    "key": "dash_qr_modal_subtitle",
+    "text": "Vorlegen beim Check-in vor Ort"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 50,
+  "fields": {
+    "key": "dash_qr_checked_in",
+    "text": "✓ EINGECHECKMENT"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 51,
+  "fields": {
+    "key": "dash_qr_btn_show",
+    "text": "📲 QR-Code anzeigen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 52,
+  "fields": {
+    "key": "dash_qr_payment_pending",
+    "text": "⏳ ZAHLUNG OFFEN"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 53,
+  "fields": {
+    "key": "auth_login_title",
+    "text": "Anmelden"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 54,
+  "fields": {
+    "key": "auth_login_subtitle",
+    "text": "Gib deine Zugangsdaten ein, um dich einzuloggen."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 55,
+  "fields": {
+    "key": "auth_username_label",
+    "text": "Benutzername"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 56,
+  "fields": {
+    "key": "auth_password_label",
+    "text": "Passwort"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 57,
+  "fields": {
+    "key": "auth_login_btn",
+    "text": "Anmelden"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 58,
+  "fields": {
+    "key": "auth_no_account",
+    "text": "Noch kein Konto?"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 59,
+  "fields": {
+    "key": "auth_register_link",
+    "text": "Hier registrieren"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 60,
+  "fields": {
+    "key": "auth_register_title",
+    "text": "Konto erstellen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 61,
+  "fields": {
+    "key": "auth_register_subtitle",
+    "text": "Erstelle ein Konto, um an LAN-Partys teilzunehmen und Sitzplätze zu reservieren."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 62,
+  "fields": {
+    "key": "profile_title",
+    "text": "Mein Profil"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 63,
+  "fields": {
+    "key": "profile_save_btn",
+    "text": "Profil speichern"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 64,
+  "fields": {
+    "key": "profile_clan_header",
+    "text": "Clan Zugehörigkeit"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 65,
+  "fields": {
+    "key": "profile_no_clan",
+    "text": "Du bist aktuell in keinem Clan."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 66,
+  "fields": {
+    "key": "news_list_title",
+    "text": "News & Ankündigungen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 67,
+  "fields": {
+    "key": "news_list_empty",
+    "text": "Aktuell sind keine News-Beiträge vorhanden."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 68,
+  "fields": {
+    "key": "info_title",
+    "text": "Event Information"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 69,
+  "fields": {
+    "key": "info_empty",
+    "text": "Für dieses Event wurden noch keine Detail-Informationen hinterlegt."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 70,
+  "fields": {
+    "key": "seating_plan_title",
+    "text": "Sitzplan"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 71,
+  "fields": {
+    "key": "seat_legend_free",
+    "text": "Frei"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 72,
+  "fields": {
+    "key": "seat_legend_prereserved",
+    "text": "Vorgemerkt"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 73,
+  "fields": {
+    "key": "seat_legend_reserved",
+    "text": "Reserviert (Bezahlt)"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 74,
+  "fields": {
+    "key": "seat_legend_taken",
+    "text": "Besetzt (Andere)"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 75,
+  "fields": {
+    "key": "seat_legend_own",
+    "text": "Dein Platz"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 76,
+  "fields": {
+    "key": "seat_stage_label",
+    "text": "Bühne / Leinwand"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 77,
+  "fields": {
+    "key": "scanner_title",
+    "text": "Vor-Ort Einlass Check-in Scanner"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 78,
+  "fields": {
+    "key": "scanner_cam_active",
+    "text": "Kamera-Scanner aktiv..."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 79,
+  "fields": {
+    "key": "checkin_success_title",
+    "text": "Einlass erfolgreich!"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 80,
+  "fields": {
+    "key": "checkin_failed_title",
+    "text": "Einlass fehlgeschlagen!"
+  }
+},
+{
   "model": "configuration.featureflag",
   "pk": 1,
   "fields": {
@@ -9243,6 +9707,37 @@
     "role": "MEMBER",
     "status": "ACCEPTED",
     "created_at": "2026-07-31T17:27:19.393Z"
+  }
+},
+{
+  "model": "emails.generalemailsettings",
+  "pk": 1,
+  "fields": {
+    "sender_email": "noreply@entailsng.de",
+    "sender_name": "EntailsNG Event-Team",
+    "reply_to_email": "",
+    "domain_name": "",
+    "is_enabled": true,
+    "is_sandbox": false,
+    "sandbox_redirect_email": "",
+    "smtp_host": "",
+    "smtp_port": 587,
+    "smtp_username": "",
+    "smtp_password": "",
+    "smtp_use_tls": true
+  }
+},
+{
+  "model": "emails.emailtemplate",
+  "pk": 1,
+  "fields": {
+    "key": "payment_confirmation",
+    "name": "Zahlungsbestätigung",
+    "subject": "Zahlungseingang bestätigt für {event_title}",
+    "content": "<h2>Zahlungsbestätigung</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>vielen Dank! Deine Zahlung für die Veranstaltung <strong>{event_title}</strong> wurde erfolgreich verbucht.</p>\n<div style=\"background: #1e293b; color: #ffffff; padding: 16px; border-radius: 8px; margin: 16px 0;\">\n  <p><strong>Veranstaltung:</strong> {event_title}</p>\n  <p><strong>Ticket:</strong> {ticket_type}</p>\n  <p><strong>Verwendungszweck / Referenz:</strong> {payment_reference}</p>\n  <p><strong>Sitzplatz:</strong> {seat_label}</p>\n  <p><strong>Bezahlter Betrag:</strong> {amount} €</p>\n</div>\n<p>Dein Sitzplatz ist nun fest für dich reserviert. Wir freuen uns auf dich auf der LAN-Party!</p>\n<p>Viele Grüße,<br>Dein EntailsNG Event Team</p>",
+    "is_active": true,
+    "placeholder_info": "Verfügbare Platzhalter für diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {event_title}: Name der Veranstaltung\n- {amount}: Bezahlter Betrag in Euro\n- {payment_reference}: Zahlungs-Referenzcode\n- {seat_label}: Zugewiesene Sitzplatznummer\n- {ticket_type}: Name der gewählten Ticket-Kategorie",
+    "updated_at": "2026-08-03T21:38:37.331Z"
   }
 }
 ]
