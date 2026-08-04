@@ -59,19 +59,30 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(data['cache'], 'ok')
 
     def test_general_configuration_ticket_toggle(self):
+        from datetime import timedelta
+        from django.utils import timezone
         from configuration.models import GeneralConfiguration
         from configuration.services import should_show_onboarding_ticket
+        from events.models import Event
+
+        event = Event.objects.create(
+            title="Test LAN",
+            slug="test-lan",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=1),
+            end_date=timezone.now() + timedelta(days=3),
+        )
 
         config = GeneralConfiguration.load()
         config.ticket_enabled = False
         config.ticket_days_before_event = 0
         config.save()
 
-        self.assertFalse(should_show_onboarding_ticket())
+        self.assertFalse(should_show_onboarding_ticket(upcoming_event=event))
 
         config.ticket_enabled = True
         config.save()
-        self.assertTrue(should_show_onboarding_ticket())
+        self.assertTrue(should_show_onboarding_ticket(upcoming_event=event))
 
     def test_general_configuration_days_before_event(self):
         from datetime import timedelta

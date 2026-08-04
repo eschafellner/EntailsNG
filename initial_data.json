@@ -1780,6 +1780,15 @@
   }
 },
 {
+  "model": "configuration.generalconfiguration",
+  "pk": 1,
+  "fields": {
+    "ticket_enabled": true,
+    "ticket_days_before_event": 1,
+    "ticket_requires_payment": false
+  }
+},
+{
   "model": "seating.seatingplan",
   "pk": 1,
   "fields": {

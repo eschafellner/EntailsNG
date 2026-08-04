@@ -1,5 +1,5 @@
 from django.utils import timezone
-from events.models import EventRegistration
+from events.models import Event, EventRegistration
 from .models import GeneralConfiguration
 
 
@@ -14,29 +14,32 @@ def should_show_onboarding_ticket(user=None, upcoming_event=None, user_registrat
     if not config.ticket_enabled:
         return False
 
-    # 2. Prüfen, ob Ticket nur X Tage vor Event-Start angezeigt werden soll (wenn > 0)
+    if upcoming_event is None:
+        upcoming_event = Event.objects.filter(is_active=True).first()
+
+    # 2. Ist überhaupt ein Event vorhanden?
+    if not upcoming_event or not upcoming_event.start_date:
+        return False
+
+    now = timezone.now()
+
+    # Wenn das Event bereits beendet ist -> Ticket verbergen
+    if upcoming_event.end_date and now > upcoming_event.end_date:
+        return False
+
+    # 3. Prüfen, ob Ticket nur X Tage vor Event-Start angezeigt werden soll (wenn X > 0)
     if config.ticket_days_before_event > 0:
-        if not upcoming_event or not upcoming_event.start_date:
-            return False
-
-        now = timezone.now()
-        # Präzise Datums- & Zeitdifferenz in Tagen (lokale Zeitzone berücksichtigend)
-        local_now_date = timezone.localtime(now).date()
-        local_event_date = timezone.localtime(upcoming_event.start_date).date()
-        days_until_event = (local_event_date - local_now_date).days
-
-        # Wenn der zeitliche Abstand in Tagen größer ist als der konfigurierte Wert X
-        if days_until_event > config.ticket_days_before_event:
-            return False
-
-        # Zusätzliche Prüfung auf Stunden-Ebene (falls Event in der Zukunft liegt)
+        # Wenn das Event in der Zukunft liegt:
         if upcoming_event.start_date > now:
-            remaining_seconds = (upcoming_event.start_date - now).total_seconds()
-            max_seconds = config.ticket_days_before_event * 86400
-            if remaining_seconds > max_seconds:
+            time_until_start = upcoming_event.start_date - now
+            days_until_start = time_until_start.total_seconds() / 86400.0
+
+            # Das Ticket darf erst angezeigt werden, wenn der Abstand <= X Tage ist!
+            # Ist das Event noch weiter als X Tage entfernt (z. B. 2,7 Tage bei X = 1), wird das Ticket verborgen.
+            if days_until_start > float(config.ticket_days_before_event):
                 return False
 
-    # 3. Prüfen, ob Ticket nur angezeigt wird, wenn der Gast bezahlt hat
+    # 4. Prüfen, ob Ticket nur angezeigt wird, wenn der Gast bezahlt hat
     if config.ticket_requires_payment:
         if not user or not user.is_authenticated:
             return False

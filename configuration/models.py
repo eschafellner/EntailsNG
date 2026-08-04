@@ -172,6 +172,7 @@ class GeneralConfiguration(models.Model):
         self.pk = 1
         super().save(*args, **kwargs)
         cache.delete('general_configuration')
+        cache.clear()
 
     def delete(self, *args, **kwargs):
         pass  # Verhindert das Löschen der Einstellungen
