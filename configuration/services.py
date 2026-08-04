@@ -1,16 +1,20 @@
 from django.utils import timezone
 from events.models import Event, EventRegistration
-from .models import GeneralConfiguration
+from .models import FeatureFlag, GeneralConfiguration
 
 
 def should_show_onboarding_ticket(user=None, upcoming_event=None, user_registration=None) -> bool:
     """
-    Prüft alle Bedingungen aus der GeneralConfiguration, um zu entscheiden,
+    Prüft alle Bedingungen aus FeatureFlag & GeneralConfiguration, um zu entscheiden,
     ob die Ticket-Karte auf dem Dashboard angezeigt werden soll.
     """
-    config = GeneralConfiguration.load()
+    # 0. Prüfen, ob das Feature-Flag "onboarding_ticket" in den Feature-Flags aktiviert ist
+    flag = FeatureFlag.objects.filter(key='onboarding_ticket').first()
+    if flag and not flag.is_enabled:
+        return False
 
-    # 1. Globale Ticket-Anzeige Schalter
+    # 1. Globale Ticket-Anzeige Schalter aus Allgemeine Konfiguration
+    config = GeneralConfiguration.load()
     if not config.ticket_enabled:
         return False
 
