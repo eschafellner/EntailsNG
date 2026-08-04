@@ -141,6 +141,27 @@ def feature_flags(request):
     upcoming_event = Event.objects.filter(is_active=True).first()
     context['upcoming_event'] = upcoming_event
 
+    # Event Kapazität & Belegungsquote für Fortschrittsbalken berechnen (immer verfügbar)
+    if upcoming_event:
+        seat_cells = SeatingCell.objects.filter(
+            plan__event=upcoming_event,
+            cell_type=SeatingCell.CellType.SEAT,
+        )
+        total_seats = seat_cells.count()
+        reserved_seats = seat_cells.filter(
+            reservation_status__in=[
+                SeatingCell.ReservationStatus.PRE_RESERVED,
+                SeatingCell.ReservationStatus.RESERVED,
+            ]
+        ).count()
+        capacity_percent = (
+            int((reserved_seats / total_seats) * 100) if total_seats > 0 else 0
+        )
+
+        context['event_total_seats'] = total_seats
+        context['event_reserved_seats'] = reserved_seats
+        context['event_capacity_percent'] = capacity_percent
+
     if not (request.user.is_authenticated and upcoming_event):
         return context
 
@@ -171,26 +192,5 @@ def feature_flags(request):
         context['user_seat_label'] = (
             cell.seat_label or f'Pos ({cell.x},{cell.y})'
         )
-
-    # Event Kapazität & Belegungsquote für Fortschrittsbalken berechnen
-    if upcoming_event:
-        seat_cells = SeatingCell.objects.filter(
-            plan__event=upcoming_event,
-            cell_type=SeatingCell.CellType.SEAT,
-        )
-        total_seats = seat_cells.count()
-        reserved_seats = seat_cells.filter(
-            reservation_status__in=[
-                SeatingCell.ReservationStatus.PRE_RESERVED,
-                SeatingCell.ReservationStatus.RESERVED,
-            ]
-        ).count()
-        capacity_percent = (
-            int((reserved_seats / total_seats) * 100) if total_seats > 0 else 0
-        )
-
-        context['event_total_seats'] = total_seats
-        context['event_reserved_seats'] = reserved_seats
-        context['event_capacity_percent'] = capacity_percent
 
     return context

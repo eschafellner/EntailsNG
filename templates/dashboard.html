@@ -400,21 +400,25 @@ document.addEventListener('DOMContentLoaded', function() {
           </script>
         {% endif %}
 
-        <!-- SITZPLATZ-BELEGUNGSQUOTE & CAPACITY PROGRESS BAR (PUNKT 1) -->
-        {% if upcoming_event and event_total_seats > 0 %}
+        <!-- SITZPLATZ-BELEGUNGSQUOTE & CAPACITY PROGRESS BAR -->
+        {% if upcoming_event %}
           <div style="background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; border-radius: 10px; margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
               <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase;">
                 Saalbelegung
               </span>
               <strong style="font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--ink);">
-                {{ event_reserved_seats }} / {{ event_total_seats }} Plätze ({{ event_capacity_percent }}%)
+                {% if event_total_seats and event_total_seats > 0 %}
+                  {{ event_reserved_seats|default:0 }} / {{ event_total_seats }} Plätze ({{ event_capacity_percent|default:0 }}%)
+                {% else %}
+                  0 / 0 Plätze (0%)
+                {% endif %}
               </strong>
             </div>
 
             <!-- Custom Progress Bar -->
             <div style="width: 100%; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden;">
-              <div style="width: {{ event_capacity_percent }}%; height: 100%; background: linear-gradient(90deg, #0284c7, #22c55e); border-radius: 4px; transition: width 0.4s ease;"></div>
+              <div style="width: {{ event_capacity_percent|default:0 }}%; height: 100%; background: linear-gradient(90deg, #0284c7, #22c55e); border-radius: 4px; transition: width 0.4s ease;"></div>
             </div>
           </div>
         {% endif %}

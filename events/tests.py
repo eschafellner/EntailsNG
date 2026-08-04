@@ -29,6 +29,18 @@ class EventDashboardTests(TestCase):
         response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['event'], self.event)
+        self.assertIn('event_total_seats', response.context)
+        self.assertContains(response, 'Saalbelegung')
+
+    def test_dashboard_saalbelegung_always_visible(self):
+        # 1. Anonymer Gast
+        response = self.client.get(reverse('dashboard'))
+        self.assertContains(response, 'Saalbelegung')
+
+        # 2. Angemeldeter User, der NOCH NICHT registriert ist
+        self.client.login(username='gamer1', password='password')
+        response_user = self.client.get(reverse('dashboard'))
+        self.assertContains(response_user, 'Saalbelegung')
 
     def test_register_for_event(self):
         self.client.login(username='gamer1', password='password')
