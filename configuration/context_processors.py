@@ -115,6 +115,25 @@ DEFAULT_TEXTS = {
     'scanner_cam_active': 'Kamera-Scanner aktiv...',
     'checkin_success_title': 'Einlass erfolgreich!',
     'checkin_failed_title': 'Einlass fehlgeschlagen!',
+
+    # E-Mail Verifizierung (Double Opt-In) & Passwort Reset Modul
+    'verify_email_title': 'E-Mail-Adresse bestätigen',
+    'verify_email_subtitle': 'Wir haben dir einen 6-stelligen Bestätigungscode per E-Mail gesendet.',
+    'verify_code_label': '6-stelliger Verifizierungscode',
+    'verify_code_btn': 'Code bestätigen & Konto aktivieren',
+    'verify_code_resend': 'Code erneut senden',
+    'verify_code_expired': 'Der Bestätigungscode ist abgelaufen. Bitte fordere einen neuen Code an.',
+    'verify_code_invalid': 'Ungültiger Code. Bitte überprüfe deine Eingabe.',
+    'verify_code_success': 'E-Mail erfolgreich verifiziert! Dein Account ist jetzt aktiv.',
+    'pw_reset_title': 'Passwort zurücksetzen',
+    'pw_reset_subtitle': 'Gib deine E-Mail-Adresse ein. Wir senden dir einen Link zum Zurücksetzen deines Passworts.',
+    'pw_reset_btn': 'Link anfordern',
+    'pw_reset_done_title': 'E-Mail gesendet',
+    'pw_reset_done_text': 'Falls ein Konto mit dieser E-Mail-Adresse existiert, haben wir dir einen Link zum Zurücksetzen gesendet.',
+    'pw_reset_confirm_title': 'Neues Passwort festlegen',
+    'pw_reset_confirm_btn': 'Passwort speichern',
+    'pw_reset_complete_title': 'Passwort geändert!',
+    'pw_reset_complete_text': 'Dein Passwort wurde erfolgreich geändert. Du kannst dich jetzt anmelden.',
 }
 
 # Template-Variable -> Übersetzungsschlüssel

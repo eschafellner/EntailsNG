@@ -42,10 +42,82 @@ class RegistrationViewTests(TestCase):
                 'password2': 'StrongPass123!',
             },
         )
-        self.assertRedirects(response, reverse('dashboard'))
+        self.assertRedirects(response, reverse('verify_email'))
         self.assertTrue(User.objects.filter(username='newuser').exists())
         user = User.objects.get(username='newuser')
-        self.assertEqual(user.birthday, date(2000, 5, 15))
+        self.assertFalse(user.is_active)  # Inaktiv bis zur Double Opt-In Verifizierung!
+        self.assertTrue(user.verification_codes.exists())
+
+
+class DoubleOptInTests(TestCase):
+
+    def setUp(self):
+        self.client.post(
+            reverse('register'),
+            {
+                'username': 'optuser',
+                'email': 'opt@example.com',
+                'birthday': '1998-04-10',
+                'password1': 'StrongPass123!',
+                'password2': 'StrongPass123!',
+            },
+        )
+        self.user = User.objects.get(username='optuser')
+        self.code_obj = self.user.verification_codes.first()
+
+    def test_verify_email_get(self):
+        response = self.client.get(reverse('verify_email'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'auth/verify_email.html')
+
+    def test_verify_email_post_success(self):
+        response = self.client.post(
+            reverse('verify_email'),
+            {'code': self.code_obj.code},
+        )
+        self.assertRedirects(response, reverse('dashboard'))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.code_obj.refresh_from_db()
+        self.assertTrue(self.code_obj.is_used)
+
+    def test_verify_email_post_invalid_code(self):
+        response = self.client.post(
+            reverse('verify_email'),
+            {'code': '000000'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+
+    def test_resend_code_cooldown(self):
+        # Versuche sofort erneut einen Code zu senden
+        response = self.client.post(reverse('resend_verification_code'))
+        self.assertRedirects(response, reverse('verify_email'))
+        # Da Cooldown aktiv, wurde kein neuer Code erzeugt
+        self.assertEqual(self.user.verification_codes.count(), 1)
+
+
+class PasswordResetTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='resetuser',
+            email='reset@example.com',
+            password='Password123!',
+        )
+
+    def test_password_reset_get(self):
+        response = self.client.get(reverse('password_reset'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'auth/password_reset.html')
+
+    def test_password_reset_post(self):
+        response = self.client.post(
+            reverse('password_reset'),
+            {'email': 'reset@example.com'},
+        )
+        self.assertRedirects(response, reverse('password_reset_done'))
 
 
 class ProfileViewTests(TestCase):

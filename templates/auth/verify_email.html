@@ -1,0 +1,146 @@
+{% load static %}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ txt_verify_email_title }} – EntailsNG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <style>
+    .otp-container {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin: 24px 0;
+    }
+    .otp-input {
+      width: 48px;
+      height: 56px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      background: #0b0f17;
+      color: #38bdf8;
+      transition: all 0.2s ease;
+    }
+    .otp-input:focus {
+      border-color: #0284c7;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.3);
+      outline: none;
+      background: #111827;
+    }
+    .timer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(234, 179, 8, 0.15);
+      border: 1px solid rgba(234, 179, 8, 0.4);
+      color: #facc15;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card" style="max-width: 440px; text-align: center;">
+      <div class="auth-header">
+        <div class="brand-mark" style="margin: 0 auto 16px auto;">HNX</div>
+        <h1 style="font-size: 28px; margin-bottom: 8px;">{{ txt_verify_email_title }}</h1>
+        <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;">
+          {{ txt_verify_email_subtitle|default:"Wir haben dir einen 6-stelligen Bestätigungscode per E-Mail gesendet an:" }}
+          <br><strong style="color: var(--ink);">{{ user_email }}</strong>
+        </p>
+
+        <div class="timer-badge">
+          ⏳ Code verfällt in: <span id="countdown">15:00</span>
+        </div>
+      </div>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="message message-{{ message.tags }}" style="margin-bottom: 16px; border-radius: 8px; font-size: 13px;">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post" action="{% url 'verify_email' %}" id="otp-form">
+        {% csrf_token %}
+        <div class="otp-container">
+          <input type="text" name="digit1" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" autofocus required>
+          <input type="text" name="digit2" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+          <input type="text" name="digit3" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+          <input type="text" name="digit4" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+          <input type="text" name="digit5" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+          <input type="text" name="digit6" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+        </div>
+
+        <button type="submit" class="primary-btn auth-btn" style="width: 100%; margin-bottom: 16px;">
+          ✓ {{ txt_verify_code_btn }}
+        </button>
+      </form>
+
+      <form method="post" action="{% url 'resend_verification_code' %}" style="margin-top: 12px;">
+        {% csrf_token %}
+        <button type="submit" class="secondary-btn" style="background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 8px 16px; border-radius: 8px; font-size: 12px; cursor: pointer; font-family: 'JetBrains Mono', monospace;">
+          🔄 {{ txt_verify_code_resend }}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Auto-Advance & Paste Logic für 6-stelligen OTP Code
+    const inputs = document.querySelectorAll('.otp-input');
+    inputs.forEach((input, index) => {
+      input.addEventListener('input', (e) => {
+        if (e.target.value.length === 1 && index < inputs.length - 1) {
+          inputs[index + 1].focus();
+        }
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !e.target.value && index > 0) {
+          inputs[index - 1].focus();
+        }
+      });
+
+      input.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pasted = (e.clipboardData || window.clipboardData).getData('text').trim();
+        if (/^\d{6}$/.test(pasted)) {
+          pasted.split('').forEach((char, i) => {
+            if (inputs[i]) inputs[i].value = char;
+          });
+          inputs[5].focus();
+        }
+      });
+    });
+
+    // 15-Minuten Countdown Timer
+    let duration = 15 * 60;
+    const countdownEl = document.getElementById('countdown');
+    const timerInterval = setInterval(() => {
+      const minutes = Math.floor(duration / 60);
+      const seconds = duration % 60;
+      countdownEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      if (--duration < 0) {
+        clearInterval(timerInterval);
+        countdownEl.textContent = 'ABGELAUFEN';
+        countdownEl.parentElement.style.background = 'rgba(239, 68, 68, 0.2)';
+        countdownEl.parentElement.style.color = '#ef4444';
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

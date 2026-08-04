@@ -4,6 +4,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+from users.forms import CustomPasswordResetForm
 
 urlpatterns = [
     # 1. Startseite / Haupt-Dashboard
@@ -25,11 +26,12 @@ urlpatterns = [
         name='logout',
     ),
 
-    # 3b. Passwort zurücksetzen
+    # 3b. Passwort zurücksetzen (mit EntailsNG E-Mail-Templates)
     path(
         'password-reset/',
         auth_views.PasswordResetView.as_view(
-            template_name='auth/password_reset.html'
+            template_name='auth/password_reset.html',
+            form_class=CustomPasswordResetForm,
         ),
         name='password_reset',
     ),

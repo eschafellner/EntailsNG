@@ -1552,6 +1552,142 @@
   }
 },
 {
+  "model": "configuration.systemtranslation",
+  "pk": 81,
+  "fields": {
+    "key": "verify_email_title",
+    "text": "E-Mail-Adresse bestätigen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 82,
+  "fields": {
+    "key": "verify_email_subtitle",
+    "text": "Wir haben dir einen 6-stelligen Bestätigungscode per E-Mail gesendet."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 83,
+  "fields": {
+    "key": "verify_code_label",
+    "text": "6-stelliger Verifizierungscode"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 84,
+  "fields": {
+    "key": "verify_code_btn",
+    "text": "Code bestätigen & Konto aktivieren"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 85,
+  "fields": {
+    "key": "verify_code_resend",
+    "text": "Code erneut senden"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 86,
+  "fields": {
+    "key": "verify_code_expired",
+    "text": "Der Bestätigungscode ist abgelaufen. Bitte fordere einen neuen Code an."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 87,
+  "fields": {
+    "key": "verify_code_invalid",
+    "text": "Ungültiger Code. Bitte überprüfe deine Eingabe."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 88,
+  "fields": {
+    "key": "verify_code_success",
+    "text": "E-Mail erfolgreich verifiziert! Dein Account ist jetzt aktiv."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 89,
+  "fields": {
+    "key": "pw_reset_title",
+    "text": "Passwort zurücksetzen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 90,
+  "fields": {
+    "key": "pw_reset_subtitle",
+    "text": "Gib deine E-Mail-Adresse ein. Wir senden dir einen Link zum Zurücksetzen deines Passworts."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 91,
+  "fields": {
+    "key": "pw_reset_btn",
+    "text": "Link anfordern"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 92,
+  "fields": {
+    "key": "pw_reset_done_title",
+    "text": "E-Mail gesendet"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 93,
+  "fields": {
+    "key": "pw_reset_done_text",
+    "text": "Falls ein Konto mit dieser E-Mail-Adresse existiert, haben wir dir einen Link zum Zurücksetzen gesendet."
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 94,
+  "fields": {
+    "key": "pw_reset_confirm_title",
+    "text": "Neues Passwort festlegen"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 95,
+  "fields": {
+    "key": "pw_reset_confirm_btn",
+    "text": "Passwort speichern"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 96,
+  "fields": {
+    "key": "pw_reset_complete_title",
+    "text": "Passwort geändert!"
+  }
+},
+{
+  "model": "configuration.systemtranslation",
+  "pk": 97,
+  "fields": {
+    "key": "pw_reset_complete_text",
+    "text": "Dein Passwort wurde erfolgreich geändert. Du kannst dich jetzt anmelden."
+  }
+},
+{
   "model": "configuration.featureflag",
   "pk": 1,
   "fields": {
@@ -9738,6 +9874,32 @@
     "is_active": true,
     "placeholder_info": "Verfügbare Platzhalter für diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {event_title}: Name der Veranstaltung\n- {amount}: Bezahlter Betrag in Euro\n- {payment_reference}: Zahlungs-Referenzcode\n- {seat_label}: Zugewiesene Sitzplatznummer\n- {ticket_type}: Name der gewählten Ticket-Kategorie",
     "updated_at": "2026-08-03T21:38:37.331Z"
+  }
+},
+{
+  "model": "emails.emailtemplate",
+  "pk": 2,
+  "fields": {
+    "key": "email_verification",
+    "name": "Double Opt-In E-Mail Verifizierung",
+    "subject": "Dein Bestätigungscode für EntailsNG: {code}",
+    "content": "<h2>Willkommen bei EntailsNG!</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>vielen Dank für deine Registrierung! Um deinen Account zu aktivieren, verwende bitte den folgenden 6-stelligen Bestätigungscode:</p>\n<div style=\"background: #111827; border: 2px solid #0284c7; color: #38bdf8; padding: 20px; border-radius: 12px; font-size: 32px; font-weight: bold; font-family: monospace; letter-spacing: 8px; text-align: center; margin: 20px 0;\">\n  {code}\n</div>\n<p>Dieser Code ist <strong>{valid_minutes} Minuten</strong> lang gültig.</p>\n<p>Falls du dieses Konto nicht erstellt hast, kannst du diese E-Mail einfach ignorieren.</p>\n<p>Viele Grüße,<br>Dein EntailsNG Team</p>",
+    "is_active": true,
+    "placeholder_info": "Verfügbare Platzhalter für diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {code}: 6-stelliger numerischer Verifizierungscode (z. B. 849201)\n- {valid_minutes}: Gültigkeitsdauer in Minuten (z. B. 15)",
+    "updated_at": "2026-08-04T19:57:32.799Z"
+  }
+},
+{
+  "model": "emails.emailtemplate",
+  "pk": 3,
+  "fields": {
+    "key": "password_reset",
+    "name": "Passwort zurücksetzen",
+    "subject": "Passwort zurücksetzen für EntailsNG",
+    "content": "<h2>Passwort zurücksetzen</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>du hast das Zurücksetzen deines Passworts für deinen EntailsNG Account angefordert.</p>\n<p>Klicke auf den folgenden Button, um ein neues Passwort festzulegen:</p>\n<div style=\"text-align: center; margin: 24px 0;\">\n  <a href=\"{reset_link}\" style=\"background: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;\">\n    🔑 Neues Passwort festlegen\n  </a>\n</div>\n<p style=\"font-size: 12px; color: #9ca3af;\">Oder kopiere diesen Link in deinen Browser:<br><a href=\"{reset_link}\" style=\"color: #38bdf8;\">{reset_link}</a></p>\n<p>Falls du kein neues Passwort angefordert hast, kannst du diese E-Mail ignorieren. Dein Passwort bleibt unverändert.</p>\n<p>Viele Grüße,<br>Dein EntailsNG Team</p>",
+    "is_active": true,
+    "placeholder_info": "Verfügbare Platzhalter für diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {reset_link}: Vollständiger Link zum Festlegen des neuen Passworts",
+    "updated_at": "2026-08-04T19:57:32.801Z"
   }
 }
 ]
