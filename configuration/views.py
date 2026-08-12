@@ -33,3 +33,32 @@ def health_check_api(request):
         "timestamp": timezone.now().isoformat(),
     }
     return JsonResponse(data, status=200 if is_healthy else 503)
+
+
+from django.shortcuts import render
+from .models import SiteCustomization
+
+
+def impressum_view(request):
+    custom = SiteCustomization.load()
+    return render(
+        request,
+        'legal.html',
+        {
+            'title': 'Impressum',
+            'content': custom.impressum_content,
+        },
+    )
+
+
+def datenschutz_view(request):
+    custom = SiteCustomization.load()
+    return render(
+        request,
+        'legal.html',
+        {
+            'title': 'Datenschutzerklärung',
+            'content': custom.datenschutz_content,
+        },
+    )
+

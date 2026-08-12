@@ -1,0 +1,25 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 30px auto; background: #1f2937; color: #f9fafb; padding: 28px; border-radius: 12px; border: 1px solid #374151; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+  <h2 style="color: #ef4444; margin-top: 0; font-size: 22px;">⚠️ Demo-Daten zurücksetzen</h2>
+  <p style="color: #d1d5db; line-height: 1.6; font-size: 14px;">
+    Möchtest du das gesamte System auf den ursprünglichen Zustand zurücksetzen?
+  </p>
+  <ul style="color: #9ca3af; font-size: 13px; margin: 16px 0; padding-left: 20px;">
+    <li>Alle neu angelegten Test-Events und Anmeldungen werden zurückgesetzt.</li>
+    <li>Die vordefinierten Demo-Events, Sitzpläne und Test-User werden frisch geladen.</li>
+    <li>Alle System-Übersetzungen und Feature-Flags werden neu gegliedert.</li>
+  </ul>
+  
+  <form method="post" style="margin-top: 24px; display: flex; gap: 12px;">
+    {% csrf_token %}
+    <button type="submit" style="background: #dc2626; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;">
+      Ja, Demo-Daten jetzt zurücksetzen
+    </button>
+    <a href="/admin/" style="background: #374151; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 14px; display: inline-block;">
+      Abbrechen
+    </a>
+  </form>
+</div>
+{% endblock %}

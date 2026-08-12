@@ -1,9 +1,10 @@
 # configuration/context_processors.py
 from django.core.cache import cache
 
-from configuration.models import FeatureFlag, NavigationItem, SystemTranslation
+from configuration.models import FeatureFlag, NavigationItem, SiteCustomization, SystemTranslation
 from events.models import Event, EventRegistration
 from seating.models import SeatingCell
+
 
 # Standardtexte an einer Stelle. Fehlende Keys werden per Management-Command
 # angelegt, nicht bei jedem Request.
@@ -30,6 +31,15 @@ DEFAULT_TEXTS = {
     'ticket_default_title': 'Nächste Veranstaltung',
     'ticket_countdown_label': 'COUNTDOWN',
     'ticket_no_event': 'Sobald das nächste Event feststeht, findest du es hier.',
+    'ticket_expired_eyebrow': 'VERANSTALTUNG BEENDET',
+    'ticket_expired_badge': 'BEENDET',
+    'ticket_expired_status': 'EVENT BEENDET',
+    'ticket_expired_box_text': 'Veranstaltung beendet',
+
+    # Navigation / Header & Footer
+    'nav_legal_impressum': 'Impressum',
+    'nav_legal_datenschutz': 'Datenschutz',
+
 
     # Status-Modul
     'status_header': 'AKTUELLE VERANSTALTUNG',
@@ -223,16 +233,24 @@ def feature_flags(request):
         if features.get(MODULE_FLAG_MAP.get(item.url_name, ''), True)
     ]
 
+    site_customization = SiteCustomization.load()
+    css_vars = site_customization.get_css_variables()
+    theme_css_inline = "\n".join([f"  {k}: {v};" for k, v in css_vars.items()])
+
     context = {
         'nav_items': filtered_nav_items,
         'features': features,
         'feature_flags': features,
+        'site_customization': site_customization,
+        'theme_css_vars': theme_css_inline,
+        'custom_css': site_customization.custom_css,
         'upcoming_event': None,
         'user_registration': None,
         'is_user_registered': False,
         'user_status_step': 1,
         'user_seat_label': None,
     }
+
 
     tr_dict = {key: texts.get(key) or default for key, default in DEFAULT_TEXTS.items()}
     context['tr'] = tr_dict
@@ -292,11 +310,19 @@ def feature_flags(request):
                     cell.seat_label or f'Pos ({cell.x},{cell.y})'
                 )
 
+    from django.utils import timezone
+    now = timezone.now()
+    is_event_expired = bool(
+        upcoming_event and upcoming_event.end_date and now > upcoming_event.end_date
+    )
+    context['is_event_expired'] = is_event_expired
+
     from .services import should_show_onboarding_ticket
     context['show_onboarding_ticket'] = should_show_onboarding_ticket(
         user=request.user,
         upcoming_event=upcoming_event,
         user_registration=context.get('user_registration'),
     )
+
 
     return context

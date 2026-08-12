@@ -3,8 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}EntailsNG{% endblock %}</title>
+  <title>{% block title %}{{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <style>
+    :root {
+{{ theme_css_vars|safe }}
+    }
+    {% if custom_css %}
+    /* Custom CSS Injection */
+    {{ custom_css|safe }}
+    {% endif %}
+  </style>
   {% block extra_head %}{% endblock %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,26 +23,70 @@
 
 <a class="skip-link" href="#main-content">Zum Inhalt springen</a>
 
+<!-- ================= MOBILE HEADER BAR ================= -->
+<header class="mobile-header">
+  <a href="{% url 'dashboard' %}" class="mobile-header-brand">
+    {% if site_customization.logo %}
+      <img src="{{ site_customization.logo.url }}" alt="{{ site_customization.site_name }} Logo" class="mobile-header-logo">
+    {% else %}
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+          <polyline points="2 17 12 22 22 17"></polyline>
+          <polyline points="2 12 12 17 22 12"></polyline>
+        </svg>
+      </span>
+    {% endif %}
+    <span class="mobile-brand-title">
+      {{ site_customization.site_name }}<span class="brand-accent">{{ site_customization.brand_accent_text }}</span>
+    </span>
+  </a>
+
+  <div class="mobile-header-actions">
+    {% if user.is_authenticated %}
+      {% if user.is_staff %}
+        <a href="{% url 'checkin_scanner' %}" class="mobile-scanner-badge" title="Scanner öffnen">
+          📱
+        </a>
+      {% endif %}
+      <a href="{% url 'profile' %}" class="mobile-user-link" title="Mein Profil öffnen">
+        👤 {{ user.username }}
+      </a>
+    {% else %}
+      <a href="{% url 'login' %}" class="mobile-login-btn">
+        Anmelden
+      </a>
+    {% endif %}
+  </div>
+</header>
+
 <!-- ================= DESKTOP SIDEBAR ================= -->
 <aside class="sidebar">
+
   <div class="brand">
-    <span class="brand-mark" aria-hidden="true">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-        <polyline points="2 17 12 22 22 17"></polyline>
-        <polyline points="2 12 12 17 22 12"></polyline>
-      </svg>
-    </span>
+    {% if site_customization.logo %}
+      <img src="{{ site_customization.logo.url }}" alt="{{ site_customization.site_name }} Logo" style="max-height: 38px; max-width: 42px; object-fit: contain;">
+    {% else %}
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+          <polyline points="2 17 12 22 22 17"></polyline>
+          <polyline points="2 12 12 17 22 12"></polyline>
+        </svg>
+      </span>
+    {% endif %}
     <span class="brand-name">
-      Entails<span class="brand-accent">NG</span>
-      <small>Event Control</small>
+      {{ site_customization.site_name }}<span class="brand-accent">{{ site_customization.brand_accent_text }}</span>
+      {% if site_customization.site_tagline %}<small>{{ site_customization.site_tagline }}</small>{% endif %}
     </span>
   </div>
 
-  <p class="nav-label">Navigation</p>
   <nav class="side-nav" aria-label="Hauptnavigation">
+
     {% for item in nav_items %}
       {% with nav_url=item.get_url %}
         <a href="{{ nav_url|default:'#' }}"
@@ -66,16 +119,25 @@
         </a>
       {% endif %}
       <a href="{% url 'profile' %}" class="user-name" style="display: block; text-decoration: none; color: #fffaf2; transition: color 0.2s;" title="Mein Profil öffnen">👤 {{ user.username }}</a>
-      <form method="post" action="{% url 'logout' %}">
+      <form method="post" action="{% url 'logout' %}" style="margin-bottom: 12px;">
         {% csrf_token %}
         <button type="submit" class="user-logout">{{ txt_nav_logout }}</button>
       </form>
     {% else %}
-      <a href="{% url 'login' %}" class="btn-login">{{ txt_nav_login }}</a>
+      <div style="margin-bottom: 12px;">
+        <a href="{% url 'login' %}" class="btn-login">{{ txt_nav_login }}</a>
+      </div>
     {% endif %}
+
+    <div class="sidebar-legal" style="padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); color: var(--muted); text-align: center;">
+      <a href="{% url 'impressum' %}" style="color: inherit; text-decoration: underline; margin-right: 8px;">Impressum</a>
+      <a href="{% url 'datenschutz' %}" style="color: inherit; text-decoration: underline;">Datenschutz</a>
+    </div>
+
   </div>
 
 </aside>
+
 
 <!-- ================= HAUPTINHALT ================= -->
 <main class="main-wrapper" id="main-content">

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 900px; margin: 0 auto; padding: 32px;">
+  <p class="eyebrow">RECHTLICHE HINWEISE</p>
+  <h1 style="margin-bottom: 24px;">{{ title }}</h1>
+  
+  <div class="legal-body" style="line-height: 1.7; font-size: 15px; color: var(--ink);">
+    {{ content|safe }}
+  </div>
+
+  <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line);">
+    <a href="javascript:history.back()" class="btn-login" style="display: inline-block; width: auto; padding: 8px 20px;">← Zurück</a>
+  </div>
+</div>
+{% endblock %}

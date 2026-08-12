@@ -27,9 +27,12 @@ def should_show_onboarding_ticket(user=None, upcoming_event=None, user_registrat
 
     now = timezone.now()
 
-    # Wenn das Event bereits beendet ist -> Ticket verbergen
+    # Prüfen, ob das Event bereits beendet ist (end_date überschritten)
     if upcoming_event.end_date and now > upcoming_event.end_date:
-        return False
+        if config.expired_ticket_mode == GeneralConfiguration.ExpiredTicketMode.HIDE:
+            return False  # Mode "Event beendet": Sofort ausblenden
+        # Mode "WORN": Ticket bleibt sichtbar (wird im Template als entwertet dargestellt)
+
 
     # 3. Prüfen, ob Ticket nur X Tage vor Event-Start angezeigt werden soll (wenn X > 0)
     if config.ticket_days_before_event > 0:

@@ -14,7 +14,18 @@
     --danger: #b83e3e;
     --shadow: 0 18px 50px rgba(76, 50, 20, .12);
     --radius: 18px;
-    --sidebar: 252px;
+    --sidebar: 246px;
+    --font-base: 15px;
+    --font-xs: 11px;
+    --font-sm: 13px;
+    --font-md: 15px;
+    --font-lg: 18px;
+    --font-xl: 22px;
+    --font-2xl: 28px;
+    --font-3xl: 35px;
+    --card-padding: 24px;
+    --btn-height: 42px;
+    --input-height: 42px;
 }
 
 * { box-sizing: border-box; }
@@ -29,8 +40,11 @@ body {
     background-size: 28px 28px;
     color: var(--ink);
     font-family: "DM Sans", sans-serif;
+    font-size: var(--font-base, 15px);
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
 }
+
 
 button, a { font: inherit; color: inherit; }
 a { text-decoration: none; }
@@ -77,49 +91,61 @@ svg { display: block; }
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    min-height: 46px;
-    padding: 0 13px;
-    border-radius: 12px;
+    gap: 10px;
+    min-height: var(--nav-item-height, 42px);
+    padding: var(--nav-padding, 0 13px);
+    border-radius: 10px;
     color: #eadfce;
+    font-size: var(--nav-font-size, 14px);
     transition: background .18s ease, color .18s ease;
 }
-.nav-item-content { display: flex; align-items: center; gap: 12px; }
+.nav-item-content { display: flex; align-items: center; gap: 10px; }
+.nav-item-content svg {
+    width: var(--nav-icon-size, 19px);
+    height: var(--nav-icon-size, 19px);
+    flex-shrink: 0;
+}
 .nav-item:hover { background: rgba(255,255,255,.07); color: #fff; }
 .nav-item.active { background: #fff; color: var(--navy); font-weight: 700; }
 .nav-item[aria-disabled="true"] { opacity: .45; pointer-events: none; }
 
 .nav-badge {
-    min-width: 20px;
-    padding: 2px 7px;
+    min-width: 18px;
+    padding: 2px 6px;
     border-radius: 999px;
     background: var(--signal);
     color: var(--navy);
     font-family: "JetBrains Mono", monospace;
-    font-size: 10px;
+    font-size: var(--nav-badge-font-size, 10px);
     font-weight: 700;
     text-align: center;
 }
 
-.sidebar-foot { margin-top: auto; }
-.user-name { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.sidebar-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); }
+.user-name { font-size: var(--foot-font-size, 13px); font-weight: 700; margin-bottom: 8px; }
 .user-logout,
 .btn-login {
-    display: inline-block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 100%;
-    min-height: 40px;
-    padding: 0 14px;
+    min-height: calc(var(--nav-item-height, 42px) - 4px);
+    padding: 0 12px;
     border: 1px solid rgba(255,255,255,.18);
-    border-radius: 11px;
+    border-radius: 9px;
     background: rgba(255,255,255,.06);
     color: #fffaf2;
-    font-size: 13px;
+    font-size: var(--foot-font-size, 13px);
+    font-weight: 600;
     cursor: pointer;
     text-align: center;
+    text-decoration: none;
+    box-sizing: border-box;
 }
-.btn-login { background: var(--signal); color: var(--navy); font-weight: 700;
-    border-color: transparent; line-height: 40px; }
-    .user-logout:hover { background: rgba(255,255,255,.14); }
+.btn-login { background: var(--signal); color: var(--navy); font-weight: 700; border-color: transparent; }
+.user-logout:hover { background: rgba(255,255,255,.14); }
+.sidebar-legal { font-size: calc(var(--foot-font-size, 13px) - 1px); }
+
 
     /* DER ENTSCHEIDENDE FIX: Content bekommt Platz neben der Sidebar. */
     .main-wrapper {
@@ -137,17 +163,19 @@ svg { display: block; }
             border-left-width: 4px;
             border-radius: 12px;
             background: var(--panel);
-            font-size: 14px;
+            font-size: var(--font-sm, 13px);
         }
         .message-success { border-left-color: #2f855a; }
         .message-error   { border-left-color: var(--danger); }
         .message-info    { border-left-color: var(--amber); }
 
         /* ==========================================================================
-         * MOBILE NAVIGATION – auf dem Desktop komplett ausgeblendet
+         * MOBILE NAVIGATION & HEADER – auf dem Desktop komplett ausgeblendet
          * ========================================================================== */
+        .mobile-header,
         .mobile-bottom-nav,
-.mobile-menu-overlay { display: none; }
+        .mobile-menu-overlay { display: none; }
+
 .topbar {
     height: 76px;
     display: flex;
@@ -172,8 +200,9 @@ svg { display: block; }
     font-size: 18px;
     font-weight: 800;
 }
-.profile-copy strong { display: block; font-size: 13px; }
-.profile-copy small { color: var(--muted); font-size: 11px; }
+.profile-copy strong { display: block; font-size: var(--font-sm, 13px); }
+.profile-copy small { color: var(--muted); font-size: var(--font-xs, 11px); }
+
 
 main { padding: 34px clamp(24px, 4vw, 58px) 70px; }
 .view { display: none; }
@@ -184,7 +213,7 @@ main { padding: 34px clamp(24px, 4vw, 58px) 70px; }
     margin: 0 0 7px;
     color: var(--signal);
     font-family: "JetBrains Mono", monospace;
-    font-size: 11px;
+    font-size: var(--font-xs, 11px);
     font-weight: 600;
     letter-spacing: .14em;
     text-transform: uppercase;
@@ -192,9 +221,20 @@ main { padding: 34px clamp(24px, 4vw, 58px) 70px; }
 h1 {
     margin-bottom: 8px;
     font-family: "Barlow Condensed", sans-serif;
-    font-size: clamp(38px, 5vw, 58px);
-    line-height: .98;
+    font-size: clamp(var(--font-2xl, 28px), 4vw, var(--font-3xl, 35px));
+    line-height: 1.05;
     letter-spacing: -.02em;
+}
+h2 {
+    font-family: "Barlow Condensed", sans-serif;
+    font-size: var(--font-2xl, 28px);
+    line-height: 1.1;
+    margin-bottom: 12px;
+}
+h3 {
+    font-size: var(--font-xl, 22px);
+    line-height: 1.2;
+    margin-bottom: 10px;
 }
 
 .command-strip {
@@ -203,47 +243,51 @@ h1 {
     grid-template-columns: minmax(0, 1.55fr) minmax(220px, .7fr);
     min-height: 252px;
     margin-bottom: 26px;
-    border-radius: 24px;
+    border-radius: calc(var(--radius, 18px) + 4px);
     color: white;
     background: var(--navy);
     box-shadow: var(--shadow);
     overflow: hidden;
 }
-.command-main { position: relative; padding: clamp(27px, 4vw, 42px); }
+.command-main { position: relative; padding: clamp(20px, 4vw, var(--card-padding, 24px)); }
 
 .status-rail {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     margin-bottom: 30px;
     border: 1px solid var(--line);
-    border-radius: var(--radius);
+    border-radius: var(--radius, 18px);
     background: var(--panel);
     overflow: hidden;
 }
 .status-step {
     position: relative;
-    min-height: 102px;
-    padding: 22px 22px 19px 50px;
+    min-height: 90px;
+    padding: calc(var(--card-padding, 24px) - 4px) calc(var(--card-padding, 24px) - 4px) calc(var(--card-padding, 24px) - 6px) calc(var(--card-padding, 24px) + 24px);
     border-right: 1px solid var(--line);
+    font-size: var(--font-sm, 13px);
 }
+.status-step strong { font-size: var(--font-md, 15px); }
 .status-step:last-child { border-right: 0; }
 .status-step.done::before {
     content: "✓";
     position: absolute;
-    left: 22px;
-    top: 22px;
+    left: var(--card-padding, 24px);
+    top: calc(var(--card-padding, 24px) - 4px);
     color: var(--signal);
     font-weight: bold;
+    font-size: var(--font-md, 15px);
 }
 .status-step.current { background: var(--amber-soft); }
 
 .card {
     border: 1px solid var(--line);
-    border-radius: var(--radius);
+    border-radius: var(--radius, 18px);
     background: var(--panel);
-    padding: 24px;
+    padding: var(--card-padding, 24px);
     box-shadow: 0 8px 26px rgba(76,50,20,.055);
 }
+
 
 /* Dynamisches Sitzplan Grid */
 .seat-visual-dynamic {
@@ -337,7 +381,7 @@ h1 {
 
 .auth-header h1 {
     font-family: "Barlow Condensed", sans-serif;
-    font-size: 38px;
+    font-size: var(--font-2xl, 28px);
     line-height: 1;
     margin-bottom: 8px;
     letter-spacing: -.01em;
@@ -345,7 +389,7 @@ h1 {
 
 .auth-header p {
     color: var(--muted);
-    font-size: 14px;
+    font-size: var(--font-sm, 13px);
     line-height: 1.5;
     margin: 0;
 }
@@ -356,7 +400,7 @@ h1 {
 
 .form-group label {
     display: block;
-    font-size: 11px;
+    font-size: var(--font-xs, 11px);
     font-family: "JetBrains Mono", monospace;
     text-transform: uppercase;
     letter-spacing: .1em;
@@ -367,14 +411,14 @@ h1 {
 
 .form-control {
     width: 100%;
-    height: 46px;
+    height: var(--input-height, 42px);
     padding: 0 14px;
-    border-radius: 12px;
+    border-radius: 10px;
     border: 1px solid var(--line);
     background: var(--paper);
     color: var(--ink);
     font-family: inherit;
-    font-size: 14px;
+    font-size: var(--font-sm, 13px);
     transition: border-color .18s ease, box-shadow .18s ease;
 }
 
@@ -386,9 +430,10 @@ h1 {
 
 .auth-btn {
     width: 100%;
-    min-height: 48px;
+    min-height: var(--btn-height, 42px);
     margin-top: 12px;
-    font-size: 14px;
+    font-size: var(--font-sm, 13px);
+    font-weight: 600;
 }
 
 .auth-footer {
@@ -396,7 +441,10 @@ h1 {
     margin-top: 24px;
     padding-top: 18px;
     border-top: 1px solid var(--line);
-    font-size: 13px;
+    font-size: var(--font-sm, 13px);
+    color: var(--muted);
+}
+
     color: var(--muted);
 }
 
@@ -450,15 +498,88 @@ h1 {
     .command-strip { grid-template-columns: 1fr; }
 }
 
-/* --- Mobil: Sidebar raus, Bottom-Nav rein --- */
+/* --- Mobil: Sidebar raus, Top-Bar & Bottom-Nav rein --- */
 @media (max-width: 860px) {
     .sidebar { display: none; }
+
+    .mobile-header {
+        position: sticky;
+        top: 0;
+        z-index: 35;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: calc(var(--input-height, 42px) + 10px);
+        padding: calc(6px + env(safe-area-inset-top, 0px)) 16px 8px;
+        background: var(--navy);
+        color: #fffaf2;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+    }
+    .mobile-header-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #fffaf2;
+        font-weight: 700;
+        text-decoration: none;
+    }
+    .mobile-header-logo {
+        max-height: 28px;
+        max-width: 32px;
+        object-fit: contain;
+    }
+    .mobile-brand-title {
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: calc(var(--font-base, 15px) * 1.25);
+        letter-spacing: -0.01em;
+        line-height: 1;
+    }
+    .mobile-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .mobile-user-link {
+        font-size: var(--font-xs, 11px);
+        font-weight: 600;
+        color: #eadfce;
+        padding: 4px 10px;
+        background: rgba(255,255,255,0.08);
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.12);
+        text-decoration: none;
+        max-width: 140px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .mobile-scanner-badge {
+        font-size: var(--font-xs, 11px);
+        padding: 4px 8px;
+        background: rgba(2, 132, 199, 0.3);
+        color: #38bdf8;
+        border: 1px solid #0284c7;
+        border-radius: 8px;
+        text-decoration: none;
+    }
+    .mobile-login-btn {
+        font-size: var(--font-xs, 11px);
+        font-weight: 700;
+        color: var(--navy);
+        background: var(--signal);
+        padding: 4px 12px;
+        border-radius: 8px;
+        text-decoration: none;
+    }
 
     .main-wrapper {
         margin-left: 0;
         /* Platz für die Bottom-Nav inkl. iPhone-Home-Indicator */
-        padding: 22px 16px calc(88px + env(safe-area-inset-bottom));
+        padding: 18px 16px calc(88px + env(safe-area-inset-bottom));
     }
+
 
     .mobile-bottom-nav {
         position: fixed;
@@ -479,15 +600,20 @@ h1 {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 4px;
-        min-height: 62px;
-        padding: 8px 4px;
+        gap: 3px;
+        min-height: var(--mobile-item-height, 62px);
+        padding: 6px 4px;
         border: 0;
         background: none;
         color: var(--muted);
-        font-size: 10px;
-        letter-spacing: .02em;
+        font-size: var(--mobile-font-size, 11px);
+        letter-spacing: .01em;
         cursor: pointer;
+    }
+    .mobile-item svg {
+        width: var(--mobile-icon-size, 21px);
+        height: var(--mobile-icon-size, 21px);
+        flex-shrink: 0;
     }
     .mobile-item span {
         max-width: 100%;
@@ -497,6 +623,7 @@ h1 {
     }
     .mobile-item.active { color: var(--signal-deep); font-weight: 700; }
     .mobile-item.active svg { color: var(--amber); }
+
 
     .mobile-menu-overlay {
         position: fixed;

@@ -10,7 +10,28 @@ Dieses Repository wurde so vorbereitet, dass auch **weniger IT-affine Kolleginne
 
 ---
 
+## ✨ Neue Highlights & Features im MVP
+
+* 🎨 **System-Individualisierbarkeit & Preset Themes:**
+  - Vordefinierte Farb-Themes (*Warm Amber*, *Cyberpunk Neon*, *Slate Blue*, *Emerald Gaming*) oder eigene Custom-Farben.
+  - Logo-Upload (PNG, SVG, WebP) für flexibles Branding.
+  - Rechtstexte (Impressum & Datenschutz) direkt im Backend pflegbar.
+  - Benutzerdefiniertes CSS per Backend injizierbar.
+* 📏 **Globales UI-Skalierungssystem (`UIScale`):**
+  - Einheitliche Steuerung aller Schriftgrößen, Abstände, Buttons, Formulare & Cards im gesamten Frontend.
+  - Stufen im Backend einstellbar: *Sehr klein*, *Klein*, *Mittel (Default)*, *Groß*, *Sehr groß*.
+* 📱 **Mobile Responsive & Mobile Top-Header Bar:**
+  - Sticky Top-Header auf Mobilgeräten (< 860px) inkl. App-Style Bottom-Navigation.
+* 🎟️ **Erweiterter Event-Ende-Status (`expired_ticket_mode`):**
+  - **Modus "Ticket abgenutzt":** Das Ticket bleibt mit entwertetem Look (`BEENDET` Stempel, Sepia/Rot-Design) als Erinnerung sichtbar.
+  - **Modus "Event beendet":** Das Ticket blendet sich bei Überschreitung des Enddatums automatisch aus.
+* 🌐 **100% Backend-Übersetzbar (`SystemTranslation`):**
+  - Sämtliche Texte im Frontend können ohne Code-Änderungen über den Admin-Bereich verwaltet werden.
+
+---
+
 ## 💡 Warum eine virtuelle Umgebung (`.venv`) sinnvoll ist
+
 
 Eine **virtuelle Umgebung** (Virtual Environment) erstellt einen isolierten "Sandkasten" für Python. Das bietet folgende Vorteile:
 

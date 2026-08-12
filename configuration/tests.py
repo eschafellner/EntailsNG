@@ -106,3 +106,93 @@ class ConfigurationModelTests(TestCase):
 
         # Ticket darf bei x=1 Tag NICHT angezeigt werden
         self.assertFalse(should_show_onboarding_ticket(upcoming_event=future_event))
+
+    def test_site_customization_themes_and_css_variables(self):
+        from configuration.models import SiteCustomization
+
+        custom = SiteCustomization.load()
+        self.assertEqual(custom.site_name, 'Entails')
+        self.assertEqual(custom.theme_preset, SiteCustomization.ThemePreset.WARM_AMBER)
+
+        amber_vars = custom.get_css_variables()
+        self.assertEqual(amber_vars['--signal'], '#f8ab2d')
+
+        # Test switching to Cyberpunk
+        custom.theme_preset = SiteCustomization.ThemePreset.CYBERPUNK
+        custom.save()
+        cyber_vars = custom.get_css_variables()
+        self.assertEqual(cyber_vars['--signal'], '#00f0ff')
+
+        # Test custom color override
+        custom.primary_color = '#ff00ff'
+        custom.save()
+        custom_vars = custom.get_css_variables()
+        self.assertEqual(custom_vars['--signal'], '#ff00ff')
+
+        # Test UIScale choices
+        self.assertEqual(custom.ui_scale, SiteCustomization.UIScale.MEDIUM)
+        self.assertEqual(custom_vars['--nav-item-height'], '42px')
+        self.assertEqual(custom_vars['--font-base'], '15px')
+        self.assertEqual(custom_vars['--card-padding'], '24px')
+
+        custom.ui_scale = SiteCustomization.UIScale.VERY_SMALL
+        custom.save()
+        xs_vars = custom.get_css_variables()
+        self.assertEqual(xs_vars['--nav-item-height'], '36px')
+        self.assertEqual(xs_vars['--font-base'], '13px')
+        self.assertEqual(xs_vars['--card-padding'], '16px')
+
+        custom.ui_scale = SiteCustomization.UIScale.VERY_LARGE
+        custom.save()
+        xl_vars = custom.get_css_variables()
+        self.assertEqual(xl_vars['--nav-item-height'], '50px')
+        self.assertEqual(xl_vars['--font-base'], '17px')
+        self.assertEqual(xl_vars['--card-padding'], '32px')
+
+
+
+    def test_legal_views(self):
+        from configuration.models import SiteCustomization
+
+        custom = SiteCustomization.load()
+        custom.impressum_content = '<p>Test Impressum Content</p>'
+        custom.datenschutz_content = '<p>Test Datenschutz Content</p>'
+        custom.save()
+
+        resp_imp = self.client.get(reverse('impressum'))
+        self.assertEqual(resp_imp.status_code, 200)
+        self.assertContains(resp_imp, 'Test Impressum Content')
+
+        resp_dat = self.client.get(reverse('datenschutz'))
+        self.assertEqual(resp_dat.status_code, 200)
+        self.assertContains(resp_dat, 'Test Datenschutz Content')
+
+    def test_expired_ticket_modes(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from events.models import Event
+        from configuration.models import GeneralConfiguration
+        from configuration.services import should_show_onboarding_ticket
+
+        # Erstelle abgelaufenes Event
+        now = timezone.now()
+        past_event = Event.objects.create(
+            title="Vergangene LAN",
+            start_date=now - timedelta(days=5),
+            end_date=now - timedelta(days=2),
+            is_active=True
+        )
+
+        config = GeneralConfiguration.load()
+        
+        # Test MODE WORN: Ticket soll angezeigt werden
+        config.expired_ticket_mode = GeneralConfiguration.ExpiredTicketMode.WORN
+        config.save()
+        self.assertTrue(should_show_onboarding_ticket(upcoming_event=past_event))
+
+        # Test MODE HIDE: Ticket soll verborgen werden
+        config.expired_ticket_mode = GeneralConfiguration.ExpiredTicketMode.HIDE
+        config.save()
+        self.assertFalse(should_show_onboarding_ticket(upcoming_event=past_event))
+
+

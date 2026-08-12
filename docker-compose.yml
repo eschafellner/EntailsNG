@@ -17,5 +17,22 @@ services:
       timeout: 5s
       retries: 5
 
+  web:
+    build: .
+    container_name: entailsng_web
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_ENGINE=postgresql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=entailsng_db
+      - DB_USER=entailsng
+      - DB_PASSWORD=entailsng_secret
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:

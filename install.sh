@@ -38,11 +38,11 @@ echo ""
 # 3. Paket-Abhängigkeiten installieren
 echo -e "${YELLOW}[3/5] Installiere benötigte Programmpakete (Django, psycopg2 etc.)...${NC}"
 pip install --upgrade pip --quiet 2>/dev/null || true
-pip install django django-tinymce psycopg2-binary pillow --quiet
+pip install -r requirements.txt --quiet
 echo -e "${GREEN}✓ Alle Abhängigkeiten wurden erfolgreich installiert.${NC}\n"
 
 # 4. Datenbank einrichten (PostgreSQL als Standard)
-echo -e "${YELLOW}[4/5] Richte PostgreSQL Datenbank-Struktur ein...${NC}"
+echo -e "${YELLOW}[4/5] Richte PostgreSQL / SQLite Datenbank-Struktur ein...${NC}"
 
 # Automatische Erkennung ob PostgreSQL erreichbar ist
 if [ -z "$DB_ENGINE" ]; then
@@ -56,6 +56,8 @@ if [ -z "$DB_ENGINE" ]; then
 fi
 
 python manage.py migrate --noinput
+python manage.py seed_translations --quiet 2>/dev/null || python manage.py seed_translations
+python manage.py seed_features --quiet 2>/dev/null || python manage.py seed_features
 
 # Falls Vorab-Daten vorhanden sind, laden
 if [ -f "initial_data.json" ]; then
@@ -63,6 +65,7 @@ if [ -f "initial_data.json" ]; then
     python manage.py loaddata initial_data.json --quiet 2>/dev/null || python manage.py loaddata initial_data.json
     echo -e "${GREEN}✓ Demo-Daten erfolgreich geladen.${NC}"
 fi
+
 echo ""
 
 # 5. Abschluss & Startskript
