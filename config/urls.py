@@ -66,6 +66,8 @@ urlpatterns = [
     path('news/', include('news.urls')),
     path('seating/', include('seating.urls')),
     path('clans/', include('clans.urls')),
+    path('tournaments/', include('tournaments.urls')),
+    path('teams/', include('tournaments.urls')),
 ]
 
 if settings.DEBUG:

@@ -1,0 +1,140 @@
+from django.test import TestCase
+from django.utils import timezone
+from datetime import timedelta
+from users.models import User
+from events.models import Event, EventRegistration
+from tournaments.models import Game, Tournament, Team, TeamMember, TournamentRegistration, TournamentMatch
+from tournaments.services import (
+    advance_match_winner, check_user_event_checkin, generate_bracket, get_or_create_solo_team
+)
+
+
+class TournamentModelTests(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="Test LAN 2026",
+            slug="test-lan-2026",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game = Game.objects.create(
+            name="CS2",
+            mode="5v5 Bomb",
+            team_size=5
+        )
+        self.user1 = User.objects.create_user(username="player1", email="p1@example.com", password="pass")
+        self.user2 = User.objects.create_user(username="player2", email="p2@example.com", password="pass")
+        self.user3 = User.objects.create_user(username="player3", email="p3@example.com", password="pass")
+
+    def test_game_slug_generation(self):
+        self.assertEqual(self.game.slug, "cs2")
+
+    def test_team_creation_and_invite_code(self):
+        team = Team.objects.create(name="Team Rocket", captain=self.user1, game=self.game)
+        self.assertIsNotNone(team.invite_code)
+        self.assertEqual(len(team.invite_code), 8)
+
+    def test_team_leave_logic(self):
+        team = Team.objects.create(name="Alpha Team", captain=self.user1, game=self.game)
+        m1 = TeamMember.objects.create(team=team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        m2 = TeamMember.objects.create(team=team, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+
+        # 1. Non-captain leaves
+        res = team.leave_team(self.user2)
+        self.assertEqual(res, 'left')
+        self.assertFalse(TeamMember.objects.filter(team=team, user=self.user2).exists())
+
+        # 2. Add user3, then captain user1 leaves -> captain rank transferred to user3
+        TeamMember.objects.create(team=team, user=self.user3, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+        res2 = team.leave_team(self.user1)
+        self.assertEqual(res2, 'captain_transferred')
+        team.refresh_from_db()
+        self.assertEqual(team.captain, self.user3)
+
+        # 3. Last member leaves -> team deleted
+        res3 = team.leave_team(self.user3)
+        self.assertEqual(res3, 'deleted')
+        self.assertFalse(Team.objects.filter(id=team.id).exists())
+
+    def test_solo_team_auto_creation(self):
+        solo_team = get_or_create_solo_team(self.user1, self.game)
+        self.assertTrue(solo_team.is_solo)
+        self.assertEqual(solo_team.captain, self.user1)
+        self.assertTrue(solo_team.is_member(self.user1))
+
+    def test_user_event_checkin_validation(self):
+        self.assertFalse(check_user_event_checkin(self.user1, self.event))
+        reg = EventRegistration.objects.create(user=self.user1, event=self.event, is_checked_in=True)
+        self.assertTrue(check_user_event_checkin(self.user1, self.event))
+
+    def test_single_elimination_bracket_generation_with_byes(self):
+        tournament = Tournament.objects.create(
+            title="CS2 Cup",
+            event=self.event,
+            game=self.game,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.REGISTRATION_OPEN,
+        )
+
+        # Create 3 teams (next power of 2 is 4, 1 BYE)
+        t1 = Team.objects.create(name="Team 1", captain=self.user1)
+        t2 = Team.objects.create(name="Team 2", captain=self.user2)
+        t3 = Team.objects.create(name="Team 3", captain=self.user3)
+
+        TournamentRegistration.objects.create(tournament=tournament, team=t1)
+        TournamentRegistration.objects.create(tournament=tournament, team=t2)
+        TournamentRegistration.objects.create(tournament=tournament, team=t3)
+
+        # Preview Test
+        preview = generate_bracket(tournament, preview=True)
+        self.assertEqual(preview['mode'], 'SINGLE_ELIMINATION')
+        self.assertEqual(preview['total_teams'], 3)
+        self.assertEqual(preview['byes'], 1)
+
+        # Real Generation Test
+        res = generate_bracket(tournament, preview=False)
+        self.assertTrue(res)
+        tournament.refresh_from_db()
+        self.assertTrue(tournament.is_generated)
+        self.assertEqual(tournament.status, Tournament.Status.IN_PROGRESS)
+
+        # Check matches in DB
+        matches = TournamentMatch.objects.filter(tournament=tournament)
+        self.assertEqual(matches.count(), 3)  # 2 in R1, 1 in R2 (Final)
+        bye_match = matches.filter(is_bye=True).first()
+        self.assertIsNotNone(bye_match)
+        self.assertEqual(bye_match.status, TournamentMatch.Status.COMPLETED)
+
+    def test_advance_match_winner(self):
+        tournament = Tournament.objects.create(
+            title="CS2 1v1",
+            event=self.event,
+            game=self.game,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+        )
+
+        t1 = Team.objects.create(name="Team A", captain=self.user1)
+        t2 = Team.objects.create(name="Team B", captain=self.user2)
+
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            team1=t1,
+            team2=t2,
+            status=TournamentMatch.Status.READY
+        )
+
+        advance_match_winner(match, t1, score1=16, score2=14)
+        match.refresh_from_db()
+
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(match.winner, t1)
+        self.assertEqual(match.loser, t2)
+        self.assertEqual(match.score_team1, 16)
+        self.assertEqual(match.score_team2, 14)

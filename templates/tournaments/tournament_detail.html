@@ -1,0 +1,485 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ tournament.title }} – Turniere – EntailsNG{% endblock %}
+
+{% block extra_head %}
+<style>
+  .tab-btn {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab-btn.active {
+    color: var(--signal);
+    border-bottom-color: var(--signal);
+  }
+  .tab-content {
+    display: none;
+  }
+  .tab-content.active {
+    display: block;
+  }
+
+  /* Turnierbaum CSS Layout */
+  .bracket-container {
+    display: flex;
+    gap: 32px;
+    overflow-x: auto;
+    padding: 20px 0;
+  }
+  .bracket-round {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    min-width: 220px;
+    gap: 16px;
+  }
+  .bracket-round-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    color: var(--signal);
+    text-align: center;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 4px;
+  }
+  .match-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: border-color 0.2s;
+  }
+  .match-card.is-my-team {
+    border: 2px solid var(--signal);
+    box-shadow: 0 0 12px rgba(248, 171, 45, 0.3);
+    background: rgba(248, 171, 45, 0.05);
+  }
+  .team-slot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.03);
+  }
+  .team-slot.is-winner {
+    font-weight: bold;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+  }
+  .team-slot.is-my-team-slot {
+    font-weight: bold;
+    color: var(--signal-deep);
+  }
+
+  /* Modal Styling */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+  .modal-box {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 440px;
+    width: 90%;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header Card -->
+  <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+      <div style="display: flex; gap: 16px; align-items: center;">
+        {% if tournament.game.logo %}
+          <img src="{{ tournament.game.logo.url }}" alt="{{ tournament.game.name }}" style="width: 64px; height: 64px; object-fit: contain; border-radius: 10px; border: 1px solid var(--line); padding: 4px; background: #fff;">
+        {% else %}
+          <div style="width: 64px; height: 64px; background: var(--navy); color: var(--signal); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: bold;">
+            🎮
+          </div>
+        {% endif %}
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="background: var(--navy); color: var(--signal); padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+              {{ tournament.get_mode_display }}
+            </span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+              {{ tournament.game.name }} ({% if tournament.game.team_size == 1 %}1v1 Solo{% else %}{{ tournament.game.team_size }}v{{ tournament.game.team_size }}{% endif %})
+            </span>
+          </div>
+          <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; color: var(--ink);">
+            {{ tournament.title }}
+          </h1>
+          <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+            Veranstaltung: {{ tournament.event.title }} | Orga-Admin: {{ tournament.tournament_admin.username|default:"Turnierleitung" }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Action & Registration Area -->
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+        {% if is_admin %}
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            {% if not tournament.is_generated %}
+              <form method="post" action="{% url 'tournament_generate_bracket' slug=tournament.slug %}">
+                {% csrf_token %}
+                <button type="submit" onclick="return confirm('Möchtest du die Anmeldung wirklich schließen und den Turnierbaum generieren?');" style="background: #10b981; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+                  🚀 Baum jetzt generieren
+                </button>
+              </form>
+            {% else %}
+              <span style="background: rgba(16, 185, 129, 0.15); color: #047857; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+                ✓ Baum generiert
+              </span>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if is_registered %}
+          <div style="display: flex; align-items: center; gap: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 8px 14px; border-radius: 8px;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; color: #047857;">
+              ✓ Angemeldet mit '{{ user_team.name }}'
+            </span>
+            {% if not tournament.is_generated %}
+              <form method="post" action="{% url 'tournament_unregister' slug=tournament.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="team_id" value="{{ user_team.id }}">
+                <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;">
+                  Abmelden
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        {% elif tournament.is_registration_open %}
+          {% if user_checkin %}
+            {% if tournament.game.team_size == 1 %}
+              <form method="post" action="{% url 'tournament_register' slug=tournament.slug %}">
+                {% csrf_token %}
+                <button type="submit" style="background: var(--signal); color: var(--navy); border: none; padding: 10px 20px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; cursor: pointer;">
+                  🎮 Jetzt als Einzelspieler anmelden (1-Click)
+                </button>
+              </form>
+            {% else %}
+              <form method="post" action="{% url 'tournament_register' slug=tournament.slug %}" style="display: flex; gap: 8px;">
+                {% csrf_token %}
+                <select name="team_id" required style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+                  <option value="">-- Team auswählen --</option>
+                  {% for t in my_user_teams %}
+                    <option value="{{ t.id }}">{{ t.name }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" style="background: var(--signal); color: var(--navy); border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+                  Team anmelden
+                </button>
+              </form>
+            {% endif %}
+          {% else %}
+            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #f87171; padding: 8px 12px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #dc2626;">
+              ⚠️ Für die Turnieranmeldung musst du erst am Einlass eingecheckt sein.
+            </div>
+          {% endif %}
+        {% else %}
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+            Anmeldung geschlossen
+          </span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <div style="border-bottom: 2px solid var(--line); display: flex; gap: 8px;">
+    <button type="button" class="tab-btn active" onclick="openTab('bracket')">
+      🏆 Turnierbaum & Matches
+    </button>
+    {% if not tournament.is_generated and preview_data %}
+      <button type="button" class="tab-btn" onclick="openTab('preview')">
+        👁️ Vorschau
+      </button>
+    {% endif %}
+    <button type="button" class="tab-btn" onclick="openTab('teams')">
+      👥 Angemeldete Teams ({{ registrations.count }}/{{ tournament.max_teams }})
+    </button>
+    <button type="button" class="tab-btn" onclick="openTab('rules')">
+      📜 Regeln & Info
+    </button>
+  </div>
+
+  <!-- Tab 1: Turnierbaum & Matches -->
+  <div id="tab-bracket" class="tab-content active">
+    <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+      {% if tournament.is_generated %}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
+            Turnierverlauf
+          </h3>
+          {% if user_team %}
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(248, 171, 45, 0.2); border: 1px solid var(--signal); color: var(--signal-deep); padding: 4px 10px; border-radius: 6px; font-weight: bold;">
+              ⭐ Dein Team ({{ user_team.name }}) ist hervorgehoben
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="bracket-container">
+          {% regroup matches by round_number as round_list %}
+          {% for round in round_list %}
+            <div class="bracket-round">
+              <div class="bracket-round-title">Runde {{ round.grouper }}</div>
+              {% for match in round.list %}
+                <div class="match-card {% if user_team and match.team1 == user_team or match.team2 == user_team %}is-my-team{% endif %}">
+                  <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); display: flex; justify-content: space-between;">
+                    <span>Match #{{ match.match_number }}</span>
+                    <span>{{ match.get_status_display }}</span>
+                  </div>
+
+                  <div class="team-slot {% if match.winner == match.team1 %}is-winner{% endif %} {% if user_team and match.team1 == user_team %}is-my-team-slot{% endif %}">
+                    <span>
+                      {% if match.team1 %}
+                        {% if user_team and match.team1 == user_team %}⭐ {% endif %}{{ match.team1.name }}
+                      {% else %}
+                        {% if match.is_bye %}Freilos (BYE){% else %}TBD{% endif %}
+                      {% endif %}
+                    </span>
+                    <strong>{{ match.score_team1|default:"-" }}</strong>
+                  </div>
+
+                  <div class="team-slot {% if match.winner == match.team2 %}is-winner{% endif %} {% if user_team and match.team2 == user_team %}is-my-team-slot{% endif %}">
+                    <span>
+                      {% if match.team2 %}
+                        {% if user_team and match.team2 == user_team %}⭐ {% endif %}{{ match.team2.name }}
+                      {% else %}
+                        TBD
+                      {% endif %}
+                    </span>
+                    <strong>{{ match.score_team2|default:"-" }}</strong>
+                  </div>
+
+                  {% if is_admin and match.status != 'COMPLETED' and not match.is_bye and match.team1 and match.team2 %}
+                    <button type="button" onclick="openScoreModal({{ match.id }}, '{{ match.team1.name|escapejs }}', '{{ match.team2.name|escapejs }}', {{ match.team1.id }}, {{ match.team2.id }})" style="margin-top: 4px; background: #0284c7; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;">
+                      ✏️ Ergebnis eintragen
+                    </button>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div style="text-align: center; padding: 40px 20px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+          ⏳ Der Turnierbaum wurde noch nicht generiert. Sobald die Anmeldephase abgeschlossen ist, erscheint hier der Baum.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Tab 2: Vorschau (falls vorhanden) -->
+  {% if not tournament.is_generated and preview_data %}
+  <div id="tab-preview" class="tab-content">
+    <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+      <h3 style="margin: 0 0 8px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--signal);">
+        👁️ Turnierbaum Vorschau
+      </h3>
+      <p style="margin: 0 0 16px 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+        So würde der Turnierbaum aussehen, wenn er jetzt mit den {{ registrations.count }} angemeldeten Teams generiert werden würde (inkl. BYE-Freilose falls nötig).
+      </p>
+
+      {% if preview_data.rounds %}
+        <div class="bracket-container">
+          {% for round in preview_data.rounds %}
+            <div class="bracket-round">
+              <div class="bracket-round-title">{{ round.name }}</div>
+              {% for m in round.matches %}
+                <div class="match-card">
+                  <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
+                    Match #{{ m.match_number }}
+                  </div>
+                  <div class="team-slot">
+                    <span>{{ m.team1 }}</span>
+                    <span>-</span>
+                  </div>
+                  <div class="team-slot">
+                    <span>{{ m.team2 }}</span>
+                    <span>-</span>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Tab 3: Angemeldete Teams -->
+  <div id="tab-teams" class="tab-content">
+    <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+      <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
+        Angemeldete Teams & Teilnehmer
+      </h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;">
+        {% for reg in registrations %}
+          <div style="padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <strong style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--ink);">
+                {{ reg.team.name }}
+              </strong>
+              <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
+                Kapitän: {{ reg.team.captain.username }}
+              </div>
+            </div>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted);">
+              #{{ forloop.counter }}
+            </span>
+          </div>
+        {% empty %}
+          <div style="grid-column: 1 / -1; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-align: center; padding: 20px;">
+            Bisher haben sich noch keine Teams angemeldet.
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 4: Regeln -->
+  <div id="tab-rules" class="tab-content">
+    <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+      <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
+        Regeln & Turnier-Details
+      </h3>
+      <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink); line-height: 1.6;">
+        {% if tournament.description %}
+          <p>{{ tournament.description|linebreaks }}</p>
+        {% endif %}
+        {% if tournament.game.rules %}
+          <h4>Spielregeln:</h4>
+          <p>{{ tournament.game.rules|linebreaks }}</p>
+        {% endif %}
+        {% if tournament.game.additional_info %}
+          <h4>Zusätzliche Informationen:</h4>
+          <p>{{ tournament.game.additional_info|linebreaks }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Quick Result Modal für Admin -->
+<div id="scoreModal" class="modal-overlay" style="display: none;">
+  <div class="modal-box">
+    <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+      ✏️ Match-Ergebnis eintragen
+    </h3>
+    <form id="scoreForm" onsubmit="submitScore(event)">
+      {% csrf_token %}
+      <input type="hidden" id="modal_match_id" name="match_id">
+
+      <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+          <label id="lbl_team1" style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; flex: 1;"></label>
+          <input type="number" id="score_team1" name="score_team1" value="0" min="0" required style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; text-align: center;">
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+          <label id="lbl_team2" style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; flex: 1;"></label>
+          <input type="number" id="score_team2" name="score_team2" value="0" min="0" required style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; text-align: center;">
+        </div>
+
+        <div>
+          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Sieger festlegen:</label>
+          <select id="winner_id" name="winner_id" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+            <option value="">-- Automatisch nach Punkten --</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" onclick="closeScoreModal()" style="background: var(--line); color: var(--ink); border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
+          Abbrechen
+        </button>
+        <button type="submit" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+          Ergebnis speichern
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('tab-' + tabName).classList.add('active');
+}
+
+function openScoreModal(matchId, t1Name, t2Name, t1Id, t2Id) {
+  document.getElementById('modal_match_id').value = matchId;
+  document.getElementById('lbl_team1').innerText = t1Name;
+  document.getElementById('lbl_team2').innerText = t2Name;
+
+  var sel = document.getElementById('winner_id');
+  sel.innerHTML = '<option value="">-- Automatisch nach Punkten --</option>' +
+                  '<option value="' + t1Id + '">' + t1Name + '</option>' +
+                  '<option value="' + t2Id + '">' + t2Name + '</option>';
+
+  document.getElementById('scoreModal').style.display = 'flex';
+}
+
+function closeScoreModal() {
+  document.getElementById('scoreModal').style.display = 'none';
+}
+
+function submitScore(e) {
+  e.preventDefault();
+  var matchId = document.getElementById('modal_match_id').value;
+  var formData = new FormData(document.getElementById('scoreForm'));
+
+  fetch('/tournaments/matches/' + matchId + '/update-score/', {
+    method: 'POST',
+    body: formData,
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      window.location.reload();
+    } else {
+      alert(data.error || 'Fehler beim Speichern');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    window.location.reload();
+  });
+}
+</script>
+{% endblock %}

@@ -226,6 +226,10 @@ def feature_flags(request):
         'info': 'info_module',
         'clan_list': 'clan_module',
         'clans': 'clan_module',
+        'tournament_list': 'tournament_module',
+        'tournaments': 'tournament_module',
+        'team_list': 'tournament_module',
+        'teams': 'tournament_module',
     }
 
     filtered_nav_items = [

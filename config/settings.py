@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'news',
     'clans',
     'emails',
+    'tournaments',
 ]
 
 MIDDLEWARE = [

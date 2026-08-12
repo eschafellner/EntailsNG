@@ -33,6 +33,12 @@ DEFAULT_FLAGS = [
         'is_enabled': True,
         'description': 'Aktiviert die Clan-Verwaltung und Clanübersicht im Frontend.',
     },
+    {
+        'key': 'tournament_module',
+        'name': 'Turnier-Modul',
+        'is_enabled': True,
+        'description': 'Aktiviert die Turnier- und Team-Verwaltung im Frontend.',
+    },
 ]
 
 DEFAULT_NAV_ITEMS = [
@@ -48,9 +54,35 @@ DEFAULT_NAV_ITEMS = [
         ),
     },
     {
+        'title': 'Turniere',
+        'url_name': 'tournament_list',
+        'order': 2,
+        'icon_svg': (
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+            'stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>'
+            '<path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>'
+            '<path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>'
+            '<path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>'
+            '<path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>'
+        ),
+    },
+    {
+        'title': 'Teams',
+        'url_name': 'team_list',
+        'order': 3,
+        'icon_svg': (
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+            'stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>'
+            '<circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>'
+            '<path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'
+        ),
+    },
+    {
         'title': 'Sitzplan',
         'url_name': 'seating_plan',
-        'order': 2,
+        'order': 4,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
@@ -61,7 +93,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'Infos',
         'url_name': 'event_info_detail',
-        'order': 3,
+        'order': 5,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
@@ -73,7 +105,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'News',
         'url_name': 'news_list',
-        'order': 4,
+        'order': 6,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
@@ -84,7 +116,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'Clans',
         'url_name': 'clan_list',
-        'order': 5,
+        'order': 7,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="2" stroke-linecap="round" '

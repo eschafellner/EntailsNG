@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ team.name }} – Teammanager – EntailsNG{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header Card -->
+  <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+          {% if team.tag %}
+            <span style="background: var(--navy); color: var(--signal); padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+              [{{ team.tag }}]
+            </span>
+          {% endif %}
+          {% if team.game %}
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+              🎮 {{ team.game.name }}
+            </span>
+          {% endif %}
+        </div>
+        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; color: var(--ink);">
+          {{ team.name }}
+        </h1>
+        <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+          Kapitän: <strong>{{ team.captain.username }}</strong> | Gegründet am {{ team.created_at|date:"d.m.Y" }}
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        {% if is_member %}
+          <form method="post" action="{% url 'team_leave' slug=team.slug %}">
+            {% csrf_token %}
+            <button type="submit" onclick="return confirm('Möchtest du das Team wirklich verlassen?');" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+              🚪 Team verlassen
+            </button>
+          </form>
+        {% elif user.is_authenticated %}
+          <form method="post" action="{% url 'team_apply' slug=team.slug %}">
+            {% csrf_token %}
+            <button type="submit" style="background: #0284c7; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+              ✋ Für Team bewerben
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- EINLADUNGSCODE WIDGET (mit Kopier-Button) -->
+  {% if is_member %}
+  <div class="card" style="padding: 20px; border-radius: 12px; background: var(--panel); border: 2px solid var(--signal);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+      <div>
+        <h3 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; color: var(--ink);">
+          🔑 Einladungscode für Teammitglieder
+        </h3>
+        <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+          Teile diesen Code mit deinen Mitspielern. Wer den Code eingibt, tritt dem Team sofort bei.
+        </p>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; background: var(--paper); border: 1px solid var(--line); padding: 6px 12px; border-radius: 8px;">
+        <span id="inviteCodeText" style="font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: bold; letter-spacing: 2px; color: var(--navy);">
+          {{ team.invite_code }}
+        </span>
+
+        <!-- BUTTON "In die Zwischenablage kopieren" -->
+        <button type="button" id="copyCodeBtn" onclick="copyInviteCode()" style="background: var(--signal); color: var(--navy); border: none; padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          📋 <span>In Zwischenablage kopieren</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Mitglieder Liste -->
+  <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+    <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
+      👥 Teammitglieder ({{ accepted_members|length }})
+    </h3>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px;">
+      {% for m in accepted_members %}
+        <div style="padding: 14px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: bold; color: var(--ink);">
+              👤 {{ m.user.username }}
+            </div>
+            <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-top: 2px;">
+              {% if m.role == 'CAPTAIN' %}
+                👑 Kapitän
+              {% else %}
+                ⚔️ Mitglied
+              {% endif %}
+            </div>
+          </div>
+
+          {% if is_captain and m.user != team.captain %}
+            <form method="post" action="{% url 'team_kick_member' slug=team.slug user_id=m.user.id %}">
+              {% csrf_token %}
+              <button type="submit" onclick="return confirm('Möchtest du {{ m.user.username }} wirklich kicken?');" style="background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid #f87171; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;" title="Mitglied kicken">
+                ❌ Kicken
+              </button>
+            </form>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Ausstehende Bewerbungen -->
+    {% if is_captain and pending_members %}
+      <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; color: var(--amber); margin: 24px 0 12px 0;">
+        ⏳ Ausstehende Bewerbungen ({{ pending_members|length }})
+      </h4>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;">
+        {% for p in pending_members %}
+          <div style="padding: 12px 16px; border: 1px dashed var(--line); border-radius: 8px; background: var(--paper); display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+              👤 {{ p.user.username }}
+            </span>
+            <form method="post" action="{% url 'team_accept_membership' slug=team.slug membership_id=p.id %}">
+              {% csrf_token %}
+              <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; cursor: pointer;">
+                ✓ Annehmen
+              </button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+function copyInviteCode() {
+  var code = "{{ team.invite_code }}";
+  navigator.clipboard.writeText(code).then(function() {
+    var btn = document.getElementById('copyCodeBtn');
+    var origHTML = btn.innerHTML;
+    btn.innerHTML = '✓ <span>Code in Zwischenablage kopiert!</span>';
+    btn.style.background = '#10b981';
+    btn.style.color = '#ffffff';
+
+    setTimeout(function() {
+      btn.innerHTML = origHTML;
+      btn.style.background = 'var(--signal)';
+      btn.style.color = 'var(--navy)';
+    }, 2500);
+  }).catch(function(err) {
+    alert('Fehler beim Kopieren: ' + err);
+  });
+}
+</script>
+{% endblock %}

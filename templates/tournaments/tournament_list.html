@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Gaming Turniere – EntailsNG{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header Card -->
+  <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <p class="eyebrow" style="margin-bottom: 4px;">Esports & Gaming</p>
+        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 32px;">
+          🏆 Turniere & Wettbewerbe
+        </h1>
+        <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+          {% if active_event %}
+            Offizielle Turniere für <strong>{{ active_event.title }}</strong>
+          {% else %}
+            Alle geplanten Turniere im Überblick
+          {% endif %}
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        {% if user_checkin %}
+          <span style="background: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid #10b981; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+            ✓ Vor Ort eingecheckt (Berechtigt)
+          </span>
+        {% elif user.is_authenticated %}
+          <span style="background: rgba(239, 68, 68, 0.1); color: #dc2626; border: 1px solid #f87171; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+            ⚠️ Nicht eingecheckt (Check-in am Einlass nötig)
+          </span>
+        {% endif %}
+        <a href="{% url 'team_list' %}" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-decoration: none;">
+          👥 Teammanager öffnen
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tournament Grid -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+    {% for tournament in tournaments %}
+      <div class="card" style="padding: 20px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <span style="background: var(--navy); color: var(--signal); padding: 4px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+              {{ tournament.get_mode_display }}
+            </span>
+            {% if tournament.status == 'OPEN' %}
+              <span style="background: rgba(16, 185, 129, 0.2); color: #047857; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+                🟢 Anmeldephase
+              </span>
+            {% elif tournament.status == 'IN_PROGRESS' %}
+              <span style="background: rgba(2, 132, 199, 0.2); color: #0284c7; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+                ⚔️ Läuft aktuell
+              </span>
+            {% elif tournament.status == 'FINISHED' %}
+              <span style="background: rgba(100, 116, 139, 0.2); color: #475569; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+                🏁 Beendet
+              </span>
+            {% else %}
+              <span style="background: rgba(100, 116, 139, 0.15); color: var(--muted); padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+                {{ tournament.get_status_display }}
+              </span>
+            {% endif %}
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
+            {% if tournament.game.logo %}
+              <img src="{{ tournament.game.logo.url }}" alt="{{ tournament.game.name }}" style="width: 52px; height: 52px; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); padding: 4px; background: #fff;">
+            {% else %}
+              <div style="width: 52px; height: 52px; background: var(--navy); color: var(--signal); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: bold;">
+                🎮
+              </div>
+            {% endif %}
+            <div>
+              <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+                {{ tournament.title }}
+              </h2>
+              <p style="margin: 2px 0 0 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+                {{ tournament.game.name }} ({% if tournament.game.team_size == 1 %}1v1 Solo{% else %}{{ tournament.game.team_size }}v{{ tournament.game.team_size }}{% endif %})
+              </p>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+            👥 Teams: <strong>{{ tournament.registered_teams_count }} / {{ tournament.max_teams }}</strong>
+            <div style="width: 100%; height: 6px; background: var(--line); border-radius: 3px; margin-top: 4px; overflow: hidden;">
+              <div style="width: {% widthratio tournament.registered_teams_count tournament.max_teams 100 %}%; height: 100%; background: var(--signal); transition: width 0.3s;"></div>
+            </div>
+          </div>
+
+          <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 16px;">
+            📅 Anmeldeschluss: {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr
+          </div>
+        </div>
+
+        <div style="padding-top: 12px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
+            Admin: {{ tournament.tournament_admin.username|default:"Orga-Team" }}
+          </span>
+          <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: #0284c7; color: white; padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+            Details & Baum →
+          </a>
+        </div>
+      </div>
+    {% empty %}
+      <div class="card" style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+        🕹️ Aktuell sind keine Turniere für diese Veranstaltung angelegt.
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

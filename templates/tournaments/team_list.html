@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+
+{% block title %}Teammanager – EntailsNG{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header Card -->
+  <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <p class="eyebrow" style="margin-bottom: 4px;">Esports & Teams</p>
+        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 32px;">
+          👥 Teammanager
+        </h1>
+        <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+          Erstelle Teams für Turniere, lade Freunde per Einladungscode ein oder tritt bestehenden Teams bei.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <button type="button" onclick="document.getElementById('createTeamModal').style.display='flex';" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-decoration: none; border: none; cursor: pointer;">
+          ➕ Neues Team gründen
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formular: Beitritt per Einladungscode -->
+  <div class="card" style="padding: 20px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);">
+    <h3 style="margin: 0 0 12px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; color: var(--ink);">
+      🔑 Einladungscode eingeben
+    </h3>
+    <form method="post" action="{% url 'team_join_by_code' %}" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+      {% csrf_token %}
+      <input type="text" name="invite_code" placeholder="z. B. 4A8B9C12" required uppercase style="padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 14px; text-transform: uppercase; width: 220px;">
+      <button type="submit" style="background: var(--navy); color: var(--signal); border: none; padding: 10px 20px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; cursor: pointer;">
+        Team beitreten
+      </button>
+    </form>
+  </div>
+
+  <!-- Meine Teams -->
+  {% if user.is_authenticated and my_teams %}
+  <div>
+    <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; margin: 0 0 14px 0; color: var(--ink);">
+      🛡️ Meine Teams
+    </h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+      {% for team in my_teams %}
+        <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 2px solid var(--signal);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+            <div>
+              <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
+                {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
+              </h3>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+                Kapitän: {{ team.captain.username }}
+              </div>
+            </div>
+            {% if team.is_captain_user %}
+              <span style="background: rgba(248, 171, 45, 0.2); color: var(--signal-deep); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;">
+                👑 Kapitän
+              </span>
+            {% endif %}
+          </div>
+
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+            👥 {{ team.get_accepted_members.count }} Mitglied(er) | Code: <code>{{ team.invite_code }}</code>
+          </div>
+
+          <a href="{% url 'team_detail' slug=team.slug %}" style="display: block; text-align: center; background: #0284c7; color: white; padding: 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+            Team verwalten →
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Alle Teams Grid -->
+  <div>
+    <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; margin: 0 0 14px 0; color: var(--ink);">
+      🌐 Alle registrierten Teams
+    </h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+      {% for team in teams %}
+        <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <h3 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
+              {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
+            </h3>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 10px;">
+              Spiel: {{ team.game.name|default:"Allgemein" }} | Kapitän: {{ team.captain.username }}
+            </div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 14px;">
+              👥 {{ team.get_accepted_members.count }} Mitglieder
+            </div>
+          </div>
+
+          <div style="padding-top: 10px; border-top: 1px solid var(--line); text-align: right;">
+            <a href="{% url 'team_detail' slug=team.slug %}" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; color: #0284c7; text-decoration: none;">
+              Profil ansehen →
+            </a>
+          </div>
+        </div>
+      {% empty %}
+        <div class="card" style="grid-column: 1 / -1; padding: 32px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+          Bisher wurden noch keine Teams gegründet.
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Neues Team gründen -->
+<div id="createTeamModal" class="modal-overlay" style="display: none;">
+  <div class="modal-box">
+    <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+      ➕ Neues Team gründen
+    </h3>
+    <form method="post" action="{% url 'team_create' %}">
+      {% csrf_token %}
+
+      <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
+        <div>
+          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Teamname *</label>
+          <input type="text" name="name" required placeholder="z. B. Phoenix Esports" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace;">
+        </div>
+
+        <div>
+          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Team-Tag (optional)</label>
+          <input type="text" name="tag" maxlength="10" placeholder="z. B. PHX" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace;">
+        </div>
+
+        <div>
+          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Zugeordnetes Spiel (optional)</label>
+          <select name="game_id" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace;">
+            <option value="">-- Überall nutzbar --</option>
+            {% for g in games %}
+              <option value="{{ g.id }}">{{ g.name }} ({{ g.team_size }}v{{ g.team_size }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" onclick="document.getElementById('createTeamModal').style.display='none';" style="background: var(--line); color: var(--ink); border: none; padding: 10px 18px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
+          Abbrechen
+        </button>
+        <button type="submit" style="background: var(--signal); color: var(--navy); border: none; padding: 10px 18px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+          Team gründen
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
