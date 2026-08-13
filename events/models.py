@@ -1,7 +1,13 @@
 import uuid
-from django.db import models
+from django.db import models, transaction
 from django.conf import settings
 from django.utils import timezone
+
+
+class EventManager(models.Manager):
+    def get_active(self):
+        """Liefert die aktuell aktive Hauptveranstaltung oder None."""
+        return self.filter(is_active=True).first()
 
 
 # 1. ZUERST DAS EVENT-MODELL DEFINIEREN:
@@ -41,6 +47,8 @@ class Event(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Zuletzt geändert")
 
+    objects = EventManager()
+
     class Meta:
         verbose_name = "Veranstaltung"
         verbose_name_plural = "Veranstaltungen"
@@ -48,6 +56,65 @@ class Event(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"
+
+    @property
+    def effective_status(self):
+        """Berechnet den fachlich korrekten Status basierend auf Zeitstempeln und Admin-Status."""
+        now = timezone.now()
+        if self.status == self.Status.CANCELLED:
+            return self.Status.CANCELLED
+        if self.status == self.Status.DRAFT:
+            return self.Status.DRAFT
+
+        if self.end_date and now > self.end_date:
+            return self.Status.FINISHED
+        if self.start_date and self.end_date and self.start_date <= now <= self.end_date:
+            return self.Status.RUNNING
+
+        return self.status
+
+    @property
+    def is_registration_open(self):
+        """Prüft, ob Anmeldungen für dieses Event aktuell offen sind."""
+        if not self.is_active or self.effective_status != self.Status.REGISTRATION_OPEN:
+            return False
+        return True
+
+    @property
+    def active_registrations_count(self):
+        """Liefert die Anzahl der aktiven (nicht stornierten) Anmeldungen."""
+        return self.registrations.exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED).count()
+
+    @property
+    def is_full(self):
+        """Prüft, ob die maximale Teilnehmerzahl erreicht ist."""
+        if not self.max_guests:
+            return False
+        return self.active_registrations_count >= self.max_guests
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        super().clean()
+        if self.start_date and self.end_date and self.end_date <= self.start_date:
+            raise ValidationError({'end_date': 'Das Enddatum muss nach dem Startdatum liegen.'})
+
+        if self.is_active and self.status == self.Status.DRAFT:
+            raise ValidationError({'is_active': 'Ein Event im Status "Entwurf" kann nicht als aktive Hauptveranstaltung gesetzt werden.'})
+
+    def save(self, *args, **kwargs):
+        from django.db import transaction
+        now = timezone.now()
+
+        # Automatischer Statuswechsel auf FINISHED, wenn Enddatum vorüber ist
+        if self.end_date and now > self.end_date and self.status not in [self.Status.DRAFT, self.Status.CANCELLED]:
+            self.status = self.Status.FINISHED
+
+        with transaction.atomic():
+            if self.is_active:
+                Event.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+            super().save(*args, **kwargs)
+
+
 
 # 2. DANACH DAS TICKET-MODELL (greift auf Event zu):
 class TicketType(models.Model):
@@ -161,7 +228,31 @@ class EventRegistration(models.Model):
     def __str__(self):
         return f"{self.user.username} -> {self.event.title} ({self.get_payment_status_display()})"
 
-    def save(self, *args, **kwargs):
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        super().clean()
+        if self.pk is None and self.event:
+            if not self.event.is_active or self.event.status != Event.Status.REGISTRATION_OPEN:
+                raise ValidationError(
+                    f"Anmeldung für '{self.event.title}' ist aktuell nicht geöffnet (Status: {self.event.get_status_display()})."
+                )
+            if self.event.is_full:
+                raise ValidationError(f"Event '{self.event.title}' ist ausgebucht ({self.event.max_guests} max).")
+            if self.ticket_type and self.ticket_type.event != self.event:
+                raise ValidationError("Das ausgewählte Ticket gehört nicht zu diesem Event.")
+
+
+    def mark_as_paid(self, send_email=True):
+        """Explizite Geschäftslogik-Methode: Markiert die Anmeldung als bezahlt."""
+        self.payment_status = self.PaymentStatus.PAID
+        self.save(send_email=send_email)
+
+    def mark_as_cancelled(self):
+        """Explizite Geschäftslogik-Methode: Storniert die Anmeldung und gibt Plätze frei."""
+        self.payment_status = self.PaymentStatus.CANCELLED
+        self.save(send_email=False)
+
+    def save(self, *args, send_email=True, **kwargs):
         is_new = self.pk is None
         old_payment_status = None
         if not is_new:
@@ -170,10 +261,14 @@ class EventRegistration(models.Model):
             except EventRegistration.DoesNotExist:
                 pass
 
+        if self.payment_status == self.PaymentStatus.PAID and not self.paid_at:
+            from django.utils import timezone
+            self.paid_at = timezone.now()
+
         super().save(*args, **kwargs)
 
         # Automatische Aktualisierung des zugewiesenen Sitzplatzes bei Statusänderung
-        for seat in self.seats.all():
+        for seat in list(self.seats.all()):
             if self.payment_status == self.PaymentStatus.PAID:
                 if seat.reservation_status != seat.ReservationStatus.RESERVED:
                     seat.reservation_status = seat.ReservationStatus.RESERVED
@@ -187,10 +282,14 @@ class EventRegistration(models.Model):
                         seat.ReservationStatus.PRE_RESERVED
                     )
                     seat.save(update_fields=['reservation_status'])
+            elif self.payment_status == self.PaymentStatus.CANCELLED:
+                seat.registration = None
+                seat.reservation_status = seat.ReservationStatus.FREE
+                seat.save(update_fields=['registration', 'reservation_status'])
 
-        # Automatische Zahlungsbestätigungs-E-Mail senden, wenn der Status auf PAID wechselt
-        if self.payment_status == self.PaymentStatus.PAID and old_payment_status != self.PaymentStatus.PAID:
-            self.send_payment_confirmation_email()
+        # Automatische Zahlungsbestätigungs-E-Mail erst NACH erfolgreichem DB-Commit versenden (transaction.on_commit)
+        if send_email and self.payment_status == self.PaymentStatus.PAID and old_payment_status != self.PaymentStatus.PAID:
+            transaction.on_commit(self.send_payment_confirmation_email)
 
     def send_payment_confirmation_email(self):
         """Sendet die automatische E-Mail-Zahlungsbestätigung an den Gast."""
@@ -212,4 +311,19 @@ class EventRegistration(models.Model):
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f"Fehler beim Auslösen der Zahlungsbestätigung: {e}")
+
+
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
+
+
+@receiver(pre_delete, sender=EventRegistration)
+def release_seats_on_registration_delete(sender, instance, **kwargs):
+    """Gibt alle verknüpften Sitzplätze frei, wenn eine EventRegistration gelöscht wird."""
+    from seating.models import SeatingCell
+    SeatingCell.objects.filter(registration=instance).update(
+        registration=None,
+        reservation_status=SeatingCell.ReservationStatus.FREE
+    )
+
 

@@ -102,11 +102,11 @@ class EmailSystemTests(TestCase):
         )
         self.assertEqual(len(mail.outbox), 0)
 
-        # Status auf PAID ändern
-        registration.payment_status = EventRegistration.PaymentStatus.PAID
-        registration.save()
+        # Status auf PAID ändern mit captureOnCommitCallbacks
+        with self.captureOnCommitCallbacks(execute=True):
+            registration.mark_as_paid()
 
-        # E-Mail muss automatisch getriggert worden sein!
+        # E-Mail muss erst nach Commit getriggert werden!
         self.assertEqual(len(mail.outbox), 1)
         sent_msg = mail.outbox[0]
         self.assertIn('testguest@example.com', sent_msg.to)

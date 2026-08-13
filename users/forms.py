@@ -83,6 +83,11 @@ class CustomAuthenticationForm(AuthenticationForm):
         try:
             return super().clean()
         except forms.ValidationError:
+            if getattr(self.request, 'ip_rate_limited', False):
+                raise forms.ValidationError(
+                    "Zu viele fehlgeschlagene Anmeldeversuche von deiner IP-Adresse. "
+                    "Bitte warte 5 Minuten, bevor du es erneut versuchst."
+                )
             if getattr(self.request, 'account_locked', False):
                 raise forms.ValidationError(
                     "Dein Konto wurde wegen 5 fehlerhafter Anmeldeversuche für 15 Minuten gesperrt. "

@@ -133,6 +133,12 @@ class SeatingCell(models.Model):
         verbose_name_plural = "Raster-Kacheln"
         unique_together = ('plan', 'x', 'y')
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.plan_id and self.plan.event_id:
+            from configuration.context_processors import invalidate_event_capacity_cache
+            invalidate_event_capacity_cache(self.plan.event_id)
+
     def __str__(self):
         return f"{self.seat_label or f'({self.x},{self.y})'} - {self.get_reservation_status_display()}"
 

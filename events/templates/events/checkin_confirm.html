@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Check-in Bestätigung – EntailsNG{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 32px;">
+  <div style="width: 64px; height: 64px; background: rgba(56, 189, 248, 0.15); border: 2px solid #38bdf8; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; font-size: 32px; color: #38bdf8;">
+    🔍
+  </div>
+
+  <h1 style="font-family: 'Barlow Condensed', sans-serif; font-size: 32px; margin-bottom: 8px;">
+    Einlass Check-in Bestätigen
+  </h1>
+
+  <p style="color: var(--muted); font-size: 15px; font-family: 'JetBrains Mono', monospace; margin-bottom: 24px;">
+    Gast: <strong style="color: var(--ink);">{{ registration.user.username }}</strong> ({{ registration.user.get_full_name|default:registration.user.username }})
+  </p>
+
+  <div style="background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 20px; text-align: left; margin-bottom: 24px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; font-family: 'JetBrains Mono', monospace;">
+      <div>
+        <span style="color: var(--muted); display: block; font-size: 11px;">VERANSTALTUNG</span>
+        <strong>{{ registration.event.title }}</strong>
+      </div>
+      <div>
+        <span style="color: var(--muted); display: block; font-size: 11px;">ZAHLUNGSSTATUS</span>
+        <strong style="color: #22c55e;">✔ {{ registration.get_payment_status_display }}</strong>
+      </div>
+      <div>
+        <span style="color: var(--muted); display: block; font-size: 11px;">TICKET</span>
+        <strong>{{ registration.ticket_type.name|default:"Standard Ticket" }}</strong>
+      </div>
+      <div>
+        <span style="color: var(--muted); display: block; font-size: 11px;">SITZPLATZ</span>
+        <strong>{{ seat_label }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'process_checkin' registration.id registration.checkin_token %}">
+    {% csrf_token %}
+    <button type="submit" style="width: 100%; background: #22c55e; color: #ffffff; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 14px; cursor: pointer;">
+      ✓ Check-in jetzt durchführen
+    </button>
+  </form>
+</div>
+{% endblock %}

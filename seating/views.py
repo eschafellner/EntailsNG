@@ -1,6 +1,7 @@
 import json
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
@@ -11,7 +12,7 @@ from .models import SeatingCell, SeatingPlan
 
 def seating_plan_view(request):
     """Rendert die öffentliche Sitzplanseite für das aktive Event."""
-    event = Event.objects.filter(is_active=True).first()
+    event = Event.objects.get_active()
     return render(request, 'seating/seating.html', {'event': event})
 
 
@@ -169,12 +170,13 @@ def get_event_seating_api(request, event_id):
 
 @login_required
 @require_POST
+@transaction.atomic
 def reserve_seat_api(request, event_id):
     """API fürs Frontend:
 
     Ermöglicht einem angemeldeten User, sich genau EINEN freien Platz
     auszusuchen. Falls bereits ein Platz reserviert wurde, wird dieser
-    automatisch freigegeben.
+    automatisch freigegeben. Transaktionssicher mit DB-Locks.
     """
     try:
         data = json.loads(request.body)
@@ -186,16 +188,22 @@ def reserve_seat_api(request, event_id):
             event_id=event_id, user=request.user
         )
 
-        # 2. Ziel-Sitzplatz finden
-        cell = SeatingCell.objects.get(plan__event_id=event_id, x=x, y=y)
-
-        # 3. Bisherigen Sitzplatz des Users für dieses Event freigeben (sofern vorhanden)
-        SeatingCell.objects.filter(
-            plan__event_id=event_id, registration=registration
-        ).update(
-            registration=None,
-            reservation_status=SeatingCell.ReservationStatus.FREE,
+        # 2. Ziel-Sitzplatz mit DB-Lock holen (select_for_update)
+        cell = SeatingCell.objects.select_for_update().get(
+            plan__event_id=event_id, x=x, y=y
         )
+
+        # 3. Bisherige Sitzplätze des Users mit DB-Lock freigeben
+        previous_seats = list(
+            SeatingCell.objects.select_for_update().filter(
+                plan__event_id=event_id, registration=registration
+            )
+        )
+        for prev in previous_seats:
+            if prev.pk != cell.pk:
+                prev.registration = None
+                prev.reservation_status = SeatingCell.ReservationStatus.FREE
+                prev.save(update_fields=['registration', 'reservation_status'])
 
         # 4. Neuen Platz über die Geschäftslogik reservieren
         success, message = cell.reserve_for_user(registration)
@@ -227,6 +235,7 @@ def reserve_seat_api(request, event_id):
 
 @login_required
 @require_POST
+@transaction.atomic
 def release_seat_api(request, event_id):
     """
     API fürs Frontend:
@@ -237,8 +246,8 @@ def release_seat_api(request, event_id):
             event_id=event_id, user=request.user
         )
 
-        # Finde den aktuellen Platz des Users für dieses Event
-        cell = SeatingCell.objects.filter(
+        # Finde den aktuellen Platz des Users mit DB-Lock
+        cell = SeatingCell.objects.select_for_update().filter(
             plan__event_id=event_id, registration=registration
         ).first()
 
@@ -274,6 +283,7 @@ def release_seat_api(request, event_id):
         )
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
 
 
 @staff_member_required

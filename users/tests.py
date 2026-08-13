@@ -229,3 +229,58 @@ class AuthBackendAndLockoutTests(TestCase):
         # Selbst mit richtigem Passwort schlägt der Login während der Sperre fehl
         login_during_lock = self.client.login(username='authuser', password='CorrectPassword123!')
         self.assertFalse(login_during_lock)
+
+    def test_lockout_auto_reset_on_expiration(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        self.user.failed_login_attempts = 5
+        self.user.locked_until = timezone.now() - timedelta(minutes=1)  # Abgelaufen!
+        self.user.save()
+
+        # is_locked() muss False liefern und den Zähler automatisch zurücksetzen
+        self.assertFalse(self.user.is_locked())
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_login_attempts, 0)
+        self.assertIsNone(self.user.locked_until)
+
+    def test_admin_unlock_action(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from users.admin import CustomUserAdmin
+
+        self.user.failed_login_attempts = 5
+        self.user.locked_until = timezone.now() + timedelta(minutes=15)
+        self.user.save()
+
+        # Admin reset_lockout aufrufen
+        self.user.reset_lockout()
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_login_attempts, 0)
+        self.assertFalse(self.user.is_locked())
+
+    def test_ip_rate_limiting_25_attempts(self):
+        from django.core.cache import cache
+        from users.auth_backends import _record_ip_failed_attempt
+        cache.clear()
+
+        # 25 Fehlversuche für IP registrieren
+        for _ in range(25):
+            _record_ip_failed_attempt('192.168.1.100')
+
+        # 26. Versuch löst IP-Rate-Limit aus und blockiert selbst korrekte Logins von dieser IP
+        response = self.client.post(
+            reverse('login'),
+            {'username': 'authuser', 'password': 'CorrectPassword123!'},
+            REMOTE_ADDR='192.168.1.100',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Zu viele fehlgeschlagene Anmeldeversuche')
+
+        # Von einer anderen IP kann sich der User jedoch weiterhin normal einloggen!
+        response_other_ip = self.client.post(
+            reverse('login'),
+            {'username': 'authuser', 'password': 'CorrectPassword123!'},
+            REMOTE_ADDR='192.168.1.200',
+        )
+        self.assertEqual(response_other_ip.status_code, 302)
+

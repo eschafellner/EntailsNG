@@ -34,13 +34,22 @@ class User(AbstractUser):
 
     def is_locked(self):
         from django.utils import timezone
-        if self.locked_until and timezone.now() < self.locked_until:
-            return True
+        if self.locked_until:
+            if timezone.now() < self.locked_until:
+                return True
+            # Sperrzeit ist abgelaufen -> Zähler & Sperre automatisch zurücksetzen!
+            self.reset_lockout()
         return False
 
     def register_failed_login(self):
         from datetime import timedelta
         from django.utils import timezone
+
+        # Falls die vorherige Sperre bereits abgelaufen ist, Zähler zurücksetzen
+        if self.locked_until and timezone.now() >= self.locked_until:
+            self.failed_login_attempts = 0
+            self.locked_until = None
+
         self.failed_login_attempts += 1
         if self.failed_login_attempts >= 5:
             self.locked_until = timezone.now() + timedelta(minutes=15)

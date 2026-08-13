@@ -31,8 +31,8 @@
         </h2>
 
         <div style="display: flex; gap: 20px; font-size: 13px; color: #9ca3af; font-family: 'JetBrains Mono', monospace; flex-wrap: wrap;">
-          <span>👤 <strong style="color: #e5e7eb;">Gast:</strong> {{ request.user.username|default:"Gast" }}</span>
-          <span>🪑 <strong style="color: #e5e7eb;">Sitzplatz:</strong> {{ user_seat_label|default:"Noch nicht reserviert" }}</span>
+          <span>👤 <strong style="color: #e5e7eb;">{{ txt_dash_guest_label }}:</strong> {{ request.user.username|default:txt_dash_guest_label }}</span>
+          <span>🪑 <strong style="color: #e5e7eb;">{{ txt_dash_seat_label_title }}:</strong> {{ user_seat_label|default:txt_dash_seat_not_reserved }}</span>
         </div>
       </div>
 
@@ -47,10 +47,10 @@
     </div>
   {% elif user_registration.is_checked_in %}
 
-    <!-- ZUSTAND A: BEREITS EINGECHECKMENT -->
+    <!-- ZUSTAND A: BEREITS EINGECHECKT -->
     <div style="background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #22c55e; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; display: inline-flex; align-items: center; gap: 6px;">
       <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block;"></span>
-      ✓ EINGECHECKMENT
+      {{ txt_dash_qr_checked_in }}
     </div>
 
   {% elif user_registration.payment_status == 'PAID' %}
@@ -244,9 +244,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
       <!-- Oberer Teil: Titel & Artikel -->
       <div>
-        <p class="eyebrow" style="margin-bottom: 4px;">Aktuelles & Ankündigungen</p>
+        <p class="eyebrow" style="margin-bottom: 4px;">{{ txt_dash_news_eyebrow }}</p>
         <h3 style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; margin-top: 0; margin-bottom: 20px; color: var(--ink);">
-          News
+          {{ txt_dash_news_title }}
         </h3>
 
         <div style="display: flex; flex-direction: column; gap: 20px;">
@@ -255,7 +255,7 @@ document.addEventListener('DOMContentLoaded', function() {
               <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                   {% if article.is_pinned %}
-                    <span style="background: rgba(248, 171, 45, 0.2); border: 1px solid var(--signal); color: var(--signal-deep); font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: bold; padding: 2px 6px; border-radius: 4px;">📌 WICHTIG</span>
+                    <span style="background: rgba(248, 171, 45, 0.2); border: 1px solid var(--signal); color: var(--signal-deep); font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: bold; padding: 2px 6px; border-radius: 4px;">{{ txt_dash_news_pinned }}</span>
                   {% endif %}
                   <strong style="font-size: 16px; color: var(--ink); font-family: 'Barlow Condensed', sans-serif;">
                     {{ article.title }}
@@ -271,12 +271,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 {{ article.content|striptags|truncatechars:180 }}
               </p>
               <a href="{% url 'news_list' %}" style="font-size: 12px; color: var(--signal-deep); font-weight: 600; text-decoration: underline; font-family: 'JetBrains Mono', monospace;">
-                Weiterlesen →
+                {{ txt_dash_news_read_more }}
               </a>
             </div>
           {% empty %}
             <p style="color: var(--muted); font-size: 13px; margin: 0; font-family: 'JetBrains Mono', monospace;">
-              Aktuell gibt es keine News.
+              {{ txt_dash_news_empty }}
             </p>
           {% endfor %}
         </div>
@@ -285,7 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <!-- Unterer Teil: Alle News Link -->
       <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--line);">
         <a href="{% url 'news_list' %}" style="font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--muted); text-transform: uppercase; text-decoration: none;">
-          Alle News & Ankündigungen anzeigen →
+          {{ txt_dash_news_all_link }}
         </a>
       </div>
 
@@ -306,11 +306,11 @@ document.addEventListener('DOMContentLoaded', function() {
         <div style="margin-bottom: 16px;">
           {% if user_seat_label %}
             <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
-              Dein Platz: <span style="color: #22c55e;">{{ user_seat_label }}</span>
+              {{ txt_dash_seat_your_seat }} <span style="color: #22c55e;">{{ user_seat_label }}</span>
             </h3>
           {% else %}
             <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
-              Kein Sitzplatz gewählt
+              {{ txt_dash_seat_no_seat_selected }}
             </h3>
           {% endif %}
         </div>
@@ -319,14 +319,14 @@ document.addEventListener('DOMContentLoaded', function() {
         {% if upcoming_event %}
           <div style="background: #161e2e; border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 20px; text-align: center;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #9ca3af; text-transform: uppercase;">Saalplan-Vorschau</span>
-              <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #38bdf8;">LIVE</span>
+              <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #9ca3af; text-transform: uppercase;">{{ txt_dash_seat_preview_label }}</span>
+              <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #38bdf8;">{{ txt_dash_seat_live_badge }}</span>
             </div>
             
             <!-- Dynamic Mini-Map Render -->
             <div id="minimap-container" style="display: inline-grid; gap: 3px; max-width: 100%; overflow: hidden; padding: 8px; background: #0b0f17; border-radius: 6px;">
               <div style="font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
-                Mini-Map lädt...
+                {{ txt_dash_seat_minimap_loading }}
               </div>
             </div>
           </div>
@@ -477,12 +477,42 @@ document.addEventListener('DOMContentLoaded', function() {
           {% endif %}
 
           {% if request.user.is_authenticated and user_status_step < 2 and upcoming_event %}
-            <form action="{% url 'register_for_event' upcoming_event.id %}" method="post" style="margin-top: 10px;">
-              {% csrf_token %}
-              <button type="submit" style="width: 100%; background: #22c55e; color: #ffffff; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
-                {{ txt_status_btn_register }}
-              </button>
-            </form>
+            {% if not upcoming_event.is_registration_open %}
+              <div style="margin-top: 10px; padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; border-radius: 6px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-align: center; font-weight: bold;">
+                {% if upcoming_event.status == 'DRAFT' %}
+                  📝 Event befindet sich noch im Entwurf
+                {% elif upcoming_event.status == 'CANCELLED' %}
+                  🚫 Event wurde abgesagt
+                {% elif upcoming_event.status == 'FINISHED' %}
+                  🏁 Event ist beendet
+                {% else %}
+                  🔒 Anmeldung aktuell geschlossen
+                {% endif %}
+              </div>
+            {% elif upcoming_event.is_full %}
+              <div style="margin-top: 10px; padding: 8px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fbbf24; border-radius: 6px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-align: center; font-weight: bold;">
+                ⚠️ Event ist ausgebucht ({{ upcoming_event.max_guests }} Max. Plätze)
+              </div>
+            {% else %}
+              <form action="{% url 'register_for_event' upcoming_event.id %}" method="post" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                {% csrf_token %}
+                {% if ticket_types and ticket_types|length > 1 %}
+                  <div>
+                    <label for="ticket_type_id" style="display: block; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 4px; text-transform: uppercase;">Ticketkategorie wählen:</label>
+                    <select name="ticket_type_id" id="ticket_type_id" style="width: 100%; padding: 6px 10px; border-radius: 6px; background: var(--bg, #0b0f17); color: #f9fafb; border: 1px solid var(--line); font-size: 12px; font-family: 'JetBrains Mono', monospace;">
+                      {% for tt in ticket_types %}
+                        <option value="{{ tt.id }}">{{ tt.name }} ({{ tt.price }} €)</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                {% elif ticket_types and ticket_types|length == 1 %}
+                  <input type="hidden" name="ticket_type_id" value="{{ ticket_types.0.id }}">
+                {% endif %}
+                <button type="submit" style="width: 100%; background: #22c55e; color: #ffffff; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
+                  {{ txt_status_btn_register }}
+                </button>
+              </form>
+            {% endif %}
           {% endif %}
         </div>
 

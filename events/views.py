@@ -11,7 +11,9 @@ from django.views.decorators.http import require_POST
 from info.models import EventInfo
 from news.models import NewsArticle
 
-from .models import Event, EventRegistration
+from .models import Event, EventRegistration, TicketType
+from .services import RegistrationService
+from .exceptions import RegistrationError
 
 from configuration.models import FeatureFlag
 
@@ -30,7 +32,7 @@ def get_active_event():
     Bewusst identisch zur Logik im Context Processor, damit Dashboard und
     Navigation nie unterschiedliche Events anzeigen.
     """
-    return Event.objects.filter(is_active=True).first()
+    return Event.objects.get_active()
 
 
 # ==============================================================================
@@ -47,6 +49,10 @@ def dashboard_view(request):
     )[:DASHBOARD_NEWS_LIMIT]
 
     registration = None
+    ticket_types = []
+    if event:
+        ticket_types = list(event.ticket_types.filter(is_active=True))
+
     if request.user.is_authenticated and event:
         registration = EventRegistration.objects.filter(
             user=request.user, event=event
@@ -64,6 +70,7 @@ def dashboard_view(request):
         'latest_news': latest_news,
         'pinned_news': pinned_news,
         'registration': registration,
+        'ticket_types': ticket_types,
         'show_onboarding_ticket': bool(
             event and request.user.is_authenticated and onboarding_enabled
         ),
@@ -80,24 +87,29 @@ def dashboard_view(request):
 @require_POST
 def register_for_event(request, event_id):
     """Meldet den eingeloggten Benutzer für das angegebene Event an."""
-    event = get_object_or_404(Event, pk=event_id, is_active=True)
+    ticket_type_id = request.POST.get('ticket_type_id')
 
-    registration, created = EventRegistration.objects.get_or_create(
-        event=event, user=request.user
-    )
-
-    if created:
-        messages.success(
-            request, f'Du bist jetzt für "{event.title}" angemeldet.'
+    try:
+        registration, created = RegistrationService.register_user(
+            user=request.user,
+            event_id=event_id,
+            ticket_type_id=ticket_type_id,
         )
-    else:
-        messages.info(
-            request, f'Du warst bereits für "{event.title}" angemeldet.'
-        )
+        if created:
+            messages.success(
+                request, f'Du bist jetzt für "{registration.event.title}" angemeldet.'
+            )
+        else:
+            messages.info(
+                request, f'Du warst bereits für "{registration.event.title}" angemeldet.'
+            )
+    except RegistrationError as e:
+        messages.error(request, str(e))
+    except Exception as e:
+        messages.error(request, 'Bei der Anmeldung ist ein unerwarteter Fehler aufgetreten.')
 
-    # WICHTIG: 'dashboard' ist der URL-Name aus events/urls.py.
-    # Der alte Wert 'user_dashboard' existiert nicht und wirft NoReverseMatch.
     return redirect('dashboard')
+
 
 
 # ==============================================================================
@@ -154,7 +166,7 @@ def toggle_check_in_api(request):
 
 @staff_member_required
 def process_checkin(request, registration_id, token):
-    """Verarbeitet den Check-in-Scan durch ein Staff-Mitglied."""
+    """Zeigt bei GET eine Vorschau mit Bestätigungs-Button und verarbeitet erst bei POST den Check-in."""
     registration = get_object_or_404(
         EventRegistration, pk=registration_id, checkin_token=token
     )
@@ -181,6 +193,30 @@ def process_checkin(request, registration_id, token):
             status=400,
         )
 
+    seat = registration.seats.first()
+    seat_label = seat.seat_label if seat else "Kein Sitzplatz"
+
+    # GET-Request: Keine Zustandsänderung! Vorschau / Bestätigungsseite anzeigen
+    if request.method == 'GET':
+        if registration.is_checked_in:
+            return render(
+                request,
+                'events/checkin_success.html',
+                {
+                    'registration': registration,
+                    'already_checked_in': True,
+                },
+            )
+        return render(
+            request,
+            'events/checkin_confirm.html',
+            {
+                'registration': registration,
+                'seat_label': seat_label,
+            },
+        )
+
+    # POST-Request: Zustandsänderung durchführen!
     already_checked_in = registration.is_checked_in
     if not already_checked_in:
         registration.check_in()

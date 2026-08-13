@@ -113,3 +113,49 @@ class SeatingPlanTests(TestCase):
         self.assertEqual(len(data['cells']), 1000)
 
 
+class SeatingConsistencyAndSignalTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='seatuser2', email='seat2@example.com', password='password'
+        )
+        self.event = Event.objects.create(
+            title='Seating LAN 2',
+            slug='seating-lan-2',
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() + timedelta(days=5),
+            end_date=timezone.now() + timedelta(days=7),
+        )
+        self.plan = SeatingPlan.objects.create(
+            event=self.event, name='Hall B', columns=5, rows=5
+        )
+        self.seat_cell = SeatingCell.objects.create(
+            plan=self.plan,
+            x=1,
+            y=1,
+            cell_type=SeatingCell.CellType.SEAT,
+            seat_label='B1',
+        )
+        self.registration = EventRegistration.objects.create(
+            user=self.user, event=self.event
+        )
+        self.seat_cell.reserve_for_user(self.registration)
+
+    def test_seat_released_when_registration_cancelled(self):
+        self.registration.payment_status = EventRegistration.PaymentStatus.CANCELLED
+        self.registration.save()
+
+        self.seat_cell.refresh_from_db()
+        self.assertIsNone(self.seat_cell.registration)
+        self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+    def test_seat_released_when_registration_deleted(self):
+        self.registration.delete()
+
+        self.seat_cell.refresh_from_db()
+        self.assertIsNone(self.seat_cell.registration)
+        self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+
+

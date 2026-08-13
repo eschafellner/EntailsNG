@@ -383,7 +383,9 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
 def _check_overbooking(request):
     overbooked_events = []
-    for event in Event.objects.all():
+    for event in Event.objects.filter(is_active=True):
+        if event.effective_status in [Event.Status.FINISHED, Event.Status.CANCELLED]:
+            continue
         if event.max_guests and event.registrations.count() > event.max_guests:
             overbooked_events.append(
                 f"'{event.title}' ({event.registrations.count()}/{event.max_guests} Plätze)"
@@ -395,3 +397,4 @@ def _check_overbooking(request):
             f"⚠️ Achtung! Es wurden mehr Plätze gebucht als Kapazität vorhanden: "
             f"{', '.join(overbooked_events)}. Bitte prüfen!",
         )
+

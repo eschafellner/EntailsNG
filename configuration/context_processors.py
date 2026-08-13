@@ -82,9 +82,12 @@ DEFAULT_TEXTS = {
     'dash_seat_your_seat': 'Dein Platz:',
     'dash_seat_no_seat_selected': 'Kein Sitzplatz gewählt',
     'dash_seat_not_reserved': 'Noch nicht reserviert',
+    'dash_seat_minimap_loading': 'Mini-Map lädt...',
+    'dash_guest_label': 'Gast',
+    'dash_seat_label_title': 'Sitzplatz',
     'dash_qr_modal_title': 'EINLASS QR-CODE',
     'dash_qr_modal_subtitle': 'Vorlegen beim Check-in vor Ort',
-    'dash_qr_checked_in': '✓ EINGECHECKMENT',
+    'dash_qr_checked_in': '✓ EINGECHECKT',
     'dash_qr_btn_show': '📲 QR-Code anzeigen',
     'dash_qr_payment_pending': '⏳ ZAHLUNG OFFEN',
 
@@ -202,6 +205,46 @@ def _load_feature_flags():
     return flags
 
 
+CAPACITY_CACHE_KEY_PREFIX = 'event_capacity_stats_'
+
+
+def invalidate_event_capacity_cache(event_id):
+    """Löscht den gecachten Sitzplatz-Statistik-Wert für das angegebene Event."""
+    if event_id:
+        cache.delete(f"{CAPACITY_CACHE_KEY_PREFIX}{event_id}")
+
+
+def get_event_capacity_stats(upcoming_event):
+    """Ermittelt Sitzplatzstatistiken mit Smart Caching (wird bei Sitzplatzänderung invalidiert)."""
+    if not upcoming_event:
+        return {'total_seats': 0, 'reserved_seats': 0, 'capacity_percent': 0}
+
+    cache_key = f"{CAPACITY_CACHE_KEY_PREFIX}{upcoming_event.id}"
+    stats = cache.get(cache_key)
+    if stats is None:
+        seat_cells = SeatingCell.objects.filter(
+            plan__event=upcoming_event,
+            cell_type=SeatingCell.CellType.SEAT,
+        )
+        total_seats = seat_cells.count()
+        reserved_seats = seat_cells.filter(
+            reservation_status__in=[
+                SeatingCell.ReservationStatus.PRE_RESERVED,
+                SeatingCell.ReservationStatus.RESERVED,
+            ]
+        ).count()
+        capacity_percent = (
+            int((reserved_seats / total_seats) * 100) if total_seats > 0 else 0
+        )
+        stats = {
+            'total_seats': total_seats,
+            'reserved_seats': reserved_seats,
+            'capacity_percent': capacity_percent,
+        }
+        cache.set(cache_key, stats, CACHE_SECONDS)
+    return stats
+
+
 def feature_flags(request):
     """Stellt Event-Daten, Menüpunkte, Feature-Flags und Texte in allen Templates bereit."""
     texts = _load_translations()
@@ -255,7 +298,6 @@ def feature_flags(request):
         'user_seat_label': None,
     }
 
-
     tr_dict = {key: texts.get(key) or default for key, default in DEFAULT_TEXTS.items()}
     context['tr'] = tr_dict
     context['translations'] = tr_dict
@@ -263,29 +305,15 @@ def feature_flags(request):
     for var_name, key in TEXT_KEYS.items():
         context[var_name] = texts.get(key) or DEFAULT_TEXTS.get(key, '')
 
-    upcoming_event = Event.objects.filter(is_active=True).first()
+    upcoming_event = Event.objects.get_active()
     context['upcoming_event'] = upcoming_event
 
-    # Event Kapazität & Belegungsquote für Fortschrittsbalken berechnen (immer verfügbar)
+    # Event Kapazität & Belegungsquote für Fortschrittsbalken (mit Smart Caching)
     if upcoming_event:
-        seat_cells = SeatingCell.objects.filter(
-            plan__event=upcoming_event,
-            cell_type=SeatingCell.CellType.SEAT,
-        )
-        total_seats = seat_cells.count()
-        reserved_seats = seat_cells.filter(
-            reservation_status__in=[
-                SeatingCell.ReservationStatus.PRE_RESERVED,
-                SeatingCell.ReservationStatus.RESERVED,
-            ]
-        ).count()
-        capacity_percent = (
-            int((reserved_seats / total_seats) * 100) if total_seats > 0 else 0
-        )
-
-        context['event_total_seats'] = total_seats
-        context['event_reserved_seats'] = reserved_seats
-        context['event_capacity_percent'] = capacity_percent
+        cap_stats = get_event_capacity_stats(upcoming_event)
+        context['event_total_seats'] = cap_stats['total_seats']
+        context['event_reserved_seats'] = cap_stats['reserved_seats']
+        context['event_capacity_percent'] = cap_stats['capacity_percent']
 
     if request.user.is_authenticated and upcoming_event:
         registration = (
@@ -293,6 +321,7 @@ def feature_flags(request):
                 event=upcoming_event, user=request.user
             )
             .select_related('user')
+            .prefetch_related('seats')
             .first()
         )
         if registration:
@@ -306,12 +335,10 @@ def feature_flags(request):
             else:
                 context['user_status_step'] = 2
 
-            cell = SeatingCell.objects.filter(
-                plan__event=upcoming_event, registration__user=request.user
-            ).first()
-            if cell:
+            seat = registration.seats.first()
+            if seat:
                 context['user_seat_label'] = (
-                    cell.seat_label or f'Pos ({cell.x},{cell.y})'
+                    seat.seat_label or f'Pos ({seat.x},{seat.y})'
                 )
 
     from django.utils import timezone
@@ -327,6 +354,5 @@ def feature_flags(request):
         upcoming_event=upcoming_event,
         user_registration=context.get('user_registration'),
     )
-
 
     return context

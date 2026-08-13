@@ -195,4 +195,41 @@ class ConfigurationModelTests(TestCase):
         config.save()
         self.assertFalse(should_show_onboarding_ticket(upcoming_event=past_event))
 
+    def test_event_capacity_stats_smart_caching_and_invalidation(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from events.models import Event
+        from seating.models import SeatingPlan, SeatingCell
+        from configuration.context_processors import get_event_capacity_stats, CAPACITY_CACHE_KEY_PREFIX
+        from django.core.cache import cache
+
+        cache.clear()
+
+        event = Event.objects.create(
+            title="Caching LAN",
+            slug="caching-lan",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=1),
+            end_date=timezone.now() + timedelta(days=3),
+        )
+        plan = SeatingPlan.objects.create(event=event, name="Halle 1", columns=5, rows=5)
+        cell = SeatingCell.objects.create(
+            plan=plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT, reservation_status=SeatingCell.ReservationStatus.FREE
+        )
+
+        stats1 = get_event_capacity_stats(event)
+        self.assertEqual(stats1['total_seats'], 1)
+        self.assertEqual(stats1['reserved_seats'], 0)
+        self.assertIsNotNone(cache.get(f"{CAPACITY_CACHE_KEY_PREFIX}{event.id}"))
+
+        # Ändere den Sitzplatz-Status -> `save()` invalidiert den Cache automatisch
+        cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        cell.save()
+
+        # Cache muss gelöscht und neu berechnet werden
+        stats2 = get_event_capacity_stats(event)
+        self.assertEqual(stats2['reserved_seats'], 1)
+        self.assertEqual(stats2['capacity_percent'], 100)
+
+
 
