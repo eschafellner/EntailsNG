@@ -1,8 +1,10 @@
+import json
 from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+
 from events.models import Event, EventRegistration, TicketType
 from events.services import RegistrationService
 from events.exceptions import (
@@ -199,6 +201,61 @@ class EventDashboardTests(TestCase):
         self.assertEqual(res_repeat.status_code, 200)
         self.assertEqual(res_repeat.json()['status'], 'already_checked_in')
 
+    def test_toggle_check_in_api_unpaid_rejected(self):
+        registration = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+        self.client.login(username='admin', password='password')
+        response = self.client.post(
+            reverse('api_toggle_check_in'),
+            data=json.dumps({'registration_id': registration.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json().get('is_checked_in', False))
+        registration.refresh_from_db()
+        self.assertFalse(registration.is_checked_in)
+
+    def test_toggle_check_in_api_paid_success(self):
+        registration = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+        self.client.login(username='admin', password='password')
+        # 1. Einchecken
+        response = self.client.post(
+            reverse('api_toggle_check_in'),
+            data=json.dumps({'registration_id': registration.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        registration.refresh_from_db()
+        self.assertTrue(registration.is_checked_in)
+
+        # 2. Auschecken
+        response_out = self.client.post(
+            reverse('api_toggle_check_in'),
+            data=json.dumps({'registration_id': registration.id}),
+            content_type='application/json',
+        )
+        self.assertEqual(response_out.status_code, 200)
+        registration.refresh_from_db()
+        self.assertFalse(registration.is_checked_in)
+
+    def test_model_check_in_raises_validation_error_when_unpaid(self):
+        from django.core.exceptions import ValidationError
+        registration = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+        with self.assertRaises(ValidationError):
+            registration.check_in()
+
+
 
 class RegistrationRulesTests(TestCase):
 
@@ -250,10 +307,12 @@ class RegistrationRulesTests(TestCase):
             RegistrationService.register_user(user=self.user1, event_id=self.event.id)
 
     def test_registration_rejected_when_expired(self):
+        self.event.start_date = timezone.now() - timedelta(days=2)
         self.event.end_date = timezone.now() - timedelta(hours=1)
         self.event.save()
         with self.assertRaises(RegistrationDeadlinePassedError):
             RegistrationService.register_user(user=self.user1, event_id=self.event.id)
+
 
     def test_registration_rejected_when_full(self):
         # Erste Anmeldung füllt die Kapazität (max_guests=1)
@@ -341,6 +400,23 @@ class EventStateAndLifecycleTests(TestCase):
         with self.assertRaises(ValidationError):
             invalid_event.clean()
 
+    def test_database_level_single_active_event_unique_constraint(self):
+        from django.db import IntegrityError
+        # Erstelle ein zweites inaktives Event
+        event2 = Event.objects.create(
+            title='Second Event',
+            slug='second-event',
+            is_active=False,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() + timedelta(days=5),
+            end_date=timezone.now() + timedelta(days=7),
+        )
+        # Wenn wir die Event.save() Logik via ORM bulk .update umgehen, muss die DB-Constraint greifen
+        with self.assertRaises(IntegrityError):
+            Event.objects.filter(id=event2.id).update(is_active=True)
+
+
+
 
 class EventRegistrationValidationTests(TestCase):
 
@@ -379,6 +455,37 @@ class EventRegistrationValidationTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(EventRegistration.objects.filter(user=self.user, event=self.event).exists())
 
+    def test_can_register_and_clean_consistency(self):
+        from django.core.exceptions import ValidationError
+
+        # 1. Event voll
+        self.event.max_guests = 1
+        self.event.save()
+        EventRegistration.objects.create(user=self.user, event=self.event)
+
+        can_reg, reason = self.event.can_register()
+        self.assertFalse(can_reg)
+        self.assertIn("maximale teilnehmerzahl", reason.lower())
+
+
+        user2 = User.objects.create_user(username='gamer_new', password='password')
+        reg_full = EventRegistration(user=user2, event=self.event)
+        with self.assertRaises(ValidationError):
+            reg_full.clean()
+
+        # 2. Event abgelaufen
+        self.event.max_guests = 50
+        self.event.start_date = timezone.now() - timedelta(days=5)
+        self.event.end_date = timezone.now() - timedelta(days=2)
+        self.event.save()
+
+        can_reg_exp, reason_exp = self.event.can_register()
+        self.assertFalse(can_reg_exp)
+
+        reg_expired = EventRegistration(user=user2, event=self.event)
+        with self.assertRaises(ValidationError):
+            reg_expired.clean()
+
     def test_ticket_type_from_other_event_validation(self):
         from django.core.exceptions import ValidationError
         from events.models import TicketType
@@ -399,16 +506,36 @@ class EventRegistrationValidationTests(TestCase):
         with self.assertRaises(ValidationError):
             reg.clean()
 
-    def test_paid_at_auto_population(self):
+    def test_paid_at_and_paid_amount_auto_population(self):
+        ticket = TicketType.objects.create(event=self.event, name='Standard', price=35.50)
         reg = EventRegistration.objects.create(
-            user=self.user, event=self.event, payment_status=EventRegistration.PaymentStatus.UNPAID
+            user=self.user, event=self.event, ticket_type=ticket, payment_status=EventRegistration.PaymentStatus.UNPAID
         )
         self.assertIsNone(reg.paid_at)
+        self.assertEqual(reg.paid_amount, 0.00)
 
+        # 1. Bezahlung markieren -> Übernahme von Ticketpreis & Zeitstempel
         reg.mark_as_paid()
         reg.refresh_from_db()
         self.assertEqual(reg.payment_status, EventRegistration.PaymentStatus.PAID)
         self.assertIsNotNone(reg.paid_at)
+        self.assertEqual(float(reg.paid_amount), 35.50)
+        self.assertIsNone(reg.cancelled_at)
+
+        # 2. Check-in durchführen
+        reg.check_in()
+        reg.refresh_from_db()
+        self.assertTrue(reg.is_checked_in)
+        self.assertIsNotNone(reg.checked_in_at)
+
+        # 3. Stornierung durchführen -> Check-in zurücksetzen, cancelled_at setzen
+        reg.mark_as_cancelled()
+        reg.refresh_from_db()
+        self.assertEqual(reg.payment_status, EventRegistration.PaymentStatus.CANCELLED)
+        self.assertFalse(reg.is_checked_in)
+        self.assertIsNone(reg.checked_in_at)
+        self.assertIsNotNone(reg.cancelled_at)
+
 
     def test_overbooking_warning_ignored_for_inactive_or_finished_events(self):
         from events.admin import _check_overbooking

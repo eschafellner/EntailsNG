@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from configuration.models import FeatureFlag, NavigationItem, SystemTranslation
+
 
 User = get_user_model()
 
@@ -230,6 +231,70 @@ class ConfigurationModelTests(TestCase):
         stats2 = get_event_capacity_stats(event)
         self.assertEqual(stats2['reserved_seats'], 1)
         self.assertEqual(stats2['capacity_percent'], 100)
+
+        # 3. Kachel löschen -> Cache muss invalidiert werden
+        cell.delete()
+        self.assertIsNone(cache.get(f"{CAPACITY_CACHE_KEY_PREFIX}{event.id}"))
+        stats3 = get_event_capacity_stats(event)
+        self.assertEqual(stats3['total_seats'], 0)
+
+        # 4. Plan für neues Event klonen -> Cache für neues Event wird initialisiert & invalidiert
+        event_new = Event.objects.create(
+            title="Cloned LAN",
+            slug="cloned-lan",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=10),
+            end_date=timezone.now() + timedelta(days=12),
+        )
+        plan.clone_for_event(new_event=event_new)
+        self.assertIsNone(cache.get(f"{CAPACITY_CACHE_KEY_PREFIX}{event_new.id}"))
+
+    def test_dynamic_debug_mode_toggle(self):
+        from django.test import RequestFactory
+        from configuration.middleware import DynamicDebugMiddleware
+        from configuration.models import GeneralConfiguration
+
+        conf = GeneralConfiguration.load()
+        conf.debug_mode = False
+        conf.save()
+
+        rf = RequestFactory()
+        request = rf.get('/some-error-endpoint/')
+
+        def raising_view(req):
+            raise ValueError("Test-Fehler für Debug-Middleware")
+
+        middleware = DynamicDebugMiddleware(raising_view)
+
+        # 1. Bei debug_mode=False liefert process_exception None (Standard 500 Handler greift)
+        try:
+            raising_view(request)
+        except Exception as e:
+            res_off = middleware.process_exception(request, e)
+            self.assertIsNone(res_off)
+
+        # 2. Bei debug_mode=True liefert process_exception die technische Debug-Response
+        conf.debug_mode = True
+        conf.save()
+
+        try:
+            raising_view(request)
+        except Exception as e:
+            res_on = middleware.process_exception(request, e)
+            self.assertIsNotNone(res_on)
+            self.assertEqual(res_on.status_code, 500)
+            self.assertIn(b"Test-Fehler", res_on.content)
+
+    @override_settings(DEBUG=False, ALLOWED_HOSTS=['testserver', '127.0.0.1', 'localhost'])
+    def test_custom_404_template_rendering_when_debug_false(self):
+        response = self.client.get('/tesm')
+        self.assertEqual(response.status_code, 404)
+        self.assertTemplateUsed(response, '404.html')
+        self.assertContains(response, 'Seite nicht gefunden', status_code=404)
+        self.assertContains(response, '404', status_code=404)
+
+
+
 
 
 

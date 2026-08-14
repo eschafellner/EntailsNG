@@ -129,6 +129,7 @@ def _wants_json(request):
 @require_POST
 def toggle_check_in_api(request):
     """Schaltet den Check-in-Status eines Gastes um (Einlass-Tool)."""
+    from django.core.exceptions import ValidationError
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -138,7 +139,7 @@ def toggle_check_in_api(request):
 
     registration = EventRegistration.objects.filter(
         pk=data.get('registration_id')
-    ).first()
+    ).select_related('user', 'event').first()
     if registration is None:
         return JsonResponse(
             {'status': 'error', 'message': 'Anmeldung nicht gefunden.'},
@@ -149,8 +150,12 @@ def toggle_check_in_api(request):
         registration.check_out()
         status_msg = 'ausgecheckt'
     else:
-        registration.check_in()
-        status_msg = 'eingecheckt'
+        try:
+            registration.check_in(actor=request.user)
+            status_msg = 'eingecheckt'
+        except ValidationError as e:
+            error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+            return JsonResponse({'status': 'error', 'message': error_message}, status=400)
 
     return JsonResponse({
         'status': 'success',
@@ -162,6 +167,7 @@ def toggle_check_in_api(request):
         ),
         'message': f'{registration.user.username} {status_msg}.',
     })
+
 
 
 @staff_member_required

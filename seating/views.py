@@ -1,4 +1,5 @@
 import json
+import logging
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -8,6 +9,9 @@ from django.views.decorators.http import require_POST
 
 from events.models import Event, EventRegistration
 from .models import SeatingCell, SeatingPlan
+
+logger = logging.getLogger(__name__)
+
 
 
 def seating_plan_view(request):
@@ -43,60 +47,157 @@ def seating_editor(request, plan_id):
 @staff_member_required
 @require_POST
 def save_seating_plan(request, plan_id):
-    """Speichert das geänderte Raster per AJAX-Call und löscht entfernte Kacheln."""
+    """Speichert das geänderte Raster per AJAX-Call mit atomarer Transaktionssicherheit, Eingabevalidierung und Schutz belegter Plätze."""
     plan = get_object_or_404(SeatingPlan, pk=plan_id)
 
     try:
         data = json.loads(request.body)
         cells_to_save = data.get('cells', [])
+        if not isinstance(cells_to_save, list):
+            return JsonResponse({'status': 'error', 'message': 'Ungültiges Datenformat: "cells" muss eine Liste sein.'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Ungültiges JSON übermittelt.'}, status=400)
 
-        # 1. Alle Koordinaten sammeln, die das Frontend aktuell mitschickt
-        sent_coordinates = set()
-        for cell_data in cells_to_save:
-            sent_coordinates.add((cell_data['x'], cell_data['y']))
+    VALID_CELL_TYPES = set(SeatingCell.CellType.values)
+    sent_coords = {}
 
-        # 2. Alle Kacheln aus der Datenbank LÖSCHEN, die im Frontend gelöscht wurden
-        existing_cells = plan.cells.all()
-        for cell in existing_cells:
-            if (cell.x, cell.y) not in sent_coordinates:
-                cell.delete()
+    for idx, c in enumerate(cells_to_save):
+        if not isinstance(c, dict):
+            return JsonResponse({'status': 'error', 'message': f'Ungültiger Kacheleintrag an Index {idx}.'}, status=400)
 
-        # 3. Bestehende Kacheln aktualisieren oder neue erstellen
-        for cell_data in cells_to_save:
-            x = cell_data['x']
-            y = cell_data['y']
-            cell_type = cell_data['cell_type']
-            seat_label = cell_data.get('seat_label', '')
-            text_label = cell_data.get('text_label', '')
+        # 1. Koordinaten validieren
+        try:
+            x = int(c.get('x'))
+            y = int(c.get('y'))
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': f'Ungültige Koordinaten an Index {idx}.'}, status=400)
 
-            cell, created = SeatingCell.objects.get_or_create(
-                plan=plan,
-                x=x,
-                y=y,
-                defaults={
-                    'cell_type': cell_type,
-                    'seat_label': seat_label,
-                    'text_label': text_label,
-                },
+        if not (1 <= x <= plan.columns and 1 <= y <= plan.rows):
+            return JsonResponse(
+                {'status': 'error', 'message': f'Koordinaten ({x},{y}) liegen außerhalb des Rasters ({plan.columns}x{plan.rows}).'},
+                status=400
             )
 
-            if not created:
-                cell.cell_type = cell_type
-                cell.seat_label = seat_label
-                cell.text_label = text_label
-                cell.save()
+        # 2. Zelltyp validieren
+        cell_type = c.get('cell_type', SeatingCell.CellType.EMPTY)
+        if cell_type not in VALID_CELL_TYPES:
+            return JsonResponse(
+                {'status': 'error', 'message': f'Ungültiger Zelltyp "{cell_type}" an Position ({x},{y}).'},
+                status=400
+            )
+
+        # 3. Feldlängen validieren
+        seat_label = str(c.get('seat_label', '') or '')[:20]
+        text_label = str(c.get('text_label', '') or '')[:50]
+
+        sent_coords[(x, y)] = {
+            'cell_type': cell_type,
+            'seat_label': seat_label,
+            'text_label': text_label,
+        }
+
+    try:
+        with transaction.atomic():
+            existing_cells = {
+                (cell.x, cell.y): cell 
+                for cell in SeatingCell.objects.filter(plan=plan).select_related('registration__user')
+            }
+
+            # 4. Schutz belegter / reservierter Plätze vor Löschung
+            coords_to_delete = set(existing_cells.keys()) - set(sent_coords.keys())
+            for coord in coords_to_delete:
+                cell = existing_cells[coord]
+                if cell.registration is not None or cell.reservation_status in [
+                    SeatingCell.ReservationStatus.RESERVED,
+                    SeatingCell.ReservationStatus.PRE_RESERVED
+                ]:
+                    user_name = cell.registration.user.username if cell.registration else "einem Teilnehmer"
+                    return JsonResponse(
+                        {
+                            'status': 'error',
+                            'message': f'Kachel an Position ({coord[0]},{coord[1]}) kann nicht gelöscht werden, da sie aktuell von {user_name} belegt/reserviert ist.',
+                        },
+                        status=400,
+                    )
+
+            if coords_to_delete:
+                pks_to_delete = [existing_cells[coord].pk for coord in coords_to_delete]
+                SeatingCell.objects.filter(pk__in=pks_to_delete).delete()
+
+            cells_to_create = []
+            cells_to_update = []
+
+            # 5. Bestehende Kacheln updaten oder neue zur Bulk-Erstellung sammeln
+            for coord, cdata in sent_coords.items():
+                x, y = coord
+                cell_type = cdata['cell_type']
+                seat_label = cdata['seat_label']
+                text_label = cdata['text_label']
+
+                if coord in existing_cells:
+                    cell = existing_cells[coord]
+
+                    # Schutz vor destruktiver Typ-Änderung belegter Plätze
+                    if cell.registration is not None and cell_type != SeatingCell.CellType.SEAT:
+                        user_name = cell.registration.user.username
+                        return JsonResponse(
+                            {
+                                'status': 'error',
+                                'message': f'Sitzplatz ({x},{y}) kann nicht in "{cell_type}" umgewandelt werden, da er von {user_name} belegt ist.',
+                            },
+                            status=400,
+                        )
+
+                    if (cell.cell_type != cell_type or 
+                        cell.seat_label != seat_label or 
+                        cell.text_label != text_label):
+                        cell.cell_type = cell_type
+                        cell.seat_label = seat_label
+                        cell.text_label = text_label
+                        cells_to_update.append(cell)
+                else:
+                    cells_to_create.append(
+                        SeatingCell(
+                            plan=plan,
+                            x=x,
+                            y=y,
+                            cell_type=cell_type,
+                            seat_label=seat_label,
+                            text_label=text_label,
+                        )
+                    )
+
+            if cells_to_create:
+                SeatingCell.objects.bulk_create(cells_to_create, batch_size=500)
+            if cells_to_update:
+                SeatingCell.objects.bulk_update(
+                    cells_to_update,
+                    fields=['cell_type', 'seat_label', 'text_label'],
+                    batch_size=500
+                )
+
+            # Einmalige Cache-Invalidierung nach DB-Commit
+            if plan.event_id:
+                from configuration.context_processors import invalidate_event_capacity_cache
+                invalidate_event_capacity_cache(plan.event_id)
 
         return JsonResponse(
             {'status': 'success', 'message': 'Sitzplan erfolgreich gespeichert!'}
         )
 
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+        logger.error("Interner Fehler beim Speichern des Sitzplans (ID: %s): %s", plan_id, e, exc_info=True)
+        return JsonResponse({'status': 'error', 'message': 'Beim Speichern des Sitzplans ist ein interner Fehler aufgetreten.'}, status=500)
+
+
 
 
 def get_event_seating_api(request, event_id):
     """
     Liefert den Sitzplan einer Veranstaltung inkl. Belegung, dynamischem Bezahlstatus & Check-in-Status als JSON.
+    Datenschutz / DSGVO:
+    Personenbezogene Daten (Benutzername, Clan-Name, Check-in-Status) werden NUR an eingeloggte Benutzer ausgeliefert.
+    Nicht eingeloggte Besucher sehen ausschließlich den aggregierten Status (FREE, PRE_RESERVED, RESERVED, BLOCKED).
     """
     try:
         plan = SeatingPlan.objects.get(event_id=event_id)
@@ -106,17 +207,19 @@ def get_event_seating_api(request, event_id):
             status=404,
         )
 
-    # Clan-Zugehörigkeiten für angemeldete User laden
-    from clans.models import ClanMembership
-    user_clan_map = {}
-    active_memberships = ClanMembership.objects.filter(
-        status=ClanMembership.Status.ACCEPTED
-    ).select_related('clan', 'user')
-    for m in active_memberships:
-        user_clan_map[m.user_id] = m.clan.name
+    is_authenticated = request.user.is_authenticated
 
+    user_clan_map = {}
     current_user_clan_name = None
-    if request.user.is_authenticated:
+
+    if is_authenticated:
+        from clans.models import ClanMembership
+        active_memberships = ClanMembership.objects.filter(
+            status=ClanMembership.Status.ACCEPTED
+        ).select_related('clan', 'user')
+        for m in active_memberships:
+            user_clan_map[m.user_id] = m.clan.name
+
         current_user_clan_name = user_clan_map.get(request.user.id)
 
     cells = []
@@ -129,11 +232,12 @@ def get_event_seating_api(request, event_id):
         if c.reservation_status == SeatingCell.ReservationStatus.BLOCKED:
             computed_status = 'BLOCKED'
         elif c.registration:
-            user = c.registration.user
-            username = user.username if user else None
-            if user:
-                clan_name = user_clan_map.get(user.id)
-            is_checked_in = c.registration.is_checked_in
+            if is_authenticated:
+                user = c.registration.user
+                username = user.username if user else None
+                if user:
+                    clan_name = user_clan_map.get(user.id)
+                is_checked_in = c.registration.is_checked_in
 
             # Differenzierung: Bezahlt vs. Vorgemerkt (Unbezahlt)
             if (
@@ -166,6 +270,7 @@ def get_event_seating_api(request, event_id):
         'user_clan_name': current_user_clan_name,
         'cells': cells,
     })
+
 
 
 @login_required
@@ -288,26 +393,76 @@ def release_seat_api(request, event_id):
 
 @staff_member_required
 @require_POST
+@transaction.atomic
 def admin_assign_seat(request):
+    """
+    API für Admins:
+    Weist einem Benutzer gezielt einen Sitzplatz zu mit strikter Validierung von Zelltyp, Sperrstatus und Belegung.
+    """
     try:
         data = json.loads(request.body)
         registration_id = data.get('registration_id')
         x = data.get('x')
         y = data.get('y')
+        force = bool(data.get('force', False))
 
-        registration = EventRegistration.objects.get(pk=registration_id)
+        if registration_id is None or x is None or y is None:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Unvollständige Parameter übergeben.'},
+                status=400,
+            )
+
+        registration = EventRegistration.objects.select_related('event', 'user').get(pk=registration_id)
         plan = SeatingPlan.objects.get(event=registration.event)
-        target_cell = SeatingCell.objects.get(plan=plan, x=x, y=y)
 
-        # 1. Bisherigen Platz des Users freigeben
-        SeatingCell.objects.filter(
+        # 1. Zielzelle mit DB-Lock laden
+        target_cell = SeatingCell.objects.select_for_update().filter(plan=plan, x=int(x), y=int(y)).first()
+        if not target_cell:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Ziel-Kachel existiert nicht auf diesem Sitzplan.'},
+                status=404,
+            )
+
+        # 2. Prüfen, ob die Zielkachel überhaupt ein Sitzplatz ist
+        if target_cell.cell_type != SeatingCell.CellType.SEAT:
+            return JsonResponse(
+                {
+                    'status': 'error',
+                    'message': f'Zuweisung fehlgeschlagen: Die gewählte Kachel ist kein Sitzplatz (Typ: {target_cell.get_cell_type_display()}).',
+                },
+                status=400,
+            )
+
+        # 3. Prüfen, ob der Platz gesperrt ist
+        if target_cell.reservation_status == SeatingCell.ReservationStatus.BLOCKED and not force:
+            return JsonResponse(
+                {
+                    'status': 'error',
+                    'message': f"Platz '{target_cell.seat_label or f'Pos ({x},{y})'}' ist gesperrt (Status: Blockiert).",
+                },
+                status=400,
+            )
+
+        # 4. Prüfen, ob der Platz bereits von einem anderen Gast belegt ist
+        if target_cell.registration and target_cell.registration != registration and not force:
+            occupied_username = target_cell.registration.user.username
+            return JsonResponse(
+                {
+                    'status': 'error',
+                    'message': f"Platz '{target_cell.seat_label or f'Pos ({x},{y})'}' ist bereits von '{occupied_username}' belegt.",
+                },
+                status=400,
+            )
+
+        # 5. Bisherigen Platz des Users freigeben (falls vorhanden)
+        SeatingCell.objects.select_for_update().filter(
             plan=plan, registration=registration
         ).update(
             registration=None,
             reservation_status=SeatingCell.ReservationStatus.FREE,
         )
 
-        # 2. Neuen Platz zuweisen und Bezahlstatus sofort auswerten!
+        # 6. Neuen Platz zuweisen und Bezahlstatus korrekt auswerten
         has_paid = (
             registration.payment_status == EventRegistration.PaymentStatus.PAID
         )
@@ -320,12 +475,21 @@ def admin_assign_seat(request):
         )
         target_cell.save()
 
+        # Cache-Invalidierung für Kapazitätsanzeige
+        from configuration.context_processors import invalidate_event_capacity_cache
+        invalidate_event_capacity_cache(registration.event_id)
+
         return JsonResponse(
-            {'status': 'success', 'message': 'Platz erfolgreich zugewiesen!'}
+            {'status': 'success', 'message': f"Platz '{target_cell.seat_label or f'Pos ({x},{y})'}' erfolgreich an {registration.user.username} zugewiesen!"}
         )
 
+    except EventRegistration.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Anmeldung nicht gefunden.'}, status=404)
+    except SeatingPlan.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Kein Sitzplan für diese Veranstaltung vorhanden.'}, status=404)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
 
 
 @staff_member_required
@@ -365,6 +529,9 @@ def admin_toggle_block_seat(request):
 
         cell.save()
 
+        from configuration.context_processors import invalidate_event_capacity_cache
+        invalidate_event_capacity_cache(event_id)
+
         return JsonResponse({
             'status': 'success',
             'message': message,
@@ -388,6 +555,7 @@ def admin_release_seat(request):
     Gibt den Sitzplatz einer bestimmten Anmeldung frei ODER gibt eine Kachel per Koordinate frei.
     """
     try:
+        from configuration.context_processors import invalidate_event_capacity_cache
         data = json.loads(request.body)
         registration_id = data.get('registration_id')
         event_id = data.get('event_id')
@@ -402,6 +570,7 @@ def admin_release_seat(request):
                 seat.registration = None
                 seat.reservation_status = SeatingCell.ReservationStatus.FREE
                 seat.save()
+            invalidate_event_capacity_cache(registration.event_id)
             return JsonResponse({
                 'status': 'success',
                 'message': 'Sitzplatzzuweisung erfolgreich aufgehoben.',
@@ -414,6 +583,7 @@ def admin_release_seat(request):
             cell.registration = None
             cell.reservation_status = SeatingCell.ReservationStatus.FREE
             cell.save()
+            invalidate_event_capacity_cache(event_id)
             return JsonResponse({
                 'status': 'success',
                 'message': f'Platz {cell.seat_label or "Pos (" + str(x) + "," + str(y) + ")"} wurde freigegeben.',
@@ -425,3 +595,4 @@ def admin_release_seat(request):
 
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+

@@ -65,8 +65,14 @@ class TournamentModelTests(TestCase):
 
     def test_user_event_checkin_validation(self):
         self.assertFalse(check_user_event_checkin(self.user1, self.event))
-        reg = EventRegistration.objects.create(user=self.user1, event=self.event, is_checked_in=True)
+        reg = EventRegistration.objects.create(
+            user=self.user1,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+            is_checked_in=True
+        )
         self.assertTrue(check_user_event_checkin(self.user1, self.event))
+
 
     def test_single_elimination_bracket_generation_with_byes(self):
         tournament = Tournament.objects.create(
@@ -138,3 +144,68 @@ class TournamentModelTests(TestCase):
         self.assertEqual(match.loser, t2)
         self.assertEqual(match.score_team1, 16)
         self.assertEqual(match.score_team2, 14)
+
+    def test_match_update_score_view_rejects_unrelated_team(self):
+        self.user1.is_staff = True
+        self.user1.save()
+        self.client.login(username="player1", password="pass")
+
+        tournament = Tournament.objects.create(
+            title="CS2 1v1",
+            event=self.event,
+            game=self.game,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+        )
+        t1 = Team.objects.create(name="Team A", captain=self.user1)
+        t2 = Team.objects.create(name="Team B", captain=self.user2)
+        unrelated_team = Team.objects.create(name="Team Unrelated", captain=self.user3)
+
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            team1=t1,
+            team2=t2,
+            status=TournamentMatch.Status.READY
+        )
+
+        from django.urls import reverse
+        # Versuch ein unbeteiligtes Team als Sieger zu übergeben
+        response = self.client.post(
+            reverse('match_update_score', kwargs={'match_id': match.id}),
+            {'score_team1': 16, 'score_team2': 14, 'winner_id': unrelated_team.id}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()['success'])
+
+        # Mit korrektem Teilnehmer
+        good_response = self.client.post(
+            reverse('match_update_score', kwargs={'match_id': match.id}),
+            {'score_team1': 16, 'score_team2': 14, 'winner_id': t1.id}
+        )
+        self.assertEqual(good_response.status_code, 200)
+        self.assertTrue(good_response.json()['success'])
+
+    def test_team_kick_member_prevents_captain_self_kick(self):
+        team = Team.objects.create(name="Captain Test", captain=self.user1, game=self.game)
+        TeamMember.objects.create(team=team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        TeamMember.objects.create(team=team, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="player1", password="pass")
+        from django.urls import reverse
+        # Kapitän versucht sich selbst zu kicken
+        response = self.client.post(
+            reverse('team_kick_member', kwargs={'slug': team.slug, 'user_id': self.user1.id})
+        )
+        self.assertRedirects(response, reverse('team_detail', kwargs={'slug': team.slug}))
+        self.assertTrue(TeamMember.objects.filter(team=team, user=self.user1).exists())
+
+        # Kapitän kickt reguläres Mitglied
+        response_kick = self.client.post(
+            reverse('team_kick_member', kwargs={'slug': team.slug, 'user_id': self.user2.id})
+        )
+        self.assertRedirects(response_kick, reverse('team_detail', kwargs={'slug': team.slug}))
+        self.assertFalse(TeamMember.objects.filter(team=team, user=self.user2).exists())
+

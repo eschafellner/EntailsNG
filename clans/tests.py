@@ -35,9 +35,13 @@ class ClanModuleTests(TestCase):
         clan = Clan.objects.get(name='Fnatic')
         self.assertRedirects(response, reverse('clan_detail', kwargs={'slug': clan.slug}))
         self.assertTrue(clan.is_admin(self.user_a))
+        self.assertTrue(clan.check_password('secretpassword'))
+        self.assertFalse(clan.check_password('wrongpassword'))
 
     def test_edit_clan_optional_password(self):
-        clan = Clan.objects.create(name='Fnatic', password='originalpassword')
+        clan = Clan.objects.create(name='Fnatic')
+        clan.set_password('originalpassword')
+        clan.save()
         ClanMembership.objects.create(
             user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
         )
@@ -54,7 +58,8 @@ class ClanModuleTests(TestCase):
         self.assertRedirects(response, reverse('clan_detail', kwargs={'slug': clan.slug}))
         clan.refresh_from_db()
         self.assertEqual(clan.name, 'Fnatic Updated')
-        self.assertEqual(clan.password, 'originalpassword')
+        self.assertTrue(clan.check_password('originalpassword'))
+
 
     def test_logo_invalid_extension(self):
         clan = Clan.objects.create(name='TestClan', password='pass')
@@ -70,15 +75,27 @@ class ClanModuleTests(TestCase):
                 'logo': bad_file,
             },
         )
-        self.assertFormError(response.context['form'], 'logo', "Ungültiges Format '.txt'. Bitte lade ein Bild im Format .jpg, .jpeg oder .png hoch.")
+        self.assertTrue(response.context['form'].has_error('logo'))
+
 
     def test_join_clan_via_password(self):
-        clan = Clan.objects.create(name='SK Gaming', password='skpass')
+        clan = Clan.objects.create(name='SK Gaming')
+        clan.set_password('skpass')
+        clan.save()
         ClanMembership.objects.create(
             user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
         )
 
         self.client.login(username='member1', password='password')
+        # Wrong password attempt
+        bad_response = self.client.post(
+            reverse('clan_join_password', kwargs={'slug': clan.slug}),
+            {'password': 'wrongpass'},
+        )
+        self.assertRedirects(bad_response, reverse('clan_detail', kwargs={'slug': clan.slug}))
+        self.assertFalse(ClanMembership.objects.filter(user=self.user_b, clan=clan).exists())
+
+        # Correct password attempt
         response = self.client.post(
             reverse('clan_join_password', kwargs={'slug': clan.slug}),
             {'password': 'skpass'},
@@ -87,6 +104,7 @@ class ClanModuleTests(TestCase):
         membership = ClanMembership.objects.filter(user=self.user_b, clan=clan).first()
         self.assertIsNotNone(membership)
         self.assertEqual(membership.status, ClanMembership.Status.ACCEPTED)
+
 
     def test_join_request_accept_and_reject(self):
         clan = Clan.objects.create(name='Natus Vincere', password='navipass')

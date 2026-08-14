@@ -51,7 +51,20 @@ class GeneralConfigurationAdmin(admin.ModelAdmin):
                 ),
             },
         ),
+        (
+            'System-Diagnose & Fehleranalyse',
+            {
+                'fields': (
+                    'debug_mode',
+                ),
+                'description': (
+                    'Ermöglicht das temporäre Einschalten der detaillierten technischen Django-Debugseite '
+                    'im Fehlerfall direkt im Browser. Im Live-Betrieb sollte dies standardmäßig deaktiviert sein.'
+                ),
+            },
+        ),
     )
+
 
     def has_add_permission(self, request):
         return not GeneralConfiguration.objects.exists()

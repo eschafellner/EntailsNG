@@ -204,8 +204,8 @@ function renderGrid(data) {
           const isOwnSeat = currentUsername && (cellData.occupied_by === currentUsername);
           const isSameClan = data.user_clan_name && cellData.clan_name && (data.user_clan_name === cellData.clan_name);
           const occupantText = cellData.clan_name
-            ? `${cellData.occupied_by || 'Unbekannt'} (${cellData.clan_name})`
-            : (cellData.occupied_by || 'Unbekannt');
+            ? `${cellData.occupied_by} (${cellData.clan_name})`
+            : cellData.occupied_by;
 
           if (isOwnSeat) {
             // BESONDERE HERVORHEBUNG: Eigener Sitzplatz (Goldgelb mit Glow)
@@ -231,9 +231,12 @@ function renderGrid(data) {
           }
 
           if (!isOwnSeat) {
-            const statusLabel = cellData.status === 'PRE_RESERVED' ? 'Vorreserviert von' : 'Belegt von';
-            tooltipText = `Platz ${seatLabel}: ${statusLabel} ${occupantText}`;
+            const statusLabel = cellData.status === 'PRE_RESERVED' ? 'Vorgemerkt' : 'Reserviert';
+            tooltipText = cellData.occupied_by 
+              ? `Platz ${seatLabel}: ${statusLabel} von ${occupantText}`
+              : `Platz ${seatLabel}: ${statusLabel}`;
           }
+
 
         } else {
           cellEl.style.background = '#374151';

@@ -36,6 +36,20 @@ class SeatingPlan(models.Model):
         event_title = self.event.title if self.event else "Keine Veranstaltung"
         return f"{event_title} - {self.name} ({self.columns}x{self.rows})"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.event_id:
+            from configuration.context_processors import invalidate_event_capacity_cache
+            invalidate_event_capacity_cache(self.event_id)
+
+    def delete(self, *args, **kwargs):
+        event_id = self.event_id
+        res = super().delete(*args, **kwargs)
+        if event_id:
+            from configuration.context_processors import invalidate_event_capacity_cache
+            invalidate_event_capacity_cache(event_id)
+        return res
+
     def clone_for_event(self, new_event=None, new_name=None):
         """Kopiert diesen Sitzplan ohne User-Reservierungen und optional ohne Event."""
         new_plan = SeatingPlan.objects.create(
@@ -69,7 +83,11 @@ class SeatingPlan(models.Model):
             )
 
         SeatingCell.objects.bulk_create(new_cells)
+        if new_event:
+            from configuration.context_processors import invalidate_event_capacity_cache
+            invalidate_event_capacity_cache(new_event.id)
         return new_plan
+
 
 
 class SeatingCell(models.Model):
@@ -139,8 +157,17 @@ class SeatingCell(models.Model):
             from configuration.context_processors import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(self.plan.event_id)
 
+    def delete(self, *args, **kwargs):
+        event_id = self.plan.event_id if (self.plan_id and hasattr(self, 'plan')) else None
+        res = super().delete(*args, **kwargs)
+        if event_id:
+            from configuration.context_processors import invalidate_event_capacity_cache
+            invalidate_event_capacity_cache(event_id)
+        return res
+
     def __str__(self):
         return f"{self.seat_label or f'({self.x},{self.y})'} - {self.get_reservation_status_display()}"
+
 
     def reserve_for_user(self, registration):
         if self.cell_type != self.CellType.SEAT:

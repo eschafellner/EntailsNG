@@ -171,6 +171,12 @@ class GeneralConfiguration(models.Model):
         verbose_name="Verhalten bei abgelaufenen Veranstaltungen",
         help_text="Bestimmt das Verhalten der Ticket-Karte auf dem Dashboard, wenn das Event-Enddatum überschritten ist.",
     )
+    debug_mode = models.BooleanField(
+        default=False,
+        verbose_name="Debug-Modus (Detaillierte Fehlerausgabe)",
+        help_text="Aktiviert die detaillierte technische Django-Fehlerseite bei Serverfehlern. Im normalen Live-Betrieb sollte dies deaktiviert sein.",
+    )
+
 
 
     class Meta:
@@ -184,7 +190,7 @@ class GeneralConfiguration(models.Model):
         self.pk = 1
         super().save(*args, **kwargs)
         cache.delete('general_configuration')
-        cache.clear()
+
 
     def delete(self, *args, **kwargs):
         pass  # Verhindert das Löschen der Einstellungen
@@ -323,8 +329,8 @@ class SiteCustomization(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)
-        cache.delete('site_customization')
-        cache.clear()
+        cache.delete_many(['site_customization', 'system_translations', 'navigation_items'])
+
 
     def delete(self, *args, **kwargs):
         pass

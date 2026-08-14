@@ -58,8 +58,9 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         'ticket_type',
     )  # <-- NEU: Filter nach Check-in
     search_fields = ('user__username', 'user__first_name', 'user__last_name')
-    readonly_fields = ('assigned_seat_picker', 'checked_in_at')
+    readonly_fields = ('assigned_seat_picker', 'checked_in_at', 'paid_at', 'cancelled_at')
     actions = ['action_check_in_guests', 'action_check_out_guests', 'export_as_csv']
+
 
     @admin.action(description="📊 CSV-Export für Kasse / Einlass (Excel-kompatibel)")
     def export_as_csv(self, request, queryset):
@@ -115,8 +116,15 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         return response
 
     def save_model(self, request, obj, form, change):
-        """Setzt den Zeitstempel automatisch, wenn im Admin das Häkchen manuell gesetzt wird"""
-        if obj.is_checked_in and not obj.checked_in_at:
+        """Setzt den Zeitstempel automatisch, wenn im Admin das Häkchen manuell gesetzt wird, und prüft den Bezahlstatus."""
+        if obj.is_checked_in and obj.payment_status != EventRegistration.PaymentStatus.PAID:
+            messages.error(
+                request,
+                f"Check-in für '{obj.user.username}' verweigert: Die Anmeldung ist nicht bezahlt (Status: {obj.get_payment_status_display()})."
+            )
+            obj.is_checked_in = False
+            obj.checked_in_at = None
+        elif obj.is_checked_in and not obj.checked_in_at:
             obj.checked_in_at = timezone.now()
         elif not obj.is_checked_in:
             obj.checked_in_at = None
@@ -153,11 +161,27 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
     @admin.action(description="🎧 Ausgewählte Gäste EINCHECKENT")
     def action_check_in_guests(self, request, queryset):
+        from django.core.exceptions import ValidationError
+        success_count = 0
+        failed_users = []
+
         for reg in queryset:
-            reg.check_in()
-        self.message_user(
-            request, f"{queryset.count()} Gäste erfolgreich eingecheckt!"
-        )
+            try:
+                reg.check_in(actor=request.user)
+                success_count += 1
+            except ValidationError:
+                failed_users.append(reg.user.username)
+
+        if success_count > 0:
+            self.message_user(
+                request, f"{success_count} Gäste erfolgreich eingecheckt!", level=messages.SUCCESS
+            )
+        if failed_users:
+            self.message_user(
+                request,
+                f"Check-in für folgende {len(failed_users)} Gast/Gäste verweigert (nicht bezahlt): {', '.join(failed_users)}.",
+                level=messages.ERROR
+            )
 
     @admin.action(description="⏳ Ausgewählten Check-in RÜCKGÄNGIG machen")
     def action_check_out_guests(self, request, queryset):
@@ -167,6 +191,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
             request,
             f"Check-in für {queryset.count()} Gäste wieder aufgehoben.",
         )
+
 
     @admin.display(description="Sitzplatz")
     def assigned_seat(self, obj):

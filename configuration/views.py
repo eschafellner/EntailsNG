@@ -1,7 +1,10 @@
+import logging
 from django.core.cache import cache
 from django.db import connection
 from django.http import JsonResponse
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 def health_check_api(request):
@@ -14,16 +17,18 @@ def health_check_api(request):
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
     except Exception as e:
-        db_status = f"error: {str(e)}"
+        logger.error(f"Healthcheck Database Failure: {e}", exc_info=True)
+        db_status = "unavailable"
         is_healthy = False
 
     try:
-        cache.set("health_check_ping", "pong", 10)
+        cache.set("health_check_ping", "pong", 5)
         if cache.get("health_check_ping") != "pong":
-            cache_status = "error: cache read/write failed"
+            cache_status = "unavailable"
             is_healthy = False
     except Exception as e:
-        cache_status = f"error: {str(e)}"
+        logger.error(f"Healthcheck Cache Failure: {e}", exc_info=True)
+        cache_status = "unavailable"
         is_healthy = False
 
     data = {
@@ -33,6 +38,7 @@ def health_check_api(request):
         "timestamp": timezone.now().isoformat(),
     }
     return JsonResponse(data, status=200 if is_healthy else 503)
+
 
 
 from django.shortcuts import render

@@ -41,6 +41,16 @@ pip install --upgrade pip --quiet 2>/dev/null || true
 pip install -r requirements.txt --quiet
 echo -e "${GREEN}✓ Alle Abhängigkeiten wurden erfolgreich installiert.${NC}\n"
 
+# 3b. Konfigurationsdatei (.env) initialisieren falls nicht vorhanden
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    echo -e "${YELLOW}   Erstelle lokale .env Datei mit sicherem Zufallsschlüssel...${NC}"
+    cp .env.example .env
+    RANDOM_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
+    sed -i "s|SECRET_KEY=change-me-in-production-secret-key-12345|SECRET_KEY=${RANDOM_SECRET}|" .env
+    echo -e "${GREEN}✓ .env erfolgreich initialisiert.${NC}\n"
+fi
+
+
 # 4. Datenbank einrichten (PostgreSQL als Standard)
 echo -e "${YELLOW}[4/5] Richte PostgreSQL / SQLite Datenbank-Struktur ein...${NC}"
 
@@ -56,14 +66,30 @@ if [ -z "$DB_ENGINE" ]; then
 fi
 
 python manage.py migrate --noinput
+python manage.py collectstatic --noinput --quiet 2>/dev/null || python manage.py collectstatic --noinput
 python manage.py seed_translations --quiet 2>/dev/null || python manage.py seed_translations
 python manage.py seed_features --quiet 2>/dev/null || python manage.py seed_features
 
-# Falls Vorab-Daten vorhanden sind, laden
-if [ -f "initial_data.json" ]; then
-    echo -e "${YELLOW}   Lade Vorab-Daten (Test-Events, Sitzpläne, Demo-User)...${NC}"
+
+# Parameter-Check für Demo-Daten
+LOAD_DEMO=false
+for arg in "$@"; do
+    if [ "$arg" == "--demo" ] || [ "$arg" == "--with-demo" ]; then
+        LOAD_DEMO=true
+    fi
+done
+if [ "$INSTALL_DEMO_DATA" == "1" ] || [ "$INSTALL_DEMO_DATA" == "true" ]; then
+    LOAD_DEMO=true
+fi
+
+# Falls Demo-Daten explizit angefordert wurden, laden
+if [ "$LOAD_DEMO" = true ] && [ -f "initial_data.json" ]; then
+    echo -e "${YELLOW}   Lade Vorab-Daten (Test-Events, Sitzpläne, Demo-User sadmin/gamer1)...${NC}"
     python manage.py loaddata initial_data.json --quiet 2>/dev/null || python manage.py loaddata initial_data.json
     echo -e "${GREEN}✓ Demo-Daten erfolgreich geladen.${NC}"
+else
+    echo -e "${BLUE}ℹ️ Saubere Installation: Es wurden keine Demo-Benutzer oder Test-Events geladen.${NC}"
+    echo -e "${BLUE}   (Hinweis: Führe './install.sh --demo' aus, falls du Test-Daten laden möchtest.)${NC}"
 fi
 
 echo ""
@@ -72,6 +98,7 @@ echo ""
 echo -e "${YELLOW}[5/5] Ausführungsrechte für Startskript setzen...${NC}"
 chmod +x start.sh 2>/dev/null || true
 echo -e "${GREEN}✓ Setup vollständig abgeschlossen!${NC}\n"
+
 
 echo -e "${GREEN}=====================================================${NC}"
 echo -e "${GREEN} 🎉 INSTALLATION ERFOLGREICH ABGESCHLOSSEN!          ${NC}"

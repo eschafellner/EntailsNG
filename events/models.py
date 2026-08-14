@@ -53,6 +53,14 @@ class Event(models.Model):
         verbose_name = "Veranstaltung"
         verbose_name_plural = "Veranstaltungen"
         ordering = ['-start_date']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['is_active'],
+                condition=models.Q(is_active=True),
+                name='only_one_active_event',
+                violation_error_message="Es kann immer nur genau eine Hauptveranstaltung gleichzeitig aktiv sein."
+            )
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"
@@ -73,12 +81,32 @@ class Event(models.Model):
 
         return self.status
 
+    def can_register(self, user=None):
+        """
+        Zentrale fachliche Prüfung (Single Source of Truth), ob eine Neuanmeldung möglich ist.
+        Wird konsistent von Service, Model.clean(), Admin und Views verwendet.
+        Rückgabe: Tuple (can_register: bool, reason: str)
+        """
+        now = timezone.now()
+        if not self.is_active:
+            return False, f"Die Veranstaltung '{self.title}' ist inaktiv."
+        if self.end_date and now > self.end_date:
+            return False, "Der Anmeldezeitraum für diese Veranstaltung ist bereits verstrichen."
+        if self.effective_status != self.Status.REGISTRATION_OPEN:
+            return False, f"Eine Anmeldung für '{self.title}' ist derzeit nicht möglich (Status: {self.get_status_display()})."
+        if self.is_full:
+            return False, f"Die maximale Teilnehmerzahl ({self.max_guests}) für '{self.title}' ist bereits erreicht."
+        if user and user.is_authenticated:
+            if self.registrations.filter(user=user).exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED).exists():
+                return False, f"Der Benutzer '{user.username}' ist bereits für diese Veranstaltung angemeldet."
+        return True, ""
+
     @property
     def is_registration_open(self):
         """Prüft, ob Anmeldungen für dieses Event aktuell offen sind."""
-        if not self.is_active or self.effective_status != self.Status.REGISTRATION_OPEN:
-            return False
-        return True
+        can_reg, _ = self.can_register()
+        return can_reg
+
 
     @property
     def active_registrations_count(self):
@@ -103,6 +131,17 @@ class Event(models.Model):
 
     def save(self, *args, **kwargs):
         from django.db import transaction
+        from django.utils.text import slugify
+
+        if not self.slug and self.title:
+            base_slug = slugify(self.title) or "event"
+            slug = base_slug
+            count = 1
+            while Event.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{count}"
+                count += 1
+            self.slug = slug
+
         now = timezone.now()
 
         # Automatischer Statuswechsel auf FINISHED, wenn Enddatum vorüber ist
@@ -113,6 +152,9 @@ class Event(models.Model):
             if self.is_active:
                 Event.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
             super().save(*args, **kwargs)
+
+
+
 
 
 
@@ -174,10 +216,15 @@ class EventRegistration(models.Model):
         decimal_places=2,
         default=0.00,
         verbose_name="Tatsächlich bezahlter Betrag (€)",
+        help_text="Wird bei Bezahlung automatisch mit dem Ticketpreis initialisiert, falls nicht manuell angegeben.",
     )
     paid_at = models.DateTimeField(
         null=True, blank=True, verbose_name="Bezahlt am"
     )
+    cancelled_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Storniert am"
+    )
+
 
     # -------------------------------------------------------------------------
     # CHECK-IN BEREICH
@@ -202,12 +249,32 @@ class EventRegistration(models.Model):
         help_text="Eindeutiges Token für den QR-Code Einlass-Scan",
     )
 
-    def check_in(self):
-        """Hilfsmethode: Checkt den Gast ein und setzt die aktuelle Uhrzeit"""
+    def can_check_in(self, actor=None):
+        """
+        Zentrale fachliche Prüfung, ob der Gast für das Event eingecheckt werden darf.
+        Rückgabe: Tuple (can_check_in: bool, reason: str)
+        """
+        if self.payment_status != self.PaymentStatus.PAID:
+            return False, f"Check-in abgelehnt: Die Anmeldung von {self.user.username} ist nicht bezahlt (Status: {self.get_payment_status_display()})."
+        if self.event and self.event.status == Event.Status.CANCELLED:
+            return False, f"Check-in abgelehnt: Die Veranstaltung '{self.event.title}' wurde abgesagt."
+        return True, ""
+
+    def check_in(self, actor=None):
+        """
+        Zentrale Methode zum Einchecken des Gastes (Single Source of Truth).
+        Prüft zwingend den Bezahlstatus und die Gültigkeit der Anmeldung vor der Zustandsänderung.
+        """
+        can_ci, reason = self.can_check_in(actor=actor)
+        if not can_ci:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(reason)
+
         if not self.is_checked_in:
             self.is_checked_in = True
             self.checked_in_at = timezone.now()
             self.save(update_fields=['is_checked_in', 'checked_in_at'])
+        return True
 
     def check_out(self):
         """Hilfsmethode: Macht den Check-in wieder rückgängig"""
@@ -215,6 +282,7 @@ class EventRegistration(models.Model):
             self.is_checked_in = False
             self.checked_in_at = None
             self.save(update_fields=['is_checked_in', 'checked_in_at'])
+
 
     created_at = models.DateTimeField(
         auto_now_add=True, verbose_name="Angemeldet am"
@@ -231,25 +299,34 @@ class EventRegistration(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError
         super().clean()
-        if self.pk is None and self.event:
-            if not self.event.is_active or self.event.status != Event.Status.REGISTRATION_OPEN:
-                raise ValidationError(
-                    f"Anmeldung für '{self.event.title}' ist aktuell nicht geöffnet (Status: {self.event.get_status_display()})."
-                )
-            if self.event.is_full:
-                raise ValidationError(f"Event '{self.event.title}' ist ausgebucht ({self.event.max_guests} max).")
-            if self.ticket_type and self.ticket_type.event != self.event:
-                raise ValidationError("Das ausgewählte Ticket gehört nicht zu diesem Event.")
+        if self.pk is None and self.event_id:
+            can_reg, reason = self.event.can_register(user=self.user if self.user_id else None)
+            if not can_reg:
+                raise ValidationError({'event': reason})
+            if self.ticket_type and self.ticket_type.event_id != self.event_id:
+                raise ValidationError({'ticket_type': "Das ausgewählte Ticket gehört nicht zu diesem Event."})
+            if self.ticket_type and not self.ticket_type.is_active:
+                raise ValidationError({'ticket_type': "Die ausgewählte Ticketkategorie ist inaktiv."})
 
 
-    def mark_as_paid(self, send_email=True):
+
+    def mark_as_paid(self, amount=None, send_email=True):
         """Explizite Geschäftslogik-Methode: Markiert die Anmeldung als bezahlt."""
         self.payment_status = self.PaymentStatus.PAID
+        if amount is not None:
+            self.paid_amount = amount
+        elif (not self.paid_amount or self.paid_amount == 0) and self.ticket_type:
+            self.paid_amount = self.ticket_type.price
+        self.cancelled_at = None
         self.save(send_email=send_email)
 
     def mark_as_cancelled(self):
-        """Explizite Geschäftslogik-Methode: Storniert die Anmeldung und gibt Plätze frei."""
+        """Explizite Geschäftslogik-Methode: Storniert die Anmeldung, setzt Check-in zurück und gibt Plätze frei."""
+        from django.utils import timezone
         self.payment_status = self.PaymentStatus.CANCELLED
+        self.is_checked_in = False
+        self.checked_in_at = None
+        self.cancelled_at = timezone.now()
         self.save(send_email=False)
 
     def save(self, *args, send_email=True, **kwargs):
@@ -261,9 +338,22 @@ class EventRegistration(models.Model):
             except EventRegistration.DoesNotExist:
                 pass
 
-        if self.payment_status == self.PaymentStatus.PAID and not self.paid_at:
-            from django.utils import timezone
-            self.paid_at = timezone.now()
+        from django.utils import timezone
+        if self.payment_status == self.PaymentStatus.PAID:
+            if not self.paid_at:
+                self.paid_at = timezone.now()
+            if (not self.paid_amount or self.paid_amount == 0) and self.ticket_type:
+                self.paid_amount = self.ticket_type.price
+            self.cancelled_at = None
+        elif self.payment_status == self.PaymentStatus.CANCELLED:
+            self.is_checked_in = False
+            self.checked_in_at = None
+            if not self.cancelled_at:
+                self.cancelled_at = timezone.now()
+        elif self.payment_status == self.PaymentStatus.UNPAID:
+            self.cancelled_at = None
+            self.is_checked_in = False
+            self.checked_in_at = None
 
         super().save(*args, **kwargs)
 
@@ -290,6 +380,7 @@ class EventRegistration(models.Model):
         # Automatische Zahlungsbestätigungs-E-Mail erst NACH erfolgreichem DB-Commit versenden (transaction.on_commit)
         if send_email and self.payment_status == self.PaymentStatus.PAID and old_payment_status != self.PaymentStatus.PAID:
             transaction.on_commit(self.send_payment_confirmation_email)
+
 
     def send_payment_confirmation_email(self):
         """Sendet die automatische E-Mail-Zahlungsbestätigung an den Gast."""

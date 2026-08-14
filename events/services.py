@@ -36,32 +36,22 @@ class RegistrationService:
         except Event.DoesNotExist:
             raise EventNotOpenError("Das angeforderte Event existiert nicht oder ist inaktiv.")
 
-        # 2. Prüfe Zeitfenster / Enddatum
-        now = timezone.now()
-        if event.end_date and now > event.end_date:
-            raise RegistrationDeadlinePassedError("Der Anmeldezeitraum für diese Veranstaltung ist bereits verstrichen.")
-
-        # 3. Prüfe Event-Status (dynamisch berechnet)
-        if event.effective_status != Event.Status.REGISTRATION_OPEN:
-            status_display = event.get_status_display()
-            raise EventNotOpenError(
-                f"Eine Anmeldung für '{event.title}' ist derzeit nicht möglich (Status: {status_display})."
-            )
-
-        # 4. Bestehende Registrierung prüfen
+        # 2. Idempotenz: Bestehende Registrierung prüfen
         existing_reg = EventRegistration.objects.filter(user=user, event=event).first()
-        if existing_reg:
+        if existing_reg and existing_reg.payment_status != EventRegistration.PaymentStatus.CANCELLED:
             return existing_reg, False
 
-        # 5. Kapazitätsprüfung
-        active_regs_count = event.registrations.exclude(
-            payment_status=EventRegistration.PaymentStatus.CANCELLED
-        ).count()
+        # 3. Zentrale fachliche Prüfung via Single Source of Truth
+        can_reg, reason = event.can_register(user=None)
+        if not can_reg:
+            now = timezone.now()
+            if event.end_date and now > event.end_date:
+                raise RegistrationDeadlinePassedError(reason)
+            elif event.is_full:
+                raise EventFullError(reason)
+            else:
+                raise EventNotOpenError(reason)
 
-        if event.max_guests and active_regs_count >= event.max_guests:
-            raise EventFullError(
-                f"Die maximale Teilnehmerzahl ({event.max_guests}) für '{event.title}' ist bereits erreicht."
-            )
 
         # 6. Tickettyp validieren
         selected_ticket = None

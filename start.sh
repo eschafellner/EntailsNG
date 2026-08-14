@@ -19,6 +19,20 @@ fi
 
 source .venv/bin/activate
 
+# Prüfen ob Abhängigkeiten vollständig sind (z. B. nach git pull)
+if ! python3 -c "import whitenoise" 2>/dev/null; then
+    echo -e "${YELLOW}📦 Aktualisiere Python-Pakete aus requirements.txt...${NC}"
+    pip install -r requirements.txt --quiet 2>/dev/null || python3 -m pip install -r requirements.txt --quiet
+fi
+
+# Lade Umgebungsvariablen aus .env falls vorhanden
+if [ -f ".env" ]; then
+    set -a
+    source .env
+    set +a
+fi
+
+
 # Automatische Erkennung der PostgreSQL Datenbank
 if [ -z "$DB_ENGINE" ]; then
     if python3 -c "import socket; s = socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 5432)); s.close()" 2>/dev/null; then

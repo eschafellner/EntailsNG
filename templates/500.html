@@ -1,23 +1,76 @@
-{% extends 'base.html' %}
-
-{% block title %}500 – Serverfehler – EntailsNG{% endblock %}
-
-{% block content %}
-<div class="card" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 40px 24px;">
-  <div style="font-family: 'Barlow Condensed', sans-serif; font-size: 80px; font-weight: 800; line-height: 1; color: var(--danger); margin-bottom: 8px;">
-    500
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Serverfehler (500) – EntailsNG</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #0b0f17;
+      color: #f9fafb;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    .error-card {
+      max-width: 550px;
+      width: 100%;
+      background: #111827;
+      border: 1px solid #374151;
+      border-radius: 12px;
+      padding: 40px 30px;
+      text-align: center;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .error-code {
+      font-size: 64px;
+      font-weight: 800;
+      color: #ef4444;
+      line-height: 1;
+      margin-bottom: 12px;
+      letter-spacing: 2px;
+    }
+    h1 {
+      font-size: 24px;
+      text-transform: uppercase;
+      margin: 0 0 12px 0;
+      color: #ffffff;
+    }
+    p {
+      color: #9ca3af;
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0 0 24px 0;
+    }
+    .btn {
+      display: inline-block;
+      background: #f59e0b;
+      color: #111827;
+      font-weight: bold;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background: #d97706;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-card">
+    <div class="error-code">500</div>
+    <h1>Unerwarteter Serverfehler</h1>
+    <p>
+      Beim Verarbeiten deiner Anfrage ist ein interner Serverfehler aufgetreten.<br>
+      Der Fehler wurde im System protokolliert. Bitte versuche es in wenigen Momenten erneut.
+    </p>
+    <a href="/" class="btn">🏠 Zur Startseite</a>
   </div>
-
-  <h1 style="font-family: 'Barlow Condensed', sans-serif; font-size: 32px; margin-bottom: 12px; color: var(--ink);">
-    Unerwarteter Serverfehler
-  </h1>
-
-  <p style="color: var(--muted); font-size: 15px; font-family: 'JetBrains Mono', monospace; line-height: 1.6; margin-bottom: 28px;">
-    Es ist ein interner Fehler aufgetreten. Unser Orga-Team wurde benachrichtigt.
-  </p>
-
-  <a href="{% url 'dashboard' %}" class="btn-login" style="display: inline-block; width: auto; padding: 12px 24px; text-decoration: none; font-weight: bold;">
-    ← Zurück zur Startseite
-  </a>
-</div>
-{% endblock %}
+</body>
+</html>

@@ -57,28 +57,33 @@ def clan_detail_view(request, slug):
     )
     is_clan_admin = clan.is_admin(request.user)
 
-    accepted_memberships = clan.get_accepted_memberships()
+    accepted_memberships = list(clan.get_accepted_memberships())
     pending_memberships = (
-        clan.get_pending_memberships() if is_clan_admin else []
+        list(clan.get_pending_memberships()) if is_clan_admin else []
     )
 
-    # Sitzplätze der Mitglieder beim aktiven Event ermitteln
+    # Sitzplätze aller Mitglieder beim aktiven Event in EINER Query abfragen (N+1 Vermeidung)
     active_event = Event.objects.filter(is_active=True).first()
-    members_with_seats = []
-    for m in accepted_memberships:
-        seat_label = None
-        if active_event:
-            cell = SeatingCell.objects.filter(
-                plan__event=active_event, registration__user=m.user
-            ).first()
-            if cell:
-                seat_label = cell.seat_label or f"Pos ({cell.x},{cell.y})"
+    user_seat_map = {}
+    if active_event and accepted_memberships:
+        member_user_ids = [m.user_id for m in accepted_memberships]
+        seats = SeatingCell.objects.filter(
+            plan__event=active_event,
+            registration__user_id__in=member_user_ids
+        ).select_related('registration')
 
-        members_with_seats.append({
+        for s in seats:
+            if s.registration_id and s.registration.user_id:
+                user_seat_map[s.registration.user_id] = s.seat_label or f"Pos ({s.x},{s.y})"
+
+    members_with_seats = [
+        {
             'membership': m,
             'user': m.user,
-            'seat_label': seat_label,
-        })
+            'seat_label': user_seat_map.get(m.user_id),
+        }
+        for m in accepted_memberships
+    ]
 
     join_form = ClanJoinPasswordForm()
 
@@ -92,6 +97,7 @@ def clan_detail_view(request, slug):
         'join_form': join_form,
     }
     return render(request, 'clans/clan_detail.html', context)
+
 
 
 @login_required
@@ -168,20 +174,22 @@ def clan_join_password_view(request, slug):
     form = ClanJoinPasswordForm(request.POST)
     if form.is_valid():
         entered_password = form.cleaned_data.get('password')
-        if entered_password == clan.password:
-            # Bestehende ausstehende Anfragen löschen/überschreiben
-            ClanMembership.objects.filter(user=request.user, clan=clan).delete()
-            ClanMembership.objects.create(
-                user=request.user,
-                clan=clan,
-                role=ClanMembership.Role.MEMBER,
-                status=ClanMembership.Status.ACCEPTED,
-            )
+        if clan.check_password(entered_password):
+            with transaction.atomic():
+                # Bestehende ausstehende Anfragen löschen/überschreiben
+                ClanMembership.objects.filter(user=request.user, clan=clan).delete()
+                ClanMembership.objects.create(
+                    user=request.user,
+                    clan=clan,
+                    role=ClanMembership.Role.MEMBER,
+                    status=ClanMembership.Status.ACCEPTED,
+                )
             messages.success(request, f'Du bist dem Clan "{clan.name}" beigetreten!')
         else:
             messages.error(request, 'Das eingegebene Clan-Passwort ist falsch.')
 
     return redirect('clan_detail', slug=clan.slug)
+
 
 
 @login_required

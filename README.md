@@ -45,11 +45,14 @@ Eine **virtuelle Umgebung** (Virtual Environment) erstellt einen isolierten "San
 
 ### 🐧 Für Linux-User (Fedora / Ubuntu / Debian)
 
-#### Option 1: Automatisch (1-Klick)
+#### Option 1: Automatisch (1-Klick Setup)
 Öffne ein Terminal im Projektordner und führe aus:
 ```bash
-./install.sh   # Einmalige Einrichtung
-./start.sh     # Server starten
+./install.sh          # Saubere Installation (ohne Testdaten für Produktion)
+# ODER:
+./install.sh --demo   # Installation mit Test-Events & Demo-Benutzern
+
+./start.sh            # Server starten
 ```
 
 #### Option 2: Manuell im Terminal
@@ -61,8 +64,11 @@ source .venv/bin/activate
 # 2. Abhängigkeiten installieren
 pip install -r requirements.txt
 
-# 3. Datenbank strukturieren & Server starten
+# 3. Datenbank strukturieren, System-Keys initialisieren & Server starten
 python manage.py migrate
+python manage.py seed_translations
+python manage.py seed_features
+# Optional: python manage.py loaddata initial_data.json  (nur für Demo-Daten)
 python manage.py runserver
 ```
 
@@ -84,6 +90,9 @@ pip install -r requirements.txt
 
 # 4. Datenbank strukturieren & Server starten
 python manage.py migrate
+python manage.py seed_translations
+python manage.py seed_features
+# Optional für Demo-Daten: python manage.py loaddata initial_data.json
 python manage.py runserver
 ```
 
@@ -102,9 +111,9 @@ Sobald der Server gestartet ist, öffne deinen Internet-Browser (z. B. Chrome, F
 
 ---
 
-## 🔑 Voreingestellte Test-Zugänge
+## 🔑 Voreingestellte Test-Zugänge (Nur bei `--demo` Installation)
 
-Für Testzwecke wurden bereits vorgefertigte Benutzerkonten angelegt:
+Falls die Installation mit `./install.sh --demo` ausgeführt wurde, sind folgende Demo-Accounts verfügbar:
 
 * **Administrator / Helfer Account**:
   * **Benutzername:** `sadmin`
@@ -114,6 +123,9 @@ Für Testzwecke wurden bereits vorgefertigte Benutzerkonten angelegt:
 * **Normaler Teilnehmer / Spieler Account**:
   * **Benutzername:** `gamer1`
   * **Passwort:** `guestpwd`
+
+> ⚠️ **Sicherheitshinweis für den Live-Betrieb:** Bei einer regulären Installation ohne `--demo` müssen eigene Administratoren sicher über `python manage.py createsuperuser` angelegt werden. Ändere vor dem Live-Betrieb stets den `SECRET_KEY` und die Datenbankpasswörter in deiner `.env`-Datei.
+
 
 ---
 

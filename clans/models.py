@@ -1,4 +1,6 @@
 from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -11,13 +13,17 @@ class Clan(models.Model):
         max_length=100, unique=True, blank=True, verbose_name="URL-Slug"
     )
     website = models.URLField(blank=True, verbose_name="Website URL")
-    logo = models.FileField(
-        upload_to="clan_logos/", blank=True, null=True, verbose_name="Clan-Logo"
+    logo = models.ImageField(
+        upload_to="clan_logos/",
+        blank=True,
+        null=True,
+        verbose_name="Clan-Logo",
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp'])],
     )
     password = models.CharField(
-        max_length=100,
-        verbose_name="Clan-Passwort",
-        help_text="Passwort für sofortigen Direktbeitritt",
+        max_length=128,
+        verbose_name="Clan-Passwort (Gehasht)",
+        help_text="Passwort für sofortigen Direktbeitritt (wird sicher gehasht gespeichert)",
     )
     created_at = models.DateTimeField(
         auto_now_add=True, verbose_name="Erstellt am"
@@ -33,6 +39,24 @@ class Clan(models.Model):
 
     def __str__(self):
         return self.name
+
+    def set_password(self, raw_password):
+        if raw_password:
+            self.password = make_password(raw_password)
+        else:
+            self.password = ''
+
+    def check_password(self, raw_password):
+        if not self.password or not raw_password:
+            return False
+        # Rückwärtskompatibilität für Altdaten im Klartext
+        if not (self.password.startswith('pbkdf2_') or self.password.startswith('argon2') or self.password.startswith('bcrypt') or self.password.startswith('scrypt')):
+            if self.password == raw_password:
+                self.set_password(raw_password)
+                self.save(update_fields=['password'])
+                return True
+            return False
+        return check_password(raw_password, self.password)
 
     def save(self, *args, **kwargs):
         if not self.slug:

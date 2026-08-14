@@ -89,6 +89,30 @@ class DoubleOptInTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_active)
+        self.code_obj.refresh_from_db()
+        self.assertEqual(self.code_obj.failed_attempts, 1)
+
+    def test_verify_email_brute_force_lockout_after_5_attempts(self):
+        # 5 falsche Versuche durchführen
+        for i in range(5):
+            response = self.client.post(
+                reverse('verify_email'),
+                {'code': f'99999{i}'},
+            )
+            self.assertEqual(response.status_code, 200)
+
+        self.code_obj.refresh_from_db()
+        self.assertEqual(self.code_obj.failed_attempts, 5)
+        self.assertTrue(self.code_obj.is_used)  # Code gesperrt/entwertet
+
+        # Selbst mit dem korrekten Code schlägt die Verifizierung nun fehl
+        response = self.client.post(
+            reverse('verify_email'),
+            {'code': self.code_obj.code},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
 
     def test_resend_code_cooldown(self):
         # Versuche sofort erneut einen Code zu senden
@@ -96,6 +120,7 @@ class DoubleOptInTests(TestCase):
         self.assertRedirects(response, reverse('verify_email'))
         # Da Cooldown aktiv, wurde kein neuer Code erzeugt
         self.assertEqual(self.user.verification_codes.count(), 1)
+
 
 
 class PasswordResetTests(TestCase):

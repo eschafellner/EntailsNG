@@ -1,10 +1,11 @@
-import random
+import secrets
 from datetime import timedelta
 from django.contrib import messages
-from django.contrib.auth import login, update_session_auth_hash, get_user_model
+from django.contrib.auth import get_user_model, login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from django.shortcuts import redirect, render
+from django.db import transaction
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from emails.services import send_system_email
 from events.models import EventRegistration
@@ -29,22 +30,19 @@ def register_view(request):
     if request.method == "POST":
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            user = form.save(commit=False)
-            user.is_active = False  # Account ist inaktiv bis zur Double Opt-In Verifizierung!
-            user.save()
+            with transaction.atomic():
+                user = form.save(commit=False)
+                user.is_active = False  # Account ist inaktiv bis zur Double Opt-In Verifizierung!
+                user.save()
 
-            # 6-stelligen Zufallscode generieren
-            code = f"{random.randint(100000, 999999):06d}"
-            expires_at = timezone.now() + timedelta(minutes=15)
-            EmailVerificationCode.objects.create(
-                user=user, code=code, expires_at=expires_at
-            )
+                # Kryptografisch sicheren 6-stelligen Zufallscode generieren
+                code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
 
             # System-E-Mail "email_verification" versenden
             context_data = {
                 'username': user.username,
                 'full_name': user.get_full_name() or user.username,
-                'code': code,
+                'code': code_obj.code,
                 'valid_minutes': 15,
             }
             send_system_email('email_verification', user.email, context_data)
@@ -80,16 +78,23 @@ def verify_email_view(request):
             digits = [request.POST.get(f'digit{i}', '').strip() for i in range(1, 7)]
             code_input = "".join(digits)
 
+        # Aktuellsten aktiven Code des Benutzers abrufen
         code_obj = EmailVerificationCode.objects.filter(
-            user=user, code=code_input, is_used=False
-        ).first()
+            user=user, is_used=False
+        ).order_by('-created_at').first()
 
-        if code_obj and code_obj.is_valid():
+        if not code_obj or not code_obj.is_valid():
+            messages.error(
+                request,
+                "Der Verifizierungscode ist ungültig oder abgelaufen. Bitte fordere einen neuen Code an.",
+            )
+        elif secrets.compare_digest(code_obj.code, code_input):
             # Account freischalten & Code entwerten
-            user.is_active = True
-            user.save()
-            code_obj.is_used = True
-            code_obj.save()
+            with transaction.atomic():
+                user.is_active = True
+                user.save(update_fields=['is_active'])
+                code_obj.is_used = True
+                code_obj.save(update_fields=['is_used'])
 
             if 'pending_verification_user_id' in request.session:
                 del request.session['pending_verification_user_id']
@@ -98,14 +103,22 @@ def verify_email_view(request):
             login(request, user, backend='users.auth_backends.EmailOrUsernameBackend')
             messages.success(
                 request,
-                request.GET.get('msg') or "E-Mail erfolgreich verifiziert! Willkommen bei EntailsNG.",
+                "E-Mail erfolgreich verifiziert! Willkommen bei EntailsNG.",
             )
             return redirect("dashboard")
         else:
-            messages.error(
-                request,
-                "Ungültiger oder abgelaufener Verifizierungscode. Bitte überprüfe deine Eingabe.",
-            )
+            code_obj.register_failed_attempt()
+            remaining = max(0, 5 - code_obj.failed_attempts)
+            if remaining > 0:
+                messages.error(
+                    request,
+                    f"Ungültiger Verifizierungscode. Noch {remaining} Versuch(e) verbleibend.",
+                )
+            else:
+                messages.error(
+                    request,
+                    "Zu viele Fehlversuche. Dieser Bestätigungscode wurde gesperrt. Bitte fordere einen neuen Code an.",
+                )
 
     context = {
         'user_email': user.email,
@@ -126,7 +139,7 @@ def resend_verification_code_view(request):
             return redirect("login")
 
         # Cooldown Schutz (maximal 1 Code alle 60 Sekunden)
-        last_code = EmailVerificationCode.objects.filter(user=user).first()
+        last_code = EmailVerificationCode.objects.filter(user=user).order_by('-created_at').first()
         if last_code and (timezone.now() - last_code.created_at) < timedelta(seconds=60):
             messages.warning(
                 request,
@@ -135,22 +148,19 @@ def resend_verification_code_view(request):
             return redirect("verify_email")
 
         # Neuen Code generieren & E-Mail senden
-        code = f"{random.randint(100000, 999999):06d}"
-        expires_at = timezone.now() + timedelta(minutes=15)
-        EmailVerificationCode.objects.create(
-            user=user, code=code, expires_at=expires_at
-        )
+        code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
 
         context_data = {
             'username': user.username,
             'full_name': user.get_full_name() or user.username,
-            'code': code,
+            'code': code_obj.code,
             'valid_minutes': 15,
         }
         send_system_email('email_verification', user.email, context_data)
         messages.info(request, f"Ein neuer Bestätigungscode wurde an {user.email} gesendet.")
 
     return redirect("verify_email")
+
 
 
 @login_required

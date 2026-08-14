@@ -35,11 +35,14 @@ DEFAULT_TEXTS = {
     'ticket_expired_badge': 'BEENDET',
     'ticket_expired_status': 'EVENT BEENDET',
     'ticket_expired_box_text': 'Veranstaltung beendet',
+    'ticket_cd_days': 'Tage',
+    'ticket_cd_hours': 'Std',
+    'ticket_cd_minutes': 'Min',
+    'ticket_cd_seconds': 'Sek',
 
     # Navigation / Header & Footer
     'nav_legal_impressum': 'Impressum',
     'nav_legal_datenschutz': 'Datenschutz',
-
 
     # Status-Modul
     'status_header': 'AKTUELLE VERANSTALTUNG',
@@ -50,6 +53,12 @@ DEFAULT_TEXTS = {
     'status_step_4': 'Eingecheckt',
     'status_btn_register': 'Jetzt anmelden',
     'status_no_event': 'Derzeit ist keine Veranstaltung geplant.',
+    'status_event_draft': '📝 Event befindet sich noch im Entwurf',
+    'status_event_cancelled': '🚫 Event wurde abgesagt',
+    'status_event_finished': '🏁 Event ist beendet',
+    'status_event_closed': '🔒 Anmeldung aktuell geschlossen',
+    'status_event_full': '⚠️ Event ist ausgebucht',
+    'status_ticket_category_select': 'Ticketkategorie wählen:',
 
     # Clan-Modul
     'clan_logo_help': 'Maximal 300x300 Pixel. Erlaubte Formate: .jpg, .jpeg, .png',
@@ -83,6 +92,8 @@ DEFAULT_TEXTS = {
     'dash_seat_no_seat_selected': 'Kein Sitzplatz gewählt',
     'dash_seat_not_reserved': 'Noch nicht reserviert',
     'dash_seat_minimap_loading': 'Mini-Map lädt...',
+    'dash_seat_plan_not_configured': 'Saalplan noch nicht konfiguriert',
+    'dash_seats_unit': 'Plätze',
     'dash_guest_label': 'Gast',
     'dash_seat_label_title': 'Sitzplatz',
     'dash_qr_modal_title': 'EINLASS QR-CODE',
@@ -90,6 +101,7 @@ DEFAULT_TEXTS = {
     'dash_qr_checked_in': '✓ EINGECHECKT',
     'dash_qr_btn_show': '📲 QR-Code anzeigen',
     'dash_qr_payment_pending': '⏳ ZAHLUNG OFFEN',
+
 
     # Auth & Profil Modul
     'auth_login_title': 'Anmelden',

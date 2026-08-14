@@ -99,6 +99,17 @@ class ClanForm(forms.ModelForm):
             raise ValidationError("Bei der Neuerstellung eines Clans muss ein Passwort angegeben werden.")
         return password
 
+    def save(self, commit=True):
+        clan = super().save(commit=False)
+        password = self.cleaned_data.get('password')
+        if password:
+            if not (self.instance.pk and password == self.instance.password):
+                clan.set_password(password)
+        if commit:
+            clan.save()
+            self.save_m2m()
+        return clan
+
 
 class ClanJoinPasswordForm(forms.Form):
     password = forms.CharField(

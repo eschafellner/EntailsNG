@@ -1,3 +1,5 @@
+import ipaddress
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.core.cache import cache
@@ -9,10 +11,25 @@ User = get_user_model()
 def _get_client_ip(request):
     if not request:
         return '127.0.0.1'
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '127.0.0.1')
+
+    remote_addr = request.META.get('REMOTE_ADDR', '127.0.0.1')
+    use_x_forwarded_for = getattr(settings, 'USE_X_FORWARDED_FOR', False)
+    num_proxies = getattr(settings, 'NUM_PROXIES', 1)
+
+    if use_x_forwarded_for:
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ips = [ip.strip() for ip in x_forwarded_for.split(',') if ip.strip()]
+            if len(ips) >= num_proxies:
+                candidate_ip = ips[-num_proxies]
+                try:
+                    ipaddress.ip_address(candidate_ip)
+                    return candidate_ip
+                except ValueError:
+                    pass
+
+    return remote_addr
+
 
 
 def _is_ip_rate_limited(ip_address):

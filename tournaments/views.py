@@ -227,7 +227,10 @@ def match_update_score(request, match_id):
     """
     Quick-Result Modal für Turnier-Admins: Trägt Spielergebnisse ein und rückt Sieger vor.
     """
-    match_obj = get_object_or_404(TournamentMatch.objects.select_related('tournament'), id=match_id)
+    match_obj = get_object_or_404(
+        TournamentMatch.objects.select_related('tournament', 'team1', 'team2'),
+        id=match_id
+    )
     tournament = match_obj.tournament
 
     is_admin = (
@@ -242,12 +245,24 @@ def match_update_score(request, match_id):
     try:
         score1 = int(request.POST.get('score_team1', 0))
         score2 = int(request.POST.get('score_team2', 0))
-    except ValueError:
+    except (ValueError, TypeError):
         return JsonResponse({'success': False, 'error': 'Ungültige Punkte/Scores eingetragen.'}, status=400)
 
     winner_id = request.POST.get('winner_id')
+    winner_team = None
+
     if winner_id:
-        winner_team = get_object_or_404(Team, id=winner_id)
+        try:
+            winner_id_int = int(winner_id)
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': 'Ungültige Sieger-ID.'}, status=400)
+
+        if match_obj.team1 and match_obj.team1.id == winner_id_int:
+            winner_team = match_obj.team1
+        elif match_obj.team2 and match_obj.team2.id == winner_id_int:
+            winner_team = match_obj.team2
+        else:
+            return JsonResponse({'success': False, 'error': 'Das gewählte Team nimmt nicht an diesem Match teil.'}, status=400)
     else:
         if score1 > score2:
             winner_team = match_obj.team1
@@ -256,10 +271,14 @@ def match_update_score(request, match_id):
         else:
             return JsonResponse({'success': False, 'error': 'Unentschieden ist in KO-Matches nicht erlaubt. Wähle den Sieger aus.'}, status=400)
 
+    if not winner_team:
+        return JsonResponse({'success': False, 'error': 'Konnte keinen gültigen Sieger ermitteln.'}, status=400)
+
     advance_match_winner(match_obj, winner_team, score1, score2)
 
     messages.success(request, f"Ergebnis gespeichert! Sieger: {winner_team.name}")
     return JsonResponse({'success': True, 'winner': winner_team.name})
+
 
 
 # =============================================================================
@@ -420,14 +439,20 @@ def team_kick_member(request, slug, user_id):
     team = get_object_or_404(Team, slug=slug)
 
     if not team.is_captain(request.user) and not request.user.is_staff:
-        messages.error(request, "Nur der Kapitän kann Mitglieder kicken.")
+        messages.error(request, "Nur der Kapitän oder Administratoren können Mitglieder entfernen.")
         return redirect('team_detail', slug=slug)
 
-    if user_id == team.captain_id:
-        messages.error(request, "Der Kapitän kann sich nicht selbst kicken.")
+    try:
+        target_user_id = int(user_id)
+    except (ValueError, TypeError):
+        messages.error(request, "Ungültige Benutzer-ID.")
         return redirect('team_detail', slug=slug)
 
-    membership = TeamMember.objects.filter(team=team, user_id=user_id).first()
+    if target_user_id == team.captain_id:
+        messages.error(request, "Der Kapitän kann sich nicht selbst kicken. Nutze stattdessen 'Team verlassen'.")
+        return redirect('team_detail', slug=slug)
+
+    membership = TeamMember.objects.filter(team=team, user_id=target_user_id).select_related('user').first()
     if membership:
         kicked_username = membership.user.username
         membership.delete()
@@ -436,6 +461,7 @@ def team_kick_member(request, slug, user_id):
         messages.error(request, "Mitglied nicht gefunden.")
 
     return redirect('team_detail', slug=slug)
+
 
 
 @login_required

@@ -56,7 +56,7 @@
   {% elif user_registration.payment_status == 'PAID' %}
     <!-- ZUSTAND B: BEZAHLT & NOCH NICHT EINGECHECKMENT (BUTTON ZUM MODAL) -->
     <button type="button" onclick="openQrModal()" style="background: #1f2937; color: #38bdf8; border: 1px solid #0284c7; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; cursor: pointer; transition: all 0.2s ease;">
-      📲 QR-Code anzeigen
+      {{ txt_dash_qr_btn_show }}
     </button>
 
     <!-- FULLSCREEN MODAL (Zentriert über den gesamten Bildschirm) -->
@@ -71,10 +71,10 @@
         </button>
 
         <h3 style="margin: 0 0 6px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; text-transform: uppercase; color: #111827;">
-          EINLASS QR-CODE
+          {{ txt_dash_qr_modal_title }}
         </h3>
         <p style="margin: 0 0 20px 0; font-size: 12px; color: #6b7280; font-family: 'JetBrains Mono', monospace;">
-          Vorlegen beim Check-in vor Ort
+          {{ txt_dash_qr_modal_subtitle }}
         </p>
 
         <!-- Großer QR-Code (240x240px für schnelle Lesbarkeit) -->
@@ -86,7 +86,7 @@
         {% endwith %}
 
         <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #374151; font-weight: bold; display: block; margin-top: 16px;">
-          GUEST: {{ request.user.username }}
+          {{ txt_dash_guest_label|upper }}: {{ request.user.username }}
         </span>
       </div>
 
@@ -120,7 +120,7 @@
     <!-- ZUSTAND C: ANGEMELDET, ABER NOCH NICHT BEZAHLT (UNPAID / CANCELLED) -->
     <div style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #eab308; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; display: inline-flex; align-items: center; gap: 6px;" title="Der QR-Code wird nach Zahlungseingang freigeschaltet.">
       <span style="width: 8px; height: 8px; background: #eab308; border-radius: 50%; display: inline-block;"></span>
-      ⏳ ZAHLUNG OFFEN
+      {{ txt_dash_qr_payment_pending }}
     </div>
   {% endif %}
 
@@ -145,10 +145,10 @@
 
         <!-- Live Countdown -->
         <div id="ticket-countdown" style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: bold; color: #ffffff; display: flex; gap: 8px;">
-          <div><span id="cd-days">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">Tage</small></div>:
-          <div><span id="cd-hours">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">Std</small></div>:
-          <div><span id="cd-minutes">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">Min</small></div>:
-          <div><span id="cd-seconds">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">Sek</small></div>
+          <div><span id="cd-days">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">{{ txt_ticket_cd_days }}</small></div>:
+          <div><span id="cd-hours">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">{{ txt_ticket_cd_hours }}</small></div>:
+          <div><span id="cd-minutes">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">{{ txt_ticket_cd_minutes }}</small></div>:
+          <div><span id="cd-seconds">00</span><small style="display:block; font-size: 9px; font-weight: normal; color: #9ca3af; margin-top: 2px;">{{ txt_ticket_cd_seconds }}</small></div>
         </div>
       {% else %}
         <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9ca3af; line-height: 1.5; text-align: center;">
@@ -157,6 +157,7 @@
       {% endif %}
 
     </div>
+
 
   </div>
 </div>
@@ -339,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
               .then(data => {
                 const container = document.getElementById('minimap-container');
                 if (!data.cells || data.cells.length === 0) {
-                  container.innerHTML = '<span style="font-size: 11px; color: #9ca3af; font-family: \'JetBrains Mono\';">Saalplan noch nicht konfiguriert</span>';
+                  container.innerHTML = '<span style="font-size: 11px; color: #9ca3af; font-family: \'JetBrains Mono\';">{{ txt_dash_seat_plan_not_configured|escapejs }}</span>';
                   return;
                 }
 
@@ -430,13 +431,13 @@ document.addEventListener('DOMContentLoaded', function() {
           <div style="background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; border-radius: 10px; margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
               <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase;">
-                Saalbelegung
+                {{ txt_dash_seat_occupancy_label }}
               </span>
               <strong style="font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--ink);">
                 {% if event_total_seats and event_total_seats > 0 %}
-                  {{ event_reserved_seats|default:0 }} / {{ event_total_seats }} Plätze ({{ event_capacity_percent|default:0 }}%)
+                  {{ event_reserved_seats|default:0 }} / {{ event_total_seats }} {{ txt_dash_seats_unit }} ({{ event_capacity_percent|default:0 }}%)
                 {% else %}
-                  0 / 0 Plätze (0%)
+                  0 / 0 {{ txt_dash_seats_unit }} (0%)
                 {% endif %}
               </strong>
             </div>
@@ -480,25 +481,25 @@ document.addEventListener('DOMContentLoaded', function() {
             {% if not upcoming_event.is_registration_open %}
               <div style="margin-top: 10px; padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; border-radius: 6px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-align: center; font-weight: bold;">
                 {% if upcoming_event.status == 'DRAFT' %}
-                  📝 Event befindet sich noch im Entwurf
+                  {{ txt_status_event_draft }}
                 {% elif upcoming_event.status == 'CANCELLED' %}
-                  🚫 Event wurde abgesagt
+                  {{ txt_status_event_cancelled }}
                 {% elif upcoming_event.status == 'FINISHED' %}
-                  🏁 Event ist beendet
+                  {{ txt_status_event_finished }}
                 {% else %}
-                  🔒 Anmeldung aktuell geschlossen
+                  {{ txt_status_event_closed }}
                 {% endif %}
               </div>
             {% elif upcoming_event.is_full %}
               <div style="margin-top: 10px; padding: 8px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fbbf24; border-radius: 6px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-align: center; font-weight: bold;">
-                ⚠️ Event ist ausgebucht ({{ upcoming_event.max_guests }} Max. Plätze)
+                {{ txt_status_event_full }} ({{ upcoming_event.max_guests }} Max. {{ txt_dash_seats_unit }})
               </div>
             {% else %}
               <form action="{% url 'register_for_event' upcoming_event.id %}" method="post" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
                 {% csrf_token %}
                 {% if ticket_types and ticket_types|length > 1 %}
                   <div>
-                    <label for="ticket_type_id" style="display: block; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 4px; text-transform: uppercase;">Ticketkategorie wählen:</label>
+                    <label for="ticket_type_id" style="display: block; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 4px; text-transform: uppercase;">{{ txt_status_ticket_category_select }}</label>
                     <select name="ticket_type_id" id="ticket_type_id" style="width: 100%; padding: 6px 10px; border-radius: 6px; background: var(--bg, #0b0f17); color: #f9fafb; border: 1px solid var(--line); font-size: 12px; font-family: 'JetBrains Mono', monospace;">
                       {% for tt in ticket_types %}
                         <option value="{{ tt.id }}">{{ tt.name }} ({{ tt.price }} €)</option>
@@ -515,6 +516,7 @@ document.addEventListener('DOMContentLoaded', function() {
             {% endif %}
           {% endif %}
         </div>
+
 
         <!-- Statusbezogene Hinweistexte -->
         {% if not upcoming_event %}
