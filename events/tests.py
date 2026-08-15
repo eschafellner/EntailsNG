@@ -562,6 +562,53 @@ class EventRegistrationValidationTests(TestCase):
         warnings = [m.message for m in messages_store if 'mehr Plätze gebucht' in str(m.message)]
         self.assertEqual(len(warnings), 0)
 
+    def test_event_admin_clone_seating_on_creation(self):
+        from django.contrib.admin.sites import AdminSite
+        from events.admin import EventAdmin
+        from seating.models import SeatingPlan, SeatingCell
+
+        # Master Template Plan erstellen
+        master_plan = SeatingPlan.objects.create(
+            event=None,
+            name="Turnhalle Master",
+            columns=10,
+            rows=10,
+        )
+        SeatingCell.objects.create(plan=master_plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT, seat_label="A1")
+        SeatingCell.objects.create(plan=master_plan, x=2, y=1, cell_type=SeatingCell.CellType.WALL)
+
+        event_admin = EventAdmin(Event, AdminSite())
+
+        new_event = Event.objects.create(
+            title="Haag-networX 2029",
+            slug="haag-2029",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=500),
+            end_date=timezone.now() + timedelta(days=502),
+        )
+
+        class DummyForm:
+            cleaned_data = {'clone_seating_from': master_plan}
+
+        from django.test import RequestFactory
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        rf = RequestFactory()
+        req = rf.post('/admin/events/event/add/')
+        setattr(req, 'session', 'session')
+        setattr(req, '_messages', FallbackStorage(req))
+
+        event_admin.save_model(req, new_event, DummyForm(), change=False)
+
+        new_event.refresh_from_db()
+        self.assertTrue(hasattr(new_event, 'seating_plan'))
+        self.assertEqual(new_event.seating_plan.columns, 10)
+        self.assertEqual(new_event.seating_plan.cells.count(), 2)
+        seat_a1 = new_event.seating_plan.cells.get(x=1, y=1)
+        self.assertEqual(seat_a1.seat_label, "A1")
+        self.assertIsNone(seat_a1.registration)
+        self.assertEqual(seat_a1.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+
 
 
 

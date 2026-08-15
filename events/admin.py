@@ -1,8 +1,34 @@
+from django import forms
 from django.contrib import admin, messages
 from django.utils import timezone
 from django.utils.safestring import mark_safe
-from seating.models import SeatingCell
+from seating.models import SeatingCell, SeatingPlan
 from .models import Event, EventRegistration, TicketType
+
+
+class EventAdminForm(forms.ModelForm):
+    clone_seating_from = forms.ModelChoiceField(
+        queryset=SeatingPlan.objects.all(),
+        required=False,
+        label="📋 Sitzplan-Layout übernehmen von",
+        help_text=(
+            "Optional: Wähle eine bestehende Vorlage oder den Sitzplan eines vergangenen Events. "
+            "Das Raumlayout (Wände, Türen, Tische, Sitzplatznummern) wird automatisch mit leeren/freien Plätzen "
+            "für dieses Event kopiert."
+        ),
+    )
+
+    class Meta:
+        model = Event
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and hasattr(self.instance, 'seating_plan') and self.instance.seating_plan:
+            self.fields['clone_seating_from'].help_text = (
+                f"ℹ️ Dieses Event hat bereits einen Sitzplan ('{self.instance.seating_plan.name}'). "
+                f"Eine neue Auswahl hier ersetzt den aktuellen Plan durch eine frische Kopie des gewählten Layouts."
+            )
 
 
 class TicketTypeInline(admin.TabularInline):
@@ -12,6 +38,7 @@ class TicketTypeInline(admin.TabularInline):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
+    form = EventAdminForm
     list_display = (
         'title',
         'start_date',
@@ -32,6 +59,22 @@ class EventAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         _check_overbooking(request)
         return super().changelist_view(request, extra_context=extra_context)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        source_plan = form.cleaned_data.get('clone_seating_from')
+        if source_plan:
+            if hasattr(obj, 'seating_plan') and obj.seating_plan:
+                obj.seating_plan.delete()
+            cloned = source_plan.clone_for_event(
+                new_event=obj,
+                new_name=f"{source_plan.name} ({obj.title})"
+            )
+            messages.success(
+                request,
+                f"🎉 Sitzplan-Layout '{source_plan.name}' wurde erfolgreich mit {cloned.cells.count()} leeren Kacheln für '{obj.title}' eingerichtet!"
+            )
+
 
 
 @admin.register(TicketType)

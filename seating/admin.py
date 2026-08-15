@@ -23,11 +23,15 @@ class SeatingCellInline(admin.TabularInline):
 class SeatingPlanAdmin(admin.ModelAdmin):
     list_display = (
         'name',
+        'plan_type_badge',
         'event',
         'columns',
         'rows',
+        'occupied_info',
         'editor_button',
     )
+    list_filter = ('event',)
+    search_fields = ('name', 'event__title')
     readonly_fields = ('live_occupancy_preview',)
     fields = (
         'event',
@@ -39,6 +43,24 @@ class SeatingPlanAdmin(admin.ModelAdmin):
     )
     actions = ['duplicate_seating_plan']
 
+    @admin.display(description="Typ / Status")
+    def plan_type_badge(self, obj):
+        if obj.event:
+            return format_html(
+                '<span style="background: #1e3a8a; color: #93c5fd; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">📅 Event-Sitzplan</span>'
+            )
+        return format_html(
+            '<span style="background: #14532d; color: #86efac; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">⭐ Master-Vorlage</span>'
+        )
+
+    @admin.display(description="Belegung")
+    def occupied_info(self, obj):
+        if not obj.pk:
+            return "-"
+        total_seats = obj.cells.filter(cell_type=SeatingCell.CellType.SEAT).count()
+        occupied = obj.cells.filter(cell_type=SeatingCell.CellType.SEAT, registration__isnull=False).count()
+        return f"{occupied} / {total_seats} belegt"
+
     @admin.display(description="Aktionen")
     def editor_button(self, obj):
         if not obj.pk:
@@ -48,6 +70,7 @@ class SeatingPlanAdmin(admin.ModelAdmin):
             '<a class="button" style="background: #2563eb; color: white; padding: 4px 10px; border-radius: 4px; text-decoration: none;" href="{}">🎨 Editor öffnen</a>',
             url,
         )
+
 
     @admin.display(
         description="Aktuelle Belegung & Sperrungen (Klicken zum Verwalten)"

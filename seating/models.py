@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from events.models import Event, EventRegistration
 
@@ -36,11 +37,28 @@ class SeatingPlan(models.Model):
         event_title = self.event.title if self.event else "Keine Veranstaltung"
         return f"{event_title} - {self.name} ({self.columns}x{self.rows})"
 
+    def clean(self):
+        super().clean()
+        if self.pk:
+            old_plan = SeatingPlan.objects.filter(pk=self.pk).first()
+            if old_plan and old_plan.event_id and self.event_id != old_plan.event_id:
+                has_registrations = self.cells.filter(registration__isnull=False).exists()
+                if has_registrations:
+                    raise ValidationError({
+                        'event': (
+                            'Dieser Sitzplan enthält bereits Teilnehmer-Reservierungen für eine andere Veranstaltung. '
+                            'Um das Layout für ein neues Event zu verwenden, nutze bitte die Funktion '
+                            '„Sitzplan klonen“, damit das neue Event mit leeren Sitzplätzen startet.'
+                        )
+                    })
+
     def save(self, *args, **kwargs):
+        self.full_clean()
         super().save(*args, **kwargs)
         if self.event_id:
             from configuration.context_processors import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(self.event_id)
+
 
     def delete(self, *args, **kwargs):
         event_id = self.event_id
@@ -151,11 +169,24 @@ class SeatingCell(models.Model):
         verbose_name_plural = "Raster-Kacheln"
         unique_together = ('plan', 'x', 'y')
 
+    def clean(self):
+        super().clean()
+        if self.registration and self.plan_id and self.plan and self.plan.event_id:
+            if self.registration.event_id != self.plan.event_id:
+                raise ValidationError({
+                    'registration': (
+                        f'Die Registrierung gehört zu Event "{self.registration.event}", '
+                        f'der Sitzplan gehört jedoch zu Event "{self.plan.event}".'
+                    )
+                })
+
     def save(self, *args, **kwargs):
+        self.full_clean()
         super().save(*args, **kwargs)
         if self.plan_id and self.plan.event_id:
             from configuration.context_processors import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(self.plan.event_id)
+
 
     def delete(self, *args, **kwargs):
         event_id = self.plan.event_id if (self.plan_id and hasattr(self, 'plan')) else None

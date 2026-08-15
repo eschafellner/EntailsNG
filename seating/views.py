@@ -231,7 +231,7 @@ def get_event_seating_api(request, event_id):
         # Dynamische Statusbestimmung für das Frontend:
         if c.reservation_status == SeatingCell.ReservationStatus.BLOCKED:
             computed_status = 'BLOCKED'
-        elif c.registration:
+        elif c.registration and c.registration.event_id == plan.event_id:
             if is_authenticated:
                 user = c.registration.user
                 username = user.username if user else None
@@ -249,6 +249,7 @@ def get_event_seating_api(request, event_id):
                 computed_status = 'PRE_RESERVED'  # Gelb / Vorreserviert
         else:
             computed_status = 'FREE'  # Grün / Frei
+
 
         cells.append({
             'x': c.x,

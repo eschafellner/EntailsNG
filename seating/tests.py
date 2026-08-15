@@ -309,6 +309,131 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.assertEqual(occupied_cell_auth['status'], 'PRE_RESERVED')
         self.assertEqual(occupied_cell_auth['occupied_by'], 'seatuser2')
 
+    def test_seating_plan_clone_isolation_between_events(self):
+        """Positiver Test: Klonen eines Sitzplans für ein neues Event isoliert die Belegungen vollständig."""
+        user_new = User.objects.create_user(
+            username='seatuser1', email='seat1@example.com', password='password'
+        )
+        event_2027 = Event.objects.create(
+            title="Haag-networX 2027",
+            slug="haag-networx-2027",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=365),
+            end_date=timezone.now() + timedelta(days=367),
+        )
+
+        # Klonen für 2027
+        cloned_plan = self.plan.clone_for_event(new_event=event_2027, new_name="Halle 1 (2027)")
+        self.assertEqual(cloned_plan.event, event_2027)
+        self.assertEqual(cloned_plan.columns, self.plan.columns)
+        self.assertEqual(cloned_plan.rows, self.plan.rows)
+
+        # 2. Im geklonten Plan müssen alle Plätze frei sein
+        cloned_cell = cloned_plan.cells.get(x=1, y=1)
+        self.assertIsNone(cloned_cell.registration)
+        self.assertEqual(cloned_cell.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+        # 3. Im Original-Plan 2026 ist Platz (1,1) unverändert belegt
+        original_cell = self.plan.cells.get(x=1, y=1)
+        self.assertIsNotNone(original_cell.registration)
+        self.assertEqual(original_cell.registration.user.username, 'seatuser2')
+
+        # 4. User 1 bucht Platz (1,1) auf dem neuen Event 2027
+        reg_2027 = EventRegistration.objects.create(
+            event=event_2027,
+            user=user_new,
+            payment_status=EventRegistration.PaymentStatus.PAID
+        )
+        cloned_cell.registration = reg_2027
+        cloned_cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        cloned_cell.save()
+
+        # Beide Events müssen unabhängig voneinander ihre eigenen User haben
+        original_cell.refresh_from_db()
+        cloned_cell.refresh_from_db()
+        self.assertEqual(original_cell.registration.user.username, 'seatuser2')
+        self.assertEqual(cloned_cell.registration.user.username, 'seatuser1')
+
+    def test_negative_cannot_repoint_occupied_seating_plan_to_different_event(self):
+        """Negativer Test: Ein belegter Sitzplan darf nicht einfach einem anderen Event zugewiesen werden."""
+        from django.core.exceptions import ValidationError
+
+        event_2027 = Event.objects.create(
+            title="Haag-networX 2027",
+            slug="haag-2027-neg",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=365),
+            end_date=timezone.now() + timedelta(days=367),
+        )
+
+        # self.plan gehört zu self.event (2026) und hat belegte Plätze
+        self.plan.event = event_2027
+        with self.assertRaises(ValidationError) as ctx:
+            self.plan.save()
+
+        self.assertIn('bereits Teilnehmer-Reservierungen', str(ctx.exception))
+
+    def test_negative_cannot_assign_cross_event_registration_to_cell(self):
+        """Negativer Test: Kacheln dürfen keine Registrierungen eines fremden Events zugewiesen bekommen."""
+        from django.core.exceptions import ValidationError
+
+        event_other = Event.objects.create(
+            title="Anderes Event",
+            slug="anderes-event",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=100),
+            end_date=timezone.now() + timedelta(days=102),
+        )
+        reg_other = EventRegistration.objects.create(
+            event=event_other,
+            user=self.user,
+            payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+        # self.plan gehört zu self.event
+        free_cell = SeatingCell.objects.create(
+            plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.SEAT,
+            reservation_status=SeatingCell.ReservationStatus.FREE
+        )
+        free_cell.registration = reg_other
+        with self.assertRaises(ValidationError) as ctx:
+            free_cell.save()
+
+        self.assertIn('Die Registrierung gehört zu Event', str(ctx.exception))
+
+    def test_api_ignores_cross_event_legacy_registrations(self):
+        """Negativer Test: Falls Altdaten existieren, ignoriert die API Registrierungen fremder Events."""
+        # Kachel manuell über QuerySet.update() mit fremder Registrierung manipulieren (umgeht Model.save())
+        event_other = Event.objects.create(
+            title="Legacy Event",
+            slug="legacy-event",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=200),
+            end_date=timezone.now() + timedelta(days=202),
+        )
+        reg_other = EventRegistration.objects.create(
+            event=event_other,
+            user=self.user,
+            payment_status=EventRegistration.PaymentStatus.PAID
+        )
+        cell_2_2 = SeatingCell.objects.create(
+            plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.SEAT,
+            reservation_status=SeatingCell.ReservationStatus.FREE
+        )
+        SeatingCell.objects.filter(pk=cell_2_2.pk).update(registration=reg_other)
+
+        self.client.login(username='seatuser2', password='password')
+        res = self.client.get(reverse('api_event_seating', kwargs={'event_id': self.event.id}))
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+
+        cell_data = next(c for c in data['cells'] if c['x'] == 2 and c['y'] == 2)
+        # Muss FREE sein, weil reg_other nicht zu self.event gehört!
+        self.assertEqual(cell_data['status'], 'FREE')
+        self.assertIsNone(cell_data['occupied_by'])
+
+
+
 
 
 
