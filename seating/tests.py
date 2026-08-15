@@ -98,10 +98,11 @@ class SeatingPlanTests(TestCase):
                 cell_type=SeatingCell.CellType.SEAT,
                 seat_label=f"S-{x}-{y}",
             )
-            for y in range(20)
-            for x in range(50)
+            for y in range(1, 21)
+            for x in range(1, 51)
         ]
         SeatingCell.objects.bulk_create(cells)
+
 
         # Teste API Performance & Query Count für 1000 Kacheln (anonym: 2 Queries; eingeloggt: 3 Queries)
         with self.assertNumQueries(2):  # Plan fetch, Cells with select_related
@@ -144,12 +145,12 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.seat_cell.reserve_for_user(self.registration)
 
     def test_seat_released_when_registration_cancelled(self):
-        self.registration.payment_status = EventRegistration.PaymentStatus.CANCELLED
-        self.registration.save()
+        self.registration.mark_as_cancelled()
 
         self.seat_cell.refresh_from_db()
         self.assertIsNone(self.seat_cell.registration)
         self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.FREE)
+
 
     def test_seat_released_when_registration_deleted(self):
         self.registration.delete()
@@ -431,6 +432,115 @@ class SeatingConsistencyAndSignalTests(TestCase):
         # Muss FREE sein, weil reg_other nicht zu self.event gehört!
         self.assertEqual(cell_data['status'], 'FREE')
         self.assertIsNone(cell_data['occupied_by'])
+
+    def test_failed_seat_change_preserves_original_seat(self):
+        """Negativer Test: Schlägt ein Sitzplatzwechsel fehl, bleibt der bisherige Platz garantiert erhalten."""
+        # 1. User sitzt sicher auf Platz (1,1)
+        self.seat_cell.registration = self.registration
+        self.seat_cell.reservation_status = SeatingCell.ReservationStatus.PRE_RESERVED
+        self.seat_cell.save()
+
+        # 2. Zweiter Platz (2,2) ist blockiert
+        blocked_cell = SeatingCell.objects.create(
+            plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.SEAT,
+            reservation_status=SeatingCell.ReservationStatus.BLOCKED
+        )
+
+        self.client.force_login(self.user)
+
+        # 3. Wechselversuch auf den blockierten Platz
+        response = self.client.post(
+            reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+            data=json.dumps({'x': 2, 'y': 2}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        # 4. Prüfen: Ursprünglicher Platz (1,1) darf NICHT freigegeben worden sein!
+        self.seat_cell.refresh_from_db()
+        self.assertEqual(self.seat_cell.registration, self.registration)
+        self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.PRE_RESERVED)
+
+    def test_concurrent_reservation_rejection_for_second_caller(self):
+        """Regressionstest: Zwei Anmeldungen konkurrieren um denselben Platz -> Zweiter Aufrufer wird abgewiesen."""
+        user_rival = User.objects.create_user(username='rival_gamer', password='password')
+        reg_rival = EventRegistration.objects.create(user=user_rival, event=self.event)
+
+        # 1. Erster Gast reserviert Platz (1,1)
+        self.client.force_login(self.user)
+        res1 = self.client.post(
+            reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+            data=json.dumps({'x': 1, 'y': 1}),
+            content_type='application/json',
+        )
+        self.assertEqual(res1.status_code, 200)
+
+        # 2. Zweiter Gast versucht denselben Platz zu reservieren -> Abweisung
+        self.client.force_login(user_rival)
+        res2 = self.client.post(
+            reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+            data=json.dumps({'x': 1, 'y': 1}),
+            content_type='application/json',
+        )
+        self.assertEqual(res2.status_code, 400)
+        self.assertIn("bereits", res2.json()['message'].lower())
+
+        # 3. Platz bleibt sicher beim ersten Gast
+        self.seat_cell.refresh_from_db()
+        self.assertEqual(self.seat_cell.registration, self.registration)
+
+    def test_admin_force_assignment_displaces_previous_user_cleanly(self):
+        """Regressionstest: Admin Force-Zuweisung entkoppelt verdrängten Gast sauber ohne Inkonsistenzen."""
+        admin_user = User.objects.create_superuser(username='superadmin', password='password')
+        user_b = User.objects.create_user(username='gamer_b', password='password')
+        reg_b = EventRegistration.objects.create(
+            user=user_b, event=self.event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+        # 1. Platz (1,1) gehört Gast A
+        self.seat_cell.registration = self.registration
+        self.seat_cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat_cell.save()
+
+        # 2. Admin erzwingt Zuweisung an Gast B mit force=True
+        self.client.force_login(admin_user)
+        res = self.client.post(
+            reverse('admin_assign_seat'),
+            data=json.dumps({'registration_id': reg_b.id, 'x': 1, 'y': 1, 'force': True}),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 200)
+
+        # 3. Kachel gehört jetzt Gast B
+        self.seat_cell.refresh_from_db()
+        self.assertEqual(self.seat_cell.registration, reg_b)
+
+        # 4. Gast A hat keinen Platz mehr zugewiesen
+        self.assertEqual(self.registration.seats.count(), 0)
+
+    def test_api_500_error_sanitization_no_information_leak(self):
+        """Sicherheitstest: Unerwartete Server-Exceptions leaken keine internen Traceback- oder Tabellendetails."""
+        from unittest.mock import patch
+
+        self.client.force_login(self.user)
+        sensitive_error = "SQL syntax error in table auth_user_passwords_secret_leak"
+
+        with patch.object(SeatingCell, 'reserve_for_user', side_effect=RuntimeError(sensitive_error)):
+            res = self.client.post(
+                reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+                data=json.dumps({'x': 1, 'y': 1}),
+                content_type='application/json',
+            )
+            self.assertEqual(res.status_code, 500)
+            data = res.json()
+            self.assertEqual(data['status'], 'error')
+            self.assertEqual(data['message'], 'Die Aktion konnte nicht ausgeführt werden. Bitte versuche es erneut.')
+            # Sicherstellen, dass interne Details NICHT in der Antwort enthalten sind
+            self.assertNotIn("auth_user_passwords", res.content.decode())
+            self.assertNotIn("SQL", res.content.decode())
+
+
 
 
 

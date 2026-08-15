@@ -299,7 +299,13 @@ def reserve_seat_api(request, event_id):
             plan__event_id=event_id, x=x, y=y
         )
 
-        # 3. Bisherige Sitzplätze des Users mit DB-Lock freigeben
+        # 3. Vorab-Prüfung: Ist der Zielplatz überhaupt reservierbar? (Pre-Check vor Freigabe des Altsitzes)
+        can_res, err_msg = cell.can_reserve_for_user(registration)
+        if not can_res:
+            transaction.set_rollback(True)
+            return JsonResponse({'status': 'error', 'message': err_msg}, status=400)
+
+        # 4. Bisherige Sitzplätze des Users mit DB-Lock freigeben
         previous_seats = list(
             SeatingCell.objects.select_for_update().filter(
                 plan__event_id=event_id, registration=registration
@@ -311,15 +317,17 @@ def reserve_seat_api(request, event_id):
                 prev.reservation_status = SeatingCell.ReservationStatus.FREE
                 prev.save(update_fields=['registration', 'reservation_status'])
 
-        # 4. Neuen Platz über die Geschäftslogik reservieren
+        # 5. Neuen Platz über die Geschäftslogik reservieren
         success, message = cell.reserve_for_user(registration)
 
         if success:
             return JsonResponse({'status': 'success', 'message': message})
         else:
+            transaction.set_rollback(True)
             return JsonResponse(
                 {'status': 'error', 'message': message}, status=400
             )
+
 
     except EventRegistration.DoesNotExist:
         return JsonResponse(
@@ -334,8 +342,10 @@ def reserve_seat_api(request, event_id):
             {'status': 'error', 'message': 'Ungültiger Sitzplatz.'}, status=404
         )
     except Exception as e:
+        logger.exception("Fehler in reserve_seat_api: %s", e)
         return JsonResponse(
-            {'status': 'error', 'message': str(e)}, status=500
+            {'status': 'error', 'message': 'Die Aktion konnte nicht ausgeführt werden. Bitte versuche es erneut.'},
+            status=500,
         )
 
 
@@ -388,7 +398,12 @@ def release_seat_api(request, event_id):
             status=403,
         )
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        logger.exception("Fehler in release_seat_api: %s", e)
+        return JsonResponse(
+            {'status': 'error', 'message': 'Die Freigabe konnte nicht durchgeführt werden. Bitte versuche es erneut.'},
+            status=500,
+        )
+
 
 
 
@@ -489,7 +504,8 @@ def admin_assign_seat(request):
     except SeatingPlan.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Kein Sitzplan für diese Veranstaltung vorhanden.'}, status=404)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        logger.exception("Fehler in admin_assign_seat: %s", e)
+        return JsonResponse({'status': 'error', 'message': 'Die Zuweisung konnte nicht gespeichert werden. Bitte versuche es erneut.'}, status=500)
 
 
 
@@ -545,7 +561,8 @@ def admin_toggle_block_seat(request):
             status=404,
         )
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        logger.exception("Fehler in admin_toggle_block_seat: %s", e)
+        return JsonResponse({'status': 'error', 'message': 'Der Sperrstatus konnte nicht geändert werden. Bitte versuche es erneut.'}, status=500)
 
 
 @staff_member_required
@@ -595,5 +612,7 @@ def admin_release_seat(request):
         )
 
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        logger.exception("Fehler in admin_release_seat: %s", e)
+        return JsonResponse({'status': 'error', 'message': 'Die Freigabe konnte nicht durchgeführt werden. Bitte versuche es erneut.'}, status=500)
+
 

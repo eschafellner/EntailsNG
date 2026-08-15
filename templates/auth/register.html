@@ -4,17 +4,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Registrieren – Haag-networX</title>
+  <title>Registrieren – {{ site_customization.site_name|default:"EntailsNG" }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <style>
+    :root {
+{{ theme_css_vars|safe }}
+    }
+    {% if custom_css %}
+    /* Custom CSS Injection */
+    {{ custom_css|safe }}
+    {% endif %}
+  </style>
 </head>
 <body>
   <div class="auth-wrapper">
     <div class="auth-card">
       <div class="auth-header">
-        <div class="brand-mark">HNX</div>
+        <div class="brand-mark">{{ site_customization.brand_accent_text|default:"HNX" }}</div>
         <h1>Konto erstellen</h1>
         <p style="color: var(--muted); font-size: 14px;">Erstelle dein Konto, um dich für die LAN-Party anzumelden und dir deinen Platz zu sichern.</p>
       </div>
@@ -50,7 +59,7 @@
 
         <div class="form-group">
           <label for="id_birthday">Geburtsdatum:</label>
-          <input type="date" name="birthday" id="id_birthday" class="form-control" value="{{ form.birthday.value|default:'' }}" required>
+          <input type="date" name="birthday" id="id_birthday" class="form-control" value="{{ form.birthday.value|default:'' }}" min="1900-01-01" max="2099-12-31" required>
         </div>
 
         <div class="form-group">
@@ -73,3 +82,4 @@
   </div>
 </body>
 </html>
+

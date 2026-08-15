@@ -57,11 +57,12 @@
 
         <div class="form-group">
           <label for="id_birthday">Geburtsdatum:</label>
-          <input type="date" name="birthday" id="id_birthday" class="form-control" value="{{ profile_form.birthday.value|date:'Y-m-d'|default:'' }}">
+          <input type="date" name="birthday" id="id_birthday" class="form-control" value="{{ profile_form.birthday.value|date:'Y-m-d'|default:'' }}" min="1900-01-01" max="2099-12-31">
           {% if profile_form.birthday.errors %}
             <div style="color: var(--danger); font-size: 12px; margin-top: 4px;">{{ profile_form.birthday.errors.0 }}</div>
           {% endif %}
         </div>
+
 
         <button type="submit" name="update_profile" class="btn-login" style="width: auto; padding: 10px 20px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px;">
           💾 Stammdaten Speichern

@@ -1,22 +1,22 @@
 {% extends 'base.html' %}
 
-{% block title %}Sitzplan – Haag-networX{% endblock %}
+{% block title %}Sitzplan – {{ event.title|default:"Haag-networX" }}{% endblock %}
 
 {% block content %}
-<div class="card" style="padding: 16px; border-radius: 12px; position: relative;">
+<div class="card seating-page-card" style="padding: 16px; border-radius: 16px; position: relative; display: flex; flex-direction: column; min-height: calc(100vh - 130px);">
 
   {% if event %}
     <!-- ======================================================================
          A. HEADER, LEGENDE & CONTROLS
          ====================================================================== -->
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 12px;">
       <div>
         <p class="eyebrow" style="margin-bottom: 2px;">Saalplan – {{ event.title }}</p>
         <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 28px;">{{ txt_seating_plan_title }}</h1>
       </div>
 
       <!-- Responsive Farb-Legende -->
-      <div style="display: flex; gap: 12px; font-size: 11px; font-family: 'JetBrains Mono', monospace; align-items: center; background: var(--paper); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); flex-wrap: wrap;">
+      <div style="display: flex; gap: 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; align-items: center; background: var(--paper); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); flex-wrap: wrap;">
         <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; border-radius: 2px; display: inline-block;"></span> {{ txt_seat_legend_free }}</span>
         <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; border-radius: 2px; display: inline-block;"></span> {{ txt_seat_legend_prereserved }}</span>
         <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 2px; display: inline-block;"></span> {{ txt_seat_legend_reserved }}</span>
@@ -26,11 +26,18 @@
       </div>
     </div>
 
-    <!-- Zoom & Reset Steuerung (Touch-freundlich) -->
-    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px;">
-      <button type="button" id="btn-zoom-in" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-width: 40px; min-height: 40px;">🔍 +</button>
-      <button type="button" id="btn-zoom-out" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-width: 40px; min-height: 40px;">🔍 -</button>
-      <button type="button" id="btn-zoom-reset" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 40px;">Reset</button>
+    <!-- Steuerung & Zoom-Bar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+      <div style="font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+        💡 Ziehen zum Verschieben • Scrollen zum Zoomen
+      </div>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <span id="zoom-level-badge" style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); padding: 4px 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px;">100%</span>
+        <button type="button" id="btn-zoom-in" title="Vergrößern (+)" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 34px;">🔍 +</button>
+        <button type="button" id="btn-zoom-out" title="Verkleinern (-)" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 34px;">🔍 -</button>
+        <button type="button" id="btn-zoom-reset" title="Plan zentrieren und einpassen" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 34px;">🎯 Einpassen</button>
+        <button type="button" id="btn-fullscreen" title="Vollbild umschalten (F)" style="background: var(--signal); color: var(--navy); border: 1px solid transparent; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 34px;">⛶ Vollbild</button>
+      </div>
     </div>
 
     <!-- Lade-Indikator -->
@@ -38,8 +45,8 @@
       Sitzplan wird geladen...
     </div>
 
-    <!-- RESPONSIVER VIEWPORT CONTAINER (Hellerer Hintergrund #161e2e) -->
-    <div id="viewport" style="width: 100%; height: clamp(350px, 60vh, 600px); overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #161e2e; position: relative; cursor: grab; touch-action: pan-y pinch-zoom;">
+    <!-- RESPONSIVER DYNAMISCHER FULL-HEIGHT VIEWPORT CONTAINER -->
+    <div id="viewport" style="width: 100%; flex: 1; min-height: 540px; height: calc(100vh - 260px); overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #111827; position: relative; cursor: grab; touch-action: pan-y pinch-zoom; box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);">
 
       <!-- Transform-Canvas Wrapper -->
       <div id="pan-canvas" style="position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: transform 0.05s ease-out; padding: 20px;">
@@ -51,7 +58,7 @@
     <!-- ======================================================================
          NATIVE RESERVIERUNGS-BESTÄTIGUNG (RESPONSIVES MODAL)
          ====================================================================== -->
-    <div id="reserve-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px;">
+    <div id="reserve-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px;">
       <div style="position: relative; background: #ffffff; padding: 24px 20px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); text-align: center; max-width: 360px; width: 100%; border: 1px solid var(--line);">
 
         <button type="button" onclick="closeReserveModal()" style="position: absolute; top: -10px; right: -10px; background: #ef4444; color: #ffffff; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
@@ -92,6 +99,24 @@
 
 </div>
 
+
+<style>
+  #viewport.is-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: none !important;
+    z-index: 99990 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+</style>
+
 {% if event %}
 <script>
 let currentScale = 1;
@@ -107,6 +132,7 @@ let initialScale = 1;
 
 let targetSeatX = null;
 let targetSeatY = null;
+let isFullscreen = false;
 
 const eventId = "{{ event.id }}";
 const isUserLoggedIn = {{ request.user.is_authenticated|yesno:"true,false" }};
@@ -237,7 +263,6 @@ function renderGrid(data) {
               : `Platz ${seatLabel}: ${statusLabel}`;
           }
 
-
         } else {
           cellEl.style.background = '#374151';
           cellEl.style.border = '1px solid #4b5563';
@@ -313,13 +338,18 @@ document.getElementById('btn-confirm-reserve').onclick = function() {
   });
 };
 
-/* PAN & ZOOM IMPLEMENTIERUNG MIT MAUS & TOUCH (PINCH-TO-ZOOM) */
+/* PAN & ZOOM IMPLEMENTIERUNG MIT MAUS, TOUCH & VOLLBILD */
 function initPanZoom(data) {
   const viewport = document.getElementById('viewport');
   const canvas = document.getElementById('pan-canvas');
+  const zoomBadge = document.getElementById('zoom-level-badge');
+  const btnFullscreen = document.getElementById('btn-fullscreen');
 
   function updateTransform() {
     canvas.style.transform = `translate(${pointX}px, ${pointY}px) scale(${currentScale})`;
+    if (zoomBadge) {
+      zoomBadge.textContent = `${Math.round(currentScale * 100)}%`;
+    }
   }
 
   window.fitToViewport = function(planData = data) {
@@ -330,8 +360,8 @@ function initPanZoom(data) {
     if (planData.cells && planData.cells.length > 0) {
       minX = Math.min(...planData.cells.map(c => c.x));
       minY = Math.min(...planData.cells.map(c => c.y));
-      maxX = Math.max(...planData.cells.map(c => c.x), planData.columns - 1);
-      maxY = Math.max(...planData.cells.map(c => c.y), planData.rows - 1);
+      maxX = Math.max(...planData.cells.map(c => c.x), data.columns - 1);
+      maxY = Math.max(...planData.cells.map(c => c.y), data.rows - 1);
     }
 
     const totalCols = (maxX - minX) + 1;
@@ -343,7 +373,7 @@ function initPanZoom(data) {
     const scaleX = viewportWidth / gridWidth;
     const scaleY = viewportHeight / gridHeight;
 
-    currentScale = Math.min(scaleX, scaleY, 1);
+    currentScale = Math.min(scaleX, scaleY, 1.2);
 
     pointX = (viewportWidth - (gridWidth * currentScale)) / 2;
     pointY = (viewportHeight - (gridHeight * currentScale)) / 2;
@@ -352,6 +382,41 @@ function initPanZoom(data) {
   };
 
   fitToViewport();
+
+  function toggleFullscreen() {
+    isFullscreen = !isFullscreen;
+    viewport.classList.toggle('is-fullscreen', isFullscreen);
+    if (btnFullscreen) {
+      btnFullscreen.innerHTML = isFullscreen ? '✕ Beenden' : '⛶ Vollbild';
+      btnFullscreen.style.background = isFullscreen ? '#ef4444' : 'var(--signal)';
+      btnFullscreen.style.color = isFullscreen ? '#ffffff' : 'var(--navy)';
+    }
+    setTimeout(() => {
+      if (window.lastSeatingData) fitToViewport(window.lastSeatingData);
+    }, 60);
+  }
+
+  if (btnFullscreen) {
+    btnFullscreen.onclick = toggleFullscreen;
+  }
+
+  // Tastatur-Shortcuts
+  document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'f' || e.key === 'F') {
+      toggleFullscreen();
+    } else if (e.key === 'Escape' && isFullscreen) {
+      toggleFullscreen();
+    } else if (e.key === '+' || e.key === '=') {
+      currentScale = Math.min(currentScale * 1.2, 3);
+      updateTransform();
+    } else if (e.key === '-' || e.key === '_') {
+      currentScale = Math.max(currentScale * 0.8, 0.15);
+      updateTransform();
+    } else if (e.key === '0') {
+      fitToViewport();
+    }
+  });
 
   // --- MAUS EVENTS ---
   viewport.addEventListener('mousedown', function(e) {
@@ -423,7 +488,7 @@ function initPanZoom(data) {
       currentScale = Math.min(Math.max(0.15, initialScale * scaleFactor), 3);
       updateTransform();
     }
-  }, { passive: false });   // WICHTIG: passive muss false sein für preventDefault
+  }, { passive: false });
 
   viewport.addEventListener('touchend', function(e) {
     if (e.touches.length < 2) initialTouchDistance = null;
@@ -439,3 +504,4 @@ function initPanZoom(data) {
 {% endif %}
 
 {% endblock %}
+

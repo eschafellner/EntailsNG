@@ -1,7 +1,58 @@
-from django.core.exceptions import ValidationError
+import re
+import xml.etree.ElementTree as ET
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import NoReverseMatch, reverse
+
+ALLOWED_SVG_TAGS = {
+    'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
+    'text', 'tspan', 'defs', 'clippath', 'mask', 'use', 'title', 'desc'
+}
+DISALLOWED_ATTRIBUTES_REGEX = re.compile(r'^(on|data-|formaction)', re.IGNORECASE)
+DANGEROUS_PROTOCOLS_REGEX = re.compile(r'^\s*(javascript|data|vbscript):', re.IGNORECASE)
+
+
+def sanitize_and_validate_svg(svg_code: str) -> str:
+    """
+    Validiert und bereinigt SVG-Code vor dem Speichern.
+    Verhindert Stored-XSS, Script-Injections und gefährliche Attribute im Template (|safe).
+    """
+    if not svg_code or not svg_code.strip():
+        return ""
+
+    raw = svg_code.strip()
+
+    # Schutz vor XXE / DTD Injections
+    if '<!DOCTYPE' in raw.upper() or '<!ENTITY' in raw.upper():
+        raise ValidationError({'icon_svg': "SVG darf keine DOCTYPE- oder ENTITY-Deklarationen enthalten."})
+
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as e:
+        raise ValidationError({'icon_svg': f"Ungültiger SVG/XML-Code: {e}"})
+
+    def clean_tag(tag):
+        if '}' in tag:
+            return tag.split('}', 1)[1].lower()
+        return tag.lower()
+
+    if clean_tag(root.tag) != 'svg':
+        raise ValidationError({'icon_svg': "Wurzelelement muss ein <svg>-Tag sein."})
+
+    for elem in root.iter():
+        tag_name = clean_tag(elem.tag)
+        if tag_name not in ALLOWED_SVG_TAGS:
+            raise ValidationError({'icon_svg': f"Nicht erlaubtes SVG-Tag '<{tag_name}>' im Icon-Code gefunden."})
+
+        for attr, val in list(elem.attrib.items()):
+            attr_clean = clean_tag(attr)
+            if DISALLOWED_ATTRIBUTES_REGEX.match(attr_clean):
+                raise ValidationError({'icon_svg': f"Nicht erlaubtes Attribut '{attr}' im SVG gefunden."})
+            if attr_clean in ('href', 'xlink:href', 'src') and DANGEROUS_PROTOCOLS_REGEX.match(str(val)):
+                raise ValidationError({'icon_svg': f"Gefährliche URI im Attribut '{attr}' gefunden."})
+
+    return raw
 
 
 class NavigationItem(models.Model):
@@ -39,8 +90,9 @@ class NavigationItem(models.Model):
     def __str__(self):
         return f'{self.order}. {self.title} ({self.url_name})'
 
+
     def clean(self):
-        """Verhindert Tippfehler: der URL-Name muss auflösbar sein."""
+        """Verhindert Tippfehler und schützt vor XSS in SVG-Icons."""
         target = self.ALIAS_MAP.get(self.url_name, self.url_name)
         try:
             reverse(target)
@@ -52,6 +104,10 @@ class NavigationItem(models.Model):
                     'news_list, seating_plan.'
                 )
             })
+
+        if self.icon_svg:
+            self.icon_svg = sanitize_and_validate_svg(self.icon_svg)
+
 
     def get_url(self):
         target = self.ALIAS_MAP.get(self.url_name, self.url_name)

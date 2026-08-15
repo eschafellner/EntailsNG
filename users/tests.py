@@ -309,3 +309,37 @@ class AuthBackendAndLockoutTests(TestCase):
         )
         self.assertEqual(response_other_ip.status_code, 302)
 
+    def test_registration_rejects_non_4_digit_birthday_year(self):
+        """Negativ-Test: Geburtsdatum mit nicht 4-stelligem Jahr wird von der Form abgewiesen."""
+        # 1. 5-stelliges Jahr wird von Django DateField abgewiesen
+        form1 = CustomUserCreationForm(data={
+            'username': 'yearuser1',
+            'email': 'year1@example.com',
+            'birthday': '20005-01-01',
+            'password1': 'StrongPass123!',
+            'password2': 'StrongPass123!',
+        })
+        self.assertFalse(form1.is_valid())
+        self.assertIn('birthday', form1.errors)
+
+        # 2. Unplausibles Jahr (< 1900 oder > 2099) wird von clean_birthday abgewiesen
+        form2 = CustomUserCreationForm(data={
+            'username': 'yearuser2',
+            'email': 'year2@example.com',
+            'birthday': '1850-01-01',
+            'password1': 'StrongPass123!',
+            'password2': 'StrongPass123!',
+        })
+        self.assertFalse(form2.is_valid())
+        self.assertIn('birthday', form2.errors)
+        self.assertIn('4-stellig', str(form2.errors['birthday']))
+
+
+    def test_profile_form_rejects_non_4_digit_birthday_year(self):
+        """Negativ-Test: UserProfileForm lehnt unplausible/überlange Jahreszahlen ab."""
+        from users.forms import UserProfileForm
+        form = UserProfileForm(data={'email': 'update@example.com', 'birthday': '1850-01-01'}, instance=self.user)
+        self.assertFalse(form.is_valid())
+        self.assertIn('birthday', form.errors)
+
+

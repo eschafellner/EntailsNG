@@ -293,6 +293,52 @@ class ConfigurationModelTests(TestCase):
         self.assertContains(response, 'Seite nicht gefunden', status_code=404)
         self.assertContains(response, '404', status_code=404)
 
+    def test_navigation_item_svg_sanitization_positive(self):
+        """Positiver Test: Gültiges Vektor-SVG wird anstandslos validiert und gespeichert."""
+        valid_svg = '<svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>'
+        item = NavigationItem(title="Valid Nav", url_name="dashboard", order=10, icon_svg=valid_svg)
+        item.clean()
+        item.save()
+        self.assertEqual(item.icon_svg, valid_svg)
+
+    def test_navigation_item_svg_sanitization_rejects_script_tag(self):
+        """Sicherheitstest: <script> Tags in SVG-Icons werden mit ValidationError blockiert."""
+        from django.core.exceptions import ValidationError
+        evil_svg = '<svg width="20" height="20"><script>alert("XSS")</script></svg>'
+        item = NavigationItem(title="Evil Nav", url_name="dashboard", order=10, icon_svg=evil_svg)
+        with self.assertRaises(ValidationError) as ctx:
+            item.clean()
+        self.assertIn("Nicht erlaubtes SVG-Tag '<script>'", str(ctx.exception))
+
+    def test_navigation_item_svg_sanitization_rejects_onload_attribute(self):
+        """Sicherheitstest: Event-Handler wie onload werden mit ValidationError blockiert."""
+        from django.core.exceptions import ValidationError
+        evil_svg = '<svg width="20" height="20" onload="alert(1)"><circle cx="10" cy="10" r="5"/></svg>'
+        item = NavigationItem(title="Evil Nav 2", url_name="dashboard", order=10, icon_svg=evil_svg)
+        with self.assertRaises(ValidationError) as ctx:
+            item.clean()
+        self.assertIn("Nicht erlaubtes Attribut 'onload'", str(ctx.exception))
+
+    def test_navigation_item_svg_sanitization_rejects_javascript_uri(self):
+        """Sicherheitstest: Gefährliche javascript: URIs werden blockiert."""
+        from django.core.exceptions import ValidationError
+        evil_svg = '<svg width="20" height="20"><use href="javascript:alert(1)"/></svg>'
+        item = NavigationItem(title="Evil Nav 3", url_name="dashboard", order=10, icon_svg=evil_svg)
+        with self.assertRaises(ValidationError) as ctx:
+            item.clean()
+        self.assertIn("Gefährliche URI", str(ctx.exception))
+
+
+    def test_navigation_item_svg_sanitization_rejects_doctype_xxe(self):
+        """Sicherheitstest: DOCTYPE / XXE Injektionen werden sofort abgewiesen."""
+        from django.core.exceptions import ValidationError
+        xxe_svg = '<!DOCTYPE svg SYSTEM "http://attacker.com/xxe"><svg width="20" height="20"></svg>'
+        item = NavigationItem(title="XXE Nav", url_name="dashboard", order=10, icon_svg=xxe_svg)
+        with self.assertRaises(ValidationError) as ctx:
+            item.clean()
+        self.assertIn("DOCTYPE", str(ctx.exception))
+
+
 
 
 

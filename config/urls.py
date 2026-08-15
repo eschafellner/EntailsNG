@@ -70,6 +70,10 @@ urlpatterns = [
     path('teams/', include('tournaments.urls')),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+if getattr(settings, 'SERVE_MEDIA', False) or settings.DEBUG:
+    from django.views.static import serve
+    urlpatterns += [
+        path(f"{settings.MEDIA_URL.lstrip('/')}<path:path>", serve, {'document_root': settings.MEDIA_ROOT}),
+    ]
+
 

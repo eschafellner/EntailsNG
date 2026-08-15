@@ -9,15 +9,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <style>
+    :root {
+{{ theme_css_vars|safe }}
+    }
+    {% if custom_css %}
+    /* Custom CSS Injection */
+    {{ custom_css|safe }}
+    {% endif %}
+  </style>
 </head>
 <body>
   <div class="auth-wrapper">
     <div class="auth-card">
       <div class="auth-header">
-        <div class="brand-mark">HNX</div>
+        <div class="brand-mark">{{ site_customization.brand_accent_text|default:"HNX" }}</div>
         <h1>{{ txt_auth_login_title }}</h1>
         <p style="color: var(--muted); font-size: 14px;">{{ txt_auth_login_subtitle }}</p>
       </div>
+
 
       {% if form.errors %}
         <div class="error-msg" style="margin-bottom: 16px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 12px; border-radius: 8px; font-size: 13px; line-height: 1.4;">

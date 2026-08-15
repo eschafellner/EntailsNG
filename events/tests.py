@@ -7,6 +7,8 @@ from django.utils import timezone
 
 from events.models import Event, EventRegistration, TicketType
 from events.services import RegistrationService
+from seating.models import SeatingPlan, SeatingCell
+
 from events.exceptions import (
     EventNotOpenError,
     EventFullError,
@@ -607,6 +609,88 @@ class EventRegistrationValidationTests(TestCase):
         self.assertEqual(seat_a1.seat_label, "A1")
         self.assertIsNone(seat_a1.registration)
         self.assertEqual(seat_a1.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+    def test_cancelled_registration_reactivation_positive(self):
+        """Positiver Test: Stornierte Registrierung wird bei erneuter Anmeldung reaktiviert statt Duplikat zu erzeugen."""
+        ticket = TicketType.objects.create(event=self.event, name="Regular", price=25.00)
+        reg, created = RegistrationService.register_user(self.user, self.event.id, ticket.id)
+        self.assertTrue(created)
+        self.assertEqual(reg.payment_status, EventRegistration.PaymentStatus.UNPAID)
+
+        # Registrierung stornieren
+        reg.mark_as_cancelled()
+        self.assertEqual(reg.payment_status, EventRegistration.PaymentStatus.CANCELLED)
+        self.assertIsNotNone(reg.cancelled_at)
+
+        # Erneute Anmeldung für dasselbe Event (darf keinen IntegrityError werfen!)
+        new_reg, new_created = RegistrationService.register_user(self.user, self.event.id, ticket.id)
+        self.assertTrue(new_created)
+        self.assertEqual(new_reg.pk, reg.pk)
+        self.assertEqual(new_reg.payment_status, EventRegistration.PaymentStatus.UNPAID)
+        self.assertIsNone(new_reg.cancelled_at)
+        self.assertEqual(EventRegistration.objects.filter(user=self.user, event=self.event).count(), 1)
+
+    def test_negative_event_end_date_before_start_date_fails(self):
+        """Negativer Test: Ein Event mit Enddatum vor Startdatum wirft ValidationError."""
+        from django.core.exceptions import ValidationError
+        bad_event = Event(
+            title="Broken Dates LAN",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=10),
+            end_date=timezone.now() + timedelta(days=5),
+        )
+        with self.assertRaises(ValidationError):
+            bad_event.save()
+
+    def test_negative_ticket_event_mismatch_fails_clean(self):
+        """Negativer Test: Zuweisung eines Tickets eines fremden Events wird von clean() blockiert."""
+        from django.core.exceptions import ValidationError
+        other_event = Event.objects.create(
+            title="Other LAN",
+            slug="other-lan",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=20),
+            end_date=timezone.now() + timedelta(days=22),
+        )
+        foreign_ticket = TicketType.objects.create(event=other_event, name="Foreign", price=30.00)
+
+        reg = EventRegistration(
+            user=self.user,
+            event=self.event,
+            ticket_type=foreign_ticket
+        )
+        with self.assertRaises(ValidationError):
+            reg.save()
+
+    def test_explicit_domain_methods_isolate_side_effects(self):
+        """Architektur-Test: mark_as_paid() und mark_as_cancelled() führen gezielt Seiteneffekte aus."""
+        ticket = TicketType.objects.create(event=self.event, name="VIP", price=50.00)
+        reg = EventRegistration.objects.create(user=self.user, event=self.event, ticket_type=ticket)
+
+        plan = SeatingPlan.objects.create(event=self.event, name="Hall", columns=5, rows=5)
+        seat = SeatingCell.objects.create(
+            plan=plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT,
+            registration=reg, reservation_status=SeatingCell.ReservationStatus.PRE_RESERVED
+        )
+
+        # 1. Zahlung bestätigen über Domain-Methode
+        reg.mark_as_paid()
+        self.assertEqual(reg.payment_status, EventRegistration.PaymentStatus.PAID)
+        self.assertEqual(reg.paid_amount, 50.00)
+        self.assertIsNotNone(reg.paid_at)
+        seat.refresh_from_db()
+        self.assertEqual(seat.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
+        # 2. Stornierung über Domain-Methode
+        reg.mark_as_cancelled()
+        self.assertEqual(reg.payment_status, EventRegistration.PaymentStatus.CANCELLED)
+        self.assertIsNotNone(reg.cancelled_at)
+        self.assertFalse(reg.is_checked_in)
+        seat.refresh_from_db()
+        self.assertIsNone(seat.registration)
+        self.assertEqual(seat.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+
 
 
 

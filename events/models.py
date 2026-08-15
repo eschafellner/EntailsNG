@@ -59,8 +59,14 @@ class Event(models.Model):
                 condition=models.Q(is_active=True),
                 name='only_one_active_event',
                 violation_error_message="Es kann immer nur genau eine Hauptveranstaltung gleichzeitig aktiv sein."
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(end_date__gt=models.F('start_date')),
+                name='event_end_date_after_start_date',
+                violation_error_message="Das Enddatum muss nach dem Startdatum liegen."
+            ),
         ]
+
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"
@@ -125,11 +131,11 @@ class Event(models.Model):
         super().clean()
         if self.start_date and self.end_date and self.end_date <= self.start_date:
             raise ValidationError({'end_date': 'Das Enddatum muss nach dem Startdatum liegen.'})
-
         if self.is_active and self.status == self.Status.DRAFT:
             raise ValidationError({'is_active': 'Ein Event im Status "Entwurf" kann nicht als aktive Hauptveranstaltung gesetzt werden.'})
 
     def save(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
         from django.db import transaction
         from django.utils.text import slugify
 
@@ -148,10 +154,16 @@ class Event(models.Model):
         if self.end_date and now > self.end_date and self.status not in [self.Status.DRAFT, self.Status.CANCELLED]:
             self.status = self.Status.FINISHED
 
+        if self.start_date and self.end_date and self.end_date <= self.start_date:
+            raise ValidationError({'end_date': 'Das Enddatum muss nach dem Startdatum liegen.'})
+
         with transaction.atomic():
             if self.is_active:
                 Event.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
             super().save(*args, **kwargs)
+
+
+
 
 
 
@@ -303,83 +315,75 @@ class EventRegistration(models.Model):
             can_reg, reason = self.event.can_register(user=self.user if self.user_id else None)
             if not can_reg:
                 raise ValidationError({'event': reason})
-            if self.ticket_type and self.ticket_type.event_id != self.event_id:
-                raise ValidationError({'ticket_type': "Das ausgewählte Ticket gehört nicht zu diesem Event."})
-            if self.ticket_type and not self.ticket_type.is_active:
-                raise ValidationError({'ticket_type': "Die ausgewählte Ticketkategorie ist inaktiv."})
-
-
+        if self.ticket_type and self.event_id and self.ticket_type.event_id != self.event_id:
+            raise ValidationError({'ticket_type': "Das ausgewählte Ticket gehört nicht zu diesem Event."})
+        if self.ticket_type and not self.ticket_type.is_active:
+            raise ValidationError({'ticket_type': "Die ausgewählte Ticketkategorie ist inaktiv."})
 
     def mark_as_paid(self, amount=None, send_email=True):
-        """Explizite Geschäftslogik-Methode: Markiert die Anmeldung als bezahlt."""
+        """
+        Explizite Geschäftslogik-Methode: Markiert die Anmeldung als bezahlt.
+        Führt gezielt alle zugehörigen Seiteneffekte aus:
+        - Zeitstempel & Betrag setzen
+        - Sitzplatz auf RESERVED aktualisieren
+        - E-Mail nach erfolgreichem DB-Commit via transaction.on_commit versenden
+        """
+        from django.db import transaction
+        from django.utils import timezone
+
         self.payment_status = self.PaymentStatus.PAID
+        if not self.paid_at:
+            self.paid_at = timezone.now()
         if amount is not None:
             self.paid_amount = amount
         elif (not self.paid_amount or self.paid_amount == 0) and self.ticket_type:
             self.paid_amount = self.ticket_type.price
         self.cancelled_at = None
-        self.save(send_email=send_email)
+        self.save()
+
+        # Sitzplätze synchronisieren
+        for seat in list(self.seats.all()):
+            if seat.reservation_status != seat.ReservationStatus.RESERVED:
+                seat.reservation_status = seat.ReservationStatus.RESERVED
+                seat.save(update_fields=['reservation_status'])
+
+        # E-Mail erst NACH erfolgreichem DB-Commit versenden
+        if send_email:
+            transaction.on_commit(self.send_payment_confirmation_email)
 
     def mark_as_cancelled(self):
-        """Explizite Geschäftslogik-Methode: Storniert die Anmeldung, setzt Check-in zurück und gibt Plätze frei."""
+        """
+        Explizite Geschäftslogik-Methode: Storniert die Anmeldung.
+        Führt gezielt alle zugehörigen Bereinigungen aus:
+        - Check-in Flags zurücksetzen
+        - Storno-Zeitstempel setzen
+        - Zugewiesene Sitzplätze freigeben
+        """
         from django.utils import timezone
         self.payment_status = self.PaymentStatus.CANCELLED
         self.is_checked_in = False
         self.checked_in_at = None
         self.cancelled_at = timezone.now()
-        self.save(send_email=False)
+        self.save()
 
-    def save(self, *args, send_email=True, **kwargs):
-        is_new = self.pk is None
-        old_payment_status = None
-        if not is_new:
-            try:
-                old_payment_status = EventRegistration.objects.get(pk=self.pk).payment_status
-            except EventRegistration.DoesNotExist:
-                pass
+        # Sitzplätze atomar freigeben
+        for seat in list(self.seats.all()):
+            seat.registration = None
+            seat.reservation_status = seat.ReservationStatus.FREE
+            seat.save(update_fields=['registration', 'reservation_status'])
 
-        from django.utils import timezone
-        if self.payment_status == self.PaymentStatus.PAID:
-            if not self.paid_at:
-                self.paid_at = timezone.now()
-            if (not self.paid_amount or self.paid_amount == 0) and self.ticket_type:
-                self.paid_amount = self.ticket_type.price
-            self.cancelled_at = None
-        elif self.payment_status == self.PaymentStatus.CANCELLED:
-            self.is_checked_in = False
-            self.checked_in_at = None
-            if not self.cancelled_at:
-                self.cancelled_at = timezone.now()
-        elif self.payment_status == self.PaymentStatus.UNPAID:
-            self.cancelled_at = None
-            self.is_checked_in = False
-            self.checked_in_at = None
+    def save(self, *args, **kwargs):
+        """
+        Schlanke Persistenzmethode:
+        Validiert ausschließlich die fundamentale Datenintegrität vor dem DB-Write.
+        Keine versteckten E-Mails oder impliziten Sitzplatzmutationen.
+        """
+        if self.ticket_type and self.event_id and self.ticket_type.event_id != self.event_id:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({'ticket_type': "Das ausgewählte Ticket gehört nicht zu diesem Event."})
 
         super().save(*args, **kwargs)
 
-        # Automatische Aktualisierung des zugewiesenen Sitzplatzes bei Statusänderung
-        for seat in list(self.seats.all()):
-            if self.payment_status == self.PaymentStatus.PAID:
-                if seat.reservation_status != seat.ReservationStatus.RESERVED:
-                    seat.reservation_status = seat.ReservationStatus.RESERVED
-                    seat.save(update_fields=['reservation_status'])
-            elif self.payment_status == self.PaymentStatus.UNPAID:
-                if (
-                    seat.reservation_status
-                    != seat.ReservationStatus.PRE_RESERVED
-                ):
-                    seat.reservation_status = (
-                        seat.ReservationStatus.PRE_RESERVED
-                    )
-                    seat.save(update_fields=['reservation_status'])
-            elif self.payment_status == self.PaymentStatus.CANCELLED:
-                seat.registration = None
-                seat.reservation_status = seat.ReservationStatus.FREE
-                seat.save(update_fields=['registration', 'reservation_status'])
-
-        # Automatische Zahlungsbestätigungs-E-Mail erst NACH erfolgreichem DB-Commit versenden (transaction.on_commit)
-        if send_email and self.payment_status == self.PaymentStatus.PAID and old_payment_status != self.PaymentStatus.PAID:
-            transaction.on_commit(self.send_payment_confirmation_email)
 
 
     def send_payment_confirmation_email(self):

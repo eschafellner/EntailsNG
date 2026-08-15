@@ -10,42 +10,51 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
   <style>
+    :root {
+{{ theme_css_vars|safe }}
+    }
+    {% if custom_css %}
+    /* Custom CSS Injection */
+    {{ custom_css|safe }}
+    {% endif %}
+
     .otp-container {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       justify-content: center;
       margin: 24px 0;
     }
     .otp-input {
-      width: 48px;
-      height: 56px;
+      width: 50px;
+      height: 58px;
       text-align: center;
       font-size: 24px;
       font-weight: 700;
       font-family: 'JetBrains Mono', monospace;
       border: 2px solid var(--line);
-      border-radius: 10px;
-      background: #0b0f17;
-      color: #38bdf8;
+      border-radius: 12px;
+      background: var(--paper);
+      color: var(--ink);
       transition: all 0.2s ease;
     }
     .otp-input:focus {
-      border-color: #0284c7;
-      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.3);
+      border-color: var(--signal, var(--amber));
+      box-shadow: 0 0 0 3px var(--signal-soft, rgba(217, 120, 23, 0.25));
       outline: none;
-      background: #111827;
+      background: var(--panel);
     }
     .timer-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(234, 179, 8, 0.15);
-      border: 1px solid rgba(234, 179, 8, 0.4);
-      color: #facc15;
-      padding: 6px 12px;
+      background: var(--signal-soft, rgba(234, 179, 8, 0.15));
+      border: 1px solid var(--signal, rgba(234, 179, 8, 0.4));
+      color: var(--signal-deep, #8a4d00);
+      padding: 6px 14px;
       border-radius: 20px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 13px;
+      font-weight: 600;
       margin-bottom: 16px;
     }
   </style>
@@ -54,8 +63,9 @@
   <div class="auth-wrapper">
     <div class="auth-card" style="max-width: 440px; text-align: center;">
       <div class="auth-header">
-        <div class="brand-mark" style="margin: 0 auto 16px auto;">HNX</div>
+        <div class="brand-mark" style="margin: 0 auto 16px auto;">{{ site_customization.brand_accent_text|default:"HNX" }}</div>
         <h1 style="font-size: 28px; margin-bottom: 8px;">{{ txt_verify_email_title }}</h1>
+
         <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;">
           {{ txt_verify_email_subtitle|default:"Wir haben dir einen 6-stelligen Bestätigungscode per E-Mail gesendet an:" }}
           <br><strong style="color: var(--ink);">{{ user_email }}</strong>

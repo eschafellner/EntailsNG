@@ -15,7 +15,12 @@ class CustomUserCreationForm(UserCreationForm):
         label="Geburtsdatum",
         required=True,
         widget=forms.DateInput(
-            attrs={"class": "form-control", "type": "date"}
+            attrs={
+                "class": "form-control",
+                "type": "date",
+                "min": "1900-01-01",
+                "max": "2099-12-31",
+            }
         ),
     )
 
@@ -30,6 +35,15 @@ class CustomUserCreationForm(UserCreationForm):
                 "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet."
             )
         return email
+
+    def clean_birthday(self):
+        birthday = self.cleaned_data.get('birthday')
+        if birthday:
+            if birthday.year < 1900 or birthday.year > 2099 or len(str(birthday.year)) != 4:
+                raise forms.ValidationError(
+                    "Bitte gib ein gültiges Geburtsdatum mit 4-stelligem Jahr an (z. B. 1998)."
+                )
+        return birthday
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -47,7 +61,12 @@ class UserProfileForm(forms.ModelForm):
         label="Geburtsdatum",
         required=False,
         widget=forms.DateInput(
-            attrs={"class": "form-control", "type": "date"}
+            attrs={
+                "class": "form-control",
+                "type": "date",
+                "min": "1900-01-01",
+                "max": "2099-12-31",
+            }
         ),
     )
 
@@ -65,6 +84,16 @@ class UserProfileForm(forms.ModelForm):
                 "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet."
             )
         return email
+
+    def clean_birthday(self):
+        birthday = self.cleaned_data.get('birthday')
+        if birthday:
+            if birthday.year < 1900 or birthday.year > 2099 or len(str(birthday.year)) != 4:
+                raise forms.ValidationError(
+                    "Bitte gib ein gültiges Geburtsdatum mit 4-stelligem Jahr an (z. B. 1998)."
+                )
+        return birthday
+
 
 
 from django.contrib.auth.forms import AuthenticationForm

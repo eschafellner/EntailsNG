@@ -129,21 +129,39 @@ Falls die Installation mit `./install.sh --demo` ausgeführt wurde, sind folgend
 
 ---
 
-## 🐘 Datenbank-Betrieb (PostgreSQL)
+## 🐳 Docker & Produktions-Betrieb
 
-EntailsNG ist für den **PostgreSQL-Betrieb** ausgelegt.
+EntailsNG bietet ein produktionsbereites Docker-Setup mit PostgreSQL, Redis und WhiteNoise.
 
-### PostgreSQL Datenbank starten:
-- **Über Docker / Podman**:
-  ```bash
-  docker-compose up -d
-  ```
-- **Nativ auf Linux (Fedora)**:
-  ```bash
-  sudo systemctl start postgresql
-  ```
+### 1. Konfigurationsdatei `.env` erstellen:
+Kopiere die Vorlage `.env.example` nach `.env` und passe deine Einstellungen an:
+```bash
+cp .env.example .env
+```
+
+Wichtige Produktions-Variablen:
+* **`SECRET_KEY`**: *(Pflicht bei `DEBUG=False`)* – Generiere einen sicheren, zufälligen Schlüssel (z. B. via `openssl rand -hex 32` oder `python -c "import secrets; print(secrets.token_urlsafe(50))"`).
+* **`DEBUG`**: Für den Live-Betrieb auf `False` setzen.
+* **`ALLOWED_HOSTS`**: Deine Domain(s) kommagetrennt (z. B. `lan.meinedomain.de,127.0.0.1`).
+* **`CSRF_TRUSTED_ORIGINS`**: Deine HTTPS-Domain(s) (z. B. `https://lan.meinedomain.de`).
+* **`SERVE_MEDIA`**: Standardmäßig `True` für Docker-Standalone. Liefert hochgeladene Medien (Logos, Avatare) auch bei `DEBUG=False` sicher aus.
+* **`SESSION_COOKIE_SECURE` / `CSRF_COOKIE_SECURE`**: Standardmäßig `True` bei `DEBUG=False` für HTTPS-Verbindungen.
+
+### 2. Docker Compose starten:
+```bash
+docker compose up -d
+```
+
+### 3. Initiale Migrationen & Admin anlegen:
+```bash
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed_translations
+docker compose exec web python manage.py seed_features
+docker compose exec web python manage.py createsuperuser
+```
 
 ---
 
-## 🛑 Server beenden
-Um den Server wieder zu beenden, gehe zurück in das Terminal-Fenster und drücke gleichzeitig die Tasten **`[STRG]` + `[C]`**.
+## 🛑 Lokalen Server beenden
+Um den lokalen Entwicklungsserver wieder zu beenden, gehe zurück in das Terminal-Fenster und drücke gleichzeitig die Tasten **`[STRG]` + `[C]`**.
+

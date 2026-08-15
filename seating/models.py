@@ -168,6 +168,13 @@ class SeatingCell(models.Model):
         verbose_name = "Raster-Kachel"
         verbose_name_plural = "Raster-Kacheln"
         unique_together = ('plan', 'x', 'y')
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(x__gte=1) & models.Q(y__gte=1),
+                name='seating_cell_coords_positive',
+                violation_error_message="Sitzplatz-Koordinaten müssen positiv (>= 1) sein."
+            ),
+        ]
 
     def clean(self):
         super().clean()
@@ -200,23 +207,40 @@ class SeatingCell(models.Model):
         return f"{self.seat_label or f'({self.x},{self.y})'} - {self.get_reservation_status_display()}"
 
 
-    def reserve_for_user(self, registration):
+    def can_reserve_for_user(self, registration):
+        """
+        Prüft vorab, ob ein Sitzplatz für den angegebenen Benutzer reserviert werden kann,
+        ohne den Zustand der Kachel oder bisheriger Sitze zu verändern.
+        """
         if self.cell_type != self.CellType.SEAT:
             return False, "Dies ist kein gültiger Sitzplatz."
 
         if self.reservation_status == self.ReservationStatus.BLOCKED:
             return False, "Dieser Platz ist vom Admin gesperrt."
 
-        if self.reservation_status == self.ReservationStatus.RESERVED:
+        if self.reservation_status == self.ReservationStatus.RESERVED and self.registration != registration:
             return False, "Dieser Platz ist bereits fest reserviert und bezahlt."
 
         has_paid = (
             registration.payment_status == EventRegistration.PaymentStatus.PAID
         )
 
-        if self.reservation_status == self.ReservationStatus.PRE_RESERVED:
+        if self.reservation_status == self.ReservationStatus.PRE_RESERVED and self.registration != registration:
             if not has_paid:
                 return False, "Platz bereits vorgemerkt. Nur zahlende Gäste können ihn überschreiben."
+
+        return True, ""
+
+
+    def reserve_for_user(self, registration):
+        can_res, msg = self.can_reserve_for_user(registration)
+        if not can_res:
+            return False, msg
+
+        has_paid = (
+            registration.payment_status == EventRegistration.PaymentStatus.PAID
+        )
+
 
         self.registration = registration
         if has_paid:

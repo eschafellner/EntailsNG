@@ -70,7 +70,18 @@ class RegistrationService:
             if len(active_tickets) >= 1:
                 selected_ticket = active_tickets[0]
 
-        # 7. Registrierung erstellen
+        # 7. Registrierung erstellen oder stornierte Registrierung reaktivieren
+        if existing_reg:
+            existing_reg.payment_status = EventRegistration.PaymentStatus.UNPAID
+            existing_reg.ticket_type = selected_ticket
+            existing_reg.paid_amount = 0.00
+            existing_reg.paid_at = None
+            existing_reg.cancelled_at = None
+            existing_reg.is_checked_in = False
+            existing_reg.checked_in_at = None
+            existing_reg.save()
+            return existing_reg, True
+
         registration = EventRegistration.objects.create(
             user=user,
             event=event,
@@ -78,3 +89,4 @@ class RegistrationService:
         )
 
         return registration, True
+
