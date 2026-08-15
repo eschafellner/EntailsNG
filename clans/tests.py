@@ -152,3 +152,82 @@ class ClanModuleTests(TestCase):
         response = self.client.get(reverse('clan_detail', kwargs={'slug': clan.slug}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Mousesports')
+
+    def test_clans_persist_across_event_switches(self):
+        """Positiver Test: Clans bleiben nach einem Event-Wechsel dauerhaft in der Clanliste sichtbar."""
+        from datetime import timedelta
+        from django.utils import timezone
+        from events.models import Event, EventRegistration
+
+        event_2026 = Event.objects.create(
+            title="Haag-networX 2026",
+            slug="haag-2026",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=10),
+            end_date=timezone.now() + timedelta(days=12),
+        )
+        event_2027 = Event.objects.create(
+            title="Haag-networX 2027",
+            slug="haag-2027",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=365),
+            end_date=timezone.now() + timedelta(days=367),
+        )
+
+        clan = Clan.objects.create(name='Ninjas in Pyjamas', password='pass')
+        ClanMembership.objects.create(
+            user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
+        )
+        EventRegistration.objects.create(user=self.user_a, event=event_2026)
+
+        # 1. Event 2026 ist aktiv -> Clan ist sichtbar
+        res1 = self.client.get(reverse('clan_list'))
+        self.assertEqual(res1.status_code, 200)
+        self.assertContains(res1, 'Ninjas in Pyjamas')
+
+        # 2. Event-Wechsel auf 2027 (User A hat sich für 2027 noch nicht angemeldet)
+        event_2026.is_active = False
+        event_2026.save()
+        event_2027.is_active = True
+        event_2027.save()
+
+        # Clan muss trotzdem sichtbar bleiben!
+        res2 = self.client.get(reverse('clan_list'))
+        self.assertEqual(res2.status_code, 200)
+        self.assertContains(res2, 'Ninjas in Pyjamas')
+
+    def test_clan_auto_deleted_when_last_member_leaves(self):
+        """Positiver Test: Verlässt das letzte Mitglied den Clan, wird der Clan automatisch gelöscht."""
+        clan = Clan.objects.create(name='Solo Clan', password='pass')
+        ClanMembership.objects.create(
+            user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
+        )
+        self.assertTrue(Clan.objects.filter(name='Solo Clan').exists())
+
+        self.client.login(username='leader', password='password')
+        response = self.client.post(reverse('clan_leave', kwargs={'slug': clan.slug}))
+        self.assertRedirects(response, reverse('clan_list'))
+
+        # Clan muss nun vollständig gelöscht sein
+        self.assertFalse(Clan.objects.filter(name='Solo Clan').exists())
+        self.assertFalse(ClanMembership.objects.filter(clan=clan).exists())
+
+    def test_negative_clan_not_deleted_if_members_remain(self):
+        """Negativer Test: Ein Clan darf NICHT gelöscht werden, wenn noch andere Mitglieder vorhanden sind."""
+        clan = Clan.objects.create(name='Duo Clan', password='pass')
+        ClanMembership.objects.create(
+            user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
+        )
+        ClanMembership.objects.create(
+            user=self.user_b, clan=clan, role=ClanMembership.Role.MEMBER, status=ClanMembership.Status.ACCEPTED
+        )
+
+        # Member B verlässt den Clan
+        self.client.login(username='member1', password='password')
+        response = self.client.post(reverse('clan_leave', kwargs={'slug': clan.slug}))
+        self.assertRedirects(response, reverse('clan_list'))
+
+        # Clan muss weiterhin existieren, da User A noch drin ist
+        self.assertTrue(Clan.objects.filter(name='Duo Clan').exists())
+        self.assertEqual(clan.memberships.filter(status=ClanMembership.Status.ACCEPTED).count(), 1)
+

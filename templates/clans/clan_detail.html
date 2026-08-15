@@ -38,13 +38,19 @@
         {% endif %}
 
         {% if current_clan_membership and current_clan_membership.status == 'ACCEPTED' %}
-          <form method="post" action="{% url 'clan_leave' slug=clan.slug %}" onsubmit="return confirm('Möchtest du den Clan {{ clan.name }} wirklich verlassen?');">
+          <form method="post" action="{% url 'clan_leave' slug=clan.slug %}"
+                {% if is_last_member %}
+                  onsubmit="return confirm('⚠️ Achtung: Du bist das letzte Mitglied im Clan \'{{ clan.name|escapejs }}\'. Wenn du den Clan verlässt, wird der Clan unwiderruflich aufgelöst und gelöscht. Möchtest du wirklich fortfahren?');"
+                {% else %}
+                  onsubmit="return confirm('Möchtest du den Clan \'{{ clan.name|escapejs }}\' wirklich verlassen?');"
+                {% endif %}>
             {% csrf_token %}
             <button type="submit" style="background: #dc2626; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
               🚪 Clan verlassen
             </button>
           </form>
         {% endif %}
+
       </div>
     </div>
   </div>

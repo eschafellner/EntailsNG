@@ -14,11 +14,7 @@
           {{ txt_clan_list_title }}
         </h1>
         <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
-          {% if active_event %}
-            Zeigt Clans mit angemeldeten Gästen für <strong>{{ active_event.title }}</strong>
-          {% else %}
-            Alle registrierten Clans im Überblick
-          {% endif %}
+          Alle registrierten Gaming-Clans & Teams im Überblick
         </p>
       </div>
 
@@ -38,36 +34,41 @@
 
   <!-- Clan Grid -->
   <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
-    {% for clan in clans %}
+    {% for item in clan_data %}
       <div class="card" style="padding: 20px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
         <div>
           <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
-            {% if clan.logo %}
-              <img src="{{ clan.logo.url }}" alt="{{ clan.name }}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
+            {% if item.clan.logo %}
+              <img src="{{ item.clan.logo.url }}" alt="{{ item.clan.name }}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
             {% else %}
               <div style="width: 48px; height: 48px; background: var(--navy); color: var(--signal); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: bold;">
-                {{ clan.name|slice:":2"|upper }}
+                {{ item.clan.name|slice:":2"|upper }}
               </div>
             {% endif %}
             <div>
               <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
-                {{ clan.name }}
+                {{ item.clan.name }}
               </h3>
-              {% if clan.website %}
-                <a href="{{ clan.website }}" target="_blank" rel="noopener" style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--signal-deep); text-decoration: underline;">
-                  🌐 {{ clan.website }}
+              {% if item.clan.website %}
+                <a href="{{ item.clan.website }}" target="_blank" rel="noopener" style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--signal-deep); text-decoration: underline;">
+                  🌐 {{ item.clan.website }}
                 </a>
               {% endif %}
             </div>
           </div>
 
-          <div style="font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 16px;">
-            👥 <strong>{{ clan.get_accepted_memberships.count }}</strong> {{ txt_clan_members_header }}
+          <div style="font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 16px; display: flex; flex-direction: column; gap: 4px;">
+            <span>👥 <strong>{{ item.total_members }}</strong> {{ txt_clan_members_header }}</span>
+            {% if active_event and item.event_registered_members > 0 %}
+              <span style="color: #22c55e; font-size: 12px;">
+                🎟️ <strong>{{ item.event_registered_members }}</strong> für {{ active_event.title }} angemeldet
+              </span>
+            {% endif %}
           </div>
         </div>
 
         <div style="padding-top: 12px; border-top: 1px solid var(--line); text-align: right;">
-          <a href="{% url 'clan_detail' slug=clan.slug %}" style="font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #0284c7; text-decoration: none;">
+          <a href="{% url 'clan_detail' slug=item.clan.slug %}" style="font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #0284c7; text-decoration: none;">
             Clanprofil ansehen →
           </a>
         </div>
@@ -78,6 +79,7 @@
       </div>
     {% endfor %}
   </div>
+
 
 </div>
 {% endblock %}

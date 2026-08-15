@@ -12,8 +12,8 @@ from .models import Clan, ClanMembership
 
 def clan_list_view(request):
     """
-    Übersicht aller Clans, die bei der aktuellen Veranstaltung mindestens 
-    ein angemeldetes Mitglied haben (oder alle Clans, falls kein Event aktiv ist).
+    Übersicht aller Clans (veranstaltungsübergreifend).
+    Zeigt für jeden Clan die Mitgliederanzahl sowie optional die Anzahl der für das aktive Event angemeldeten Mitglieder.
     """
     active_event = Event.objects.filter(is_active=True).first()
     user_membership = (
@@ -22,21 +22,35 @@ def clan_list_view(request):
         else None
     )
 
-    if active_event:
-        # Filter: Nur Clans, deren akzeptierte Mitglieder für das aktive Event angemeldet sind
-        clans = Clan.objects.filter(
-            memberships__status=ClanMembership.Status.ACCEPTED,
-            memberships__user__registrations__event=active_event,
-        ).distinct()
-    else:
-        clans = Clan.objects.all()
+    clans = Clan.objects.prefetch_related('memberships__user__registrations').all()
+
+    clan_data = []
+    for clan in clans:
+        accepted_members = [
+            m for m in clan.memberships.all()
+            if m.status == ClanMembership.Status.ACCEPTED
+        ]
+        total_members = len(accepted_members)
+
+        event_registered_members = 0
+        if active_event:
+            for m in accepted_members:
+                if any(r.event_id == active_event.id for r in m.user.registrations.all()):
+                    event_registered_members += 1
+
+        clan_data.append({
+            'clan': clan,
+            'total_members': total_members,
+            'event_registered_members': event_registered_members,
+        })
 
     context = {
-        'clans': clans,
+        'clan_data': clan_data,
         'active_event': active_event,
         'user_membership': user_membership,
     }
     return render(request, 'clans/clan_list.html', context)
+
 
 
 def clan_detail_view(request, slug):
@@ -92,11 +106,13 @@ def clan_detail_view(request, slug):
         'user_membership': user_membership,
         'current_clan_membership': current_clan_membership,
         'is_clan_admin': is_clan_admin,
+        'is_last_member': len(accepted_memberships) <= 1,
         'members_with_seats': members_with_seats,
         'pending_memberships': pending_memberships,
         'join_form': join_form,
     }
     return render(request, 'clans/clan_detail.html', context)
+
 
 
 
@@ -292,7 +308,21 @@ def clan_manage_member_view(request, slug, membership_id):
             )
         else:
             username = membership.user.username
-            membership.delete()
+            clan_name = clan.name
+            with transaction.atomic():
+                membership.delete()
+
+                remaining_count = clan.memberships.filter(
+                    status=ClanMembership.Status.ACCEPTED
+                ).count()
+                if remaining_count == 0:
+                    clan.delete()
+                    messages.warning(
+                        request,
+                        f'{username} wurde aus dem Clan entfernt. Da keine weiteren Mitglieder vorhanden waren, wurde der Clan "{clan_name}" aufgelöst und gelöscht.',
+                    )
+                    return redirect('clan_list')
+
             messages.info(request, f'{username} wurde aus dem Clan entfernt.')
 
     return redirect('clan_detail', slug=clan.slug)
@@ -303,8 +333,9 @@ def clan_manage_member_view(request, slug, membership_id):
 def clan_leave_view(request, slug):
     """
     User verlässt den Clan.
-    Verlässt der letzte Clan-Admin den Clan, springt die Admin-Rolle automatisch 
-    auf das nächste älteste akzeptierte Mitglied um.
+    - Ist der User das letzte Mitglied, wird der Clan automatisch gelöscht.
+    - Verlässt der letzte Clan-Admin den Clan bei mehreren Mitgliedern, springt die Admin-Rolle
+      automatisch auf das dienstälteste verbleibende Mitglied um.
     """
     clan = get_object_or_404(Clan, slug=slug)
     membership = ClanMembership.objects.filter(
@@ -316,39 +347,44 @@ def clan_leave_view(request, slug):
         return redirect('clan_detail', slug=clan.slug)
 
     was_admin = (membership.role == ClanMembership.Role.ADMIN)
+    clan_name = clan.name
 
     with transaction.atomic():
         membership.delete()
 
+        remaining_memberships = clan.memberships.filter(
+            status=ClanMembership.Status.ACCEPTED
+        )
+        remaining_count = remaining_memberships.count()
+
+        if remaining_count == 0:
+            # Letztes Mitglied hat den Clan verlassen -> Clan auflösen & löschen
+            clan.delete()
+            messages.warning(
+                request,
+                f'Du hast den Clan verlassen. Da du das letzte Mitglied warst, wurde der Clan "{clan_name}" aufgelöst und gelöscht.',
+            )
+            return redirect('clan_list')
+
         if was_admin:
-            # Prüfen ob noch ein anderer Admin existiert
-            remaining_admins = clan.memberships.filter(
-                role=ClanMembership.Role.ADMIN,
-                status=ClanMembership.Status.ACCEPTED,
+            has_other_admin = remaining_memberships.filter(
+                role=ClanMembership.Role.ADMIN
             ).exists()
 
-            if not remaining_admins:
+            if not has_other_admin:
                 # Befördere das dienstälteste verbleibende Mitglied zum Admin
-                next_member = (
-                    clan.memberships.filter(status=ClanMembership.Status.ACCEPTED)
-                    .order_by('created_at')
-                    .first()
-                )
+                next_member = remaining_memberships.order_by('created_at').first()
                 if next_member:
                     next_member.role = ClanMembership.Role.ADMIN
-                    next_member.save()
+                    next_member.save(update_fields=['role'])
                     messages.info(
                         request,
                         f'Du hast den Clan verlassen. {next_member.user.username} wurde als neuer Clan-Admin bestimmt.',
                     )
-                else:
-                    messages.info(
-                        request,
-                        'Du hast den Clan verlassen. Es sind keine weiteren Mitglieder im Clan verblieben.',
-                    )
             else:
-                messages.info(request, 'Du hast den Clan erfolgreich verlassen.')
+                messages.info(request, f'Du hast den Clan "{clan_name}" erfolgreich verlassen.')
         else:
-            messages.info(request, 'Du hast den Clan erfolgreich verlassen.')
+            messages.info(request, f'Du hast den Clan "{clan_name}" erfolgreich verlassen.')
 
     return redirect('clan_list')
+

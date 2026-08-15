@@ -1,14 +1,17 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import models, transaction
 from django.http import JsonResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 
-from events.models import Event
+from events.models import Event, EventRegistration
+
 from tournaments.models import (
-    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentRegistration
+    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentRegistration, generate_invite_code
 )
+
 from tournaments.services import (
     advance_match_winner, check_user_event_checkin, generate_bracket, get_or_create_solo_team
 )
@@ -280,29 +283,55 @@ def match_update_score(request, match_id):
     return JsonResponse({'success': True, 'winner': winner_team.name})
 
 
-
 # =============================================================================
 # TEAMMANAGER VIEWS
 # =============================================================================
 
+
 def team_list(request):
     """
-    Teammanager Hauptseite: Zeigt alle verfassten Teams & eigene Teams an.
+    Teammanager Hauptseite: Zeigt Teams des aktiven Events sowie archivierte Teams vergangener Events.
     """
-    teams = Team.objects.filter(is_solo=False).select_related('captain', 'game').prefetch_related('memberships__user')
+    active_event = Event.objects.filter(is_active=True).first()
     games = Game.objects.all()
+    active_tab = request.GET.get('tab', 'active')
 
-    my_teams = []
+    # Aktive Teams: Nicht archiviert & entweder dem aktiven Event zugeordnet oder ohne Zuordnung
+    if active_event:
+        active_teams = Team.objects.filter(
+            is_solo=False,
+            is_archived=False,
+        ).filter(models.Q(event=active_event) | models.Q(event__isnull=True)).select_related('captain', 'game', 'event').prefetch_related('memberships__user')
+
+        archived_teams = Team.objects.filter(
+            is_solo=False
+        ).filter(models.Q(is_archived=True) | ~models.Q(event=active_event) & models.Q(event__isnull=False)).select_related('captain', 'game', 'event').prefetch_related('memberships__user')
+    else:
+        active_teams = Team.objects.filter(is_solo=False, is_archived=False).select_related('captain', 'game', 'event').prefetch_related('memberships__user')
+        archived_teams = Team.objects.filter(is_solo=False, is_archived=True).select_related('captain', 'game', 'event').prefetch_related('memberships__user')
+
+    my_active_teams = []
+    my_archived_teams = []
     if request.user.is_authenticated:
-        my_teams = Team.objects.filter(
+        user_teams = Team.objects.filter(
             memberships__user=request.user,
             memberships__status=TeamMember.Status.ACCEPTED
-        ).distinct()
+        ).select_related('captain', 'game', 'event').distinct()
+
+        for t in user_teams:
+            if t.is_archived or (active_event and t.event_id and t.event_id != active_event.id):
+                my_archived_teams.append(t)
+            else:
+                my_active_teams.append(t)
 
     context = {
-        'teams': teams,
+        'active_event': active_event,
+        'active_tab': active_tab,
+        'active_teams': active_teams,
+        'archived_teams': archived_teams,
+        'my_active_teams': my_active_teams,
+        'my_archived_teams': my_archived_teams,
         'games': games,
-        'my_teams': my_teams,
     }
     return render(request, 'tournaments/team_list.html', context)
 
@@ -311,8 +340,9 @@ def team_list(request):
 @require_POST
 def team_create(request):
     """
-    Erstellt ein neues Team für den Benutzer (Benutzer wird Kapitän).
+    Erstellt ein neues Team für den Benutzer für das aktive Event (Benutzer wird Kapitän).
     """
+    active_event = Event.objects.filter(is_active=True).first()
     name = request.POST.get('name', '').strip()
     tag = request.POST.get('tag', '').strip()
     game_id = request.POST.get('game_id')
@@ -321,8 +351,8 @@ def team_create(request):
         messages.error(request, "Bitte gib einen Teamnamen ein.")
         return redirect('team_list')
 
-    if Team.objects.filter(name__iexact=name).exists():
-        messages.error(request, "Ein Team mit diesem Namen existiert bereits.")
+    if Team.objects.filter(name__iexact=name, is_archived=False).exists():
+        messages.error(request, "Ein aktives Team mit diesem Namen existiert bereits.")
         return redirect('team_list')
 
     game = Game.objects.filter(id=game_id).first() if game_id else None
@@ -332,6 +362,8 @@ def team_create(request):
         tag=tag,
         game=game,
         captain=request.user,
+        event=active_event,
+        is_archived=False,
     )
     TeamMember.objects.create(
         team=team,
@@ -346,9 +378,10 @@ def team_create(request):
 
 def team_detail(request, slug):
     """
-    Übersichtsseite eines einzelnen Teams.
+    Übersichtsseite eines einzelnen Teams inkl. Archiv-Status und Reaktivierungsoption.
     """
-    team = get_object_or_404(Team.objects.select_related('captain', 'game'), slug=slug)
+    active_event = Event.objects.filter(is_active=True).first()
+    team = get_object_or_404(Team.objects.select_related('captain', 'game', 'event'), slug=slug)
 
     members = team.memberships.select_related('user').all()
     accepted_members = [m for m in members if m.status == TeamMember.Status.ACCEPTED]
@@ -361,15 +394,104 @@ def team_detail(request, slug):
     if request.user.is_authenticated:
         user_membership = team.memberships.filter(user=request.user).first()
 
+    # Roster-Status für das aktive Event prüfen
+    roster_with_event_status = []
+    if active_event:
+        for m in accepted_members:
+            reg = EventRegistration.objects.filter(user=m.user, event=active_event).first()
+            roster_with_event_status.append({
+                'membership': m,
+                'user': m.user,
+                'is_registered': reg is not None,
+                'is_checked_in': reg.is_checked_in if reg else False,
+            })
+    else:
+        for m in accepted_members:
+            roster_with_event_status.append({
+                'membership': m,
+                'user': m.user,
+                'is_registered': False,
+                'is_checked_in': False,
+            })
+
+    is_team_archived = team.is_archived or bool(active_event and team.event_id and team.event_id != active_event.id)
+
     context = {
         'team': team,
+        'active_event': active_event,
+        'is_team_archived': is_team_archived,
         'accepted_members': accepted_members,
+        'roster_with_event_status': roster_with_event_status,
         'pending_members': pending_members,
         'is_captain': is_captain,
         'is_member': is_member,
         'user_membership': user_membership,
     }
     return render(request, 'tournaments/team_detail.html', context)
+
+
+@login_required
+def team_reactivate(request, slug):
+    """
+    Reaktivierungs-Assistent: Ermöglicht dem Kapitän, ein archiviertes Team für das aktive Event zu reaktivieren.
+    Inklusive Smart Roster Check (Mitglieder behalten/entfernen basierend auf Event-Anmeldung).
+    """
+    team = get_object_or_404(Team.objects.select_related('captain', 'game', 'event'), slug=slug)
+    active_event = Event.objects.filter(is_active=True).first()
+
+    if not team.is_captain(request.user) and not request.user.is_staff:
+        messages.error(request, "Nur der Teamkapitän kann das Team reaktivieren.")
+        return redirect('team_detail', slug=team.slug)
+
+    if not active_event:
+        messages.error(request, "Derzeit ist keine aktive Veranstaltung vorhanden, für die das Team reaktiviert werden kann.")
+        return redirect('team_detail', slug=team.slug)
+
+    accepted_members = list(team.get_accepted_members())
+
+    if request.method == 'POST':
+        game_id = request.POST.get('game_id')
+        keep_user_ids = [int(uid) for uid in request.POST.getlist('keep_members') if uid.isdigit()]
+        reset_invite = request.POST.get('reset_invite_code') == '1'
+
+        with transaction.atomic():
+            team.event = active_event
+            team.is_archived = False
+            if game_id:
+                team.game_id = game_id
+            if reset_invite:
+                team.invite_code = generate_invite_code()
+            team.save()
+
+            # Mitglieder bereinigen (Kapitän bleibt immer)
+            TeamMember.objects.filter(team=team).exclude(user=team.captain).exclude(user_id__in=keep_user_ids).delete()
+
+        messages.success(request, f"🎉 Team '{team.name}' wurde erfolgreich für '{active_event.title}' reaktiviert!")
+        return redirect('team_detail', slug=team.slug)
+
+    # GET: Roster vorbereiten
+    roster = []
+    for m in accepted_members:
+        reg = EventRegistration.objects.filter(user=m.user, event=active_event).first()
+        roster.append({
+            'member': m,
+            'user': m.user,
+            'is_captain': (m.user == team.captain),
+            'is_registered': reg is not None,
+            'is_checked_in': reg.is_checked_in if reg else False,
+            'ticket_name': reg.ticket_type.name if (reg and reg.ticket_type) else None,
+        })
+
+    games = Game.objects.all()
+
+    context = {
+        'team': team,
+        'active_event': active_event,
+        'roster': roster,
+        'games': games,
+    }
+    return render(request, 'tournaments/team_reactivate.html', context)
+
 
 
 @login_required

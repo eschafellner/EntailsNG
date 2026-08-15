@@ -5,11 +5,39 @@
 {% block content %}
 <div style="display: flex; flex-direction: column; gap: 24px;">
 
+  <!-- Archiv-Banner falls archiviert -->
+  {% if is_team_archived %}
+  <div class="card" style="padding: 20px; border-radius: 12px; background: rgba(234, 179, 8, 0.1); border: 1px solid #eab308; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+    <div>
+      <div style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: #b45309; font-weight: bold;">
+        📁 Archiviertes Team ({{ team.event.title|default:"Vergangene Veranstaltung" }})
+      </div>
+      <p style="margin: 4px 0 0 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+        Dieses Team wurde aus einer früheren LAN-Party archiviert. Ergebnisse und Matches bleiben historisch erhalten.
+      </p>
+    </div>
+    {% if active_event and is_captain %}
+      <a href="{% url 'team_reactivate' slug=team.slug %}" style="background: #22c55e; color: white; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+        🔄 Für {{ active_event.title }} reaktivieren
+      </a>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <!-- Header Card -->
   <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
       <div>
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+          {% if is_team_archived %}
+            <span style="background: var(--line); color: var(--muted); padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+              📁 ARCHIV
+            </span>
+          {% else %}
+            <span style="background: rgba(34, 197, 94, 0.15); color: #16a34a; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+              ● AKTIV ({{ team.event.title|default:active_event.title|default:"Haupt-Event" }})
+            </span>
+          {% endif %}
           {% if team.tag %}
             <span style="background: var(--navy); color: var(--signal); padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
               [{{ team.tag }}]
@@ -30,6 +58,11 @@
       </div>
 
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        {% if is_team_archived and active_event and is_captain %}
+          <a href="{% url 'team_reactivate' slug=team.slug %}" style="background: #22c55e; color: white; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+            🔄 Team reaktivieren
+          </a>
+        {% endif %}
         {% if is_member %}
           <form method="post" action="{% url 'team_leave' slug=team.slug %}">
             {% csrf_token %}
@@ -37,7 +70,7 @@
               🚪 Team verlassen
             </button>
           </form>
-        {% elif user.is_authenticated %}
+        {% elif user.is_authenticated and not is_team_archived %}
           <form method="post" action="{% url 'team_apply' slug=team.slug %}">
             {% csrf_token %}
             <button type="submit" style="background: #0284c7; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
@@ -48,6 +81,7 @@
       </div>
     </div>
   </div>
+
 
   <!-- EINLADUNGSCODE WIDGET (mit Kopier-Button) -->
   {% if is_member %}
@@ -82,26 +116,35 @@
       👥 Teammitglieder ({{ accepted_members|length }})
     </h3>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px;">
-      {% for m in accepted_members %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+      {% for item in roster_with_event_status %}
         <div style="padding: 14px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; justify-content: space-between; align-items: center;">
           <div>
             <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: bold; color: var(--ink);">
-              👤 {{ m.user.username }}
+              👤 {{ item.user.username }}
             </div>
-            <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-top: 2px;">
-              {% if m.role == 'CAPTAIN' %}
-                👑 Kapitän
-              {% else %}
-                ⚔️ Mitglied
+            <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-top: 2px; display: flex; flex-direction: column; gap: 2px;">
+              <span>
+                {% if item.membership.role == 'CAPTAIN' %}
+                  👑 Kapitän
+                {% else %}
+                  ⚔️ Mitglied
+                {% endif %}
+              </span>
+              {% if active_event %}
+                {% if item.is_registered %}
+                  <span style="color: #22c55e;">✓ Für {{ active_event.title }} registriert</span>
+                {% else %}
+                  <span style="color: #eab308;">⚠️ Kein Ticket für {{ active_event.title }}</span>
+                {% endif %}
               {% endif %}
             </div>
           </div>
 
-          {% if is_captain and m.user != team.captain %}
-            <form method="post" action="{% url 'team_kick_member' slug=team.slug user_id=m.user.id %}">
+          {% if is_captain and item.user != team.captain %}
+            <form method="post" action="{% url 'team_kick_member' slug=team.slug user_id=item.user.id %}">
               {% csrf_token %}
-              <button type="submit" onclick="return confirm('Möchtest du {{ m.user.username }} wirklich kicken?');" style="background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid #f87171; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;" title="Mitglied kicken">
+              <button type="submit" onclick="return confirm('Möchtest du {{ item.user.username }} wirklich kicken?');" style="background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid #f87171; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;" title="Mitglied kicken">
                 ❌ Kicken
               </button>
             </form>
@@ -109,6 +152,7 @@
         </div>
       {% endfor %}
     </div>
+
 
     <!-- Ausstehende Bewerbungen -->
     {% if is_captain and pending_members %}

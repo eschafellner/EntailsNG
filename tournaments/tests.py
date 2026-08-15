@@ -209,3 +209,126 @@ class TournamentModelTests(TestCase):
         self.assertRedirects(response_kick, reverse('team_detail', kwargs={'slug': team.slug}))
         self.assertFalse(TeamMember.objects.filter(team=team, user=self.user2).exists())
 
+    def test_team_created_with_active_event(self):
+        """Positiver Test: Neu gegründetes Team wird automatisch dem aktiven Event zugeordnet."""
+        from django.urls import reverse
+        self.client.login(username="player1", password="pass")
+        response = self.client.post(
+            reverse('team_create'),
+            {'name': 'Active Event Team', 'tag': 'AET', 'game_id': self.game.id}
+        )
+        team = Team.objects.get(name='Active Event Team')
+        self.assertEqual(team.event, self.event)
+        self.assertFalse(team.is_archived)
+
+    def test_archive_teams_for_event_service(self):
+        """Positiver Test: Service archive_teams_for_event archiviert alle Teams des Events."""
+        from tournaments.services import archive_teams_for_event
+        t1 = Team.objects.create(name="Team LAN 1", captain=self.user1, event=self.event)
+        t2 = Team.objects.create(name="Team LAN 2", captain=self.user2, event=self.event)
+
+        count = archive_teams_for_event(self.event)
+        self.assertEqual(count, 2)
+        t1.refresh_from_db()
+        t2.refresh_from_db()
+        self.assertTrue(t1.is_archived)
+        self.assertTrue(t2.is_archived)
+
+    def test_team_reactivation_positive(self):
+        """Positiver Test: Kapitän reaktiviert archiviertes Team für neues Event mit Roster-Auswahl."""
+        from django.urls import reverse
+        # Neues Event anlegen und aktivieren
+        self.event.is_active = False
+        self.event.save()
+
+        event_2027 = Event.objects.create(
+            title="Haag-networX 2027",
+            slug="haag-2027",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=365),
+            end_date=timezone.now() + timedelta(days=367),
+        )
+
+        # User1 hat Ticket für 2027, User2 hat keines
+        EventRegistration.objects.create(user=self.user1, event=event_2027)
+
+        # Altes archiviertes Team
+        old_team = Team.objects.create(
+            name="Veterans",
+            captain=self.user1,
+            game=self.game,
+            event=self.event,
+            is_archived=True,
+        )
+        TeamMember.objects.create(team=old_team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        TeamMember.objects.create(team=old_team, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="player1", password="pass")
+
+        # GET Reaktivierungs-Assistent
+        get_res = self.client.get(reverse('team_reactivate', kwargs={'slug': old_team.slug}))
+        self.assertEqual(get_res.status_code, 200)
+        self.assertContains(get_res, "Smart Roster Check")
+        self.assertContains(get_res, "player1")
+        self.assertContains(get_res, "player2")
+
+        # POST Reaktivierung: Nur player1 behalten, player2 wird abgewählt
+        post_res = self.client.post(
+            reverse('team_reactivate', kwargs={'slug': old_team.slug}),
+            {
+                'game_id': self.game.id,
+                'keep_members': [self.user1.id],
+                'reset_invite_code': '1',
+            }
+        )
+        self.assertRedirects(post_res, reverse('team_detail', kwargs={'slug': old_team.slug}))
+
+        old_team.refresh_from_db()
+        self.assertEqual(old_team.event, event_2027)
+        self.assertFalse(old_team.is_archived)
+        self.assertEqual(old_team.memberships.count(), 1)
+        self.assertTrue(old_team.memberships.filter(user=self.user1).exists())
+        self.assertFalse(old_team.memberships.filter(user=self.user2).exists())
+
+    def test_negative_non_captain_cannot_reactivate_team(self):
+        """Negativer Test: Normales Teammitglied kann ein Team nicht reaktivieren."""
+        from django.urls import reverse
+        old_team = Team.objects.create(
+            name="Alpha Squad",
+            captain=self.user1,
+            event=self.event,
+            is_archived=True,
+        )
+        TeamMember.objects.create(team=old_team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        TeamMember.objects.create(team=old_team, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+
+        # Login als User2 (nicht Kapitän)
+        self.client.login(username="player2", password="pass")
+        response = self.client.post(
+            reverse('team_reactivate', kwargs={'slug': old_team.slug}),
+            {'keep_members': [self.user2.id]}
+        )
+        self.assertRedirects(response, reverse('team_detail', kwargs={'slug': old_team.slug}))
+        old_team.refresh_from_db()
+        self.assertTrue(old_team.is_archived)
+        self.assertEqual(old_team.event, self.event)
+
+    def test_negative_cannot_reactivate_without_active_event(self):
+        """Negativer Test: Reaktivierung scheitert, wenn keine aktive Veranstaltung existiert."""
+        from django.urls import reverse
+        self.event.is_active = False
+        self.event.save()
+
+        old_team = Team.objects.create(
+            name="No Event Team",
+            captain=self.user1,
+            event=self.event,
+            is_archived=True,
+        )
+        TeamMember.objects.create(team=old_team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="player1", password="pass")
+        response = self.client.get(reverse('team_reactivate', kwargs={'slug': old_team.slug}))
+        self.assertRedirects(response, reverse('team_detail', kwargs={'slug': old_team.slug}))
+
+

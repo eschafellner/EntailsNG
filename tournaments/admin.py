@@ -80,12 +80,24 @@ class TeamMemberInline(admin.TabularInline):
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ('name', 'tag', 'captain', 'game', 'invite_code', 'is_solo', 'created_at')
-    list_filter = ('game', 'is_solo')
+    list_display = ('name', 'tag', 'event', 'captain', 'game', 'invite_code', 'is_archived', 'is_solo', 'created_at')
+    list_filter = ('event', 'is_archived', 'game', 'is_solo')
     search_fields = ('name', 'tag', 'invite_code', 'captain__username')
     prepopulated_fields = {'slug': ('name',)}
-    raw_id_fields = ('captain',)
+    raw_id_fields = ('captain', 'event')
     inlines = [TeamMemberInline]
+    actions = ['action_archive_teams', 'action_unarchive_teams']
+
+    @admin.action(description="Ausgewählte Teams archivieren")
+    def action_archive_teams(self, request, queryset):
+        count = queryset.update(is_archived=True)
+        self.message_user(request, f"{count} Team(s) erfolgreich archiviert.", messages.SUCCESS)
+
+    @admin.action(description="Ausgewählte Teams aus dem Archiv wiederherstellen")
+    def action_unarchive_teams(self, request, queryset):
+        count = queryset.update(is_archived=False)
+        self.message_user(request, f"{count} Team(s) als aktiv markiert.", messages.SUCCESS)
+
 
 
 @admin.register(TeamMember)

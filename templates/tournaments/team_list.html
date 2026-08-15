@@ -41,24 +41,26 @@
   </div>
 
   <!-- Meine Teams -->
-  {% if user.is_authenticated and my_teams %}
+  {% if user.is_authenticated and my_active_teams or my_archived_teams %}
   <div>
     <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; margin: 0 0 14px 0; color: var(--ink);">
       🛡️ Meine Teams
     </h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
-      {% for team in my_teams %}
-        <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 2px solid var(--signal);">
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+      {% for team in my_active_teams %}
+        <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 2px solid #22c55e;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
             <div>
-              <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
-                {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
-              </h3>
-              <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
-                Kapitän: {{ team.captain.username }}
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
+                  {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
+                </h3>
+              </div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #22c55e; margin-top: 2px;">
+                ● Aktiv für {{ team.event.title|default:active_event.title|default:"Aktuelles Event" }}
               </div>
             </div>
-            {% if team.is_captain_user %}
+            {% if team.captain_id == user.id %}
               <span style="background: rgba(248, 171, 45, 0.2); color: var(--signal-deep); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;">
                 👑 Kapitän
               </span>
@@ -74,43 +76,126 @@
           </a>
         </div>
       {% endfor %}
-    </div>
-  </div>
-  {% endif %}
 
-  <!-- Alle Teams Grid -->
-  <div>
-    <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; margin: 0 0 14px 0; color: var(--ink);">
-      🌐 Alle registrierten Teams
-    </h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
-      {% for team in teams %}
-        <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
-          <div>
-            <h3 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
-              {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
-            </h3>
-            <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 10px;">
-              Spiel: {{ team.game.name|default:"Allgemein" }} | Kapitän: {{ team.captain.username }}
+      {% for team in my_archived_teams %}
+        <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 1px dashed var(--line); opacity: 0.9;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+            <div>
+              <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--muted);">
+                {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
+              </h3>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px;">
+                📁 Archiviert ({{ team.event.title|default:"Früheres Event" }})
+              </div>
             </div>
-            <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 14px;">
-              👥 {{ team.get_accepted_members.count }} Mitglieder
-            </div>
+            <span style="background: var(--line); color: var(--muted); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;">
+              Archiv
+            </span>
           </div>
 
-          <div style="padding-top: 10px; border-top: 1px solid var(--line); text-align: right;">
-            <a href="{% url 'team_detail' slug=team.slug %}" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; color: #0284c7; text-decoration: none;">
-              Profil ansehen →
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+            👥 {{ team.get_accepted_members.count }} Mitglieder
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <a href="{% url 'team_detail' slug=team.slug %}" style="flex: 1; text-align: center; background: var(--line); color: var(--ink); padding: 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-decoration: none;">
+              Details
             </a>
+            {% if active_event and team.captain_id == user.id %}
+              <a href="{% url 'team_reactivate' slug=team.slug %}" style="flex: 1.4; text-align: center; background: #22c55e; color: white; padding: 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; text-decoration: none;">
+                🔄 Reaktivieren
+              </a>
+            {% endif %}
           </div>
-        </div>
-      {% empty %}
-        <div class="card" style="grid-column: 1 / -1; padding: 32px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
-          Bisher wurden noch keine Teams gegründet.
         </div>
       {% endfor %}
     </div>
   </div>
+  {% endif %}
+
+  <!-- Tab Navigation: Aktuelle Teams vs. Archivierte Teams -->
+  <div>
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+      <div style="display: flex; gap: 8px;">
+        <a href="{% url 'team_list' %}?tab=active" style="padding: 10px 16px; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; text-decoration: none; border-bottom: 3px solid {% if active_tab == 'active' %}#0284c7{% else %}transparent{% endif %}; color: {% if active_tab == 'active' %}var(--ink){% else %}var(--muted){% endif %};">
+          🎮 Aktuelle Teams {% if active_event %}({{ active_event.title }}){% endif %}
+        </a>
+        <a href="{% url 'team_list' %}?tab=archived" style="padding: 10px 16px; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; text-decoration: none; border-bottom: 3px solid {% if active_tab == 'archived' %}#0284c7{% else %}transparent{% endif %}; color: {% if active_tab == 'archived' %}var(--ink){% else %}var(--muted){% endif %};">
+          📁 Archivierte Teams ({{ archived_teams.count }})
+        </a>
+      </div>
+    </div>
+
+    <!-- Team Grid je nach Tab -->
+    {% if active_tab == 'active' %}
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+        {% for team in active_teams %}
+          <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <h3 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
+                {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
+              </h3>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 10px;">
+                Spiel: {{ team.game.name|default:"Allgemein" }} | Kapitän: {{ team.captain.username }}
+              </div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 14px;">
+                👥 {{ team.get_accepted_members.count }} Mitglieder
+              </div>
+            </div>
+
+            <div style="padding-top: 10px; border-top: 1px solid var(--line); text-align: right;">
+              <a href="{% url 'team_detail' slug=team.slug %}" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; color: #0284c7; text-decoration: none;">
+                Profil ansehen →
+              </a>
+            </div>
+          </div>
+        {% empty %}
+          <div class="card" style="grid-column: 1 / -1; padding: 32px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+            Für die aktuelle Veranstaltung wurden noch keine neuen Teams gegründet. Gründe jetzt dein Team oder reaktiviere ein bestehendes!
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+        {% for team in archived_teams %}
+          <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 1px dashed var(--line); display: flex; flex-direction: column; justify-content: space-between; opacity: 0.85;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+                <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
+                  {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
+                </h3>
+                <span style="background: var(--line); color: var(--muted); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">
+                  Archiv
+                </span>
+              </div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 6px;">
+                Spiel: {{ team.game.name|default:"Allgemein" }} | Event: {{ team.event.title|default:"Vergangenes Event" }}
+              </div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 14px;">
+                👥 {{ team.get_accepted_members.count }} Mitglieder | Kapitän: {{ team.captain.username }}
+              </div>
+            </div>
+
+            <div style="padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+              <a href="{% url 'team_detail' slug=team.slug %}" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); text-decoration: none;">
+                Details ansehen →
+              </a>
+              {% if active_event and team.captain_id == user.id %}
+                <a href="{% url 'team_reactivate' slug=team.slug %}" style="background: #22c55e; color: white; padding: 4px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; text-decoration: none;">
+                  🔄 Reaktivieren
+                </a>
+              {% endif %}
+            </div>
+          </div>
+        {% empty %}
+          <div class="card" style="grid-column: 1 / -1; padding: 32px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+            Keine archivierten Teams vorhanden.
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
 
 </div>
 

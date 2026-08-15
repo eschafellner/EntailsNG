@@ -197,9 +197,24 @@ class Team(models.Model):
         verbose_name="Einzelspieler-Team",
         help_text="Automatisch erstelltes Solo-Team für 1v1 Turniere",
     )
+    event = models.ForeignKey(
+        'events.Event',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="teams",
+        verbose_name="Veranstaltung",
+        help_text="Die Veranstaltung, für die dieses Team aktuell antritt.",
+    )
+    is_archived = models.BooleanField(
+        default=False,
+        verbose_name="Archiviert",
+        help_text="Zeigt an, ob das Team aus einer früheren Veranstaltung archiviert wurde.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Zuletzt geändert")
+
 
     class Meta:
         verbose_name = "Team"

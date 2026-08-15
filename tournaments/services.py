@@ -20,6 +20,24 @@ def check_user_event_checkin(user, event):
     ).exists()
 
 
+def archive_teams_for_event(event):
+    """
+    Archiviert alle Teams, die der angegebenen Veranstaltung zugeordnet sind
+    oder an Turnieren dieser Veranstaltung teilgenommen haben.
+    """
+    if not event:
+        return 0
+    direct_teams = Team.objects.filter(event=event, is_archived=False)
+    tournament_teams = Team.objects.filter(
+        tournament_registrations__tournament__event=event,
+        is_archived=False
+    )
+    combined_ids = set(direct_teams.values_list('id', flat=True)) | set(tournament_teams.values_list('id', flat=True))
+    count = Team.objects.filter(id__in=combined_ids).update(is_archived=True, event=event)
+    return count
+
+
+
 def get_or_create_solo_team(user, game):
     """
     Erstellt oder holt ein 1v1 Solo-Team für den angegebenen Benutzer und das angegebene Spiel.
