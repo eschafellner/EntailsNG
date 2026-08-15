@@ -104,9 +104,13 @@ TEMPLATES = [
                 'configuration.context_processors.feature_flags',
                 'django.contrib.messages.context_processors.messages',
             ],
+            'builtins': [
+                'configuration.templatetags.translations',
+            ],
         },
     },
 ]
+
 
 WSGI_APPLICATION = 'config.wsgi.application'
 

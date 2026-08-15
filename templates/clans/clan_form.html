@@ -32,7 +32,7 @@
       <label for="id_logo">Clan-Logo (optional):</label>
       {{ form.logo }}
       <small style="color: var(--muted); font-size: 11px; display: block; margin-top: 4px;">
-        ℹ️ {{ txt_clan_logo_help|default:"Maximal 300x300 Pixel. Erlaubte Formate: .jpg, .jpeg, .png" }}
+        ℹ️ {% t "clan_logo_help" "Maximal 300x300 Pixel. Erlaubte Formate: .jpg, .jpeg, .png" %}
       </small>
       {% if form.logo.errors %}
         <div style="color: var(--danger); font-size: 12px; margin-top: 4px;">{{ form.logo.errors.0 }}</div>

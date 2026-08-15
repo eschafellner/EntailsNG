@@ -1,15 +1,10 @@
-# configuration/context_processors.py
 from django.core.cache import cache
+from django.utils.functional import SimpleLazyObject
 
 from configuration.models import FeatureFlag, NavigationItem, SiteCustomization, SystemTranslation
 from events.models import Event, EventRegistration
 from seating.models import SeatingCell
 
-
-# Standardtexte an einer Stelle. Fehlende Keys werden per Management-Command
-# angelegt, nicht bei jedem Request.
-# Standardtexte an einer Stelle. Fehlende Keys werden per Management-Command
-# angelegt, nicht bei jedem Request.
 DEFAULT_TEXTS = {
     'seat_card_title': 'SITZPLATZBUCHUNG',
     'seat_btn_open': 'Sitzplan öffnen',
@@ -102,7 +97,6 @@ DEFAULT_TEXTS = {
     'dash_qr_btn_show': '📲 QR-Code anzeigen',
     'dash_qr_payment_pending': '⏳ ZAHLUNG OFFEN',
 
-
     # Auth & Profil Modul
     'auth_login_title': 'Anmelden',
     'auth_login_subtitle': 'Gib deine Zugangsdaten ein, um dich einzuloggen.',
@@ -162,36 +156,6 @@ DEFAULT_TEXTS = {
     'pw_reset_complete_title': 'Passwort geändert!',
     'pw_reset_complete_text': 'Dein Passwort wurde erfolgreich geändert. Du kannst dich jetzt anmelden.',
 }
-
-# Template-Variable -> Übersetzungsschlüssel
-TEXT_KEYS = {
-    'txt_seat_card_title': 'seat_card_title',
-    'txt_seat_btn_open': 'seat_btn_open',
-    'txt_seat_btn_reserve': 'seat_btn_reserve',
-    'txt_seat_no_event': 'seat_no_event_text',
-    'txt_seat_not_registered': 'seat_not_registered_text',
-    'txt_seat_confirm_title': 'seat_confirm_title',
-    'txt_seat_confirm_question': 'seat_confirm_question',
-    'txt_seat_confirm_yes': 'seat_confirm_yes',
-    'txt_seat_confirm_no': 'seat_confirm_no',
-    'txt_ticket_eyebrow': 'ticket_eyebrow',
-    'txt_ticket_default_title': 'ticket_default_title',
-    'txt_ticket_countdown_label': 'ticket_countdown_label',
-    'txt_ticket_no_event': 'ticket_no_event',
-    'txt_status_header': 'status_header',
-    'txt_status_your_status': 'status_your_status',
-    'txt_status_step_1': 'status_step_1',
-    'txt_status_step_2': 'status_step_2',
-    'txt_status_step_3': 'status_step_3',
-    'txt_status_step_4': 'status_step_4',
-    'txt_status_btn_register': 'status_btn_register',
-    'txt_status_no_event': 'status_no_event',
-    'txt_clan_logo_help': 'clan_logo_help',
-}
-
-# Füge dynamisch txt_<key> für alle DEFAULT_TEXTS hinzu
-for _k in DEFAULT_TEXTS.keys():
-    TEXT_KEYS[f'txt_{_k}'] = _k
 
 TRANSLATION_CACHE_KEY = 'system_translations'
 FEATURE_FLAGS_CACHE_KEY = 'feature_flags_dict'
@@ -257,9 +221,30 @@ def get_event_capacity_stats(upcoming_event):
     return stats
 
 
+def _get_active_event():
+    return Event.objects.get_active()
+
+
+def _get_user_registration(request):
+    if not request.user.is_authenticated:
+        return None
+    event = _get_active_event()
+    if not event:
+        return None
+    return (
+        EventRegistration.objects.filter(event=event, user=request.user)
+        .select_related('user', 'ticket_type')
+        .prefetch_related('seats')
+        .first()
+    )
+
+
 def feature_flags(request):
-    """Stellt Event-Daten, Menüpunkte, Feature-Flags und Texte in allen Templates bereit."""
-    texts = _load_translations()
+    """
+    Schlanker Context Processor:
+    Stellt Navigations-Items, Feature Flags und Site-Customization bereit.
+    upcoming_event und user_registration werden lazy über SimpleLazyObject aufgelöst (0 DB-Queries bei Seiten ohne Event-Bezug).
+    """
     features = _load_feature_flags()
 
     all_nav_items = cache.get_or_set(
@@ -296,75 +281,14 @@ def feature_flags(request):
     css_vars = site_customization.get_css_variables()
     theme_css_inline = "\n".join([f"  {k}: {v};" for k, v in css_vars.items()])
 
-    context = {
+    return {
         'nav_items': filtered_nav_items,
         'features': features,
         'feature_flags': features,
         'site_customization': site_customization,
         'theme_css_vars': theme_css_inline,
         'custom_css': site_customization.custom_css,
-        'upcoming_event': None,
-        'user_registration': None,
-        'is_user_registered': False,
-        'user_status_step': 1,
-        'user_seat_label': None,
+        'upcoming_event': SimpleLazyObject(_get_active_event),
+        'user_registration': SimpleLazyObject(lambda: _get_user_registration(request)),
     }
 
-    tr_dict = {key: texts.get(key) or default for key, default in DEFAULT_TEXTS.items()}
-    context['tr'] = tr_dict
-    context['translations'] = tr_dict
-
-    for var_name, key in TEXT_KEYS.items():
-        context[var_name] = texts.get(key) or DEFAULT_TEXTS.get(key, '')
-
-    upcoming_event = Event.objects.get_active()
-    context['upcoming_event'] = upcoming_event
-
-    # Event Kapazität & Belegungsquote für Fortschrittsbalken (mit Smart Caching)
-    if upcoming_event:
-        cap_stats = get_event_capacity_stats(upcoming_event)
-        context['event_total_seats'] = cap_stats['total_seats']
-        context['event_reserved_seats'] = cap_stats['reserved_seats']
-        context['event_capacity_percent'] = cap_stats['capacity_percent']
-
-    if request.user.is_authenticated and upcoming_event:
-        registration = (
-            EventRegistration.objects.filter(
-                event=upcoming_event, user=request.user
-            )
-            .select_related('user')
-            .prefetch_related('seats')
-            .first()
-        )
-        if registration:
-            context['user_registration'] = registration
-            context['is_user_registered'] = True
-
-            if registration.is_checked_in:
-                context['user_status_step'] = 4
-            elif registration.payment_status == EventRegistration.PaymentStatus.PAID:
-                context['user_status_step'] = 3
-            else:
-                context['user_status_step'] = 2
-
-            seat = registration.seats.first()
-            if seat:
-                context['user_seat_label'] = (
-                    seat.seat_label or f'Pos ({seat.x},{seat.y})'
-                )
-
-    from django.utils import timezone
-    now = timezone.now()
-    is_event_expired = bool(
-        upcoming_event and upcoming_event.end_date and now > upcoming_event.end_date
-    )
-    context['is_event_expired'] = is_event_expired
-
-    from .services import should_show_onboarding_ticket
-    context['show_onboarding_ticket'] = should_show_onboarding_ticket(
-        user=request.user,
-        upcoming_event=upcoming_event,
-        user_registration=context.get('user_registration'),
-    )
-
-    return context

@@ -251,6 +251,7 @@ class ConfigurationModelTests(TestCase):
 
     def test_dynamic_debug_mode_toggle(self):
         from django.test import RequestFactory
+        from django.contrib.auth.models import AnonymousUser
         from configuration.middleware import DynamicDebugMiddleware
         from configuration.models import GeneralConfiguration
 
@@ -260,30 +261,50 @@ class ConfigurationModelTests(TestCase):
 
         rf = RequestFactory()
         request = rf.get('/some-error-endpoint/')
+        staff_user = User.objects.create_user(username="debug_admin", password="password", is_staff=True)
+        regular_user = User.objects.create_user(username="regular_guest", password="password")
 
         def raising_view(req):
             raise ValueError("Test-Fehler für Debug-Middleware")
 
         middleware = DynamicDebugMiddleware(raising_view)
 
-        # 1. Bei debug_mode=False liefert process_exception None (Standard 500 Handler greift)
+        # 1. Bei debug_mode=False liefert process_exception immer None
+        request.user = staff_user
         try:
             raising_view(request)
         except Exception as e:
             res_off = middleware.process_exception(request, e)
             self.assertIsNone(res_off)
 
-        # 2. Bei debug_mode=True liefert process_exception die technische Debug-Response
+        # 2. Bei debug_mode=True, aber ANONYMEM User: Schutz vor Information Leakage (liefert None)
         conf.debug_mode = True
         conf.save()
-
+        request.user = AnonymousUser()
         try:
             raising_view(request)
         except Exception as e:
-            res_on = middleware.process_exception(request, e)
-            self.assertIsNotNone(res_on)
-            self.assertEqual(res_on.status_code, 500)
-            self.assertIn(b"Test-Fehler", res_on.content)
+            res_anon = middleware.process_exception(request, e)
+            self.assertIsNone(res_anon)
+
+        # 3. Bei debug_mode=True, aber NORMALEM User: Schutz vor Information Leakage (liefert None)
+        request.user = regular_user
+        try:
+            raising_view(request)
+        except Exception as e:
+            res_user = middleware.process_exception(request, e)
+            self.assertIsNone(res_user)
+
+        # 4. Bei debug_mode=True UND STAFF-User: liefert technische Debug-Response
+        request.user = staff_user
+        try:
+            raising_view(request)
+        except Exception as e:
+            res_staff = middleware.process_exception(request, e)
+            self.assertIsNotNone(res_staff)
+            self.assertEqual(res_staff.status_code, 500)
+            self.assertIn(b"Test-Fehler", res_staff.content)
+
 
     @override_settings(DEBUG=False, ALLOWED_HOSTS=['testserver', '127.0.0.1', 'localhost'])
     def test_custom_404_template_rendering_when_debug_false(self):
@@ -337,6 +358,41 @@ class ConfigurationModelTests(TestCase):
         with self.assertRaises(ValidationError) as ctx:
             item.clean()
         self.assertIn("DOCTYPE", str(ctx.exception))
+
+    def test_translation_template_tag_default_and_override(self):
+        """Test für {% t %} Template-Tag mit Default-Werten, DB-Overrides und Fallbacks."""
+        from django.template import Context, Template
+
+        # 1. Unbekannter Key mit explizitem Fallback
+        t_fallback = Template('{% t "unknown_custom_key" "Mein Fallback" %}')
+        self.assertEqual(t_fallback.render(Context({})), 'Mein Fallback')
+
+        # 2. DB-Override über SystemTranslation
+        SystemTranslation.objects.update_or_create(key='test_override_key', defaults={'text': 'INDIVIDUELLE RESERVIERUNG'})
+        t_override = Template('{% t "test_override_key" %}')
+        self.assertEqual(t_override.render(Context({})), 'INDIVIDUELLE RESERVIERUNG')
+
+        # 3. Default-Text aus DEFAULT_TEXTS (wenn kein DB Eintrag vorhanden)
+        SystemTranslation.objects.filter(key='seat_card_title').delete()
+        t_default = Template('{% t "seat_card_title" %}')
+        self.assertEqual(t_default.render(Context({})), 'SITZPLATZBUCHUNG')
+
+
+    def test_context_processor_is_lean_without_txt_bloat(self):
+        """Testet, dass der Context Processor keine 400 txt_* Keys mehr injiziert."""
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        # Sicherstellen, dass keine txt_* Variablen im Context rumliegen
+        context_keys = list(response.context.keys())
+        txt_keys = [k for k in context_keys if k.startswith('txt_')]
+        self.assertEqual(txt_keys, [])
+        self.assertNotIn('tr', response.context)
+        self.assertNotIn('translations', response.context)
+        # Schlanke Kern-Keys sind vorhanden
+        self.assertIn('features', response.context)
+        self.assertIn('nav_items', response.context)
+        self.assertIn('site_customization', response.context)
+
 
 
 

@@ -22,8 +22,10 @@ DASHBOARD_NEWS_LIMIT = 3
 
 
 def _is_feature_enabled(key, default=True):
-    flag = FeatureFlag.objects.filter(key=key).first()
-    return flag.is_enabled if flag else default
+    from configuration.context_processors import _load_feature_flags
+    flags = _load_feature_flags()
+    return flags.get(key, default)
+
 
 
 def get_active_event():
@@ -42,6 +44,10 @@ def get_active_event():
 
 def dashboard_view(request):
     """Startseite. Funktioniert für Gäste und angemeldete Benutzer."""
+    from django.utils import timezone
+    from configuration.context_processors import get_event_capacity_stats
+    from configuration.services import should_show_onboarding_ticket
+
     event = get_active_event()
     event_info = EventInfo.objects.first()
     latest_news = NewsArticle.objects.filter(is_published=True).order_by(
@@ -50,15 +56,41 @@ def dashboard_view(request):
 
     registration = None
     ticket_types = []
+    user_status_step = 1
+    user_seat_label = None
+
     if event:
         ticket_types = list(event.ticket_types.filter(is_active=True))
 
-    if request.user.is_authenticated and event:
-        registration = EventRegistration.objects.filter(
-            user=request.user, event=event
-        ).first()
+        if request.user.is_authenticated:
+            registration = (
+                EventRegistration.objects.filter(event=event, user=request.user)
+                .select_related('user', 'ticket_type')
+                .prefetch_related('seats')
+                .first()
+            )
+            if registration:
+                if registration.is_checked_in:
+                    user_status_step = 4
+                elif registration.payment_status == EventRegistration.PaymentStatus.PAID:
+                    user_status_step = 3
+                else:
+                    user_status_step = 2
 
-    onboarding_enabled = _is_feature_enabled('onboarding_ticket', default=True)
+                seat = registration.seats.first()
+                if seat:
+                    user_seat_label = seat.seat_label or f'Pos ({seat.x},{seat.y})'
+
+    cap_stats = get_event_capacity_stats(event) if event else {'total_seats': 0, 'reserved_seats': 0, 'capacity_percent': 0}
+
+    now = timezone.now()
+    is_event_expired = bool(event and event.end_date and now > event.end_date)
+
+    show_ticket = should_show_onboarding_ticket(
+        user=request.user,
+        upcoming_event=event,
+        user_registration=registration,
+    )
 
     pinned_news = NewsArticle.objects.filter(
         is_published=True, is_pinned=True
@@ -66,16 +98,24 @@ def dashboard_view(request):
 
     context = {
         'event': event,
+        'upcoming_event': event,
         'event_info': event_info,
         'latest_news': latest_news,
         'pinned_news': pinned_news,
         'registration': registration,
+        'user_registration': registration,
+        'is_user_registered': registration is not None,
+        'user_status_step': user_status_step,
+        'user_seat_label': user_seat_label,
         'ticket_types': ticket_types,
-        'show_onboarding_ticket': bool(
-            event and request.user.is_authenticated and onboarding_enabled
-        ),
+        'event_total_seats': cap_stats['total_seats'],
+        'event_reserved_seats': cap_stats['reserved_seats'],
+        'event_capacity_percent': cap_stats['capacity_percent'],
+        'is_event_expired': is_event_expired,
+        'show_onboarding_ticket': show_ticket,
     }
     return render(request, 'dashboard.html', context)
+
 
 
 # ==============================================================================

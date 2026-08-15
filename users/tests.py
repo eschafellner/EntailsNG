@@ -342,4 +342,17 @@ class AuthBackendAndLockoutTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('birthday', form.errors)
 
+    def test_timing_attack_mitigation_on_nonexistent_user(self):
+        """Sicherheitstest: Bei nicht existierenden Benutzern wird Dummy-Password-Hashing durchgeführt."""
+        from unittest.mock import patch
+        from users.auth_backends import EmailOrUsernameBackend
+
+        backend = EmailOrUsernameBackend()
+        with patch.object(User, 'set_password') as mock_set_password:
+            res = backend.authenticate(None, username='definitely_non_existing_user', password='SomePassword123!')
+            self.assertIsNone(res)
+            # Sicherstellen, dass set_password aufgerufen wurde zur Timing-Mitigation
+            mock_set_password.assert_called_once_with('SomePassword123!')
+
+
 

@@ -40,8 +40,14 @@ def _is_ip_rate_limited(ip_address):
 
 def _record_ip_failed_attempt(ip_address):
     cache_key = f"ip_failed_logins_{ip_address}"
-    attempts = cache.get(cache_key, 0) + 1
-    cache.set(cache_key, attempts, timeout=300)  # 5 Minuten Fenster
+    try:
+        # Atomare Inkrementierung (verhindert Race Conditions bei parallelen Login-Requests)
+        if cache.add(cache_key, 1, timeout=300):
+            return 1
+        return cache.incr(cache_key)
+    except (ValueError, TypeError):
+        cache.set(cache_key, 1, timeout=300)
+        return 1
 
 
 class EmailOrUsernameBackend(ModelBackend):
@@ -69,6 +75,8 @@ class EmailOrUsernameBackend(ModelBackend):
                 Q(username__iexact=username) | Q(email__iexact=username)
             )
         except User.DoesNotExist:
+            # Timing-Attack Mitigation: Konstante Laufzeit sicherstellen (Dummy-Hashing)
+            User().set_password(password)
             _record_ip_failed_attempt(client_ip)
             return None
         except User.MultipleObjectsReturned:
@@ -94,4 +102,5 @@ class EmailOrUsernameBackend(ModelBackend):
                 setattr(request, 'account_locked', True)
                 setattr(request, 'locked_user', user)
             return None
+
 

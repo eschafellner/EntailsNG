@@ -77,6 +77,53 @@ class ClanModuleTests(TestCase):
         )
         self.assertTrue(response.context['form'].has_error('logo'))
 
+    def test_logo_valid_image(self):
+        from PIL import Image
+        import io
+        img_io = io.BytesIO()
+        img = Image.new('RGB', (200, 200), color='green')
+        img.save(img_io, format='PNG')
+        img_io.seek(0)
+        valid_file = SimpleUploadedFile("valid_logo.png", img_io.getvalue(), content_type="image/png")
+
+        clan = Clan.objects.create(name='ValidLogoClan', password='pass')
+        ClanMembership.objects.create(
+            user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
+        )
+        self.client.login(username='leader', password='password')
+        response = self.client.post(
+            reverse('clan_edit', kwargs={'slug': clan.slug}),
+            {
+                'name': 'ValidLogoClan',
+                'logo': valid_file,
+            },
+        )
+        self.assertRedirects(response, reverse('clan_detail', kwargs={'slug': clan.slug}))
+
+    def test_logo_oversized_dimensions(self):
+        from PIL import Image
+        import io
+        img_io = io.BytesIO()
+        img = Image.new('RGB', (500, 500), color='red')
+        img.save(img_io, format='PNG')
+        img_io.seek(0)
+        oversized_file = SimpleUploadedFile("huge_logo.png", img_io.getvalue(), content_type="image/png")
+
+        clan = Clan.objects.create(name='HugeLogoClan', password='pass')
+        ClanMembership.objects.create(
+            user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
+        )
+        self.client.login(username='leader', password='password')
+        response = self.client.post(
+            reverse('clan_edit', kwargs={'slug': clan.slug}),
+            {
+                'name': 'HugeLogoClan',
+                'logo': oversized_file,
+            },
+        )
+        self.assertTrue(response.context['form'].has_error('logo'))
+
+
 
     def test_join_clan_via_password(self):
         clan = Clan.objects.create(name='SK Gaming')

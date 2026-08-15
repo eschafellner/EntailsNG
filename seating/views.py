@@ -208,22 +208,34 @@ def get_event_seating_api(request, event_id):
         )
 
     is_authenticated = request.user.is_authenticated
-
     user_clan_map = {}
     current_user_clan_name = None
 
+    cells_qs = plan.cells.select_related('registration__user').all()
+
     if is_authenticated:
         from clans.models import ClanMembership
-        active_memberships = ClanMembership.objects.filter(
-            status=ClanMembership.Status.ACCEPTED
-        ).select_related('clan', 'user')
-        for m in active_memberships:
-            user_clan_map[m.user_id] = m.clan.name
+        # Performance: Nur User-IDs sammeln, die tatsächlich auf diesem Saalplan platziert sind + aktueller User
+        seated_user_ids = {
+            c.registration.user_id
+            for c in cells_qs
+            if c.registration and c.registration.user_id
+        }
+        seated_user_ids.add(request.user.id)
+
+        if seated_user_ids:
+            active_memberships = ClanMembership.objects.filter(
+                user_id__in=seated_user_ids,
+                status=ClanMembership.Status.ACCEPTED
+            ).values('user_id', 'clan__name')
+
+            for m in active_memberships:
+                user_clan_map[m['user_id']] = m['clan__name']
 
         current_user_clan_name = user_clan_map.get(request.user.id)
 
     cells = []
-    for c in plan.cells.select_related('registration__user').all():
+    for c in cells_qs:
         username = None
         clan_name = None
         is_checked_in = False
@@ -250,7 +262,6 @@ def get_event_seating_api(request, event_id):
         else:
             computed_status = 'FREE'  # Grün / Frei
 
-
         cells.append({
             'x': c.x,
             'y': c.y,
@@ -271,6 +282,7 @@ def get_event_seating_api(request, event_id):
         'user_clan_name': current_user_clan_name,
         'cells': cells,
     })
+
 
 
 
@@ -511,10 +523,12 @@ def admin_assign_seat(request):
 
 @staff_member_required
 @require_POST
+@transaction.atomic
 def admin_toggle_block_seat(request):
     """
     API für Admins:
     Sperrt einen Platz ohne Anmeldung (Status BLOCKED) oder gibt ihn wieder frei (Status FREE).
+    Transaktionssicher mit DB-Row-Lock.
     """
     try:
         data = json.loads(request.body)
@@ -523,7 +537,7 @@ def admin_toggle_block_seat(request):
         y = data.get('y')
 
         plan = SeatingPlan.objects.get(event_id=event_id)
-        cell = SeatingCell.objects.get(plan=plan, x=x, y=y)
+        cell = SeatingCell.objects.select_for_update().get(plan=plan, x=x, y=y)
 
         if cell.cell_type != SeatingCell.CellType.SEAT:
             return JsonResponse(
@@ -538,13 +552,13 @@ def admin_toggle_block_seat(request):
         if cell.reservation_status == SeatingCell.ReservationStatus.BLOCKED:
             cell.reservation_status = SeatingCell.ReservationStatus.FREE
             cell.registration = None
-            message = f"Platz '{cell.seat_label or 'Pos (' + str(x) + ',' + str(y) + ')'}' wurde wieder FREIGEGEBEN."
+            message = f"Platz '{cell.seat_label or f'Pos ({x},{y})'}' wurde wieder FREIGEGEBEN."
         else:
             cell.reservation_status = SeatingCell.ReservationStatus.BLOCKED
             cell.registration = None  # Keine Anmeldung nötig
-            message = f"Platz '{cell.seat_label or 'Pos (' + str(x) + ',' + str(y) + ')'}' wurde GESPERRT."
+            message = f"Platz '{cell.seat_label or f'Pos ({x},{y})'}' wurde GESPERRT."
 
-        cell.save()
+        cell.save(update_fields=['reservation_status', 'registration'])
 
         from configuration.context_processors import invalidate_event_capacity_cache
         invalidate_event_capacity_cache(event_id)
@@ -567,10 +581,12 @@ def admin_toggle_block_seat(request):
 
 @staff_member_required
 @require_POST
+@transaction.atomic
 def admin_release_seat(request):
     """
     API für Admins:
     Gibt den Sitzplatz einer bestimmten Anmeldung frei ODER gibt eine Kachel per Koordinate frei.
+    Transaktionssicher mit DB-Row-Lock.
     """
     try:
         from configuration.context_processors import invalidate_event_capacity_cache
@@ -582,12 +598,12 @@ def admin_release_seat(request):
 
         # Fall 1: Freigabe über Registration-ID
         if registration_id:
-            registration = EventRegistration.objects.get(pk=registration_id)
-            seats = SeatingCell.objects.filter(registration=registration)
+            registration = EventRegistration.objects.select_related('event').get(pk=registration_id)
+            seats = list(SeatingCell.objects.select_for_update().filter(registration=registration))
             for seat in seats:
                 seat.registration = None
                 seat.reservation_status = SeatingCell.ReservationStatus.FREE
-                seat.save()
+                seat.save(update_fields=['registration', 'reservation_status'])
             invalidate_event_capacity_cache(registration.event_id)
             return JsonResponse({
                 'status': 'success',
@@ -597,14 +613,14 @@ def admin_release_seat(request):
         # Fall 2: Freigabe über Event-ID & Koordinaten
         elif event_id and x is not None and y is not None:
             plan = SeatingPlan.objects.get(event_id=event_id)
-            cell = SeatingCell.objects.get(plan=plan, x=x, y=y)
+            cell = SeatingCell.objects.select_for_update().get(plan=plan, x=x, y=y)
             cell.registration = None
             cell.reservation_status = SeatingCell.ReservationStatus.FREE
-            cell.save()
+            cell.save(update_fields=['registration', 'reservation_status'])
             invalidate_event_capacity_cache(event_id)
             return JsonResponse({
                 'status': 'success',
-                'message': f'Platz {cell.seat_label or "Pos (" + str(x) + "," + str(y) + ")"} wurde freigegeben.',
+                'message': f'Platz {cell.seat_label or f"Pos ({x},{y})"} wurde freigegeben.',
             })
 
         return JsonResponse(
@@ -614,5 +630,6 @@ def admin_release_seat(request):
     except Exception as e:
         logger.exception("Fehler in admin_release_seat: %s", e)
         return JsonResponse({'status': 'error', 'message': 'Die Freigabe konnte nicht durchgeführt werden. Bitte versuche es erneut.'}, status=500)
+
 
 
