@@ -1,5 +1,6 @@
 import re
 import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -11,6 +12,170 @@ ALLOWED_SVG_TAGS = {
 }
 DISALLOWED_ATTRIBUTES_REGEX = re.compile(r'^(on|data-|formaction)', re.IGNORECASE)
 DANGEROUS_PROTOCOLS_REGEX = re.compile(r'^\s*(javascript|data|vbscript):', re.IGNORECASE)
+DANGEROUS_CSS_PATTERNS = re.compile(
+    r'(javascript:|expression\(|@import|<script|</style|behavior:|\bdata:)',
+    re.IGNORECASE
+)
+
+SYSTEM_ICONS = {
+    'dashboard': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>'
+        '<polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
+    ),
+    'tournaments': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>'
+        '<path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>'
+        '<path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>'
+        '<path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>'
+        '<path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>'
+    ),
+    'teams': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>'
+        '<circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>'
+        '<path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'
+    ),
+    'seating': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>'
+        '<line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>'
+    ),
+    'info': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle>'
+        '<line x1="12" y1="16" x2="12" y2="12"></line>'
+        '<line x1="12" y1="8" x2="12.01" y2="8"></line></svg>'
+    ),
+    'news': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>'
+        '<path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8V6Z"></path></svg>'
+    ),
+    'clans': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>'
+    ),
+    'rules': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>'
+        '<path d="M6 6h10"></path><path d="M6 10h10"></path></svg>'
+    ),
+    'support': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle>'
+        '<path d="m4.93 4.93 4.24 4.24"></path><path d="m14.83 14.83 4.24 4.24"></path>'
+        '<path d="m14.83 9.17 4.24-4.24"></path><path d="m4.93 19.07 4.24-4.24"></path></svg>'
+    ),
+    'shop': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle>'
+        '<path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>'
+    ),
+    'settings': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>'
+        '<circle cx="12" cy="12" r="3"></circle></svg>'
+    ),
+}
+
+
+class SafeHTMLSanitizer(HTMLParser):
+    """
+    Sicherer HTML-Sanitizer mit strikter Tag- und Attribut-Whitelist.
+    Entfernt alle <script>, <iframe>, Inline-Event-Handler (on*) und bösartige URLs.
+    """
+    ALLOWED_TAGS = {
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
+        'strong', 'b', 'em', 'i', 'u', 's', 'small', 'sub', 'sup',
+        'ul', 'ol', 'li', 'blockquote', 'a',
+        'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div', 'span'
+    }
+    ALLOWED_ATTRS = {'href', 'title', 'target', 'rel', 'class', 'id', 'align'}
+    VOID_TAGS = {'br', 'hr', 'img'}
+    DISALLOWED_PROTOCOLS = re.compile(r'^\s*(javascript|data|vbscript):', re.IGNORECASE)
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.result = []
+        self.tag_stack = []
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag not in self.ALLOWED_TAGS:
+            return
+
+        cleaned_attrs = []
+        for name, value in attrs:
+            name = name.lower()
+            if name.startswith('on') or name.startswith('data-'):
+                continue
+            if name not in self.ALLOWED_ATTRS:
+                continue
+            if name in ('href', 'src'):
+                if self.DISALLOWED_PROTOCOLS.match(str(value)):
+                    value = '#'
+            val_escaped = str(value).replace('"', '&quot;')
+            cleaned_attrs.append(f'{name}="{val_escaped}"')
+
+        attr_str = f" {' '.join(cleaned_attrs)}" if cleaned_attrs else ""
+        self.result.append(f"<{tag}{attr_str}>")
+        if tag not in self.VOID_TAGS:
+            self.tag_stack.append(tag)
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in self.tag_stack:
+            while self.tag_stack:
+                popped = self.tag_stack.pop()
+                self.result.append(f"</{popped}>")
+                if popped == tag:
+                    break
+
+    def handle_data(self, data):
+        self.result.append(data)
+
+    def handle_entityref(self, name):
+        self.result.append(f"&{name};")
+
+    def handle_charref(self, name):
+        self.result.append(f"&#{name};")
+
+    def get_clean_html(self):
+        while self.tag_stack:
+            self.result.append(f"</{self.tag_stack.pop()}>")
+        return "".join(self.result)
+
+
+def sanitize_html(html_code: str) -> str:
+    """Bereinigt HTML-Texte (wie Impressum/Datenschutz) strikt vor XSS und Script-Injections."""
+    if not html_code or not html_code.strip():
+        return ""
+    sanitizer = SafeHTMLSanitizer()
+    sanitizer.feed(html_code)
+    return sanitizer.get_clean_html()
+
+
+def validate_custom_css(css_code: str):
+    """Validiert benutzerdefiniertes CSS auf bösartige Injection-Konstrukte."""
+    if not css_code or not css_code.strip():
+        return
+    if DANGEROUS_CSS_PATTERNS.search(css_code):
+        raise ValidationError({
+            'custom_css': "CSS enthält nicht erlaubte Ausdrücke (z. B. JavaScript, @import oder Script-Tags)."
+        })
 
 
 def sanitize_and_validate_svg(svg_code: str) -> str:
@@ -56,6 +221,20 @@ def sanitize_and_validate_svg(svg_code: str) -> str:
 
 
 class NavigationItem(models.Model):
+    class IconChoices(models.TextChoices):
+        DASHBOARD = 'dashboard', 'Dashboard / Übersicht (Home)'
+        TOURNAMENTS = 'tournaments', 'Turniere (Pokal / Trophy)'
+        TEAMS = 'teams', 'Teams (Spielergruppe)'
+        SEATING = 'seating', 'Sitzplan (Raster / Grid)'
+        INFO = 'info', 'Informationen (Info-Kreis)'
+        NEWS = 'news', 'Neuigkeiten (Zeitung / Feed)'
+        CLANS = 'clans', 'Clans (Schild / Wappen)'
+        RULES = 'rules', 'Regeln & FAQ (Buch / Dokument)'
+        SUPPORT = 'support', 'Support & Hilfe (Rettungsring)'
+        SHOP = 'shop', 'Shop & Catering (Einkaufswagen)'
+        SETTINGS = 'settings', 'Einstellungen (Regler)'
+        CUSTOM = 'custom', 'Benutzerdefiniertes SVG (Nur Superuser)'
+
     title = models.CharField(
         max_length=100,
         help_text='Anzeigename im Menü (z. B. Übersicht, Sitzplan)',
@@ -64,8 +243,15 @@ class NavigationItem(models.Model):
         max_length=100,
         help_text='Django URL-Name, z. B. dashboard, news_list, seating_plan',
     )
+    icon_name = models.CharField(
+        max_length=50,
+        choices=IconChoices.choices,
+        default=IconChoices.DASHBOARD,
+        verbose_name='Icon-Auswahl',
+        help_text='Wähle ein sicheres Standard-Icon aus der Liste.',
+    )
     icon_svg = models.TextField(
-        blank=True, help_text='SVG-Code für das Icon (20x20px empfohlen)'
+        blank=True, help_text='Optionaler SVG-Code für das Icon (nur bei Auswahl "Benutzerdefiniertes SVG")'
     )
     badge_text = models.CharField(
         max_length=10, blank=True, default='',
@@ -90,7 +276,6 @@ class NavigationItem(models.Model):
     def __str__(self):
         return f'{self.order}. {self.title} ({self.url_name})'
 
-
     def clean(self):
         """Verhindert Tippfehler und schützt vor XSS in SVG-Icons."""
         target = self.ALIAS_MAP.get(self.url_name, self.url_name)
@@ -105,9 +290,16 @@ class NavigationItem(models.Model):
                 )
             })
 
-        if self.icon_svg:
+        if self.icon_name == self.IconChoices.CUSTOM and self.icon_svg:
             self.icon_svg = sanitize_and_validate_svg(self.icon_svg)
+        elif self.icon_name != self.IconChoices.CUSTOM:
+            self.icon_svg = SYSTEM_ICONS.get(self.icon_name, '')
 
+    def get_icon_svg(self):
+        """Liefert den sicheren SVG-Code des Icons."""
+        if self.icon_name != self.IconChoices.CUSTOM and self.icon_name in SYSTEM_ICONS:
+            return SYSTEM_ICONS[self.icon_name]
+        return self.icon_svg or SYSTEM_ICONS.get('dashboard', '')
 
     def get_url(self):
         target = self.ALIAS_MAP.get(self.url_name, self.url_name)
@@ -117,7 +309,10 @@ class NavigationItem(models.Model):
             return ''
 
     def save(self, *args, **kwargs):
+        if self.icon_name != self.IconChoices.CUSTOM and not self.icon_svg:
+            self.icon_svg = SYSTEM_ICONS.get(self.icon_name, '')
         super().save(*args, **kwargs)
+        cache.delete('navigation_items')
         cache.delete('navigation_items')
 
     def delete(self, *args, **kwargs):
@@ -247,9 +442,8 @@ class GeneralConfiguration(models.Model):
         super().save(*args, **kwargs)
         cache.delete('general_configuration')
 
-
     def delete(self, *args, **kwargs):
-        pass  # Verhindert das Löschen der Einstellungen
+        raise ValidationError("Die Systemeinstellungen können nicht gelöscht werden.")
 
     @classmethod
     def load(cls):
@@ -379,17 +573,22 @@ class SiteCustomization(models.Model):
         verbose_name = 'Individualisierung & Branding'
         verbose_name_plural = 'Individualisierung & Branding'
 
-    def __str__(self):
-        return f'Individualisierung & Branding ({self.get_theme_preset_display()})'
+    def clean(self):
+        if self.impressum_content:
+            self.impressum_content = sanitize_html(self.impressum_content)
+        if self.datenschutz_content:
+            self.datenschutz_content = sanitize_html(self.datenschutz_content)
+        if self.custom_css:
+            validate_custom_css(self.custom_css)
 
     def save(self, *args, **kwargs):
+        self.clean()
         self.pk = 1
         super().save(*args, **kwargs)
         cache.delete_many(['site_customization', 'system_translations', 'navigation_items'])
 
-
     def delete(self, *args, **kwargs):
-        pass
+        raise ValidationError("Die Individualisierungs-Einstellungen können nicht gelöscht werden.")
 
     @classmethod
     def load(cls):

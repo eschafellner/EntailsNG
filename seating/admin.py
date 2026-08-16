@@ -30,7 +30,7 @@ class SeatingPlanAdmin(admin.ModelAdmin):
         'occupied_info',
         'editor_button',
     )
-    list_filter = ('event',)
+    list_filter = ('is_template', 'event')
     search_fields = ('name', 'event__title')
     readonly_fields = ('live_occupancy_preview',)
     fields = (

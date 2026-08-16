@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from configuration.cache import invalidate_event_capacity_cache
 
 
 class SeatingPlan(models.Model):
@@ -27,13 +28,18 @@ class SeatingPlan(models.Model):
         verbose_name="Hallen- & Anfahrts-Infos",
         help_text="Informationen zu Parkplätzen, Strom, Catering etc.",
     )
+    is_template = models.BooleanField(
+        default=False,
+        verbose_name="Ist Vorlage",
+        help_text="Kennzeichnet diesen Plan als wiederverwendbare Vorlage ohne feste Event-Zuweisung.",
+    )
 
     class Meta:
         verbose_name = "Sitzplan / Halle"
         verbose_name_plural = "Sitzpläne / Hallen"
 
     def __str__(self):
-        event_title = self.event.title if self.event else "Keine Veranstaltung"
+        event_title = self.event.title if self.event else "Vorlage"
         return f"{event_title} - {self.name} ({self.columns}x{self.rows})"
 
     def clean(self):
@@ -52,18 +58,19 @@ class SeatingPlan(models.Model):
                     })
 
     def save(self, *args, **kwargs):
+        if self.event_id is None:
+            self.is_template = True
+        else:
+            self.is_template = False
         self.full_clean()
         super().save(*args, **kwargs)
         if self.event_id:
-            from seating.services import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(self.event_id)
-
 
     def delete(self, *args, **kwargs):
         event_id = self.event_id
         res = super().delete(*args, **kwargs)
         if event_id:
-            from seating.services import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(event_id)
         return res
 
@@ -101,7 +108,6 @@ class SeatingPlan(models.Model):
 
         SeatingCell.objects.bulk_create(new_cells)
         if new_event:
-            from seating.services import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(new_event.id)
         return new_plan
 
@@ -174,6 +180,10 @@ class SeatingCell(models.Model):
                 violation_error_message="Sitzplatz-Koordinaten müssen positiv (>= 1) sein."
             ),
         ]
+        indexes = [
+            models.Index(fields=['plan', 'cell_type', 'reservation_status'], name='seating_plan_type_res_idx'),
+            models.Index(fields=['registration'], name='seating_cell_reg_idx'),
+        ]
 
     def clean(self):
         super().clean()
@@ -190,15 +200,12 @@ class SeatingCell(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
         if self.plan_id and self.plan.event_id:
-            from configuration.context_processors import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(self.plan.event_id)
-
 
     def delete(self, *args, **kwargs):
         event_id = self.plan.event_id if (self.plan_id and hasattr(self, 'plan')) else None
         res = super().delete(*args, **kwargs)
         if event_id:
-            from configuration.context_processors import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(event_id)
         return res
 
@@ -211,6 +218,17 @@ class SeatingCell(models.Model):
         Prüft vorab, ob ein Sitzplatz für den angegebenen Benutzer reserviert werden kann,
         ohne den Zustand der Kachel oder bisheriger Sitze zu verändern.
         """
+        if not registration:
+            return False, "Keine gültige Anmeldung vorhanden."
+
+        if getattr(registration, 'payment_status', None) == 'CANCELLED':
+            return False, "Deine Anmeldung ist storniert. Bitte melde dich erneut an."
+
+        event = getattr(registration, 'event', None)
+        if event and hasattr(event, 'effective_status'):
+            if event.effective_status in ('CANCELLED', 'FINISHED', 'DRAFT'):
+                return False, "Für diese Veranstaltung können keine Plätze mehr gewählt werden."
+
         if self.cell_type != self.CellType.SEAT:
             return False, "Dies ist kein gültiger Sitzplatz."
 

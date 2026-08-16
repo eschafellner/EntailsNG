@@ -1,5 +1,14 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager as BaseUserManager
 from django.db import models
+
+
+class UserManager(BaseUserManager):
+    def _create_user(self, username, email, password, **extra_fields):
+        if not email:
+            email = f"{str(username).lower()}@entailsng.local"
+        email = self.normalize_email(email)
+        return super()._create_user(username, email, password, **extra_fields)
+
 
 class User(AbstractUser):
     class Roles(models.TextChoices):
@@ -8,12 +17,23 @@ class User(AbstractUser):
         MODERATOR = 'MODERATOR', 'Moderator'
         USER = 'USER', 'Normaler User'
 
+    objects = UserManager()
+
     # Standard-Rolle für neu registrierte Benutzer ist 'USER'
     role = models.CharField(
         max_length=20,
         choices=Roles.choices,
         default=Roles.USER,
         verbose_name="Rolle"
+    )
+
+    # E-Mail-Adresse ist eindeutig (Single Source of Truth)
+    email = models.EmailField(
+        unique=True,
+        verbose_name="E-Mail-Adresse",
+        error_messages={
+            'unique': "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.",
+        },
     )
 
     # Stammdaten-Feld
@@ -28,6 +48,12 @@ class User(AbstractUser):
     locked_until = models.DateTimeField(
         null=True, blank=True, verbose_name="Gesperrt bis"
     )
+
+    def save(self, *args, **kwargs):
+        if not self.email:
+            self.email = f"{str(self.username).lower()}@entailsng.local"
+        super().save(*args, **kwargs)
+
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"

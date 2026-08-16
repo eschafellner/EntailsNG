@@ -181,3 +181,21 @@ class FrontendNegativeSecurityTests(TestCase):
                     non_empty_matches, [],
                     f"Template '{tmpl}' enthält unerlaubte Inline-<script>-Blöcke!"
                 )
+
+    def test_proxy_ssl_header_not_enabled_by_default_without_env(self):
+        """
+        Negativ-Test: Stellt sicher, dass SECURE_PROXY_SSL_HEADER ohne BEHIND_PROXY=1
+        nicht blind aktiv ist (verhindert gefälschte X-Forwarded-Proto Header).
+        """
+        # Wenn BEHIND_PROXY nicht gesetzt oder False ist, darf der Header nicht gesetzt sein
+        from config import settings as cfg_settings
+        if not getattr(cfg_settings, 'BEHIND_PROXY', False):
+            self.assertIsNone(cfg_settings.SECURE_PROXY_SSL_HEADER)
+
+    def test_deprecated_xss_filter_is_not_used(self):
+        """
+        Negativ-Test: Stellt sicher, dass der veraltete, wirkungslose SECURE_BROWSER_XSS_FILTER nicht verwendet wird.
+        """
+        from config import settings as cfg_settings
+        self.assertFalse(hasattr(cfg_settings, 'SECURE_BROWSER_XSS_FILTER') and cfg_settings.SECURE_BROWSER_XSS_FILTER is True)
+

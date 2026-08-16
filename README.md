@@ -144,7 +144,7 @@ Wichtige Produktions-Variablen:
 * **`DEBUG`**: Für den Live-Betrieb auf `False` setzen.
 * **`ALLOWED_HOSTS`**: Deine Domain(s) kommagetrennt (z. B. `lan.meinedomain.de,127.0.0.1`).
 * **`CSRF_TRUSTED_ORIGINS`**: Deine HTTPS-Domain(s) (z. B. `https://lan.meinedomain.de`).
-* **`SERVE_MEDIA`**: Standardmäßig `True` für Docker-Standalone. Liefert hochgeladene Medien (Logos, Avatare) auch bei `DEBUG=False` sicher aus.
+* **`REDIS_URL`**: `redis://redis:6379/1` *(Empfohlen in Produktion)* – Zentraler Cache für Multi-Worker-Betrieb (z. B. Gunicorn), damit Theme- und Navigations-Invalidierungen sofort auf allen Workern greifen.
 * **`SESSION_COOKIE_SECURE` / `CSRF_COOKIE_SECURE`**: Standardmäßig `True` bei `DEBUG=False` für HTTPS-Verbindungen.
 
 ### 2. Docker Compose starten:

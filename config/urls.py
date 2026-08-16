@@ -4,6 +4,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+from django.views.generic import RedirectView
 from users import views
 from users.forms import CustomAuthenticationForm, CustomPasswordResetForm
 
@@ -67,7 +68,7 @@ urlpatterns = [
     path('seating/', include('seating.urls')),
     path('clans/', include('clans.urls')),
     path('tournaments/', include('tournaments.urls')),
-    path('teams/', include('tournaments.urls')),
+    path('teams/', RedirectView.as_view(pattern_name='team_list', permanent=False)),
 ]
 
 if getattr(settings, 'SERVE_MEDIA', False) or settings.DEBUG:

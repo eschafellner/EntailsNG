@@ -20,6 +20,7 @@ class SeatingPlanTests(TestCase):
             title='Seating LAN',
             slug='seating-lan',
             is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
             start_date=timezone.now() + timedelta(days=5),
             end_date=timezone.now() + timedelta(days=7),
         )
@@ -633,6 +634,72 @@ class SeatingServiceAndSignalTests(TestCase):
         sync_seat_status_with_payment(self.reg1)
         self.seat1.refresh_from_db()
         self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
+    def test_seating_cell_rejects_cancelled_registration(self):
+        """Sicherheitstest: Stornierte Anmeldungen können keine Sitzplätze reservieren."""
+        self.reg1.payment_status = EventRegistration.PaymentStatus.CANCELLED
+        self.reg1.save()
+
+        can_res, msg = self.seat1.can_reserve_for_user(self.reg1)
+        self.assertFalse(can_res)
+        self.assertIn("storniert", msg)
+
+        res, msg2 = self.seat1.reserve_for_user(self.reg1)
+        self.assertFalse(res)
+
+    def test_seating_cell_rejects_reservation_for_finished_event(self):
+        """Sicherheitstest: Für beendete Events können keine Plätze mehr gewählt werden."""
+        past_event = Event.objects.create(
+            title="Past Event",
+            slug="past-event",
+            is_active=False,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() - timedelta(days=10),
+            end_date=timezone.now() - timedelta(days=5),
+        )
+        past_reg = EventRegistration.objects.create(user=self.user1, event=past_event)
+        can_res, msg = self.seat1.can_reserve_for_user(past_reg)
+        self.assertFalse(can_res)
+        self.assertIn("keine Plätze mehr", msg)
+
+    def test_seating_plan_is_template_flag(self):
+        """Testet die automatische Erkennung von Vorlagen-Plänen vs Live-Event-Plänen."""
+        template_plan = SeatingPlan.objects.create(name="Default 100 Template", columns=10, rows=10)
+        self.assertTrue(template_plan.is_template)
+
+        other_event = Event.objects.create(
+            title="Other Event",
+            slug="other-event",
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=10),
+            end_date=timezone.now() + timedelta(days=12),
+        )
+        event_plan = SeatingPlan.objects.create(event=other_event, name="Event Live Plan", columns=10, rows=10)
+        self.assertFalse(event_plan.is_template)
+
+    def test_save_seating_plan_rejects_deleting_occupied_cell(self):
+        """Sicherheitstest: Editor-API verhindert das Löschen belegter Kacheln."""
+        admin_user = User.objects.create_superuser(username='staff_editor', email='staff@example.com', password='password')
+        self.client.login(username='staff_editor', password='password')
+        # seat1 (1,1) ist belegt durch reg1
+        self.seat1.registration = self.reg1
+        self.seat1.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat1.save()
+
+        # Versuch, nur Kachel (1,2) zu senden -> Kachel (1,1) würde gelöscht werden
+        payload = {
+            'cells': [
+                {'x': 1, 'y': 2, 'cell_type': 'SEAT', 'seat_label': 'A2', 'text_label': ''}
+            ]
+        }
+        response = self.client.post(
+            reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("nicht gelöscht werden", response.json()['message'])
+
 
 
 

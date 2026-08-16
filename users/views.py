@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
+from django.core.cache import cache
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -74,6 +75,18 @@ def verify_email_view(request):
         return redirect("dashboard")
 
     if request.method == "POST":
+        # IP-basiertes Rate-Limiting gegen Brute-Force auf Verifizierungscodes
+        client_ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
+        rate_key = f"rate_limit_verify_email_{client_ip}"
+        attempts = cache.get(rate_key, 0)
+        if attempts >= 10:
+            messages.error(
+                request,
+                "Zu viele Verifizierungsversuche von deiner IP-Adresse. Bitte warte eine Minute.",
+            )
+            return render(request, "auth/verify_email.html", {'user_email': user.email, 'user_id': user.id})
+        cache.set(rate_key, attempts + 1, 60)
+
         # Einzelnen Code-String aus Formular oder den 6 Ziffernfeldern zusammenbauen
         code_input = request.POST.get('code', '').strip()
         if not code_input:

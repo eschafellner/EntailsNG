@@ -3,9 +3,9 @@ from .models import NewsArticle
 
 
 def get_latest_news(limit=3):
-    """Liefert die neuesten veröffentlichten News-Beiträge."""
+    """Liefert die neuesten veröffentlichten News-Beiträge (gemäß Meta-Sortierung: Angepinnt, Neueste)."""
     return list(
-        NewsArticle.objects.filter(is_published=True).order_by('-id')[:limit]
+        NewsArticle.objects.filter(is_published=True)[:limit]
     )
 
 
@@ -18,6 +18,4 @@ def get_pinned_news():
 
 def get_all_published_news():
     """Liefert alle veröffentlichten News für die News-Übersicht."""
-    return NewsArticle.objects.filter(is_published=True).order_by(
-        '-is_pinned', '-created_at'
-    )
+    return NewsArticle.objects.filter(is_published=True)

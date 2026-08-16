@@ -372,5 +372,38 @@ class AuthBackendAndLockoutTests(TestCase):
             # Sicherstellen, dass set_password aufgerufen wurde zur Timing-Mitigation
             mock_set_password.assert_called_once_with('SomePassword123!')
 
+    def test_authenticate_inactive_user_returns_none(self):
+        """
+        NEGATIV-TEST: Inaktive Accounts (z. B. unbestätigte E-Mail) dürfen durch authenticate()
+        strikt NICHT angemeldet werden, selbst wenn das Passwort korrekt ist.
+        """
+        from django.contrib.auth import authenticate
+        inactive_user = User.objects.create_user(
+            username='inactive_guest',
+            email='inactive@example.com',
+            password='CorrectPassword123!',
+            is_active=False,
+        )
+        # Login per Username
+        res_user = authenticate(username='inactive_guest', password='CorrectPassword123!')
+        self.assertIsNone(res_user)
+
+        # Login per E-Mail
+        res_email = authenticate(username='inactive@example.com', password='CorrectPassword123!')
+        self.assertIsNone(res_email)
+
+    def test_db_unique_email_constraint_raises_integrity_error(self):
+        """
+        NEGATIV-TEST: Die Datenbank verhindert Duplikate bei der E-Mail-Adresse per Unique-Constraint.
+        """
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            User.objects.create_user(
+                username='second_user_with_same_email',
+                email='authuser@example.com',  # Bereits in setUp vergeben
+                password='Password123!',
+            )
+
+
 
 

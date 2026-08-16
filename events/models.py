@@ -1,8 +1,16 @@
+import logging
 import secrets
 import uuid
-from django.db import models, transaction
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.utils import timezone
+from django.utils.text import slugify
+
+from configuration.cache import invalidate_event_capacity_cache
+from emails.services import send_system_email
+
+logger = logging.getLogger(__name__)
 
 
 def generate_short_code(length=8):
@@ -97,6 +105,13 @@ class Event(models.Model):
 
         return self.status
 
+    def get_effective_status_display(self):
+        """Liefert den lesbaren Text des berechneten effektiven Status."""
+        for choice_val, choice_label in self.Status.choices:
+            if choice_val == self.effective_status:
+                return choice_label
+        return self.get_status_display()
+
     def can_register(self, user=None):
         """
         Zentrale fachliche Prüfung (Single Source of Truth), ob eine Neuanmeldung möglich ist.
@@ -109,7 +124,7 @@ class Event(models.Model):
         if self.end_date and now > self.end_date:
             return False, "Der Anmeldezeitraum für diese Veranstaltung ist bereits verstrichen."
         if self.effective_status != self.Status.REGISTRATION_OPEN:
-            return False, f"Eine Anmeldung für '{self.title}' ist derzeit nicht möglich (Status: {self.get_status_display()})."
+            return False, f"Eine Anmeldung für '{self.title}' ist derzeit nicht möglich (Status: {self.get_effective_status_display()})."
         if self.is_full:
             return False, f"Die maximale Teilnehmerzahl ({self.max_guests}) für '{self.title}' ist bereits erreicht."
         if user and user.is_authenticated:
@@ -137,7 +152,6 @@ class Event(models.Model):
         return self.active_registrations_count >= self.max_guests
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         super().clean()
         if self.start_date and self.end_date and self.end_date <= self.start_date:
             raise ValidationError({'end_date': 'Das Enddatum muss nach dem Startdatum liegen.'})
@@ -145,10 +159,6 @@ class Event(models.Model):
             raise ValidationError({'is_active': 'Ein Event im Status "Entwurf" kann nicht als aktive Hauptveranstaltung gesetzt werden.'})
 
     def save(self, *args, **kwargs):
-        from django.core.exceptions import ValidationError
-        from django.db import transaction
-        from django.utils.text import slugify
-
         if not self.slug and self.title:
             base_slug = slugify(self.title) or "event"
             slug = base_slug
@@ -157,12 +167,6 @@ class Event(models.Model):
                 slug = f"{base_slug}-{count}"
                 count += 1
             self.slug = slug
-
-        now = timezone.now()
-
-        # Automatischer Statuswechsel auf FINISHED, wenn Enddatum vorüber ist
-        if self.end_date and now > self.end_date and self.status not in [self.Status.DRAFT, self.Status.CANCELLED]:
-            self.status = self.Status.FINISHED
 
         if self.start_date and self.end_date and self.end_date <= self.start_date:
             raise ValidationError({'end_date': 'Das Enddatum muss nach dem Startdatum liegen.'})
@@ -328,7 +332,6 @@ class EventRegistration(models.Model):
         return f"{self.user.username} -> {self.event.title} ({self.get_payment_status_display()})"
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         super().clean()
         if self.pk is None and self.event_id:
             can_reg, reason = self.event.can_register(user=self.user if self.user_id else None)
@@ -339,23 +342,14 @@ class EventRegistration(models.Model):
         if self.ticket_type and not self.ticket_type.is_active:
             raise ValidationError({'ticket_type': "Die ausgewählte Ticketkategorie ist inaktiv."})
 
-    def save(self, *args, **kwargs):
-        if not self.short_code:
-            self.short_code = generate_short_code()
-        super().save(*args, **kwargs)
-
-
     def mark_as_paid(self, amount=None, send_email=True):
         """
         Explizite Geschäftslogik-Methode: Markiert die Anmeldung als bezahlt.
         Führt gezielt alle zugehörigen Seiteneffekte aus:
         - Zeitstempel & Betrag setzen
-        - Sitzplatz auf RESERVED aktualisieren
+        - Sitzplatz auf RESERVED aktualisieren (Bulk)
         - E-Mail nach erfolgreichem DB-Commit via transaction.on_commit versenden
         """
-        from django.db import transaction
-        from django.utils import timezone
-
         self.payment_status = self.PaymentStatus.PAID
         if not self.paid_at:
             self.paid_at = timezone.now()
@@ -366,11 +360,10 @@ class EventRegistration(models.Model):
         self.cancelled_at = None
         self.save()
 
-        # Sitzplätze synchronisieren
-        for seat in list(self.seats.all()):
-            if seat.reservation_status != seat.ReservationStatus.RESERVED:
-                seat.reservation_status = seat.ReservationStatus.RESERVED
-                seat.save(update_fields=['reservation_status'])
+        # Sitzplätze synchronisieren (Bulk Update ohne N+1)
+        self.seats.filter(reservation_status='PRE').update(reservation_status='RESERVED')
+        if self.event_id:
+            invalidate_event_capacity_cache(self.event_id)
 
         # E-Mail erst NACH erfolgreichem DB-Commit versenden
         if send_email:
@@ -382,39 +375,35 @@ class EventRegistration(models.Model):
         Führt gezielt alle zugehörigen Bereinigungen aus:
         - Check-in Flags zurücksetzen
         - Storno-Zeitstempel setzen
-        - Zugewiesene Sitzplätze freigeben
+        - Zugewiesene Sitzplätze freigeben (Bulk)
         """
-        from django.utils import timezone
         self.payment_status = self.PaymentStatus.CANCELLED
         self.is_checked_in = False
         self.checked_in_at = None
         self.cancelled_at = timezone.now()
         self.save()
 
-        # Sitzplätze atomar freigeben
-        for seat in list(self.seats.all()):
-            seat.registration = None
-            seat.reservation_status = seat.ReservationStatus.FREE
-            seat.save(update_fields=['registration', 'reservation_status'])
+        # Sitzplätze atomar freigeben (Bulk Update)
+        self.seats.update(registration=None, reservation_status='FREE')
+        if self.event_id:
+            invalidate_event_capacity_cache(self.event_id)
 
     def save(self, *args, **kwargs):
         """
         Schlanke Persistenzmethode:
-        Validiert ausschließlich die fundamentale Datenintegrität vor dem DB-Write.
-        Keine versteckten E-Mails oder impliziten Sitzplatzmutationen.
+        Validiert ausschließlich Datenintegrität und erzeugt ggf. den kryptografischen short_code.
         """
+        if not self.short_code:
+            self.short_code = generate_short_code()
+
         if self.ticket_type and self.event_id and self.ticket_type.event_id != self.event_id:
-            from django.core.exceptions import ValidationError
             raise ValidationError({'ticket_type': "Das ausgewählte Ticket gehört nicht zu diesem Event."})
 
         super().save(*args, **kwargs)
 
-
-
     def send_payment_confirmation_email(self):
         """Sendet die automatische E-Mail-Zahlungsbestätigung an den Gast."""
         try:
-            from emails.services import send_system_email
             seat = self.seats.first()
             seat_label = seat.seat_label if seat else "Noch kein Sitzplatz"
 
@@ -429,8 +418,7 @@ class EventRegistration(models.Model):
             }
             send_system_email('payment_confirmation', self.user.email, context_data)
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Fehler beim Auslösen der Zahlungsbestätigung: {e}")
+            logger.error("Fehler beim Auslösen der Zahlungsbestätigung: %s", e)
 
 
 

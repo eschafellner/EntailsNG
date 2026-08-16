@@ -47,3 +47,11 @@ class NewsServiceTests(TestCase):
         # Angepinnte News muss an erster Stelle stehen
         self.assertEqual(all_news[0].title, 'News 2')
 
+    def test_get_latest_news_respects_ordering_by_pinned_and_date(self):
+        """Testet, dass get_latest_news nach -is_pinned, -created_at sortiert statt nach -id."""
+        from news.services import get_latest_news
+        news = get_latest_news(limit=2)
+        # News 2 ist angepinnt -> muss an erster Stelle sein
+        self.assertEqual(news[0].title, 'News 2')
+        self.assertEqual(news[1].title, 'News 1')
+

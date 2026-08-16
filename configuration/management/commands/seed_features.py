@@ -45,6 +45,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'Dashboard',
         'url_name': 'dashboard',
+        'icon_name': 'dashboard',
         'order': 1,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
@@ -56,6 +57,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'Turniere',
         'url_name': 'tournament_list',
+        'icon_name': 'tournaments',
         'order': 2,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
@@ -70,6 +72,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'Teams',
         'url_name': 'team_list',
+        'icon_name': 'teams',
         'order': 3,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
@@ -82,6 +85,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'Sitzplan',
         'url_name': 'seating_plan',
+        'icon_name': 'seating',
         'order': 4,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
@@ -93,6 +97,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'Infos',
         'url_name': 'event_info_detail',
+        'icon_name': 'info',
         'order': 5,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
@@ -105,6 +110,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'News',
         'url_name': 'news_list',
+        'icon_name': 'news',
         'order': 6,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
@@ -116,6 +122,7 @@ DEFAULT_NAV_ITEMS = [
     {
         'title': 'Clans',
         'url_name': 'clan_list',
+        'icon_name': 'clans',
         'order': 7,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
@@ -152,6 +159,7 @@ class Command(BaseCommand):
                 title=nav_data['title'],
                 defaults={
                     'url_name': nav_data['url_name'],
+                    'icon_name': nav_data.get('icon_name', 'dashboard'),
                     'order': nav_data['order'],
                     'icon_svg': nav_data['icon_svg'],
                     'is_active': True,
@@ -159,6 +167,7 @@ class Command(BaseCommand):
             )
             if not created:
                 item.url_name = nav_data['url_name']
+                item.icon_name = nav_data.get('icon_name', 'dashboard')
                 item.icon_svg = nav_data['icon_svg']
                 item.order = nav_data['order']
                 item.is_active = True

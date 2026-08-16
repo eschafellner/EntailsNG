@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -426,7 +427,7 @@ class EventStateAndLifecycleTests(TestCase):
             start_date=timezone.now() - timedelta(days=5),
             end_date=timezone.now() - timedelta(days=2),
         )
-        self.assertEqual(expired_event.status, Event.Status.FINISHED)
+        self.assertEqual(expired_event.status, Event.Status.REGISTRATION_OPEN)
         self.assertEqual(expired_event.effective_status, Event.Status.FINISHED)
 
     def test_clean_validation_draft_cannot_be_active(self):
@@ -742,6 +743,188 @@ class EventRegistrationValidationTests(TestCase):
         seat.refresh_from_db()
         self.assertIsNone(seat.registration)
         self.assertEqual(seat.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+    def test_reregister_after_cancellation_reactivates_cleanly(self):
+        """Funktionaler Test: Nach Storno kann sich der Gast problemlos erneut anmelden ohne IntegrityError."""
+        reg = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.CANCELLED,
+            cancelled_at=timezone.now()
+        )
+
+        # Erneute Registrierung über Service
+        reactivated_reg, created = RegistrationService.register_user(
+            user=self.user,
+            event_id=self.event.id
+        )
+
+        self.assertTrue(created)
+        self.assertEqual(reactivated_reg.id, reg.id)
+        self.assertEqual(reactivated_reg.payment_status, EventRegistration.PaymentStatus.UNPAID)
+        self.assertIsNone(reactivated_reg.cancelled_at)
+        self.assertIsNone(reactivated_reg.paid_at)
+
+    def test_event_effective_status_does_not_mutate_db_status_on_save(self):
+        """Architektur-Test: Event.save() überschreibt den Redakteurs-Status in der DB nicht still."""
+        past_event = Event.objects.create(
+            title="Old Event",
+            slug="old-event",
+            is_active=False,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() - timedelta(days=10),
+            end_date=timezone.now() - timedelta(days=5),
+        )
+
+        self.assertEqual(past_event.status, Event.Status.REGISTRATION_OPEN)
+        self.assertEqual(past_event.effective_status, Event.Status.FINISHED)
+        self.assertEqual(past_event.get_effective_status_display(), "Beendet")
+
+        # Bearbeitung (z.B. Tippfehler-Korrektur)
+        past_event.title = "Old Event (Korrektur)"
+        past_event.save()
+        past_event.refresh_from_db()
+
+        # DB-Status bleibt REGISTRATION_OPEN, effective_status bleibt FINISHED
+        self.assertEqual(past_event.status, Event.Status.REGISTRATION_OPEN)
+        self.assertEqual(past_event.effective_status, Event.Status.FINISHED)
+
+    def test_event_db_constraint_rejects_end_before_start(self):
+        """Sicherheitstest: DB CheckConstraint verhindert inkonsistente Event-Zeiträume."""
+        from django.db import IntegrityError
+        with self.assertRaises((IntegrityError, Exception)):
+            Event.objects.create(
+                title="Invalid Date Event",
+                slug="invalid-date",
+                is_active=False,
+                start_date=timezone.now() + timedelta(days=10),
+                end_date=timezone.now() + timedelta(days=5),
+            )
+
+
+class AdmissionAndPaymentHardeningTests(TestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_superuser(
+            username='scanner_staff', email='scanner@example.com', password='password'
+        )
+        self.user = User.objects.create_user(
+            username='player1', email='player1@example.com', password='password'
+        )
+        self.event = Event.objects.create(
+            title='Hardening LAN',
+            slug='hardening-lan',
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            max_guests=2,
+            start_date=timezone.now() + timedelta(days=5),
+            end_date=timezone.now() + timedelta(days=7),
+        )
+
+    def test_can_register_matrix(self):
+        """Umfassende Matrix-Prüfung aller Status-, Kapazitäts- und Voranmeldungs-Zustände."""
+        # 1. Normal geöffnet, Plätze frei
+        can, reason = self.event.can_register(user=self.user)
+        self.assertTrue(can)
+
+        # 2. Bereits angemeldet
+        EventRegistration.objects.create(user=self.user, event=self.event)
+        can, reason = self.event.can_register(user=self.user)
+        self.assertFalse(can)
+        self.assertIn("bereits", reason)
+
+        # 3. Anderer User, aber Event voll
+        user2 = User.objects.create_user(username='player2', email='player2@example.com', password='password')
+        EventRegistration.objects.create(user=user2, event=self.event)
+        user3 = User.objects.create_user(username='player3', email='player3@example.com', password='password')
+        can, reason = self.event.can_register(user=user3)
+        self.assertFalse(can)
+        self.assertIn("erreicht", reason.lower())
+
+        # 4. Status Draft
+        self.event.status = Event.Status.DRAFT
+        can, reason = self.event.can_register(user=user3)
+        self.assertFalse(can)
+
+        # 5. Status Cancelled
+        self.event.status = Event.Status.CANCELLED
+        can, reason = self.event.can_register(user=user3)
+        self.assertFalse(can)
+
+        # 6. Status Finished
+        self.event.status = Event.Status.FINISHED
+        can, reason = self.event.can_register(user=user3)
+        self.assertFalse(can)
+
+    def test_check_in_rejection_rules(self):
+        """Testet Check-in Regeln: Ablehnung bei unbezahlt und storniert."""
+        reg = EventRegistration.objects.create(user=self.user, event=self.event)
+
+        # 1. Unbezahlt -> Fehler
+        with self.assertRaises(ValidationError):
+            reg.check_in(actor=self.staff_user)
+
+        # 2. Bezahlt -> Erfolgreich
+        reg.mark_as_paid()
+        reg.check_in(actor=self.staff_user)
+        self.assertTrue(reg.is_checked_in)
+        self.assertIsNotNone(reg.checked_in_at)
+
+        # 3. Storniert -> Check-in unmöglich
+        reg.mark_as_cancelled()
+        with self.assertRaises(ValidationError):
+            reg.check_in(actor=self.staff_user)
+
+    def test_scan_qr_api_rejections_and_valid_scans(self):
+        """Testet scan_qr_api: Ablehnung von ungültigen/fremden Codes, Erst-Scan und Zweit-Scan."""
+        self.client.login(username='scanner_staff', password='password')
+
+        # 1. Ungültiger Token / Fake UUID
+        res = self.client.post(
+            reverse('api_scan_qr'),
+            data=json.dumps({'code': '00000000-0000-0000-0000-000000000000'}),
+            content_type='application/json'
+        )
+        self.assertEqual(res.status_code, 404)
+
+        # 2. Integer PK Attack Versuch (z. B. "1" oder "999") -> muss 404 liefern
+        res_pk = self.client.post(
+            reverse('api_scan_qr'),
+            data=json.dumps({'code': '1'}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_pk.status_code, 404)
+
+        # 3. Unbezahlte Registrierung gescannt -> 400 unpaid
+        unpaid_reg = EventRegistration.objects.create(user=self.user, event=self.event)
+        res_unpaid = self.client.post(
+            reverse('api_scan_qr'),
+            data=json.dumps({'code': str(unpaid_reg.checkin_token)}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_unpaid.status_code, 400)
+        self.assertEqual(res_unpaid.json()['status'], 'unpaid')
+
+        # 4. Bezahlt -> Erst-Scan liefert status: success
+        unpaid_reg.mark_as_paid()
+        res_valid = self.client.post(
+            reverse('api_scan_qr'),
+            data=json.dumps({'code': str(unpaid_reg.checkin_token)}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_valid.status_code, 200)
+        self.assertEqual(res_valid.json()['status'], 'success')
+        self.assertFalse(res_valid.json()['already_checked_in'])
+
+        # 5. Zweiter Scan desselben Gastes -> status: already_checked_in
+        res_second = self.client.post(
+            reverse('api_scan_qr'),
+            data=json.dumps({'code': str(unpaid_reg.checkin_token)}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_second.status_code, 200)
+        self.assertEqual(res_second.json()['status'], 'already_checked_in')
+        self.assertTrue(res_second.json()['already_checked_in'])
+
 
 
 

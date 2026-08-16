@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
 from events.models import Event, EventRegistration
+from configuration.cache import invalidate_event_capacity_cache
 from .models import SeatingCell, SeatingPlan
 
 logger = logging.getLogger(__name__)
@@ -178,7 +179,6 @@ def save_seating_plan(request, plan_id):
 
             # Einmalige Cache-Invalidierung nach DB-Commit
             if plan.event_id:
-                from configuration.context_processors import invalidate_event_capacity_cache
                 invalidate_event_capacity_cache(plan.event_id)
 
         return JsonResponse(
@@ -504,7 +504,6 @@ def admin_assign_seat(request):
         target_cell.save()
 
         # Cache-Invalidierung für Kapazitätsanzeige
-        from configuration.context_processors import invalidate_event_capacity_cache
         invalidate_event_capacity_cache(registration.event_id)
 
         return JsonResponse(
@@ -560,7 +559,6 @@ def admin_toggle_block_seat(request):
 
         cell.save(update_fields=['reservation_status', 'registration'])
 
-        from configuration.context_processors import invalidate_event_capacity_cache
         invalidate_event_capacity_cache(event_id)
 
         return JsonResponse({
@@ -589,7 +587,6 @@ def admin_release_seat(request):
     Transaktionssicher mit DB-Row-Lock.
     """
     try:
-        from configuration.context_processors import invalidate_event_capacity_cache
         data = json.loads(request.body)
         registration_id = data.get('registration_id')
         event_id = data.get('event_id')

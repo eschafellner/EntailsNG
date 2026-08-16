@@ -74,24 +74,24 @@ class EmailOrUsernameBackend(ModelBackend):
             user = User.objects.get(
                 Q(username__iexact=username) | Q(email__iexact=username)
             )
-        except User.DoesNotExist:
+        except (User.DoesNotExist, User.MultipleObjectsReturned):
             # Timing-Attack Mitigation: Konstante Laufzeit sicherstellen (Dummy-Hashing)
             User().set_password(password)
             _record_ip_failed_attempt(client_ip)
             return None
-        except User.MultipleObjectsReturned:
-            user = User.objects.filter(
-                Q(username__iexact=username) | Q(email__iexact=username)
-            ).first()
 
-        # 3. Prüfe, ob Konto aktuell temporär gesperrt ist (15 Minuten Sperre)
+        # 3. Inaktive Konten (z. B. vor Double Opt-In E-Mail-Verifizierung) dürfen sich nicht anmelden
+        if not user.is_active:
+            return None
+
+        # 4. Prüfe, ob Konto aktuell temporär gesperrt ist (15 Minuten Sperre)
         if user.is_locked():
             if request:
                 setattr(request, 'account_locked', True)
                 setattr(request, 'locked_user', user)
             return None
 
-        # 4. Passwort verifizieren
+        # 5. Passwort verifizieren
         if user.check_password(password):
             user.reset_lockout()
             return user

@@ -18,10 +18,16 @@ from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 't', 'yes')
+def env_bool(key, default=False):
+    """Parst eine Boolean-Umgebungsvariable robust und sicher."""
+    val = os.environ.get(key)
+    if val is None:
+        return default
+    return str(val).strip().lower() in ('true', '1', 't', 'yes')
+
+
+DEBUG = env_bool('DEBUG', default=True)
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
@@ -66,20 +72,9 @@ INSTALLED_APPS = [
     'tournaments',
 ]
 
-# WhiteNoise Erkennung mit sicherem Fallback
-try:
-    import whitenoise  # noqa: F401
-    HAS_WHITENOISE = True
-except ImportError:
-    HAS_WHITENOISE = False
-
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-]
-if HAS_WHITENOISE:
-    MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
-
-MIDDLEWARE += [
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -129,12 +124,16 @@ if DB_ENGINE == 'sqlite':
         }
     }
 else:
+    db_password = os.environ.get('DB_PASSWORD')
+    if not DEBUG and not db_password and 'test' not in sys.argv:
+        raise ImproperlyConfigured("Umgebungsvariable DB_PASSWORD ist für den Produktionsbetrieb (DEBUG=False) zwingend erforderlich!")
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.environ.get('DB_NAME', 'entailsng_db'),
             'USER': os.environ.get('DB_USER', 'entailsng'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'entailsng_secret'),
+            'PASSWORD': db_password or 'entailsng_secret',
             'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
             'PORT': os.environ.get('DB_PORT', '5432'),
             'CONN_MAX_AGE': 600,
@@ -158,6 +157,12 @@ else:
             'LOCATION': 'entailsng-local-cache',
         }
     }
+    if not DEBUG:
+        import warnings
+        warnings.warn(
+            "Ohne REDIS_URL ist der Cache prozesslokal (LocMemCache) – Backend-Änderungen greifen unter Multi-Worker-Betrieb (z. B. Gunicorn) verzögert!",
+            RuntimeWarning,
+        )
 
 
 # Password validation
@@ -190,12 +195,10 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-if HAS_WHITENOISE and not DEBUG and 'test' not in sys.argv:
+if not DEBUG and 'test' not in sys.argv:
     STATICFILES_STORAGE_BACKEND = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-elif HAS_WHITENOISE:
-    STATICFILES_STORAGE_BACKEND = "whitenoise.storage.CompressedStaticFilesStorage"
 else:
-    STATICFILES_STORAGE_BACKEND = "django.contrib.staticfiles.storage.StaticFilesStorage"
+    STATICFILES_STORAGE_BACKEND = "whitenoise.storage.CompressedStaticFilesStorage"
 
 STORAGES = {
     "default": {
@@ -210,7 +213,7 @@ STORAGES = {
 # Uploaded Media
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-SERVE_MEDIA = os.environ.get('SERVE_MEDIA', 'True' if DEBUG else 'False').lower() in ('true', '1', 't', 'yes')
+SERVE_MEDIA = env_bool('SERVE_MEDIA', default=True if DEBUG else False)
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -227,17 +230,25 @@ AUTHENTICATION_BACKENDS = [
 # E-Mail Timeout in Sekunden (Schutz vor blockierenden SMTP-Sockets im Webserver)
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
 
-# Reverse Proxy SSL Header
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# Reverse Proxy SSL Header (nur aktivieren, wenn die App explizit hinter einem Reverse Proxy betrieben wird)
+BEHIND_PROXY = env_bool('BEHIND_PROXY', default=False)
+if BEHIND_PROXY:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+else:
+    SECURE_PROXY_SSL_HEADER = None
 
-# Security Header für Produktion
+# Security Header für Produktion (DEBUG=False)
 if not DEBUG:
-    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1', 't', 'yes')
-    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() in ('true', '1', 't', 'yes')
-    CSRF_COOKIE_SECURE = os.environ.get('CSRF_COOKIE_SECURE', 'True').lower() in ('true', '1', 't', 'yes')
-    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', default=True)
+    SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', default=True)
+    CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', default=True)
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+
+    # HSTS (HTTP Strict Transport Security)
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True)
+    SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', default=False)
 
 
 # Standardisiertes Logging

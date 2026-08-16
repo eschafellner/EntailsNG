@@ -1,7 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from configuration.models import FeatureFlag, NavigationItem, SystemTranslation
+from configuration.models import (
+    FeatureFlag,
+    NavigationItem,
+    SiteCustomization,
+    SystemTranslation,
+)
 
 
 User = get_user_model()
@@ -318,16 +323,24 @@ class ConfigurationModelTests(TestCase):
     def test_navigation_item_svg_sanitization_positive(self):
         """Positiver Test: Gültiges Vektor-SVG wird anstandslos validiert und gespeichert."""
         valid_svg = '<svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>'
-        item = NavigationItem(title="Valid Nav", url_name="dashboard", order=10, icon_svg=valid_svg)
+        item = NavigationItem(title="Valid Nav", url_name="dashboard", icon_name=NavigationItem.IconChoices.CUSTOM, order=10, icon_svg=valid_svg)
         item.clean()
         item.save()
         self.assertEqual(item.icon_svg, valid_svg)
 
+    def test_navigation_item_uses_system_icons(self):
+        """Testet, dass NavigationItem Standard-Icons aus der sicheren System-Icon-Registry rendert."""
+        item = NavigationItem(title="Turniere Nav", url_name="dashboard", icon_name=NavigationItem.IconChoices.TOURNAMENTS, order=5)
+        item.clean()
+        item.save()
+        self.assertIn('<svg', item.get_icon_svg())
+        self.assertIn('viewBox="0 0 24 24"', item.get_icon_svg())
+
     def test_navigation_item_svg_sanitization_rejects_script_tag(self):
-        """Sicherheitstest: <script> Tags in SVG-Icons werden mit ValidationError blockiert."""
+        """Sicherheitstest: <script> Tags in benutzerdefinierten SVG-Icons werden mit ValidationError blockiert."""
         from django.core.exceptions import ValidationError
         evil_svg = '<svg width="20" height="20"><script>alert("XSS")</script></svg>'
-        item = NavigationItem(title="Evil Nav", url_name="dashboard", order=10, icon_svg=evil_svg)
+        item = NavigationItem(title="Evil Nav", url_name="dashboard", icon_name=NavigationItem.IconChoices.CUSTOM, order=10, icon_svg=evil_svg)
         with self.assertRaises(ValidationError) as ctx:
             item.clean()
         self.assertIn("Nicht erlaubtes SVG-Tag '<script>'", str(ctx.exception))
@@ -336,7 +349,7 @@ class ConfigurationModelTests(TestCase):
         """Sicherheitstest: Event-Handler wie onload werden mit ValidationError blockiert."""
         from django.core.exceptions import ValidationError
         evil_svg = '<svg width="20" height="20" onload="alert(1)"><circle cx="10" cy="10" r="5"/></svg>'
-        item = NavigationItem(title="Evil Nav 2", url_name="dashboard", order=10, icon_svg=evil_svg)
+        item = NavigationItem(title="Evil Nav 2", url_name="dashboard", icon_name=NavigationItem.IconChoices.CUSTOM, order=10, icon_svg=evil_svg)
         with self.assertRaises(ValidationError) as ctx:
             item.clean()
         self.assertIn("Nicht erlaubtes Attribut 'onload'", str(ctx.exception))
@@ -345,20 +358,97 @@ class ConfigurationModelTests(TestCase):
         """Sicherheitstest: Gefährliche javascript: URIs werden blockiert."""
         from django.core.exceptions import ValidationError
         evil_svg = '<svg width="20" height="20"><use href="javascript:alert(1)"/></svg>'
-        item = NavigationItem(title="Evil Nav 3", url_name="dashboard", order=10, icon_svg=evil_svg)
+        item = NavigationItem(title="Evil Nav 3", url_name="dashboard", icon_name=NavigationItem.IconChoices.CUSTOM, order=10, icon_svg=evil_svg)
         with self.assertRaises(ValidationError) as ctx:
             item.clean()
         self.assertIn("Gefährliche URI", str(ctx.exception))
-
 
     def test_navigation_item_svg_sanitization_rejects_doctype_xxe(self):
         """Sicherheitstest: DOCTYPE / XXE Injektionen werden sofort abgewiesen."""
         from django.core.exceptions import ValidationError
         xxe_svg = '<!DOCTYPE svg SYSTEM "http://attacker.com/xxe"><svg width="20" height="20"></svg>'
-        item = NavigationItem(title="XXE Nav", url_name="dashboard", order=10, icon_svg=xxe_svg)
+        item = NavigationItem(title="XXE Nav", url_name="dashboard", icon_name=NavigationItem.IconChoices.CUSTOM, order=10, icon_svg=xxe_svg)
         with self.assertRaises(ValidationError) as ctx:
             item.clean()
         self.assertIn("DOCTYPE", str(ctx.exception))
+
+    def test_html_sanitizer_removes_dangerous_tags_and_events(self):
+        """Sicherheitstest: Rechtstexte filtern <script>, <iframe>, onclick und javascript: URIs sicher heraus."""
+        from configuration.models import sanitize_html
+        dirty = (
+            '<h3>Impressum</h3><script>steal()</script>'
+            '<p onclick="pwn()">Text <a href="javascript:hack()">Link</a>'
+            '<iframe src="http://evil.com"></iframe></p>'
+        )
+        clean = sanitize_html(dirty)
+        self.assertNotIn('<script>', clean)
+        self.assertNotIn('<iframe>', clean)
+        self.assertNotIn('onclick', clean)
+        self.assertNotIn('javascript:hack()', clean)
+        self.assertIn('<h3>Impressum</h3>', clean)
+        self.assertIn('Text', clean)
+
+    def test_sitecustomization_clean_sanitizes_legal_texts(self):
+        """Sicherheitstest: SiteCustomization.clean() bereinigt Impressum und Datenschutz."""
+        custom = SiteCustomization.load()
+        custom.impressum_content = '<h3>Title</h3><script>alert(1)</script><p>Info</p>'
+        custom.datenschutz_content = '<p onmouseover="bad()">Datenschutz <a href="javascript:bad()">Link</a></p>'
+        custom.save()
+        custom.refresh_from_db()
+        self.assertNotIn('<script>', custom.impressum_content)
+        self.assertNotIn('onmouseover', custom.datenschutz_content)
+        self.assertNotIn('javascript:', custom.datenschutz_content)
+
+    def test_custom_css_validation_rejects_malicious_code(self):
+        """Sicherheitstest: Bösartiges CSS (@import, javascript:, expression) wird abgewiesen."""
+        from django.core.exceptions import ValidationError
+        custom = SiteCustomization.load()
+        custom.custom_css = 'body { background: url(javascript:alert(1)); }'
+        with self.assertRaises(ValidationError):
+            custom.clean()
+
+        custom.custom_css = '@import url("http://evil.com/style.css");'
+        with self.assertRaises(ValidationError):
+            custom.clean()
+
+    def test_admin_readonly_fields_for_non_superusers(self):
+        """
+        Sicherheitstest / Privilege Escalation Prevention:
+        Staff-Redakteure (is_staff=True, is_superuser=False) haben keinen Schreibzugriff
+        auf custom_css, Rechtstexte oder rohes SVG im Django-Admin.
+        """
+        from django.contrib.admin.sites import AdminSite
+        from configuration.admin import SiteCustomizationAdmin, NavigationItemAdmin
+        from django.contrib.auth import get_user_model
+        from unittest.mock import Mock
+
+        User = get_user_model()
+        staff_request = Mock()
+        staff_request.user = Mock()
+        staff_request.user.is_superuser = False
+
+        admin_site = AdminSite()
+        site_admin = SiteCustomizationAdmin(SiteCustomization, admin_site)
+        readonly_site = site_admin.get_readonly_fields(staff_request)
+        self.assertIn('custom_css', readonly_site)
+        self.assertIn('impressum_content', readonly_site)
+        self.assertIn('datenschutz_content', readonly_site)
+
+        nav_admin = NavigationItemAdmin(NavigationItem, admin_site)
+        readonly_nav = nav_admin.get_readonly_fields(staff_request)
+        self.assertIn('icon_svg', readonly_nav)
+
+        # Superuser hat vollen Schreibzugriff auf sensible Felder
+        super_request = Mock()
+        super_request.user = Mock()
+        super_request.user.is_superuser = True
+        super_site_readonly = site_admin.get_readonly_fields(super_request)
+        self.assertNotIn('custom_css', super_site_readonly)
+        self.assertNotIn('impressum_content', super_site_readonly)
+        self.assertNotIn('datenschutz_content', super_site_readonly)
+
+        super_nav_readonly = nav_admin.get_readonly_fields(super_request)
+        self.assertNotIn('icon_svg', super_nav_readonly)
 
     def test_translation_template_tag_default_and_override(self):
         """Test für {% t %} Template-Tag mit Default-Werten, DB-Overrides und Fallbacks."""
@@ -378,7 +468,6 @@ class ConfigurationModelTests(TestCase):
         t_default = Template('{% t "seat_card_title" %}')
         self.assertEqual(t_default.render(Context({})), 'SITZPLATZBUCHUNG')
 
-
     def test_context_processor_is_lean_without_txt_bloat(self):
         """Testet, dass der Context Processor keine 400 txt_* Keys mehr injiziert."""
         response = self.client.get(reverse('dashboard'))
@@ -393,6 +482,7 @@ class ConfigurationModelTests(TestCase):
         self.assertIn('features', response.context)
         self.assertIn('nav_items', response.context)
         self.assertIn('site_customization', response.context)
+
 
 
 

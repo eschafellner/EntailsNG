@@ -1,15 +1,10 @@
 # seating/services.py
 from django.core.cache import cache
+from configuration.cache import invalidate_event_capacity_cache
 from .models import SeatingCell, SeatingPlan
 
 CAPACITY_CACHE_KEY_PREFIX = 'event_capacity_stats_'
 CACHE_SECONDS = 300
-
-
-def invalidate_event_capacity_cache(event_id):
-    """Löscht den gecachten Sitzplatz-Statistik-Wert für das angegebene Event."""
-    if event_id:
-        cache.delete(f"{CAPACITY_CACHE_KEY_PREFIX}{event_id}")
 
 
 def get_event_capacity_stats(upcoming_event):

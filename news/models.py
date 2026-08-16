@@ -32,7 +32,7 @@ class NewsArticle(models.Model):
     class Meta:
         verbose_name = "News-Beitrag"
         verbose_name_plural = "News-Beiträge"
-        ordering = ["-is_pinned", "-created_at"]  # Angepinnte Beiträge zuerst, dann neueste
+        ordering = ["-is_pinned", "-created_at", "-id"]  # Angepinnte Beiträge zuerst, dann neueste
 
     def __str__(self):
         return self.title

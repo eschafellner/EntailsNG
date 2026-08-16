@@ -1,9 +1,12 @@
 # events/views.py
 import json
+import logging
+import re
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -11,6 +14,8 @@ from django.views.decorators.http import require_POST
 from .models import Event, EventRegistration, TicketType
 from .services import RegistrationService
 from .exceptions import RegistrationError
+
+logger = logging.getLogger(__name__)
 
 from configuration.models import FeatureFlag
 from news.services import get_latest_news, get_pinned_news
@@ -143,6 +148,7 @@ def register_for_event(request, event_id):
     except RegistrationError as e:
         messages.error(request, str(e))
     except Exception as e:
+        logger.exception("Unerwarteter Fehler bei der Event-Registrierung für Event %s von User %s: %s", event_id, request.user, e)
         messages.error(request, 'Bei der Anmeldung ist ein unerwarteter Fehler aufgetreten.')
 
     return redirect('dashboard')
@@ -324,7 +330,16 @@ def scan_qr_api(request):
     Sicherheit: Akzeptiert ausschließlich unerratbare UUIDv4 (QR) oder kryptografischen short_code (8-stellig).
     Ein Fallback auf fortlaufende Primärschlüssel (pk) ist strikt verboten!
     """
-    import re
+    # Rate-Limiting gegen automatisiertes Durchprobieren / Flooding
+    rate_key = f"rate_limit_scan_qr_{request.user.id}"
+    attempts = cache.get(rate_key, 0)
+    if attempts >= 60:
+        return JsonResponse(
+            {'status': 'error', 'message': 'Zu viele Scan-Anfragen in kurzer Zeit. Bitte kurz warten.'},
+            status=429,
+        )
+    cache.set(rate_key, attempts + 1, 60)
+
     try:
         data = json.loads(request.body)
         code_str = str(data.get('code', '')).strip()

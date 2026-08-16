@@ -19,10 +19,19 @@ class SystemTranslationAdmin(admin.ModelAdmin):
 
 @admin.register(NavigationItem)
 class NavigationItemAdmin(admin.ModelAdmin):
-    list_display = ('order', 'title', 'url_name', 'badge_text', 'is_active')
+    list_display = ('order', 'title', 'url_name', 'icon_name', 'badge_text', 'is_active')
     list_display_links = ('title',)  # Verhindert den Django admin.E124 Fehler
     list_editable = ('order', 'is_active')
     ordering = ('order',)
+    fields = ('title', 'url_name', 'icon_name', 'icon_svg', 'badge_text', 'order', 'is_active')
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if not request.user.is_superuser:
+            # Roher SVG-Code ist nur für Superuser editierbar (Staff nutzt die sichere icon_name Auswahlliste)
+            if 'icon_svg' not in readonly:
+                readonly.append('icon_svg')
+        return readonly
 
 
 from django.urls import path
@@ -181,5 +190,14 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if not request.user.is_superuser:
+            # Sensible HTML/CSS-Felder dürfen nur von echten Superusern geändert werden
+            for field in ('custom_css', 'impressum_content', 'datenschutz_content'):
+                if field not in readonly:
+                    readonly.append(field)
+        return readonly
 
 
