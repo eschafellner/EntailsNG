@@ -1,13 +1,12 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from events.models import Event, EventRegistration
 
 
 class SeatingPlan(models.Model):
     """Sitzplan-Raster / Halle für eine Veranstaltung"""
 
     event = models.OneToOneField(
-        Event,
+        'events.Event',
         on_delete=models.CASCADE,
         related_name='seating_plan',  # Singular macht hier jetzt auch mehr Sinn
         null=True,
@@ -56,7 +55,7 @@ class SeatingPlan(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
         if self.event_id:
-            from configuration.context_processors import invalidate_event_capacity_cache
+            from seating.services import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(self.event_id)
 
 
@@ -64,7 +63,7 @@ class SeatingPlan(models.Model):
         event_id = self.event_id
         res = super().delete(*args, **kwargs)
         if event_id:
-            from configuration.context_processors import invalidate_event_capacity_cache
+            from seating.services import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(event_id)
         return res
 
@@ -102,7 +101,7 @@ class SeatingPlan(models.Model):
 
         SeatingCell.objects.bulk_create(new_cells)
         if new_event:
-            from configuration.context_processors import invalidate_event_capacity_cache
+            from seating.services import invalidate_event_capacity_cache
             invalidate_event_capacity_cache(new_event.id)
         return new_plan
 
@@ -149,7 +148,7 @@ class SeatingCell(models.Model):
     )
 
     registration = models.ForeignKey(
-        EventRegistration,
+        'events.EventRegistration',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -222,7 +221,7 @@ class SeatingCell(models.Model):
             return False, "Dieser Platz ist bereits fest reserviert und bezahlt."
 
         has_paid = (
-            registration.payment_status == EventRegistration.PaymentStatus.PAID
+            getattr(registration, 'payment_status', None) == 'PAID'
         )
 
         if self.reservation_status == self.ReservationStatus.PRE_RESERVED and self.registration != registration:
@@ -238,7 +237,7 @@ class SeatingCell(models.Model):
             return False, msg
 
         has_paid = (
-            registration.payment_status == EventRegistration.PaymentStatus.PAID
+            getattr(registration, 'payment_status', None) == 'PAID'
         )
 
 
@@ -249,6 +248,7 @@ class SeatingCell(models.Model):
         else:
             self.reservation_status = self.ReservationStatus.PRE_RESERVED
             msg = "Platz erfolgreich vorgemerkt."
+
 
         self.save()
         return True, msg

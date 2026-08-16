@@ -111,3 +111,25 @@ class EmailSystemTests(TestCase):
         sent_msg = mail.outbox[0]
         self.assertIn('testguest@example.com', sent_msg.to)
         self.assertIn('E-Mail LAN 2026', sent_msg.subject)
+
+    def test_email_timeout_setting_configured(self):
+        """Prüft, dass EMAIL_TIMEOUT in Django-Settings konfiguriert ist (Schutz vor hängenden Webserver-Threads)."""
+        from django.conf import settings
+        self.assertTrue(hasattr(settings, 'EMAIL_TIMEOUT'))
+        self.assertGreater(settings.EMAIL_TIMEOUT, 0)
+
+    def test_send_system_email_passes_timeout(self):
+        """Prüft, dass send_system_email timeout an get_connection weiterreicht."""
+        from unittest.mock import patch
+        with patch('emails.services.get_connection') as mock_get_conn:
+            mock_conn_instance = mock_get_conn.return_value
+            send_system_email(
+                'payment_confirmation',
+                'testguest@example.com',
+                {'full_name': 'Max', 'event_title': 'LAN', 'amount': '10'},
+            )
+            mock_get_conn.assert_called()
+            call_kwargs = mock_get_conn.call_args[1]
+            self.assertIn('timeout', call_kwargs)
+            self.assertEqual(call_kwargs['timeout'], 10)
+

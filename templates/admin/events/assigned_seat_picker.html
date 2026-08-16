@@ -1,0 +1,39 @@
+{% load static %}
+<div style="display: flex; align-items: center; gap: 15px;">
+  <strong id="current-seat-display" style="font-size: 14px;">{{ seat_text }}</strong>
+  {% if has_plan %}
+    <button type="button" class="button" style="background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" onclick="openSeatModal({{ event_id }})">
+      🪑 Sitzplatz wählen / ändern
+    </button>
+    {% if current_seat %}
+      <button type="button" class="button" style="background: #dc2626; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" onclick="deleteSeatAssignment({{ obj.pk }}, '{{ obj.user.username|escapejs }}')">
+        🗑️ Sitzplatzzuweisung löschen
+      </button>
+    {% endif %}
+  {% endif %}
+</div>
+
+{% if has_plan %}
+<!-- Modal Popup -->
+<div id="seatModal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); align-items: center; justify-content: center;">
+  <div style="background: #1e293b; padding: 25px; border-radius: 12px; color: white; max-width: 90vw; max-height: 85vh; overflow: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <h3 style="margin: 0; color: white;">Sitzplatz auswählen für {{ obj.user.username }}</h3>
+      <button type="button" onclick="closeSeatModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer;">✖</button>
+    </div>
+
+    <div id="modal-grid-container" data-event-id="{{ event_id }}" data-reg-id="{{ obj.pk }}" data-username="{{ obj.user.username }}" style="background: #0f172a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      Lade Sitzplan...
+    </div>
+
+    <div style="display: flex; gap: 15px; font-size: 12px; color: #cbd5e1;">
+      <span><strong style="color:#22c55e">■</strong> Frei (Klicken zum Buchen)</span>
+      <span><strong style="color:#f97316">■</strong> Vorgemerkt</span>
+      <span><strong style="color:#ef4444">■</strong> Bezahlt</span>
+      <span><strong style="color:#3b82f6">■</strong> Aktuell gewählt</span>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/admin-seat-picker.js' %}"></script>
+{% endif %}

@@ -4,8 +4,8 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from events.models import Event, EventRegistration
-from seating.models import SeatingCell
+from events.models import Event
+from seating.services import get_user_seat_map
 from .forms import ClanForm, ClanJoinPasswordForm
 from .models import Clan, ClanMembership
 
@@ -15,7 +15,7 @@ def clan_list_view(request):
     Übersicht aller Clans (veranstaltungsübergreifend).
     Zeigt für jeden Clan die Mitgliederanzahl sowie optional die Anzahl der für das aktive Event angemeldeten Mitglieder.
     """
-    active_event = Event.objects.filter(is_active=True).first()
+    active_event = Event.objects.get_active()
     user_membership = (
         ClanMembership.get_user_active_membership(request.user)
         if request.user.is_authenticated
@@ -76,19 +76,12 @@ def clan_detail_view(request, slug):
         list(clan.get_pending_memberships()) if is_clan_admin else []
     )
 
-    # Sitzplätze aller Mitglieder beim aktiven Event in EINER Query abfragen (N+1 Vermeidung)
-    active_event = Event.objects.filter(is_active=True).first()
+    # Sitzplätze aller Mitglieder beim aktiven Event via Domain Service abfragen (N+1 Vermeidung)
+    active_event = Event.objects.get_active()
     user_seat_map = {}
     if active_event and accepted_memberships:
         member_user_ids = [m.user_id for m in accepted_memberships]
-        seats = SeatingCell.objects.filter(
-            plan__event=active_event,
-            registration__user_id__in=member_user_ids
-        ).select_related('registration')
-
-        for s in seats:
-            if s.registration_id and s.registration.user_id:
-                user_seat_map[s.registration.user_id] = s.seat_label or f"Pos ({s.x},{s.y})"
+        user_seat_map = get_user_seat_map(active_event, member_user_ids)
 
     members_with_seats = [
         {
@@ -98,6 +91,7 @@ def clan_detail_view(request, slug):
         }
         for m in accepted_memberships
     ]
+
 
     join_form = ClanJoinPasswordForm()
 

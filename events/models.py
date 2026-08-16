@@ -1,7 +1,17 @@
+import secrets
 import uuid
 from django.db import models, transaction
 from django.conf import settings
 from django.utils import timezone
+
+
+def generate_short_code(length=8):
+    """
+    Generiert einen 8-stelligen unerratbaren, verwechslungsfreien Ticket-Kurzcode.
+    Alphabet schließt 0/O und 1/I/L aus, um Lesefehler am Einlass zu verhindern.
+    """
+    alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 
 class EventManager(models.Manager):
@@ -260,6 +270,15 @@ class EventRegistration(models.Model):
         verbose_name="Check-in Secret Token",
         help_text="Eindeutiges Token für den QR-Code Einlass-Scan",
     )
+    short_code = models.CharField(
+        max_length=12,
+        default=generate_short_code,
+        unique=True,
+        db_index=True,
+        editable=False,
+        verbose_name="Ticket-Kurzcode",
+        help_text="8-stelliger unerratbarer Code für die manuelle Einlass-Eingabe",
+    )
 
     def can_check_in(self, actor=None):
         """
@@ -319,6 +338,12 @@ class EventRegistration(models.Model):
             raise ValidationError({'ticket_type': "Das ausgewählte Ticket gehört nicht zu diesem Event."})
         if self.ticket_type and not self.ticket_type.is_active:
             raise ValidationError({'ticket_type': "Die ausgewählte Ticketkategorie ist inaktiv."})
+
+    def save(self, *args, **kwargs):
+        if not self.short_code:
+            self.short_code = generate_short_code()
+        super().save(*args, **kwargs)
+
 
     def mark_as_paid(self, amount=None, send_email=True):
         """
@@ -408,17 +433,6 @@ class EventRegistration(models.Model):
             logging.getLogger(__name__).error(f"Fehler beim Auslösen der Zahlungsbestätigung: {e}")
 
 
-from django.db.models.signals import pre_delete
-from django.dispatch import receiver
 
-
-@receiver(pre_delete, sender=EventRegistration)
-def release_seats_on_registration_delete(sender, instance, **kwargs):
-    """Gibt alle verknüpften Sitzplätze frei, wenn eine EventRegistration gelöscht wird."""
-    from seating.models import SeatingCell
-    SeatingCell.objects.filter(registration=instance).update(
-        registration=None,
-        reservation_status=SeatingCell.ReservationStatus.FREE
-    )
 
 

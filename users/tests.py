@@ -48,6 +48,24 @@ class RegistrationViewTests(TestCase):
         self.assertFalse(user.is_active)  # Inaktiv bis zur Double Opt-In Verifizierung!
         self.assertTrue(user.verification_codes.exists())
 
+    def test_register_sends_verification_email_on_commit(self):
+        """Prüft, dass der Verifizierungsmail-Versand per transaction.on_commit nach dem DB-Commit ausgelöst wird."""
+        from django.core import mail
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('register'),
+                {
+                    'username': 'oncommituser',
+                    'email': 'oncommit@example.com',
+                    'birthday': '2000-05-15',
+                    'password1': 'StrongPass123!',
+                    'password2': 'StrongPass123!',
+                },
+            )
+        self.assertRedirects(response, reverse('verify_email'))
+        self.assertTrue(any('oncommit@example.com' in m.to for m in mail.outbox))
+
+
 
 class DoubleOptInTests(TestCase):
 

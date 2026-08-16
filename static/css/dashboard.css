@@ -1,0 +1,84 @@
+/* dashboard.css - Modularisierte Styles für das Dashboard */
+
+.ticket-wrapper {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.countdown-expired {
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.countdown-live {
+  color: #22c55e;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.minimap-wrapper {
+  background: #161e2e;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.minimap-container {
+  display: inline-grid;
+  gap: 3px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 8px;
+  background: #0b0f17;
+  border-radius: 6px;
+}
+
+.minimap-empty {
+  font-size: 11px;
+  color: #9ca3af;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.minimap-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.minimap-cell-empty {
+  background: transparent;
+}
+
+.minimap-cell-own {
+  background: #f8ab2d;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px #f8ab2d;
+  transform: scale(1.2);
+  z-index: 10;
+}
+
+.minimap-cell-free {
+  background: rgba(34, 197, 94, 0.4);
+  border: 1px solid #22c55e;
+}
+
+.minimap-cell-pre {
+  background: rgba(234, 179, 8, 0.4);
+  border: 1px solid #eab308;
+}
+
+.minimap-cell-reserved {
+  background: rgba(239, 68, 68, 0.4);
+  border: 1px solid #ef4444;
+}
+
+.minimap-cell-obstacle {
+  background: #374151;
+}

@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 
@@ -189,8 +190,10 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-if HAS_WHITENOISE:
+if HAS_WHITENOISE and not DEBUG and 'test' not in sys.argv:
     STATICFILES_STORAGE_BACKEND = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+elif HAS_WHITENOISE:
+    STATICFILES_STORAGE_BACKEND = "whitenoise.storage.CompressedStaticFilesStorage"
 else:
     STATICFILES_STORAGE_BACKEND = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
@@ -220,6 +223,9 @@ LOGIN_URL = '/login/'
 AUTHENTICATION_BACKENDS = [
     'users.auth_backends.EmailOrUsernameBackend',
 ]
+
+# E-Mail Timeout in Sekunden (Schutz vor blockierenden SMTP-Sockets im Webserver)
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
 
 # Reverse Proxy SSL Header
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

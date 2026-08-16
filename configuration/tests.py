@@ -201,8 +201,9 @@ class ConfigurationModelTests(TestCase):
         from django.utils import timezone
         from events.models import Event
         from seating.models import SeatingPlan, SeatingCell
-        from configuration.context_processors import get_event_capacity_stats, CAPACITY_CACHE_KEY_PREFIX
+        from seating.services import get_event_capacity_stats, CAPACITY_CACHE_KEY_PREFIX
         from django.core.cache import cache
+
 
         cache.clear()
 

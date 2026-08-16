@@ -140,6 +140,7 @@ class CustomPasswordResetForm(forms.Form):
         from django.utils.http import urlsafe_base64_encode
         from emails.services import send_system_email
 
+        from django.db import transaction
         email = self.cleaned_data["email"]
         if token_generator is None:
             token_generator = default_token_generator
@@ -158,6 +159,9 @@ class CustomPasswordResetForm(forms.Form):
                 "full_name": user.get_full_name() or user.username,
                 "reset_link": reset_link,
             }
-            send_system_email("password_reset", user.email, context_data)
+            transaction.on_commit(
+                lambda u=user, ctx=context_data: send_system_email("password_reset", u.email, ctx)
+            )
+
 
 

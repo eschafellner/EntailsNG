@@ -1,0 +1,35 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/admin-seating.css' %}">
+
+<div class="seat-preview-container">
+  <div class="seat-grid" style="grid-template-columns: repeat({{ plan.columns }}, 30px);">
+    {% for row in grid_rows %}
+      {% for cell_data in row %}
+        <div class="preview-cell" 
+             {% if cell_data.click_handler %}{{ cell_data.click_handler|safe }}{% endif %} 
+             style="background: {{ cell_data.bg_color }}; cursor: {{ cell_data.cursor }}; {% if cell_data.is_blocked %}border: 1px solid #ef4444;{% endif %}">
+          {{ cell_data.content }}
+          {% if cell_data.tooltip %}
+            <div class="tooltip">
+              <div><b>Platz:</b> {{ cell_data.tooltip.seat_label }}</div>
+              <div><b>Status:</b> {{ cell_data.tooltip.status_info }}</div>
+              <div><b>Inhaber:</b> {{ cell_data.tooltip.user_info|safe }}</div>
+              <div style="color:#94a3b8; margin-top:4px;">{{ cell_data.tooltip.action_hint }}</div>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+</div>
+
+<div class="seat-legend">
+  <span><strong style="color:#22c55e">■</strong> Frei</span>
+  <span><strong style="color:#f97316">■</strong> Vorgemerkt</span>
+  <span><strong style="color:#ef4444">■</strong> Bezahlt (Noch nicht da)</span>
+  <span><strong style="color:#991b1b">■</strong> Eingecheckt (Vor Ort)</span>
+  <span><strong style="color:#000000; background:#000; border:1px solid #ef4444; padding:0 2px;">■</strong> Gesperrt</span>
+  <span><strong style="color:#64748b">■</strong> Wand</span>
+</div>
+
+<script src="{% static 'js/admin-seat-preview.js' %}"></script>

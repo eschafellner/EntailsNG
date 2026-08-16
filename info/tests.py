@@ -17,3 +17,18 @@ class EventInfoViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'LAN Info &amp; Regeln')
         self.assertContains(response, 'WLAN Passwort & Catering Infos')
+
+
+class InfoServiceTests(TestCase):
+
+    def test_get_event_info_returns_instance(self):
+        from info.services import get_event_info
+        EventInfo.objects.create(
+            title='FAQ & Ablauf',
+            subtitle='Wegbeschreibung',
+            content='<p>Parkplätze vorhanden</p>',
+        )
+        info = get_event_info()
+        self.assertIsNotNone(info)
+        self.assertEqual(info.title, 'FAQ & Ablauf')
+

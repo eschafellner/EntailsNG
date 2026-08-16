@@ -8,14 +8,14 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from info.models import EventInfo
-from news.models import NewsArticle
-
 from .models import Event, EventRegistration, TicketType
 from .services import RegistrationService
 from .exceptions import RegistrationError
 
 from configuration.models import FeatureFlag
+from news.services import get_latest_news, get_pinned_news
+from info.services import get_event_info
+from seating.services import get_event_capacity_stats
 
 # Wie viele News auf dem Dashboard erscheinen. Eine Stelle, ein Wert.
 DASHBOARD_NEWS_LIMIT = 3
@@ -45,14 +45,13 @@ def get_active_event():
 def dashboard_view(request):
     """Startseite. Funktioniert für Gäste und angemeldete Benutzer."""
     from django.utils import timezone
-    from configuration.context_processors import get_event_capacity_stats
     from configuration.services import should_show_onboarding_ticket
 
     event = get_active_event()
-    event_info = EventInfo.objects.first()
-    latest_news = NewsArticle.objects.filter(is_published=True).order_by(
-        '-id'
-    )[:DASHBOARD_NEWS_LIMIT]
+    event_info = get_event_info()
+    latest_news = get_latest_news(limit=DASHBOARD_NEWS_LIMIT)
+    pinned_news = get_pinned_news()
+
 
     registration = None
     ticket_types = []
@@ -92,9 +91,7 @@ def dashboard_view(request):
         user_registration=registration,
     )
 
-    pinned_news = NewsArticle.objects.filter(
-        is_published=True, is_pinned=True
-    ).first()
+
 
     context = {
         'event': event,
@@ -322,8 +319,10 @@ def checkin_scanner_view(request):
 @require_POST
 def scan_qr_api(request):
     """
-    Verarbeitet gescannte QR-Code-Daten per AJAX für das Helfer-Tool.
+    Verarbeitet gescannte QR-Code-Daten oder manuell eingegebene Ticket-Codes für das Helfer-Tool.
     Strikte Beschränkung: NUR Mitarbeiter (is_staff=True).
+    Sicherheit: Akzeptiert ausschließlich unerratbare UUIDv4 (QR) oder kryptografischen short_code (8-stellig).
+    Ein Fallback auf fortlaufende Primärschlüssel (pk) ist strikt verboten!
     """
     import re
     try:
@@ -336,8 +335,10 @@ def scan_qr_api(request):
 
     if not code_str:
         return JsonResponse(
-            {'status': 'error', 'message': 'Kein QR-Code übergeben.'}, status=400
+            {'status': 'error', 'message': 'Kein QR-Code oder Ticket-Code übergeben.'}, status=400
         )
+
+    registration = None
 
     # 1. Extrahiere UUID aus String, falls eine URL oder voller Text gescannt wurde
     uuid_match = re.search(
@@ -345,8 +346,6 @@ def scan_qr_api(request):
         code_str,
         re.I,
     )
-
-    registration = None
     if uuid_match:
         token_uuid = uuid_match.group(0)
         registration = (
@@ -355,12 +354,15 @@ def scan_qr_api(request):
             .first()
         )
 
-    if not registration and code_str.isdigit():
-        registration = (
-            EventRegistration.objects.filter(pk=int(code_str))
-            .select_related('user', 'event', 'ticket_type')
-            .first()
-        )
+    # 2. Suche per kryptografischem short_code (z. B. "K7QM2XZ4" oder "K7QM-2XZ4")
+    if not registration:
+        clean_code = re.sub(r'[^A-Za-z0-9]', '', code_str).upper()
+        if len(clean_code) >= 6:
+            registration = (
+                EventRegistration.objects.filter(short_code=clean_code)
+                .select_related('user', 'event', 'ticket_type')
+                .first()
+            )
 
     if not registration:
         return JsonResponse(

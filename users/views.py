@@ -38,14 +38,16 @@ def register_view(request):
                 # Kryptografisch sicheren 6-stelligen Zufallscode generieren
                 code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
 
-            # System-E-Mail "email_verification" versenden
-            context_data = {
-                'username': user.username,
-                'full_name': user.get_full_name() or user.username,
-                'code': code_obj.code,
-                'valid_minutes': 15,
-            }
-            send_system_email('email_verification', user.email, context_data)
+                context_data = {
+                    'username': user.username,
+                    'full_name': user.get_full_name() or user.username,
+                    'code': code_obj.code,
+                    'valid_minutes': 15,
+                }
+                # E-Mail-Versand erst NACH erfolgreichem DB-Commit (kein SMTP-Blocker in Transaktion, keine Phantom-Mails bei Rollback)
+                transaction.on_commit(
+                    lambda: send_system_email('email_verification', user.email, context_data)
+                )
 
             # Session merken & zur Verifizierungsmaske umleiten
             request.session['pending_verification_user_id'] = user.id
@@ -147,16 +149,20 @@ def resend_verification_code_view(request):
             )
             return redirect("verify_email")
 
-        # Neuen Code generieren & E-Mail senden
-        code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
+        with transaction.atomic():
+            # Neuen Code generieren & E-Mail erst nach Commit senden
+            code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
 
-        context_data = {
-            'username': user.username,
-            'full_name': user.get_full_name() or user.username,
-            'code': code_obj.code,
-            'valid_minutes': 15,
-        }
-        send_system_email('email_verification', user.email, context_data)
+            context_data = {
+                'username': user.username,
+                'full_name': user.get_full_name() or user.username,
+                'code': code_obj.code,
+                'valid_minutes': 15,
+            }
+            transaction.on_commit(
+                lambda: send_system_email('email_verification', user.email, context_data)
+            )
+
         messages.info(request, f"Ein neuer Bestätigungscode wurde an {user.email} gesendet.")
 
     return redirect("verify_email")

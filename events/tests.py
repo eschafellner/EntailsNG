@@ -203,6 +203,59 @@ class EventDashboardTests(TestCase):
         self.assertEqual(res_repeat.status_code, 200)
         self.assertEqual(res_repeat.json()['status'], 'already_checked_in')
 
+    def test_scan_qr_api_with_short_code(self):
+        """Prüft, dass der Check-in per 8-stelligem Ticket-Code (short_code) erfolgreich funktioniert."""
+        registration = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+        self.assertTrue(bool(registration.short_code))
+        self.assertEqual(len(registration.short_code), 8)
+
+        self.client.login(username='admin', password='password')
+
+        # Test mit formatiertem / lowercase Code (z.B. manuelle Helfer-Eingabe)
+        formatted_code = f"{registration.short_code[:4]}-{registration.short_code[4:]}".lower()
+        response = self.client.post(
+            reverse('api_scan_qr'),
+            data={'code': formatted_code},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['user'], 'gamer1')
+        registration.refresh_from_db()
+        self.assertTrue(registration.is_checked_in)
+
+    def test_scan_qr_api_rejects_integer_pk_fallback(self):
+        """
+        NEGATIV-TEST: Stellt sicher, dass das bloße Übergeben des fortlaufenden Primärschlüssels (z. B. "1", "2")
+        strikt mit 404 abgewiesen wird und KEIN unbefugter Check-in erfolgt.
+        """
+        registration = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+        self.client.login(username='admin', password='password')
+
+        # Versuch mit reinem Integer-PK
+        pk_input = str(registration.pk)
+        response = self.client.post(
+            reverse('api_scan_qr'),
+            data={'code': pk_input},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()['status'], 'error')
+
+        # Verifiziere, dass der Gast NICHT eingecheckt wurde
+        registration.refresh_from_db()
+        self.assertFalse(registration.is_checked_in)
+
+
     def test_toggle_check_in_api_unpaid_rejected(self):
         registration = EventRegistration.objects.create(
             user=self.user,

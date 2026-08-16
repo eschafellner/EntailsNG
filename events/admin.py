@@ -87,6 +87,7 @@ class TicketTypeAdmin(admin.ModelAdmin):
 class EventRegistrationAdmin(admin.ModelAdmin):
     list_display = (
         'user',
+        'short_code',
         'event',
         'ticket_type',
         'payment_status_badge',
@@ -100,8 +101,8 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         'payment_status',
         'ticket_type',
     )  # <-- NEU: Filter nach Check-in
-    search_fields = ('user__username', 'user__first_name', 'user__last_name')
-    readonly_fields = ('assigned_seat_picker', 'checked_in_at', 'paid_at', 'cancelled_at')
+    search_fields = ('user__username', 'user__first_name', 'user__last_name', 'short_code')
+    readonly_fields = ('short_code', 'checkin_token', 'assigned_seat_picker', 'checked_in_at', 'paid_at', 'cancelled_at')
     actions = ['action_check_in_guests', 'action_check_out_guests', 'export_as_csv']
 
 
@@ -117,6 +118,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         writer = csv.writer(response, delimiter=';')
         writer.writerow([
             'Username',
+            'Ticket-Code',
             'Vorname',
             'Nachname',
             'E-Mail',
@@ -144,6 +146,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
             writer.writerow([
                 reg.user.username,
+                reg.short_code,
                 reg.user.first_name,
                 reg.user.last_name,
                 reg.user.email,
@@ -174,14 +177,9 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
-        for seat in obj.seats.all():
-            if obj.payment_status == EventRegistration.PaymentStatus.PAID:
-                seat.reservation_status = SeatingCell.ReservationStatus.RESERVED
-            else:
-                seat.reservation_status = (
-                    SeatingCell.ReservationStatus.PRE_RESERVED
-                )
-            seat.save()
+        from seating.services import sync_seat_status_with_payment
+        sync_seat_status_with_payment(obj)
+
 
     @admin.display(description="Einlass-Status", ordering="is_checked_in")
     def check_in_badge(self, obj):
@@ -257,178 +255,22 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         )
 
         has_plan = (
-            hasattr(obj.event, "seating_plan") and obj.event.seating_plan
+            hasattr(obj.event, "seating_plan") and bool(obj.event.seating_plan)
         )
 
         if not has_plan:
             return f"{seat_text} (Für dieses Event existiert noch kein Sitzplan)"
 
-        delete_button_html = ""
-        if current_seat:
-            delete_button_html = (
-                '<button type="button" class="button" style="background: #dc2626; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" onclick="deleteSeatAssignment()">'
-                "🗑️ Sitzplatzzuweisung löschen"
-                "</button>"
-            )
+        from django.template.loader import render_to_string
+        context = {
+            'obj': obj,
+            'current_seat': current_seat,
+            'seat_text': seat_text,
+            'has_plan': has_plan,
+            'event_id': obj.event.id if obj.event else None,
+        }
+        return mark_safe(render_to_string('admin/events/assigned_seat_picker.html', context))
 
-        html = """
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <strong id="current-seat-display" style="font-size: 14px;">{seat_text}</strong>
-            <button type="button" class="button" style="background: #2563eb; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" onclick="openSeatModal()">
-                🪑 Sitzplatz wählen / ändern
-            </button>
-            {delete_button_html}
-        </div>
-
-        <!-- Modal Popup -->
-        <div id="seatModal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); align-items: center; justify-content: center;">
-            <div style="background: #1e293b; padding: 25px; border-radius: 12px; color: white; max-width: 90vw; max-height: 85vh; overflow: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: white;">Sitzplatz auswählen für {username}</h3>
-                    <button type="button" onclick="closeSeatModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer;">✖</button>
-                </div>
-
-                <div id="modal-grid-container" style="background: #0f172a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                    Lade Sitzplan...
-                </div>
-
-                <div style="display: flex; gap: 15px; font-size: 12px; color: #cbd5e1;">
-                    <span><strong style="color:#22c55e">■</strong> Frei (Klicken zum Buchen)</span>
-                    <span><strong style="color:#f97316">■</strong> Vorgemerkt</span>
-                    <span><strong style="color:#ef4444">■</strong> Bezahlt</span>
-                    <span><strong style="color:#3b82f6">■</strong> Aktuell gewählt</span>
-                </div>
-            </div>
-        </div>
-
-        <script>
-            function openSeatModal() {{
-                document.getElementById('seatModal').style.display = 'flex';
-                loadModalGrid();
-            }}
-
-            function closeSeatModal() {{
-                document.getElementById('seatModal').style.display = 'none';
-            }}
-
-            function loadModalGrid() {{
-                const eventId = {event_id};
-                const container = document.getElementById('modal-grid-container');
-
-                fetch(`/seating/api/plan/${{eventId}}/`)
-                    .then(res => res.json())
-                    .then(data => {{
-                        if (data.error) {{
-                            container.innerHTML = data.error;
-                            return;
-                        }}
-
-                        let gridHtml = `<div style="display: grid; grid-template-columns: repeat(${{data.columns}}, 32px); gap: 4px;">`;
-                        const cellMap = {{}};
-                        data.cells.forEach(c => cellMap[`${{c.x}}_${{c.y}}`] = c);
-
-                        for (let y = 1; y <= data.rows; y++) {{
-                            for (let x = 1; x <= data.columns; x++) {{
-                                const c = cellMap[`${{x}}_${{y}}`];
-                                if (!c) {{
-                                    gridHtml += `<div style="width:32px; height:32px; background:#1e293b; border-radius:4px;"></div>`;
-                                    continue;
-                                }}
-
-                                let bg = "#334155";
-                                let cursor = "default";
-                                let title = `(${{x}},${{y}})`;
-                                let content = "";
-                                let isClickable = false;
-
-                                if (c.cell_type === 'WALL') bg = "#64748b";
-                                else if (c.cell_type === 'DOOR') bg = "#8b5cf6";
-                                else if (c.cell_type === 'LABEL') {{ bg = "#0284c7"; content = c.text_label ? c.text_label.substring(0,2) : "T"; }}
-                                else if (c.cell_type === 'SEAT') {{
-                                    content = c.seat_label || "S";
-                                    title = `${{c.seat_label}} (${{c.status}})`;
-                                    isClickable = true;
-                                    cursor = "pointer";
-
-                                    if (c.occupied_by === "{username}") {{
-                                        bg = "#3b82f6";
-                                        title += " - Aktueller Platz dieses Users";
-                                    }} else if (c.status === 'RESERVED') bg = "#ef4444";
-                                    else if (c.status === 'PRE') bg = "#f97316";
-                                    else if (c.status === 'BLOCKED') {{ bg = "#000"; isClickable = false; }}
-                                    else bg = "#22c55e";
-                                }}
-
-                                const clickAttr = isClickable ? `onclick="selectSeatForUser(${{x}}, ${{y}}, '${{c.seat_label || ''}}')"` : '';
-                                gridHtml += `<div ${{clickAttr}} title="${{title}}" style="background: ${{bg}}; width: 32px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: white; cursor: ${{cursor}}; user-select: none;">${{content}}</div>`;
-                            }}
-                        }}
-
-                        gridHtml += '</div>';
-                        container.innerHTML = gridHtml;
-                    }});
-            }}
-
-            function selectSeatForUser(x, y, label) {{
-                if (!confirm(`Möchtest du {username} den Platz "${{label || x + ',' + y}}" zuweisen?`)) return;
-
-                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-
-                fetch('/seating/admin/assign-seat/', {{
-                    method: 'POST',
-                    headers: {{
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    }},
-                    body: JSON.stringify({{
-                        registration_id: {reg_id},
-                        x: x,
-                        y: y
-                    }})
-                }})
-                .then(res => res.json())
-                .then(data => {{
-                    if (data.status === 'success') {{
-                        location.reload();
-                    }} else {{
-                        alert("Fehler: " + data.message);
-                    }}
-                }});
-            }}
-
-            function deleteSeatAssignment() {{
-                if (!confirm("Möchtest du die Sitzplatzzuweisung für {username} wirklich löschen? Der Platz wird dadurch wieder freigegeben.")) return;
-
-                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-
-                fetch('/seating/admin/release-seat/', {{
-                    method: 'POST',
-                    headers: {{
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    }},
-                    body: JSON.stringify({{
-                        registration_id: {reg_id}
-                    }})
-                }})
-                .then(res => res.json())
-                .then(data => {{
-                    if (data.status === 'success') {{
-                        location.reload();
-                    }} else {{
-                        alert("Fehler: " + data.message);
-                    }}
-                }});
-            }}
-        </script>
-        """.format(
-            seat_text=seat_text,
-            delete_button_html=delete_button_html,
-            username=obj.user.username,
-            event_id=obj.event.id,
-            reg_id=obj.pk,
-        )
-        return mark_safe(html)
 
     @admin.display(description="Bezahlstatus", ordering="payment_status")
     def payment_status_badge(self, obj):

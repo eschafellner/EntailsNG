@@ -3,7 +3,12 @@ from django.utils.functional import SimpleLazyObject
 
 from configuration.models import FeatureFlag, NavigationItem, SiteCustomization, SystemTranslation
 from events.models import Event, EventRegistration
-from seating.models import SeatingCell
+from seating.services import (
+    get_event_capacity_stats,
+    invalidate_event_capacity_cache,
+    CAPACITY_CACHE_KEY_PREFIX,
+)  # Re-Export für Rückwärtskompatibilität
+
 
 DEFAULT_TEXTS = {
     'seat_card_title': 'SITZPLATZBUCHUNG',
@@ -180,45 +185,6 @@ def _load_feature_flags():
         cache.set(FEATURE_FLAGS_CACHE_KEY, flags, CACHE_SECONDS)
     return flags
 
-
-CAPACITY_CACHE_KEY_PREFIX = 'event_capacity_stats_'
-
-
-def invalidate_event_capacity_cache(event_id):
-    """Löscht den gecachten Sitzplatz-Statistik-Wert für das angegebene Event."""
-    if event_id:
-        cache.delete(f"{CAPACITY_CACHE_KEY_PREFIX}{event_id}")
-
-
-def get_event_capacity_stats(upcoming_event):
-    """Ermittelt Sitzplatzstatistiken mit Smart Caching (wird bei Sitzplatzänderung invalidiert)."""
-    if not upcoming_event:
-        return {'total_seats': 0, 'reserved_seats': 0, 'capacity_percent': 0}
-
-    cache_key = f"{CAPACITY_CACHE_KEY_PREFIX}{upcoming_event.id}"
-    stats = cache.get(cache_key)
-    if stats is None:
-        seat_cells = SeatingCell.objects.filter(
-            plan__event=upcoming_event,
-            cell_type=SeatingCell.CellType.SEAT,
-        )
-        total_seats = seat_cells.count()
-        reserved_seats = seat_cells.filter(
-            reservation_status__in=[
-                SeatingCell.ReservationStatus.PRE_RESERVED,
-                SeatingCell.ReservationStatus.RESERVED,
-            ]
-        ).count()
-        capacity_percent = (
-            int((reserved_seats / total_seats) * 100) if total_seats > 0 else 0
-        )
-        stats = {
-            'total_seats': total_seats,
-            'reserved_seats': reserved_seats,
-            'capacity_percent': capacity_percent,
-        }
-        cache.set(cache_key, stats, CACHE_SECONDS)
-    return stats
 
 
 def _get_active_event():

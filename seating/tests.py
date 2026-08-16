@@ -541,6 +541,101 @@ class SeatingConsistencyAndSignalTests(TestCase):
             self.assertNotIn("SQL", res.content.decode())
 
 
+class SeatingServiceAndSignalTests(TestCase):
+
+    def setUp(self):
+        self.user1 = User.objects.create_user(username='u1', email='u1@test.com', password='pw')
+        self.user2 = User.objects.create_user(username='u2', email='u2@test.com', password='pw')
+        self.event = Event.objects.create(
+            title='LAN 2026',
+            slug='lan-2026',
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timezone.timedelta(days=2),
+        )
+        self.plan = SeatingPlan.objects.create(
+            event=self.event, name='Main Hall', columns=10, rows=10
+        )
+        self.seat1 = SeatingCell.objects.create(
+            plan=self.plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT, seat_label='A1'
+        )
+        self.seat2 = SeatingCell.objects.create(
+            plan=self.plan, x=1, y=2, cell_type=SeatingCell.CellType.SEAT, seat_label='A2'
+        )
+        self.reg1 = EventRegistration.objects.create(
+            event=self.event, user=self.user1, payment_status=EventRegistration.PaymentStatus.UNPAID
+        )
+        self.reg2 = EventRegistration.objects.create(
+            event=self.event, user=self.user2, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+    def test_signal_releases_seats_when_registration_deleted(self):
+        """Testet, dass das pre_delete Signal in seating/signals.py den Platz automatisch freigibt."""
+        self.seat1.registration = self.reg1
+        self.seat1.reservation_status = SeatingCell.ReservationStatus.PRE_RESERVED
+        self.seat1.save()
+
+        self.assertEqual(self.seat1.registration, self.reg1)
+
+        # Löschung der Registrierung
+        self.reg1.delete()
+
+        # Platz muss jetzt wieder frei sein
+        self.seat1.refresh_from_db()
+        self.assertIsNone(self.seat1.registration)
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+    def test_get_event_capacity_stats_service(self):
+        from seating.services import get_event_capacity_stats, invalidate_event_capacity_cache
+
+        invalidate_event_capacity_cache(self.event.id)
+        stats = get_event_capacity_stats(self.event)
+        self.assertEqual(stats['total_seats'], 2)
+        self.assertEqual(stats['reserved_seats'], 0)
+
+        # 1 Platz belegen
+        self.seat1.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat1.save()
+
+        stats2 = get_event_capacity_stats(self.event)
+        self.assertEqual(stats2['total_seats'], 2)
+        self.assertEqual(stats2['reserved_seats'], 1)
+        self.assertEqual(stats2['capacity_percent'], 50)
+
+    def test_get_user_seat_map_service(self):
+        from seating.services import get_user_seat_map
+
+        self.seat1.registration = self.reg1
+        self.seat1.save()
+
+        self.seat2.registration = self.reg2
+        self.seat2.save()
+
+        seat_map = get_user_seat_map(self.event, [self.user1.id, self.user2.id])
+        self.assertEqual(seat_map.get(self.user1.id), 'A1')
+        self.assertEqual(seat_map.get(self.user2.id), 'A2')
+
+    def test_sync_seat_status_with_payment_service(self):
+        from seating.services import sync_seat_status_with_payment
+
+        self.seat1.registration = self.reg1
+        self.seat1.reservation_status = SeatingCell.ReservationStatus.FREE
+        self.seat1.save()
+
+        # Unbezahlt -> PRE_RESERVED
+        sync_seat_status_with_payment(self.reg1)
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.PRE_RESERVED)
+
+        # Bezahlt -> RESERVED
+        self.reg1.payment_status = EventRegistration.PaymentStatus.PAID
+        self.reg1.save()
+        sync_seat_status_with_payment(self.reg1)
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
+
+
 
 
 

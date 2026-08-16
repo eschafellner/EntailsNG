@@ -1,4 +1,5 @@
 import logging
+from django.conf import settings as django_settings
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.utils.html import strip_tags
 from .models import EmailTemplate, GeneralEmailSettings
@@ -65,6 +66,7 @@ def send_system_email(template_key, recipient_email, context_data):
 
     # 5. E-Mail versenden (Eigenes SMTP-Setup oder Django-Standard)
     try:
+        timeout = getattr(django_settings, 'EMAIL_TIMEOUT', 10)
         connection = None
         if settings.smtp_host:
             connection = get_connection(
@@ -73,7 +75,10 @@ def send_system_email(template_key, recipient_email, context_data):
                 username=settings.smtp_username or None,
                 password=settings.smtp_password or None,
                 use_tls=settings.smtp_use_tls,
+                timeout=timeout,
             )
+        else:
+            connection = get_connection(timeout=timeout)
 
         msg = EmailMultiAlternatives(
             subject=subject,
