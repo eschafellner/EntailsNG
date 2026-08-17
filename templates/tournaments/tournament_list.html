@@ -101,9 +101,15 @@
           <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
             Admin: {{ tournament.tournament_admin.username|default:"Orga-Team" }}
           </span>
-          <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: #0284c7; color: white; padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
-            Details & Baum →
-          </a>
+          {% if tournament.is_registration_open %}
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: var(--signal); color: var(--navy); padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+              🎮 Jetzt anmelden →
+            </a>
+          {% else %}
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: #0284c7; color: white; padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+              Details & Baum →
+            </a>
+          {% endif %}
         </div>
       </div>
     {% empty %}

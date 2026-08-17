@@ -9,6 +9,7 @@ urlpatterns = [
     path('<slug:slug>/unregister/', views.tournament_unregister, name='tournament_unregister'),
     path('<slug:slug>/generate-bracket/', views.tournament_generate_bracket, name='tournament_generate_bracket'),
     path('matches/<int:match_id>/update-score/', views.match_update_score, name='match_update_score'),
+    path('matches/<int:match_id>/update-ffa-score/', views.match_update_ffa_score, name='match_update_ffa_score'),
 
     # Teams URLs
     path('teams/all/', views.team_list, name='team_list'),

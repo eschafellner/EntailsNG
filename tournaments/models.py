@@ -156,8 +156,38 @@ class Tournament(models.Model):
         now = timezone.now()
         return (
             self.status == self.Status.REGISTRATION_OPEN
-            and self.registration_start <= now <= self.registration_end
+            and (self.registration_start is None or self.registration_start <= now)
+            and (self.registration_end is None or now <= self.registration_end)
         )
+
+    def can_register(self, user=None, team=None):
+        """
+        Zentrale Validierung, ob ein Team oder Spieler für dieses Turnier angemeldet werden darf.
+        Rückgabe: Tuple (can_register: bool, reason: str)
+        """
+        now = timezone.now()
+
+        if self.status != self.Status.REGISTRATION_OPEN:
+            return False, f"Die Anmeldung für '{self.title}' ist aktuell nicht geöffnet (Status: {self.get_status_display()})."
+
+        if self.registration_start and now < self.registration_start:
+            formatted_start = self.registration_start.strftime('%d.%m.%Y %H:%M')
+            return False, f"Die Anmeldung für '{self.title}' beginnt erst am {formatted_start} Uhr."
+
+        if self.registration_end and now > self.registration_end:
+            formatted_end = self.registration_end.strftime('%d.%m.%Y %H:%M')
+            return False, f"Der Anmeldeschluss für '{self.title}' war am {formatted_end} Uhr."
+
+        if self.is_generated or self.status in [self.Status.IN_PROGRESS, self.Status.FINISHED]:
+            return False, f"Das Turnier '{self.title}' läuft bereits oder ist beendet."
+
+        if self.max_teams and self.registrations.count() >= self.max_teams:
+            return False, f"Die maximale Teilnehmeranzahl ({self.max_teams}) für '{self.title}' ist bereits erreicht."
+
+        if team and self.registrations.filter(team=team).exists():
+            return False, f"Das Team '{team.name}' ist bereits für dieses Turnier angemeldet."
+
+        return True, ""
 
     def registered_teams_count(self):
         return self.registrations.count()
@@ -255,15 +285,38 @@ class Team(models.Model):
             return False
         return self.captain_id == user.id
 
+    def is_in_active_tournament(self):
+        """
+        Prüft, ob das Team in einem generierten oder laufenden Turnier registriert ist.
+        """
+        return self.tournament_registrations.filter(
+            models.Q(tournament__is_generated=True) |
+            models.Q(tournament__status=Tournament.Status.IN_PROGRESS)
+        ).exists()
+
+    def delete(self, *args, **kwargs):
+        force = kwargs.pop('force', False)
+        if not force and self.is_in_active_tournament():
+            from django.core.exceptions import ValidationError
+            raise ValidationError(
+                f"Das Team '{self.name}' kann nicht gelöscht werden, da es in einem laufenden oder generierten Turnier registriert ist."
+            )
+        super().delete(*args, **kwargs)
+
     def leave_team(self, user):
         """
         Entfernt einen User aus dem Team.
         Wenn der Kapitän austritt, geht die Kapitänswürde an ein beliebiges anderes aktives Mitglied.
-        Verlässt das letzte Mitglied das Team, wird das Team gelöscht.
+        Verlässt das letzte Mitglied das Team, wird das Team gelöscht (außer bei aktivem Turnier).
         """
         membership = self.memberships.filter(user=user).first()
         if not membership:
             return False
+
+        if self.is_in_active_tournament():
+            accepted_count = self.memberships.filter(status=TeamMember.Status.ACCEPTED).count()
+            if accepted_count <= 1:
+                return 'in_active_tournament'
 
         membership.delete()
 
@@ -360,6 +413,8 @@ class TournamentMatch(models.Model):
     class BracketType(models.TextChoices):
         WINNERS = 'WINNERS', 'Winner Bracket'
         LOSERS = 'LOSERS', 'Loser Bracket'
+        GRAND_FINAL = 'GRAND_FINAL', 'Grand Final'
+        GRAND_FINAL_RESET = 'GRAND_FINAL_RESET', 'Grand Final Reset'
         FINAL = 'FINAL', 'Finale'
         GROUP = 'GROUP', 'Gruppenspiel'
         FFA = 'FFA', 'Free For All'
@@ -379,7 +434,7 @@ class TournamentMatch(models.Model):
     round_number = models.PositiveIntegerField(default=1, verbose_name="Runde")
     match_number = models.PositiveIntegerField(default=1, verbose_name="Match-Nummer in Runde")
     bracket_type = models.CharField(
-        max_length=15,
+        max_length=20,
         choices=BracketType.choices,
         default=BracketType.WINNERS,
         verbose_name="Bracket Typ",
@@ -432,6 +487,13 @@ class TournamentMatch(models.Model):
         verbose_name="Status",
     )
 
+    decision_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Entscheidungsgrund",
+        help_text="Wird erfasst bei manueller Admin-Entscheidung, Disqualifikation oder Forfeit.",
+    )
+
     next_match_winner = models.ForeignKey(
         'self',
         null=True,
@@ -440,6 +502,13 @@ class TournamentMatch(models.Model):
         related_name='prev_matches_winner',
         verbose_name="Folgematch Sieger",
     )
+    next_match_winner_slot = models.PositiveSmallIntegerField(
+        default=1,
+        choices=[(1, 'Team 1'), (2, 'Team 2')],
+        verbose_name="Ziel-Slot Sieger",
+        help_text="1 für Team 1 Slot, 2 für Team 2 Slot im Sieger-Folgematch",
+    )
+
     next_match_loser = models.ForeignKey(
         'self',
         null=True,
@@ -447,6 +516,12 @@ class TournamentMatch(models.Model):
         on_delete=models.SET_NULL,
         related_name='prev_matches_loser',
         verbose_name="Folgematch Verlierer",
+    )
+    next_match_loser_slot = models.PositiveSmallIntegerField(
+        default=1,
+        choices=[(1, 'Team 1'), (2, 'Team 2')],
+        verbose_name="Ziel-Slot Verlierer",
+        help_text="1 für Team 1 Slot, 2 für Team 2 Slot im Verlierer-Folgematch",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -457,7 +532,87 @@ class TournamentMatch(models.Model):
         verbose_name_plural = "Turnier-Matches"
         ordering = ['bracket_type', 'round_number', 'match_number']
 
+    @property
+    def winner_advances_to(self):
+        if self.next_match_winner:
+            return (self.next_match_winner, self.next_match_winner_slot)
+        return None
+
+    @property
+    def loser_advances_to(self):
+        if self.next_match_loser:
+            return (self.next_match_loser, self.next_match_loser_slot)
+        return None
+
+    @property
+    def round_name(self):
+        if self.bracket_type == self.BracketType.GRAND_FINAL:
+            return "Grand Final"
+        elif self.bracket_type == self.BracketType.GRAND_FINAL_RESET:
+            return "Grand Final Reset"
+        elif self.bracket_type == self.BracketType.WINNERS:
+            return f"WB Round {self.round_number}"
+        elif self.bracket_type == self.BracketType.LOSERS:
+            return f"LB Round {self.round_number}"
+        elif self.bracket_type == self.BracketType.FINAL:
+            return "Finale"
+        elif self.bracket_type == self.BracketType.GROUP:
+            group_label = f" ({self.group_name})" if self.group_name else ""
+            return f"Spieltag {self.round_number}{group_label}"
+        elif self.bracket_type == self.BracketType.FFA:
+            return f"FFA Runde {self.round_number}"
+        return f"Runde {self.round_number}"
+
     def __str__(self):
+        if self.bracket_type == self.BracketType.FFA:
+            return f"{self.round_name} M{self.match_number} ({self.participants.count()} Teilnehmer)"
         t1 = self.team1.name if self.team1 else ("BYE" if self.is_bye else "TBD")
-        t2 = self.team2.name if self.team2 else "TBD"
-        return f"R{self.round_number} M{self.match_number} ({self.get_bracket_type_display()}): {t1} vs {t2}"
+        t2 = self.team2.name if self.team2 else ("BYE" if (self.is_bye and not self.team2) else "TBD")
+        return f"{self.round_name} M{self.match_number}: {t1} vs {t2}"
+
+
+class TournamentMatchParticipant(models.Model):
+    match = models.ForeignKey(
+        TournamentMatch,
+        on_delete=models.CASCADE,
+        related_name='participants',
+        verbose_name="Match",
+    )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='match_participations',
+        verbose_name="Team / Teilnehmer",
+    )
+    rank = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Platzierung",
+        help_text="1 für 1. Platz, 2 für 2. Platz, etc.",
+    )
+    score = models.IntegerField(
+        default=0,
+        verbose_name="Punkte / Kills / Zeit",
+    )
+    is_disqualified = models.BooleanField(
+        default=False,
+        verbose_name="Disqualifiziert",
+    )
+    notes = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Notizen / Details",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Match-Teilnehmer (FFA)"
+        verbose_name_plural = "Match-Teilnehmer (FFA)"
+        unique_together = ('match', 'team')
+        ordering = ['rank', '-score', 'id']
+
+    def __str__(self):
+        rank_str = f"#{self.rank} " if self.rank else ""
+        return f"{rank_str}{self.team.name} ({self.score} Pkt) in Match {self.match.id}"

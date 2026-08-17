@@ -12,8 +12,23 @@ from tournaments.models import (
     Game, Team, TeamMember, Tournament, TournamentMatch, TournamentRegistration, generate_invite_code
 )
 
+from tournaments.exceptions import (
+    TournamentError,
+    TournamentRegistrationError,
+    TournamentBracketError,
+    TournamentMatchError,
+)
 from tournaments.services import (
-    advance_match_winner, check_user_event_checkin, generate_bracket, get_or_create_solo_team
+    FFAMatchService,
+    GroupStageStandingService,
+    LeagueStandingService,
+    TournamentBracketService,
+    TournamentMatchService,
+    TournamentRegistrationService,
+    advance_match_winner,
+    check_user_event_checkin,
+    generate_bracket,
+    get_or_create_solo_team,
 )
 
 
@@ -42,62 +57,96 @@ def tournament_list(request):
 
 def tournament_detail(request, slug):
     """
-    Detailseite eines Turniers inkl. Turnierbaum-Visualisierung, Teams & Vorschau.
+    Detailansicht eines Turniers: Infos, Anmeldungen, Turnierbaum & Live-Matches.
     """
     tournament = get_object_or_404(
-        Tournament.objects.select_related('event', 'game', 'tournament_admin', 'tournament_support'),
+        Tournament.objects.select_related('game', 'event', 'tournament_admin', 'tournament_support'),
         slug=slug
     )
 
+    now = timezone.now()
     user_checkin = False
+    has_event_ticket = False
     is_admin = False
     user_team = None
     is_registered = False
+    my_user_teams = []
 
     if request.user.is_authenticated:
-        user_checkin = check_user_event_checkin(request.user, tournament.event)
         is_admin = (
             request.user.is_staff or
+            request.user.is_superuser or
             request.user == tournament.tournament_admin or
             request.user == tournament.tournament_support
         )
 
-        # Finde Team des Benutzers für dieses Spiel
-        user_memberships = TeamMember.objects.filter(
-            user=request.user,
-            status=TeamMember.Status.ACCEPTED,
-        ).select_related('team')
+        if tournament.event:
+            user_reg = EventRegistration.objects.filter(user=request.user, event=tournament.event).first()
+            if user_reg:
+                has_event_ticket = True
+                user_checkin = user_reg.is_checked_in
 
-        for mem in user_memberships:
-            if mem.team.game == tournament.game or mem.team.game is None:
-                user_team = mem.team
-                break
+        # Für Admins/Staff gilt der Check-in im Frontend immer als erfüllt
+        if is_admin:
+            user_checkin = True
 
-        if user_team:
-            is_registered = TournamentRegistration.objects.filter(
-                tournament=tournament,
-                team=user_team
-            ).exists()
+        # Finde heraus, ob der User bereits mit einem Team für dieses Turnier angemeldet ist
+        registered_team_reg = TournamentRegistration.objects.filter(
+            tournament=tournament,
+            team__memberships__user=request.user,
+            team__memberships__status=TeamMember.Status.ACCEPTED
+        ).select_related('team').first()
+
+        if registered_team_reg:
+            is_registered = True
+            user_team = registered_team_reg.team
+
+        # Teams, bei denen der User Kapitän ist, für dieses Spiel und Event (nicht archiviert, nicht solo)
+        my_user_teams = Team.objects.filter(
+            captain=request.user,
+            is_archived=False,
+            is_solo=False,
+        ).filter(
+            models.Q(game=tournament.game) | models.Q(game__isnull=True)
+        ).filter(
+            models.Q(event=tournament.event) | models.Q(event__isnull=True)
+        ).distinct()
 
     registrations = tournament.registrations.select_related('team', 'team__captain').all()
     matches = tournament.matches.select_related('team1', 'team2', 'winner', 'loser').order_by('bracket_type', 'round_number', 'match_number')
 
+    # Status & Zeitfenster-Details für die UI
+    tournament_is_full = bool(tournament.max_teams and registrations.count() >= tournament.max_teams)
+    registration_not_started_yet = bool(tournament.registration_start and now < tournament.registration_start)
+    registration_ended = bool(tournament.registration_end and now > tournament.registration_end)
+
     # Vorschau-Daten generieren falls Turnierbaum noch nicht generiert
     preview_data = None
     if not tournament.is_generated:
-        preview_data = generate_bracket(tournament, preview=True)
+        preview_data = TournamentBracketService.get_bracket_preview(tournament.id)
 
-    # Für 1v1 Teams Verfügbarkeit ermitteln
-    my_user_teams = []
-    if request.user.is_authenticated:
-        my_user_teams = Team.objects.filter(
-            memberships__user=request.user,
-            memberships__status=TeamMember.Status.ACCEPTED
-        ).distinct()
+    # Standings & Modus-spezifische Tabellendaten
+    league_standings = []
+    group_a_standings = []
+    group_b_standings = []
+    ffa_match = None
+    ffa_participants = []
+
+    if tournament.is_generated:
+        if tournament.mode == Tournament.Mode.LEAGUE:
+            league_standings = LeagueStandingService.calculate_league_standings(tournament)
+        elif tournament.mode == Tournament.Mode.GROUP_STAGE:
+            group_a_standings = GroupStageStandingService.calculate_group_standings(tournament, 'Gruppe A')
+            group_b_standings = GroupStageStandingService.calculate_group_standings(tournament, 'Gruppe B')
+        elif tournament.mode == Tournament.Mode.FFA:
+            ffa_match = tournament.matches.filter(bracket_type=TournamentMatch.BracketType.FFA).first()
+            if ffa_match:
+                ffa_participants = list(ffa_match.participants.select_related('team').order_by('rank', '-score', 'id'))
 
     context = {
         'tournament': tournament,
         'user_checkin': user_checkin,
+        'has_event_ticket': has_event_ticket,
         'is_admin': is_admin,
         'user_team': user_team,
         'is_registered': is_registered,
@@ -105,6 +154,14 @@ def tournament_detail(request, slug):
         'matches': matches,
         'preview_data': preview_data,
         'my_user_teams': my_user_teams,
+        'tournament_is_full': tournament_is_full,
+        'registration_not_started_yet': registration_not_started_yet,
+        'registration_ended': registration_ended,
+        'league_standings': league_standings,
+        'group_a_standings': group_a_standings,
+        'group_b_standings': group_b_standings,
+        'ffa_match': ffa_match,
+        'ffa_participants': ffa_participants,
     }
     return render(request, 'tournaments/tournament_detail.html', context)
 
@@ -114,54 +171,24 @@ def tournament_detail(request, slug):
 def tournament_register(request, slug):
     """
     Meldet ein Team oder einen Einzelspieler für das Turnier an.
-    Prüft Vor-Ort Check-in!
+    Prüft Zeitfenster, Vor-Ort Check-in, Kapazitätslimits und Team-Berechtigungen transaktionssicher.
     """
     tournament = get_object_or_404(Tournament, slug=slug)
-
-    # 1. Check-in Validierung
-    if not check_user_event_checkin(request.user, tournament.event):
-        messages.error(
-            request,
-            "❌ Anmeldefehler: Nur vor Ort eingecheckte Gäste können sich für Turniere anmelden! Bitte checke am Einlass ein."
-        )
-        return redirect('tournament_detail', slug=slug)
-
-    # 2. Status Validierung
-    if tournament.status != Tournament.Status.REGISTRATION_OPEN:
-        messages.error(request, "❌ Die Anmeldung für dieses Turnier ist aktuell nicht geöffnet.")
-        return redirect('tournament_detail', slug=slug)
-
-    # 3. Max Teams Validierung
-    if tournament.registrations.count() >= tournament.max_teams:
-        messages.error(request, "❌ Die maximale Teilnehmeranzahl für dieses Turnier wurde bereits erreicht.")
-        return redirect('tournament_detail', slug=slug)
-
-    # 4. Einzelspieler (1v1) Auto-Team oder gewähltes Team
     team_id = request.POST.get('team_id')
 
-    if tournament.game.team_size == 1:
-        # Automatisches Solo-Team erstellen / abrufen
-        team = get_or_create_solo_team(request.user, tournament.game)
-    else:
-        if not team_id:
-            messages.error(request, "❌ Bitte wähle ein Team für die Anmeldung aus.")
-            return redirect('tournament_detail', slug=slug)
-        team = get_object_or_404(Team, id=team_id)
-
-        # Prüfen ob User Kapitän/Mitglied ist
-        if not team.is_member(request.user):
-            messages.error(request, "❌ Du bist kein Mitglied dieses Teams.")
-            return redirect('tournament_detail', slug=slug)
-
-    # 5. Anmelden
-    reg, created = TournamentRegistration.objects.get_or_create(
-        tournament=tournament,
-        team=team,
-    )
-    if created:
-        messages.success(request, f"🎉 Team '{team.name}' erfolgreich für '{tournament.title}' angemeldet!")
-    else:
-        messages.info(request, f"Dein Team '{team.name}' ist bereits angemeldet.")
+    try:
+        reg, created = TournamentRegistrationService.register_team(
+            tournament_id=tournament.id,
+            user=request.user,
+            team_id=team_id,
+            actor=request.user,
+        )
+        if created:
+            messages.success(request, f"🎉 Team '{reg.team.name}' erfolgreich für '{tournament.title}' angemeldet!")
+        else:
+            messages.info(request, f"Dein Team '{reg.team.name}' ist bereits angemeldet.")
+    except TournamentError as e:
+        messages.error(request, f"❌ {e}")
 
     return redirect('tournament_detail', slug=slug)
 
@@ -174,22 +201,17 @@ def tournament_unregister(request, slug):
     """
     tournament = get_object_or_404(Tournament, slug=slug)
     team_id = request.POST.get('team_id')
-    
-    if tournament.is_generated:
-        messages.error(request, "❌ Eine Abmeldung ist nicht mehr möglich, da der Turnierbaum bereits generiert wurde.")
-        return redirect('tournament_detail', slug=slug)
 
-    registration = TournamentRegistration.objects.filter(
-        tournament=tournament,
-        team_id=team_id,
-        team__memberships__user=request.user,
-    ).first()
-
-    if registration:
-        registration.delete()
-        messages.success(request, f"Team erfolgreich vom Turnier '{tournament.title}' abgemeldet.")
-    else:
-        messages.error(request, "Keine aktive Turnieranmeldung gefunden.")
+    try:
+        team_name = TournamentRegistrationService.unregister_team(
+            tournament_id=tournament.id,
+            user=request.user,
+            team_id=team_id,
+            actor=request.user,
+        )
+        messages.success(request, f"Team '{team_name}' erfolgreich vom Turnier '{tournament.title}' abgemeldet.")
+    except TournamentError as e:
+        messages.error(request, f"❌ {e}")
 
     return redirect('tournament_detail', slug=slug)
 
@@ -198,28 +220,26 @@ def tournament_unregister(request, slug):
 @require_POST
 def tournament_generate_bracket(request, slug):
     """
-    Admin-Aktion: Schließt die Anmeldung und generiert den Turnierbaum.
+    Admin-Aktion: Validiert Mindestteams, generiert den Turnierbaum und schließt erst dann atomar die Anmeldung.
     """
     tournament = get_object_or_404(Tournament, slug=slug)
 
     is_admin = (
         request.user.is_staff or
+        request.user.is_superuser or
         request.user == tournament.tournament_admin or
         request.user == tournament.tournament_support
     )
 
     if not is_admin:
-        messages.error(request, "Keine Berechtigung zur Generierung des Turnierbaums.")
+        messages.error(request, "❌ Keine Berechtigung zur Generierung des Turnierbaums.")
         return redirect('tournament_detail', slug=slug)
 
-    tournament.status = Tournament.Status.REGISTRATION_CLOSED
-    tournament.save()
-
-    res = generate_bracket(tournament, preview=False)
-    if res:
+    try:
+        TournamentBracketService.generate_bracket(tournament_id=tournament.id, actor=request.user)
         messages.success(request, f"🚀 Turnierbaum für '{tournament.title}' erfolgreich generiert! Das Turnier läuft jetzt.")
-    else:
-        messages.error(request, "Fehler bei der Generierung. Es sind mindestens 2 angemeldete Teams erforderlich.")
+    except TournamentError as e:
+        messages.error(request, f"❌ {e}")
 
     return redirect('tournament_detail', slug=slug)
 
@@ -238,6 +258,7 @@ def match_update_score(request, match_id):
 
     is_admin = (
         request.user.is_staff or
+        request.user.is_superuser or
         request.user == tournament.tournament_admin or
         request.user == tournament.tournament_support
     )
@@ -246,41 +267,83 @@ def match_update_score(request, match_id):
         return JsonResponse({'success': False, 'error': 'Keine Berechtigung zur Ergebniseingabe.'}, status=403)
 
     try:
-        score1 = int(request.POST.get('score_team1', 0))
-        score2 = int(request.POST.get('score_team2', 0))
-    except (ValueError, TypeError):
-        return JsonResponse({'success': False, 'error': 'Ungültige Punkte/Scores eingetragen.'}, status=400)
+        score1 = request.POST.get('score_team1', 0)
+        score2 = request.POST.get('score_team2', 0)
+        winner_id = request.POST.get('winner_id')
+        decision_reason = request.POST.get('decision_reason')
 
-    winner_id = request.POST.get('winner_id')
-    winner_team = None
+        match_updated, winner_team = TournamentMatchService.update_match_score(
+            match_id=match_obj.id,
+            score1=score1,
+            score2=score2,
+            winner_id=winner_id,
+            decision_reason=decision_reason,
+            actor=request.user,
+        )
 
-    if winner_id:
-        try:
-            winner_id_int = int(winner_id)
-        except (ValueError, TypeError):
-            return JsonResponse({'success': False, 'error': 'Ungültige Sieger-ID.'}, status=400)
+        messages.success(request, f"Ergebnis gespeichert! Sieger: {winner_team.name}")
+        return JsonResponse({'success': True, 'winner': winner_team.name})
+    except TournamentError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Interner Fehler: {e}'}, status=500)
 
-        if match_obj.team1 and match_obj.team1.id == winner_id_int:
-            winner_team = match_obj.team1
-        elif match_obj.team2 and match_obj.team2.id == winner_id_int:
-            winner_team = match_obj.team2
-        else:
-            return JsonResponse({'success': False, 'error': 'Das gewählte Team nimmt nicht an diesem Match teil.'}, status=400)
-    else:
-        if score1 > score2:
-            winner_team = match_obj.team1
-        elif score2 > score1:
-            winner_team = match_obj.team2
-        else:
-            return JsonResponse({'success': False, 'error': 'Unentschieden ist in KO-Matches nicht erlaubt. Wähle den Sieger aus.'}, status=400)
 
-    if not winner_team:
-        return JsonResponse({'success': False, 'error': 'Konnte keinen gültigen Sieger ermitteln.'}, status=400)
+@login_required
+@require_POST
+def match_update_ffa_score(request, match_id):
+    """
+    Erfasst Ränge und Scores für alle Teilnehmer eines FFA-Matches.
+    """
+    match_obj = get_object_or_404(
+        TournamentMatch.objects.select_related('tournament'),
+        id=match_id
+    )
+    tournament = match_obj.tournament
 
-    advance_match_winner(match_obj, winner_team, score1, score2)
+    is_admin = (
+        request.user.is_staff or
+        request.user.is_superuser or
+        request.user == tournament.tournament_admin or
+        request.user == tournament.tournament_support
+    )
 
-    messages.success(request, f"Ergebnis gespeichert! Sieger: {winner_team.name}")
-    return JsonResponse({'success': True, 'winner': winner_team.name})
+    if not is_admin:
+        messages.error(request, "❌ Keine Berechtigung zur Ergebniseingabe.")
+        return redirect('tournament_detail', slug=tournament.slug)
+
+    try:
+        participant_scores = []
+        participants = match_obj.participants.all()
+        for p in participants:
+            rank_val = request.POST.get(f'rank_{p.id}')
+            score_val = request.POST.get(f'score_{p.id}', 0)
+            notes_val = request.POST.get(f'notes_{p.id}', '')
+            is_dq = bool(request.POST.get(f'dq_{p.id}'))
+            participant_scores.append({
+                'participant_id': p.id,
+                'rank': rank_val,
+                'score': score_val,
+                'notes': notes_val,
+                'is_disqualified': is_dq,
+            })
+
+        decision_reason = request.POST.get('decision_reason', '')
+
+        FFAMatchService.update_ffa_scores(
+            match_id=match_obj.id,
+            participant_scores=participant_scores,
+            decision_reason=decision_reason,
+            actor=request.user,
+        )
+
+        messages.success(request, f"🏆 FFA-Ergebnisse für '{tournament.title}' erfolgreich gespeichert!")
+    except TournamentError as e:
+        messages.error(request, f"❌ {e}")
+    except Exception as e:
+        messages.error(request, f"❌ Unerwarteter Fehler: {e}")
+
+    return redirect('tournament_detail', slug=tournament.slug)
 
 
 # =============================================================================
@@ -515,7 +578,7 @@ def team_join_by_code(request):
         messages.info(request, f"Du bist bereits Mitglied im Team '{team.name}'.")
         return redirect('team_detail', slug=team.slug)
 
-    TeamMember.objects.get_or_create(
+    membership, created = TeamMember.objects.get_or_create(
         team=team,
         user=request.user,
         defaults={
@@ -523,6 +586,10 @@ def team_join_by_code(request):
             'status': TeamMember.Status.ACCEPTED,
         }
     )
+
+    if not created and membership.status == TeamMember.Status.PENDING:
+        membership.status = TeamMember.Status.ACCEPTED
+        membership.save(update_fields=['status'])
 
     messages.success(request, f"🤝 Du bist dem Team '{team.name}' erfolgreich beigetreten!")
     return redirect('team_detail', slug=team.slug)
@@ -538,7 +605,13 @@ def team_leave(request, slug):
     team = get_object_or_404(Team, slug=slug)
 
     res = team.leave_team(request.user)
-    if res == 'deleted':
+    if res == 'in_active_tournament':
+        messages.error(
+            request,
+            f"Du kannst das Team '{team.name}' nicht verlassen, da es an einem laufenden Turnier teilnimmt. Wende dich bitte an die Turnierleitung."
+        )
+        return redirect('team_detail', slug=slug)
+    elif res == 'deleted':
         messages.info(request, f"Du hast das Team '{team.name}' verlassen. Da du das letzte Mitglied warst, wurde das Team gelöscht.")
         return redirect('team_list')
     elif res == 'captain_transferred':
@@ -559,6 +632,13 @@ def team_kick_member(request, slug, user_id):
     Kapitän kickt ein Mitglied aus dem Team.
     """
     team = get_object_or_404(Team, slug=slug)
+
+    if team.is_in_active_tournament():
+        messages.error(
+            request,
+            f"Mitglieder können während eines laufenden Turniers nicht aus dem Team entfernt werden. Wende dich bitte an die Turnierleitung."
+        )
+        return redirect('team_detail', slug=slug)
 
     if not team.is_captain(request.user) and not request.user.is_staff:
         messages.error(request, "Nur der Kapitän oder Administratoren können Mitglieder entfernen.")

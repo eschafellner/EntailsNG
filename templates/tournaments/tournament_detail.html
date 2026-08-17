@@ -178,7 +178,16 @@
             {% endif %}
           </div>
         {% elif tournament.is_registration_open %}
-          {% if user_checkin %}
+          {% if not user.is_authenticated %}
+            <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.04); border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px;">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink);">
+                🔒 Bitte anmelden:
+              </span>
+              <a href="{% url 'login' %}?next={{ request.path }}" style="background: var(--signal); color: var(--navy); padding: 6px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+                Login
+              </a>
+            </div>
+          {% elif user_checkin %}
             {% if tournament.game.team_size == 1 %}
               <form method="post" action="{% url 'tournament_register' slug=tournament.slug %}">
                 {% csrf_token %}
@@ -187,28 +196,81 @@
                 </button>
               </form>
             {% else %}
-              <form method="post" action="{% url 'tournament_register' slug=tournament.slug %}" style="display: flex; gap: 8px;">
-                {% csrf_token %}
-                <select name="team_id" required style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
-                  <option value="">-- Team auswählen --</option>
-                  {% for t in my_user_teams %}
-                    <option value="{{ t.id }}">{{ t.name }}</option>
-                  {% endfor %}
-                </select>
-                <button type="submit" style="background: var(--signal); color: var(--navy); border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
-                  Team anmelden
-                </button>
-              </form>
+              {% if my_user_teams %}
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+                  <form method="post" action="{% url 'tournament_register' slug=tournament.slug %}" style="display: flex; gap: 8px;">
+                    {% csrf_token %}
+                    <select name="team_id" required style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+                      <option value="">-- Team auswählen --</option>
+                      {% for t in my_user_teams %}
+                        <option value="{{ t.id }}">{{ t.name }}</option>
+                      {% endfor %}
+                    </select>
+                    <button type="submit" style="background: var(--signal); color: var(--navy); border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+                      Team anmelden
+                    </button>
+                  </form>
+                  <a href="{% url 'team_list' %}" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); text-decoration: underline;">
+                    🔍 Zur Teamsuche
+                  </a>
+                </div>
+              {% else %}
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+                    Du bist aktuell in keinem Team für {{ tournament.game.name }}.
+                  </span>
+                  <a href="{% url 'team_list' %}" style="display: inline-block; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none; background: var(--navy); color: var(--signal); border: 1px solid var(--signal);">
+                    🔍 Zur Teamsuche
+                  </a>
+                </div>
+              {% endif %}
             {% endif %}
           {% else %}
-            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #f87171; padding: 8px 12px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #dc2626;">
-              ⚠️ Für die Turnieranmeldung musst du erst am Einlass eingecheckt sein.
-            </div>
+            {% if has_event_ticket %}
+              <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #f87171; padding: 8px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #dc2626; max-width: 380px; text-align: right;">
+                ⚠️ Du hast ein Ticket für <strong>{{ tournament.event.title }}</strong>, bist aber noch nicht am Einlass eingecheckt. Der Einlass-Scan schaltet die Turnieranmeldung frei.
+              </div>
+            {% else %}
+              <div style="background: rgba(248, 171, 45, 0.15); border: 1px solid var(--signal); padding: 8px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink); display: flex; align-items: center; gap: 8px;">
+                <span>🎟️ Event-Ticket für <strong>{{ tournament.event.title }}</strong> erforderlich:</span>
+                {% if tournament.event.id %}
+                  <a href="{% url 'register_for_event' event_id=tournament.event.id %}" style="color: var(--signal-deep); font-weight: bold; text-decoration: underline;">
+                    Ticket holen →
+                  </a>
+                {% endif %}
+              </div>
+            {% endif %}
           {% endif %}
         {% else %}
-          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
-            Anmeldung geschlossen
-          </span>
+          {% if tournament.is_generated or tournament.status == 'IN_PROGRESS' %}
+            <span style="background: rgba(2, 132, 199, 0.15); color: #0284c7; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+              ⚔️ Turnier läuft
+            </span>
+          {% elif tournament.status == 'FINISHED' %}
+            <span style="background: rgba(100, 116, 139, 0.15); color: #475569; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+              🏁 Turnier beendet
+            </span>
+          {% elif registration_not_started_yet %}
+            <span style="background: rgba(248, 171, 45, 0.15); color: var(--ink); padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+              ⏳ Anmeldung öffnet am {{ tournament.registration_start|date:"d.m.Y H:i" }} Uhr
+            </span>
+          {% elif registration_ended %}
+            <span style="background: rgba(239, 68, 68, 0.1); color: #dc2626; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+              ⛔ Anmeldeschluss war am {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr
+            </span>
+          {% elif tournament_is_full %}
+            <span style="background: rgba(239, 68, 68, 0.1); color: #dc2626; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+              🔴 Voll (Max. {{ tournament.max_teams }} Teams erreicht)
+            </span>
+          {% elif tournament.status == 'DRAFT' %}
+            <span style="background: rgba(100, 116, 139, 0.15); color: var(--muted); padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+              Entwurf (Anmeldung noch nicht freigegeben)
+            </span>
+          {% else %}
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+              Anmeldung geschlossen
+            </span>
+          {% endif %}
         {% endif %}
       </div>
     </div>
@@ -240,60 +302,255 @@
           <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
             Turnierverlauf
           </h3>
-          {% if user_team %}
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(248, 171, 45, 0.2); border: 1px solid var(--signal); color: var(--signal-deep); padding: 4px 10px; border-radius: 6px; font-weight: bold;">
-              ⭐ Dein Team ({{ user_team.name }}) ist hervorgehoben
-            </span>
-          {% endif %}
+          <div style="display: flex; gap: 8px; align-items: center;">
+            {% if user_team %}
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(248, 171, 45, 0.2); border: 1px solid var(--signal); color: var(--signal-deep); padding: 4px 10px; border-radius: 6px; font-weight: bold;">
+                ⭐ Dein Team ({{ user_team.name }}) ist hervorgehoben
+              </span>
+            {% endif %}
+            {% if is_admin and tournament.mode == 'FFA' and ffa_match and tournament.status != 'FINISHED' %}
+              <button type="button" onclick="openFfaScoreModal()" style="background: var(--signal); color: var(--navy); border: none; padding: 6px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+                ✏️ FFA-Ergebnisse eintragen
+              </button>
+            {% endif %}
+          </div>
         </div>
 
-        <div class="bracket-container">
-          {% regroup matches by round_number as round_list %}
-          {% for round in round_list %}
-            <div class="bracket-round">
-              <div class="bracket-round-title">Runde {{ round.grouper }}</div>
-              {% for match in round.list %}
-                <div class="match-card {% if user_team and match.team1 == user_team or match.team2 == user_team %}is-my-team{% endif %}">
-                  <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); display: flex; justify-content: space-between;">
-                    <span>Match #{{ match.match_number }}</span>
-                    <span>{{ match.get_status_display }}</span>
-                  </div>
+        {# ================== MODUS: LIGA ================== #}
+        {% if tournament.mode == 'LEAGUE' %}
+          <div style="margin-bottom: 28px;">
+            <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin: 0 0 12px 0; color: var(--signal-deep);">
+              📊 Ligatabelle
+            </h4>
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+                <thead>
+                  <tr style="background: var(--panel); border-bottom: 2px solid var(--line); text-align: left;">
+                    <th style="padding: 10px 12px; width: 50px;">Pl.</th>
+                    <th style="padding: 10px 12px;">Team</th>
+                    <th style="padding: 10px 8px; text-align: center;">Sp</th>
+                    <th style="padding: 10px 8px; text-align: center;">S</th>
+                    <th style="padding: 10px 8px; text-align: center;">U</th>
+                    <th style="padding: 10px 8px; text-align: center;">N</th>
+                    <th style="padding: 10px 12px; text-align: center;">Score</th>
+                    <th style="padding: 10px 8px; text-align: center;">Diff</th>
+                    <th style="padding: 10px 12px; text-align: right;">Pkt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in league_standings %}
+                    <tr style="border-bottom: 1px solid var(--line); {% if user_team and row.team == user_team %}background: rgba(248, 171, 45, 0.08); font-weight: bold;{% endif %}">
+                      <td style="padding: 10px 12px;">
+                        {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}{{ row.rank }}.{% endif %}
+                      </td>
+                      <td style="padding: 10px 12px;">
+                        {{ row.team.name }}
+                        {% if row.team.captain %}
+                          <span style="font-size: 11px; color: var(--muted);">({{ row.team.captain.username }})</span>
+                        {% endif %}
+                      </td>
+                      <td style="padding: 10px 8px; text-align: center;">{{ row.played }}</td>
+                      <td style="padding: 10px 8px; text-align: center; color: #10b981;">{{ row.won }}</td>
+                      <td style="padding: 10px 8px; text-align: center; color: var(--muted);">{{ row.drawn }}</td>
+                      <td style="padding: 10px 8px; text-align: center; color: #ef4444;">{{ row.lost }}</td>
+                      <td style="padding: 10px 12px; text-align: center;">{{ row.score_for }}:{{ row.score_against }}</td>
+                      <td style="padding: 10px 8px; text-align: center;">{% if row.score_diff > 0 %}+{% endif %}{{ row.score_diff }}</td>
+                      <td style="padding: 10px 12px; text-align: right; font-weight: bold; color: var(--signal-deep);">{{ row.points }}</td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="9" style="padding: 16px; text-align: center; color: var(--muted);">Noch keine Ligaspiele abgeschlossen.</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                  <div class="team-slot {% if match.winner == match.team1 %}is-winner{% endif %} {% if user_team and match.team1 == user_team %}is-my-team-slot{% endif %}">
-                    <span>
-                      {% if match.team1 %}
-                        {% if user_team and match.team1 == user_team %}⭐ {% endif %}{{ match.team1.name }}
-                      {% else %}
-                        {% if match.is_bye %}Freilos (BYE){% else %}TBD{% endif %}
-                      {% endif %}
-                    </span>
-                    <strong>{{ match.score_team1|default:"-" }}</strong>
-                  </div>
+          <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin: 0 0 12px 0; color: var(--ink);">
+            📅 Spielplan & Begegnungen
+          </h4>
 
-                  <div class="team-slot {% if match.winner == match.team2 %}is-winner{% endif %} {% if user_team and match.team2 == user_team %}is-my-team-slot{% endif %}">
-                    <span>
-                      {% if match.team2 %}
-                        {% if user_team and match.team2 == user_team %}⭐ {% endif %}{{ match.team2.name }}
-                      {% else %}
-                        TBD
-                      {% endif %}
-                    </span>
-                    <strong>{{ match.score_team2|default:"-" }}</strong>
-                  </div>
+        {# ================== MODUS: GRUPPENPHASE ================== #}
+        {% elif tournament.mode == 'GROUP_STAGE' %}
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 28px;">
+            <!-- Gruppe A Tabelle -->
+            <div style="border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--panel);">
+              <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; margin: 0 0 10px 0; color: var(--signal-deep);">
+                🅰️ Gruppe A
+              </h4>
+              <table style="width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--line); text-align: left;">
+                    <th style="padding: 6px 8px; width: 35px;">Pl.</th>
+                    <th style="padding: 6px 8px;">Team</th>
+                    <th style="padding: 6px 6px; text-align: center;">Sp</th>
+                    <th style="padding: 6px 6px; text-align: center;">Diff</th>
+                    <th style="padding: 6px 8px; text-align: right;">Pkt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in group_a_standings %}
+                    <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); {% if user_team and row.team == user_team %}background: rgba(248, 171, 45, 0.12); font-weight: bold;{% endif %}">
+                      <td style="padding: 6px 8px;">{{ row.rank }}.</td>
+                      <td style="padding: 6px 8px;">{{ row.team.name }}</td>
+                      <td style="padding: 6px 6px; text-align: center;">{{ row.played }}</td>
+                      <td style="padding: 6px 6px; text-align: center;">{% if row.score_diff > 0 %}+{% endif %}{{ row.score_diff }}</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: bold;">{{ row.points }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
 
-                  {% if is_admin and match.status != 'COMPLETED' and not match.is_bye and match.team1 and match.team2 %}
-                    <button type="button" onclick="openScoreModal({{ match.id }}, '{{ match.team1.name|escapejs }}', '{{ match.team2.name|escapejs }}', {{ match.team1.id }}, {{ match.team2.id }})" style="margin-top: 4px; background: #0284c7; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;">
-                      ✏️ Ergebnis eintragen
-                    </button>
+            <!-- Gruppe B Tabelle -->
+            <div style="border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--panel);">
+              <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; margin: 0 0 10px 0; color: var(--signal-deep);">
+                🅱️ Gruppe B
+              </h4>
+              <table style="width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--line); text-align: left;">
+                    <th style="padding: 6px 8px; width: 35px;">Pl.</th>
+                    <th style="padding: 6px 8px;">Team</th>
+                    <th style="padding: 6px 6px; text-align: center;">Sp</th>
+                    <th style="padding: 6px 6px; text-align: center;">Diff</th>
+                    <th style="padding: 6px 8px; text-align: right;">Pkt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in group_b_standings %}
+                    <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); {% if user_team and row.team == user_team %}background: rgba(248, 171, 45, 0.12); font-weight: bold;{% endif %}">
+                      <td style="padding: 6px 8px;">{{ row.rank }}.</td>
+                      <td style="padding: 6px 8px;">{{ row.team.name }}</td>
+                      <td style="padding: 6px 6px; text-align: center;">{{ row.played }}</td>
+                      <td style="padding: 6px 6px; text-align: center;">{% if row.score_diff > 0 %}+{% endif %}{{ row.score_diff }}</td>
+                      <td style="padding: 6px 8px; text-align: right; font-weight: bold;">{{ row.points }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin: 0 0 12px 0; color: var(--ink);">
+            ⚔️ Gruppenmatches & KO-Phase
+          </h4>
+
+        {# ================== MODUS: FFA ================== #}
+        {% elif tournament.mode == 'FFA' %}
+          <div style="margin-bottom: 24px;">
+            <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin: 0 0 12px 0; color: var(--signal-deep);">
+              🏆 Free For All – Gesamtwertung
+            </h4>
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+                <thead>
+                  <tr style="background: var(--panel); border-bottom: 2px solid var(--line); text-align: left;">
+                    <th style="padding: 10px 14px; width: 60px;">Rang</th>
+                    <th style="padding: 10px 14px;">Teilnehmer / Team</th>
+                    <th style="padding: 10px 14px; text-align: center;">Punkte / Kills / Zeit</th>
+                    <th style="padding: 10px 14px;">Status / Notizen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for p in ffa_participants %}
+                    <tr style="border-bottom: 1px solid var(--line); {% if user_team and p.team == user_team %}background: rgba(248, 171, 45, 0.08); font-weight: bold;{% endif %}">
+                      <td style="padding: 10px 14px; font-size: 15px;">
+                        {% if p.rank == 1 %}🥇 1.{% elif p.rank == 2 %}🥈 2.{% elif p.rank == 3 %}🥉 3.{% elif p.rank %}{{ p.rank }}.{% else %}—{% endif %}
+                      </td>
+                      <td style="padding: 10px 14px;">
+                        <strong>{{ p.team.name }}</strong>
+                        {% if p.team.captain and p.team.captain.username != p.team.name %}
+                          <span style="font-size: 11px; color: var(--muted);">({{ p.team.captain.username }})</span>
+                        {% endif %}
+                      </td>
+                      <td style="padding: 10px 14px; text-align: center; font-weight: bold; font-size: 14px; color: var(--signal-deep);">
+                        {{ p.score }}
+                      </td>
+                      <td style="padding: 10px 14px; font-size: 12px; color: var(--muted);">
+                        {% if p.is_disqualified %}
+                          <span style="color: #ef4444; font-weight: bold;">❌ Disqualifiziert</span>
+                        {% elif p.notes %}
+                          {{ p.notes }}
+                        {% elif p.rank %}
+                          ✓ Gewertet
+                        {% else %}
+                          Ausstehend
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="4" style="padding: 16px; text-align: center; color: var(--muted);">Keine Teilnehmer vorhanden.</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
+
+        {# Standard-Match-Karten für alle Modi mit 2-Team Matches #}
+        {% if tournament.mode != 'FFA' %}
+          <div class="bracket-container">
+            {% regroup matches by round_number as round_list %}
+            {% for round in round_list %}
+              <div class="bracket-round">
+                <div class="bracket-round-title">
+                  {% if tournament.mode == 'LEAGUE' %}
+                    Spieltag {{ round.grouper }}
+                  {% elif tournament.mode == 'GROUP_STAGE' %}
+                    {% if round.grouper == 1 %}Gruppenphase{% elif round.grouper == 2 %}Halbfinale / Finale{% else %}Finale{% endif %}
+                  {% else %}
+                    Runde {{ round.grouper }}
                   {% endif %}
                 </div>
-              {% endfor %}
-            </div>
-          {% endfor %}
-        </div>
+                {% for match in round.list %}
+                  <div class="match-card {% if user_team and match.team1 == user_team or match.team2 == user_team %}is-my-team{% endif %}">
+                    <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); display: flex; justify-content: space-between;">
+                      <span>
+                        {% if match.group_name %}{{ match.group_name }} | {% endif %}Match #{{ match.match_number }}
+                      </span>
+                      <span>{{ match.get_status_display }}</span>
+                    </div>
+
+                    <div class="team-slot {% if match.winner == match.team1 %}is-winner{% endif %} {% if user_team and match.team1 == user_team %}is-my-team-slot{% endif %}">
+                      <span>
+                        {% if match.team1 %}
+                          {% if user_team and match.team1 == user_team %}⭐ {% endif %}{{ match.team1.name }}
+                        {% else %}
+                          {% if match.is_bye %}Freilos (BYE){% else %}TBD{% endif %}
+                        {% endif %}
+                      </span>
+                      <strong>{{ match.score_team1|default:"-" }}</strong>
+                    </div>
+
+                    <div class="team-slot {% if match.winner == match.team2 %}is-winner{% endif %} {% if user_team and match.team2 == user_team %}is-my-team-slot{% endif %}">
+                      <span>
+                        {% if match.team2 %}
+                          {% if user_team and match.team2 == user_team %}⭐ {% endif %}{{ match.team2.name }}
+                        {% else %}
+                          TBD
+                        {% endif %}
+                      </span>
+                      <strong>{{ match.score_team2|default:"-" }}</strong>
+                    </div>
+
+                    {% if is_admin and match.status != 'COMPLETED' and not match.is_bye and match.team1 and match.team2 %}
+                      <button type="button" onclick="openScoreModal({{ match.id }}, '{{ match.team1.name|escapejs }}', '{{ match.team2.name|escapejs }}', {{ match.team1.id }}, {{ match.team2.id }})" style="margin-top: 4px; background: #0284c7; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;">
+                        ✏️ Ergebnis eintragen
+                      </button>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
       {% else %}
         <div style="text-align: center; padding: 40px 20px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
-          ⏳ Der Turnierbaum wurde noch nicht generiert. Sobald die Anmeldephase abgeschlossen ist, erscheint hier der Baum.
+          ⏳ Das Turnier wurde noch nicht generiert. Sobald die Anmeldephase abgeschlossen ist, erscheint hier der Spielplan.
         </div>
       {% endif %}
     </div>
@@ -304,10 +561,10 @@
   <div id="tab-preview" class="tab-content">
     <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
       <h3 style="margin: 0 0 8px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--signal);">
-        👁️ Turnierbaum Vorschau
+        👁️ Turnier Vorschau
       </h3>
       <p style="margin: 0 0 16px 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
-        So würde der Turnierbaum aussehen, wenn er jetzt mit den {{ registrations.count }} angemeldeten Teams generiert werden würde (inkl. BYE-Freilose falls nötig).
+        So würde das Turnier aussehen, wenn es jetzt mit den {{ registrations.count }} angemeldeten Teams generiert werden würde.
       </p>
 
       {% if preview_data.rounds %}
@@ -392,7 +649,7 @@
 
 </div>
 
-<!-- Quick Result Modal für Admin -->
+<!-- Quick Result Modal für 2-Team Matches (Admin) -->
 <div id="scoreModal" class="modal-overlay" style="display: none;">
   <div class="modal-box">
     <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
@@ -419,6 +676,11 @@
             <option value="">-- Automatisch nach Punkten --</option>
           </select>
         </div>
+
+        <div>
+          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Entscheidungsgrund (bei Disqualifikation / Forfeit):</label>
+          <input type="text" id="decision_reason" name="decision_reason" placeholder="z. B. Forfeit, Disqualifikation, Admin-Entscheidung" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px; box-sizing: border-box;">
+        </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -432,6 +694,47 @@
     </form>
   </div>
 </div>
+
+<!-- FFA Result Modal (Admin) -->
+{% if is_admin and tournament.mode == 'FFA' and ffa_match %}
+<div id="ffaScoreModal" class="modal-overlay" style="display: none;">
+  <div class="modal-box" style="max-width: 580px;">
+    <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+      🏆 FFA-Ergebnisse erfassen
+    </h3>
+    <form method="post" action="{% url 'match_update_ffa_score' match_id=ffa_match.id %}">
+      {% csrf_token %}
+
+      <div style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; padding-right: 4px;">
+        {% for p in ffa_participants %}
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel);">
+            <div style="flex: 2; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+              <strong>{{ p.team.name }}</strong>
+            </div>
+            <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+              <span style="font-size: 10px; color: var(--muted);">Rang:</span>
+              <input type="number" name="rank_{{ p.id }}" value="{{ p.rank|default:'' }}" min="1" max="{{ ffa_participants|length }}" placeholder="1" style="width: 50px; padding: 4px; border-radius: 4px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; text-align: center;">
+            </div>
+            <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
+              <span style="font-size: 10px; color: var(--muted);">Pkt:</span>
+              <input type="number" name="score_{{ p.id }}" value="{{ p.score|default:0 }}" style="width: 55px; padding: 4px; border-radius: 4px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; text-align: center;">
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" onclick="closeFfaScoreModal()" style="background: var(--line); color: var(--ink); border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
+          Abbrechen
+        </button>
+        <button type="submit" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+          Wertung speichern & abschließen
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 <script>
 function openTab(tabName) {
@@ -456,6 +759,16 @@ function openScoreModal(matchId, t1Name, t2Name, t1Id, t2Id) {
 
 function closeScoreModal() {
   document.getElementById('scoreModal').style.display = 'none';
+}
+
+function openFfaScoreModal() {
+  var modal = document.getElementById('ffaScoreModal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeFfaScoreModal() {
+  var modal = document.getElementById('ffaScoreModal');
+  if (modal) modal.style.display = 'none';
 }
 
 function submitScore(e) {
