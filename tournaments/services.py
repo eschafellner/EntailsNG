@@ -367,9 +367,7 @@ class TournamentMatchService:
             raise InvalidScoreError("Punkte müssen nicht-negative Ganzzahlen (>= 0) sein.")
 
         with transaction.atomic():
-            match = TournamentMatch.objects.select_for_update().select_related(
-                'tournament', 'team1', 'team2', 'next_match_winner', 'next_match_loser'
-            ).get(pk=match_id)
+            match = TournamentMatch.objects.select_for_update().get(pk=match_id)
 
             # 1. Folgematch-Schutz bei nachträglicher Änderung
             if match.status == TournamentMatch.Status.COMPLETED:
@@ -814,11 +812,11 @@ class FFAMatchService:
         [{'participant_id': 12, 'rank': 1, 'score': 1500, 'is_disqualified': False, 'notes': ''}, ...]
         """
         with transaction.atomic():
-            match = TournamentMatch.objects.select_for_update().select_related('tournament').get(pk=match_id)
+            match = TournamentMatch.objects.select_for_update().get(pk=match_id)
             if match.bracket_type != TournamentMatch.BracketType.FFA:
                 raise TournamentMatchError("Dieses Match ist kein Free-For-All (FFA) Match.")
 
-            participants = {p.id: p for p in match.participants.select_for_update().select_related('team')}
+            participants = {p.id: p for p in match.participants.select_for_update()}
 
             winner_participant = None
 

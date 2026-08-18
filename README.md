@@ -111,57 +111,84 @@ Sobald der Server gestartet ist, öffne deinen Internet-Browser (z. B. Chrome, F
 
 ---
 
-## 🔑 Voreingestellte Test-Zugänge (Nur bei `--demo` Installation)
+## 🐳 Docker & Produktions-Betrieb (Linux-VPS)
 
-Falls die Installation mit `./install.sh --demo` ausgeführt wurde, sind folgende Demo-Accounts verfügbar:
+EntailsNG ist für den direkten Produktivbetrieb auf einem Linux-VPS mit **Docker Compose**, **PostgreSQL 16**, **Redis 7**, **Nginx Reverse Proxy** und automatisierten **Let's Encrypt TLS-Zertifikaten** vorbereitet.
 
-* **Administrator / Helfer Account**:
-  * **Benutzername:** `sadmin`
-  * **Passwort:** `adminpwd`
-  * *(Besitzt Mitarbeiter-Rechte für den Helfer-Scanner und den Admin-Bereich)*
+### 1. DNS-Records anlegen (beim Domain-Registrar)
+Vor dem ersten Start müssen folgende DNS-Einträge auf die öffentliche IP-Adresse deines VPS zeigen:
 
-* **Normaler Teilnehmer / Spieler Account**:
-  * **Benutzername:** `gamer1`
-  * **Passwort:** `guestpwd`
-
-> ⚠️ **Sicherheitshinweis für den Live-Betrieb:** Bei einer regulären Installation ohne `--demo` müssen eigene Administratoren sicher über `python manage.py createsuperuser` angelegt werden. Ändere vor dem Live-Betrieb stets den `SECRET_KEY` und die Datenbankpasswörter in deiner `.env`-Datei.
-
+| Typ | Host / Name | Ziel / Wert | Zweck |
+| :--- | :--- | :--- | :--- |
+| **A** | `@` (oder z. B. `lan`) | `<VPS-IPv4-Adresse>` | Haupt-Domain |
+| **A** (optional) | `www` | `<VPS-IPv4-Adresse>` | WWW-Weiterleitung |
+| **AAAA** (optional) | `@` (oder z. B. `lan`) | `<VPS-IPv6-Adresse>` | IPv6-Unterstützung |
 
 ---
 
-## 🐳 Docker & Produktions-Betrieb
+### 2. Konfiguration (`.env`) anlegen
 
-EntailsNG bietet ein produktionsbereites Docker-Setup mit PostgreSQL, Redis und WhiteNoise.
-
-### 1. Konfigurationsdatei `.env` erstellen:
-Kopiere die Vorlage `.env.example` nach `.env` und passe deine Einstellungen an:
+Kopiere die Vorlage `.env.example` nach `.env` und befülle alle Werte:
 ```bash
 cp .env.example .env
 ```
 
-Wichtige Produktions-Variablen:
-* **`SECRET_KEY`**: *(Pflicht bei `DEBUG=False`)* – Generiere einen sicheren, zufälligen Schlüssel (z. B. via `openssl rand -hex 32` oder `python -c "import secrets; print(secrets.token_urlsafe(50))"`).
-* **`DEBUG`**: Für den Live-Betrieb auf `False` setzen.
-* **`ALLOWED_HOSTS`**: Deine Domain(s) kommagetrennt (z. B. `lan.meinedomain.de,127.0.0.1`).
-* **`CSRF_TRUSTED_ORIGINS`**: Deine HTTPS-Domain(s) (z. B. `https://lan.meinedomain.de`).
-* **`REDIS_URL`**: `redis://redis:6379/1` *(Empfohlen in Produktion)* – Zentraler Cache für Multi-Worker-Betrieb (z. B. Gunicorn), damit Theme- und Navigations-Invalidierungen sofort auf allen Workern greifen.
-* **`SESSION_COOKIE_SECURE` / `CSRF_COOKIE_SECURE`**: Standardmäßig `True` bei `DEBUG=False` für HTTPS-Verbindungen.
+> ⚠️ **Sicherheitshinweis zur Secret Rotation & Git-Historie:**
+> Frühere Test-Commits enthielten Default-Schlüssel im Klartext. Erzeuge für den Live-Betrieb zwingend neue, kryptografisch sichere Passwörter und Schlüssel!
 
-### 2. Docker Compose starten:
+Wichtige Produktions-Variablen:
+* **`SECRET_KEY`**: Neuer Zufallsschlüssel (z. B. via `python3 -c "import secrets; print(secrets.token_urlsafe(50))"`).
+* **`DEBUG`**: Zwingend `False`.
+* **`DOMAIN_NAME`**: Deine Domain (z. B. `lan.meinedomain.de`).
+* **`ALLOWED_HOSTS`**: Kommagetrennt (z. B. `lan.meinedomain.de`).
+* **`CSRF_TRUSTED_ORIGINS`**: `https://lan.meinedomain.de`.
+* **`CERTBOT_EMAIL`**: Deine E-Mail für Let's Encrypt Benachrichtigungen.
+* **`DB_PASSWORD`**: Starkes, zufälliges PostgreSQL-Passwort.
+* **`EMAIL_HOST`**, **`EMAIL_PORT`**, **`EMAIL_HOST_USER`**, **`EMAIL_HOST_PASSWORD`**: Zugangsdaten deines SMTP-Providers.
+
+---
+
+### 3. Erstinitialisierung & HTTPS-Zertifikate
+
+Führe das mitgelieferte Initialisierungsskript aus, um das Nginx-Dummy-Zertifikat anzulegen, die ACME-Challenge zu durchlaufen und das offizielle Let's Encrypt Zertifikat zu beziehen:
+```bash
+bash nginx/init-letsencrypt.sh
+```
+
+Bei jedem späteren Start oder Update genügt ein einfaches:
 ```bash
 docker compose up -d
 ```
 
-### 3. Initiale Migrationen & Admin anlegen:
+---
+
+### 4. Administrator-Account sicher anlegen
+
+Nach dem ersten Start kann ein neuer Administrator-Account direkt im Container erstellt werden:
 ```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py seed_translations
-docker compose exec web python manage.py seed_features
 docker compose exec web python manage.py createsuperuser
 ```
 
 ---
 
-## 🛑 Lokalen Server beenden
-Um den lokalen Entwicklungsserver wieder zu beenden, gehe zurück in das Terminal-Fenster und drücke gleichzeitig die Tasten **`[STRG]` + `[C]`**.
+### 5. Deployment-Überprüfung & Diagnose
+
+Prüfe, ob alle Systemchecks und Deploy-Prüfungen ohne Fehler und Warnungen durchlaufen:
+```bash
+docker compose exec web python manage.py check --deploy
+```
+
+Status aller Container und Logs einsehen:
+```bash
+docker compose ps
+docker compose logs -f web
+```
+
+---
+
+## 🛑 Server stoppen
+```bash
+docker compose down
+```
+
 

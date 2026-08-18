@@ -278,3 +278,14 @@ class ClanModuleTests(TestCase):
         self.assertTrue(Clan.objects.filter(name='Duo Clan').exists())
         self.assertEqual(clan.memberships.filter(status=ClanMembership.Status.ACCEPTED).count(), 1)
 
+    def test_clan_password_automatic_hashing_on_save(self):
+        """Passwörter im Klartext werden bei save() automatisch gehasht und check_password validiert sicher."""
+        clan = Clan.objects.create(name='Security Clan', password='plain_secret_123')
+        clan.refresh_from_db()
+
+        # Passwort darf in der DB nicht mehr im Klartext liegen
+        self.assertNotEqual(clan.password, 'plain_secret_123')
+        self.assertTrue(clan.password.startswith('pbkdf2_') or clan.password.startswith('argon2') or clan.password.startswith('bcrypt'))
+        self.assertTrue(clan.check_password('plain_secret_123'))
+        self.assertFalse(clan.check_password('wrong_secret'))
+

@@ -49,13 +49,6 @@ class Clan(models.Model):
     def check_password(self, raw_password):
         if not self.password or not raw_password:
             return False
-        # Rückwärtskompatibilität für Altdaten im Klartext
-        if not (self.password.startswith('pbkdf2_') or self.password.startswith('argon2') or self.password.startswith('bcrypt') or self.password.startswith('scrypt')):
-            if self.password == raw_password:
-                self.set_password(raw_password)
-                self.save(update_fields=['password'])
-                return True
-            return False
         return check_password(raw_password, self.password)
 
     def save(self, *args, **kwargs):
@@ -67,6 +60,13 @@ class Clan(models.Model):
                 slug = f"{base_slug}-{count}"
                 count += 1
             self.slug = slug
+        if self.password and not (
+            self.password.startswith('pbkdf2_') or
+            self.password.startswith('argon2') or
+            self.password.startswith('bcrypt') or
+            self.password.startswith('scrypt')
+        ):
+            self.password = make_password(self.password)
         super().save(*args, **kwargs)
 
     def get_accepted_memberships(self):

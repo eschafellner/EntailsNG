@@ -6,14 +6,22 @@ __pycache__/
 *.pyc
 .venv/
 
-# SQLite Datenbank (nicht ins Git, damit jeder Tester eine frische DB hat)
+# SQLite Datenbank
 *.sqlite3
-db.sqlite3
 
 # Django-Geheimnisse / Umgebungsvariablen
 .env
+.env.local
+.env.production
+
+# Let's Encrypt / Certbot Daten & Zertifikate
+data/certbot/
+
+# Logs
+*.log
 
 # IDE / Editor Einstellungen
 .vscode/
 .idea/
 *.swp
+

@@ -256,7 +256,7 @@ class ConfigurationModelTests(TestCase):
         self.assertIsNone(cache.get(f"{CAPACITY_CACHE_KEY_PREFIX}{event_new.id}"))
 
     def test_dynamic_debug_mode_toggle(self):
-        from django.test import RequestFactory
+        from django.test import RequestFactory, override_settings
         from django.contrib.auth.models import AnonymousUser
         from configuration.middleware import DynamicDebugMiddleware
         from configuration.models import GeneralConfiguration
@@ -283,33 +283,43 @@ class ConfigurationModelTests(TestCase):
             res_off = middleware.process_exception(request, e)
             self.assertIsNone(res_off)
 
-        # 2. Bei debug_mode=True, aber ANONYMEM User: Schutz vor Information Leakage (liefert None)
+        # 2. In Produktion (settings.DEBUG=False): selbst bei debug_mode=True und Staff-User -> KEIN Leak (liefert None)
         conf.debug_mode = True
         conf.save()
-        request.user = AnonymousUser()
-        try:
-            raising_view(request)
-        except Exception as e:
-            res_anon = middleware.process_exception(request, e)
-            self.assertIsNone(res_anon)
+        with override_settings(DEBUG=False):
+            request.user = staff_user
+            try:
+                raising_view(request)
+            except Exception as e:
+                res_prod = middleware.process_exception(request, e)
+                self.assertIsNone(res_prod)
 
-        # 3. Bei debug_mode=True, aber NORMALEM User: Schutz vor Information Leakage (liefert None)
-        request.user = regular_user
-        try:
-            raising_view(request)
-        except Exception as e:
-            res_user = middleware.process_exception(request, e)
-            self.assertIsNone(res_user)
+        # 3. Unter DEBUG=True, aber ANONYMEM User: Schutz vor Information Leakage (liefert None)
+        with override_settings(DEBUG=True):
+            request.user = AnonymousUser()
+            try:
+                raising_view(request)
+            except Exception as e:
+                res_anon = middleware.process_exception(request, e)
+                self.assertIsNone(res_anon)
 
-        # 4. Bei debug_mode=True UND STAFF-User: liefert technische Debug-Response
-        request.user = staff_user
-        try:
-            raising_view(request)
-        except Exception as e:
-            res_staff = middleware.process_exception(request, e)
-            self.assertIsNotNone(res_staff)
-            self.assertEqual(res_staff.status_code, 500)
-            self.assertIn(b"Test-Fehler", res_staff.content)
+            # 4. Unter DEBUG=True, aber NORMALEM User: Schutz vor Information Leakage (liefert None)
+            request.user = regular_user
+            try:
+                raising_view(request)
+            except Exception as e:
+                res_user = middleware.process_exception(request, e)
+                self.assertIsNone(res_user)
+
+            # 5. Unter DEBUG=True UND debug_mode=True UND STAFF-User: liefert technische Debug-Response
+            request.user = staff_user
+            try:
+                raising_view(request)
+            except Exception as e:
+                res_staff = middleware.process_exception(request, e)
+                self.assertIsNotNone(res_staff)
+                self.assertEqual(res_staff.status_code, 500)
+                self.assertIn(b"Test-Fehler", res_staff.content)
 
 
     @override_settings(DEBUG=False, ALLOWED_HOSTS=['testserver', '127.0.0.1', 'localhost'])

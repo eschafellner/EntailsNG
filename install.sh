@@ -46,9 +46,12 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     echo -e "${YELLOW}   Erstelle lokale .env Datei mit sicherem Zufallsschlüssel...${NC}"
     cp .env.example .env
     RANDOM_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
-    sed -i "s|SECRET_KEY=change-me-in-production-secret-key-12345|SECRET_KEY=${RANDOM_SECRET}|" .env
+    sed -i "s|SECRET_KEY=hier-einen-langen-zufaelligen-secret-key-eintragen|SECRET_KEY=${RANDOM_SECRET}|" .env
+    sed -i "s|DEBUG=False|DEBUG=True|" .env
+    sed -i "s|ALLOWED_HOSTS=lan.meinedomain.de|ALLOWED_HOSTS=*|" .env
     echo -e "${GREEN}✓ .env erfolgreich initialisiert.${NC}\n"
 fi
+
 
 
 # 4. Datenbank einrichten (PostgreSQL als Standard)
