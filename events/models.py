@@ -284,7 +284,7 @@ class EventRegistration(models.Model):
         help_text="8-stelliger unerratbarer Code für die manuelle Einlass-Eingabe",
     )
 
-    def can_check_in(self, actor=None):
+    def can_check_in(self, actor=None, target_event=None):
         """
         Zentrale fachliche Prüfung, ob der Gast für das Event eingecheckt werden darf.
         Rückgabe: Tuple (can_check_in: bool, reason: str)
@@ -293,14 +293,18 @@ class EventRegistration(models.Model):
             return False, f"Check-in abgelehnt: Die Anmeldung von {self.user.username} ist nicht bezahlt (Status: {self.get_payment_status_display()})."
         if self.event and self.event.status == Event.Status.CANCELLED:
             return False, f"Check-in abgelehnt: Die Veranstaltung '{self.event.title}' wurde abgesagt."
+        
+        active_event = target_event or Event.objects.get_active()
+        if active_event and self.event_id != active_event.id:
+            return False, f"Check-in abgelehnt: Dieses Ticket gehört zur Veranstaltung '{self.event.title}' und ist für '{active_event.title}' nicht gültig!"
         return True, ""
 
-    def check_in(self, actor=None):
+    def check_in(self, actor=None, target_event=None):
         """
         Zentrale Methode zum Einchecken des Gastes (Single Source of Truth).
         Prüft zwingend den Bezahlstatus und die Gültigkeit der Anmeldung vor der Zustandsänderung.
         """
-        can_ci, reason = self.can_check_in(actor=actor)
+        can_ci, reason = self.can_check_in(actor=actor, target_event=target_event)
         if not can_ci:
             from django.core.exceptions import ValidationError
             raise ValidationError(reason)

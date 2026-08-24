@@ -6,189 +6,152 @@
 
 Willkommen bei **EntailsNG**, der modernen Neuauflage des LAN-Party-Managementsystems für Community-Treffen, Esports-Events und LAN-Partys mit bis zu 1.000 Gästen!
 
-Dieses Repository wurde so vorbereitet, dass auch **weniger IT-affine Kolleginnen und Kollegen** den aktuellen MVP-Stand in weniger als einer Minute installieren, testen und präsentieren können.
+Stack: **Python 3.12+ / Django 6, PostgreSQL 16, Redis 7, Nginx, Gunicorn, WhiteNoise, Pillow**.
 
 ---
 
-## ✨ Neue Highlights & Features im MVP
+## ✨ Highlights & Module im Überblick
 
-* 🎨 **System-Individualisierbarkeit & Preset Themes:**
-  - Vordefinierte Farb-Themes (*Warm Amber*, *Cyberpunk Neon*, *Slate Blue*, *Emerald Gaming*) oder eigene Custom-Farben.
-  - Logo-Upload (PNG, SVG, WebP) für flexibles Branding.
-  - Rechtstexte (Impressum & Datenschutz) direkt im Backend pflegbar.
-  - Benutzerdefiniertes CSS per Backend injizierbar.
-* 📏 **Globales UI-Skalierungssystem (`UIScale`):**
-  - Einheitliche Steuerung aller Schriftgrößen, Abstände, Buttons, Formulare & Cards im gesamten Frontend.
-  - Stufen im Backend einstellbar: *Sehr klein*, *Klein*, *Mittel (Default)*, *Groß*, *Sehr groß*.
-* 📱 **Mobile Responsive & Mobile Top-Header Bar:**
-  - Sticky Top-Header auf Mobilgeräten (< 860px) inkl. App-Style Bottom-Navigation.
-* 🎟️ **Erweiterter Event-Ende-Status (`expired_ticket_mode`):**
-  - **Modus "Ticket abgenutzt":** Das Ticket bleibt mit entwertetem Look (`BEENDET` Stempel, Sepia/Rot-Design) als Erinnerung sichtbar.
-  - **Modus "Event beendet":** Das Ticket blendet sich bei Überschreitung des Enddatums automatisch aus.
-* 🌐 **100% Backend-Übersetzbar (`SystemTranslation`):**
-  - Sämtliche Texte im Frontend können ohne Code-Änderungen über den Admin-Bereich verwaltet werden.
+* 🎟️ **Event- & Ticket-Management:** Registrierungen, dynamische Ticketkategorien, Vorverkaufsfristen & Double-Opt-In E-Mail-Verifizierung.
+* 🗺️ **Interaktiver 2D-Sitzplan:** Saalplan mit Zoom, Verschieben & Echtzeit-Reservierung für bis zu 1.000 Plätze.
+* 📱 **Helfer Check-in Scanner:** Vor-Ort Einlass-Tool mit Kamera-QR-Scan, akustischem Feedback & Ausweis-Verifikation.
+* 🏆 **Turnier- & Clan-Verwaltung:** Single/Double Elimination Brackets, Match-Scoring, Team-Management & Clan-Logos.
+* 📰 **News & Ankündigungen:** Newsfeed mit Markdown/Rich-Text und Benachrichtigungen.
+* 🎨 **Theme-Engine & UI-Skalierung:** Farbpaletten (*Warm Amber*, *Cyberpunk*, *Slate Blue*), Logo-Upload, Global `UIScale` und 100% Backend-übersetzbare Systemtexte.
 
 ---
 
-## 💡 Warum eine virtuelle Umgebung (`.venv`) sinnvoll ist
+## ⚡ Schnellstart für lokale Entwicklung (Dev-Setup)
 
+### 🐧 Linux (Fedora / Ubuntu / Debian)
 
-Eine **virtuelle Umgebung** (Virtual Environment) erstellt einen isolierten "Sandkasten" für Python. Das bietet folgende Vorteile:
+EntailsNG unterstützt sowohl **Podman** (Standard auf Fedora/RHEL) als auch **Docker** (Ubuntu/Debian):
 
-* 🛡️ **Keine Konflikte:** Alle benötigten Bibliotheken (Django, TinyMCE etc.) werden nur in diesen Projektordner installiert, ohne das globale Betriebssystem zu verändern.
-* 🔄 **Saubere Installation:** Sollte etwas schiefgehen, kann der Ordner `.venv` einfach gelöscht und mit einem Befehl neu angelegt werden.
-* 📦 **Identische Umgebung:** Alle Entwickler und Tester arbeiten exakt mit denselben Paketversionen.
-
----
-
-## ⚡ Einrichtungsanleitung (Nach Betriebssystem aufgeteilt)
-
-### 🐧 Für Linux-User (Fedora / Ubuntu / Debian)
-
-#### Option 1: Automatisch (1-Klick Setup)
-Öffne ein Terminal im Projektordner und führe aus:
 ```bash
-./install.sh          # Saubere Installation (ohne Testdaten für Produktion)
-# ODER:
-./install.sh --demo   # Installation mit Test-Events & Demo-Benutzern
+# 1. Installation (einmalig)
+./install.sh --demo    # Richtet .venv ein, startet DB & lädt Testdaten (sadmin/adminpwd)
 
-./start.sh            # Server starten
+# 2. Server starten
+./start.sh             # Startet den Django Dev-Server & prüft automatisch PostgreSQL/Redis
 ```
 
-#### Option 2: Manuell im Terminal
+#### 🐘 Lokale Datenbanken mit Podman / Docker steuern:
+Falls du die Datenbanken manuell im Hintergrund starten oder stoppen möchtest:
+
 ```bash
-# 1. Virtuelle Umgebung anlegen & aktivieren
-python3 -m venv .venv
+# Für Fedora / Podman:
+systemctl --user enable --now podman.socket   # Einmalig aktivieren
+podman compose up -d db redis
+
+# Für Ubuntu / Docker:
+docker compose up -d db redis
+
+# Dev-Server starten:
 source .venv/bin/activate
+python manage.py runserver
+```
+
+---
+
+### 🪟 Windows (PowerShell)
+
+```powershell
+# 1. Virtuelle Umgebung anlegen & aktivieren
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 
 # 2. Abhängigkeiten installieren
 pip install -r requirements.txt
 
-# 3. Datenbank strukturieren, System-Keys initialisieren & Server starten
+# 3. Datenbank strukturieren & Seeds ausführen
 python manage.py migrate
 python manage.py seed_translations
 python manage.py seed_features
-# Optional: python manage.py loaddata initial_data.json  (nur für Demo-Daten)
+python manage.py seed_email_templates
+
+# 4. Server starten
 python manage.py runserver
 ```
 
 ---
 
-### 🪟 Für Windows-User (PowerShell / Eingabeaufforderung)
+## 🌐 Lokale Web-Adressen
 
-#### Manuelle Einrichtung in der PowerShell:
-```powershell
-# 1. Virtuelle Umgebung anlegen
-python -m venv .venv
-
-# 2. Virtuelle Umgebung aktivieren
-.venv\Scripts\Activate.ps1
-# (Falls Eingabeaufforderung / CMD genutzt wird: .venv\Scripts\activate.bat)
-
-# 3. Abhängigkeiten installieren
-pip install -r requirements.txt
-
-# 4. Datenbank strukturieren & Server starten
-python manage.py migrate
-python manage.py seed_translations
-python manage.py seed_features
-# Optional für Demo-Daten: python manage.py loaddata initial_data.json
-python manage.py runserver
-```
-
----
-
-## 🌐 Aufrufen der Seiten im Web-Browser
-
-Sobald der Server gestartet ist, öffne deinen Internet-Browser (z. B. Chrome, Firefox, Edge oder Safari) und rufe folgende Links auf:
+Sobald der Server läuft, erreichst du die Anwendung unter:
 
 | Bereich | Web-Adresse (URL) | Beschreibung |
 | :--- | :--- | :--- |
-| **🌐 Hauptseite / Dashboard** | [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Hauptübersicht mit aktuellem Event, Ticket-Status, News & Saalplan-Vorschau. |
-| **🗺️ Interaktiver Sitzplan** | [http://127.0.0.1:8000/seating/](http://127.0.0.1:8000/seating/) | 2D-Saalplan mit Zoom & Verschieben (Performance-optimiert für bis zu 1.000 Plätze). |
-| **📱 Helfer Check-in Scanner** | [http://127.0.0.1:8000/checkin/scanner/](http://127.0.0.1:8000/checkin/scanner/) | Vor-Ort Einlass-Tool für Helfer mit Kamera-QR-Scan & Ton-Feedback *(Nur für Mitarbeiter)*. |
-| **🛠️ Admin-Verwaltung** | [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/) | Django Verwaltungsoberfläche für Events, Sitzpläne, E-Mail-Konfiguration & User. |
+| **🌐 Hauptseite / Dashboard** | [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Hauptübersicht mit aktuellem Event, Ticket-Status & News. |
+| **🗺️ Interaktiver Sitzplan** | [http://127.0.0.1:8000/seating/](http://127.0.0.1:8000/seating/) | 2D-Saalplan mit Zoom & Sitzplatzwahl. |
+| **📱 Helfer Check-in Scanner** | [http://127.0.0.1:8000/checkin/scanner/](http://127.0.0.1:8000/checkin/scanner/) | Vor-Ort Einlass-Tool für Helfer mit QR-Scanner *(Staff-Login nötig)*. |
+| **🛠️ Admin-Verwaltung** | [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/) | Django Verwaltungsoberfläche (Standard-Admin: `sadmin` / `adminpwd`). |
 
 ---
 
-## 🐳 Docker & Produktions-Betrieb (Linux-VPS)
+## 🐳 Live-Deployment (Produktion / VM / VPS)
 
-EntailsNG ist für den direkten Produktivbetrieb auf einem Linux-VPS mit **Docker Compose**, **PostgreSQL 16**, **Redis 7**, **Nginx Reverse Proxy** und automatisierten **Let's Encrypt TLS-Zertifikaten** vorbereitet.
+EntailsNG ist vollständig containerisiert und kann wahlweise über einen **Linux-VPS mit Let's Encrypt** oder über einen **Cloudflare Tunnel (Heimserver / VM)** betrieben werden.
 
-### 1. DNS-Records anlegen (beim Domain-Registrar)
-Vor dem ersten Start müssen folgende DNS-Einträge auf die öffentliche IP-Adresse deines VPS zeigen:
+### 1. Konfiguration (`.env`) anlegen
 
-| Typ | Host / Name | Ziel / Wert | Zweck |
-| :--- | :--- | :--- | :--- |
-| **A** | `@` (oder z. B. `lan`) | `<VPS-IPv4-Adresse>` | Haupt-Domain |
-| **A** (optional) | `www` | `<VPS-IPv4-Adresse>` | WWW-Weiterleitung |
-| **AAAA** (optional) | `@` (oder z. B. `lan`) | `<VPS-IPv6-Adresse>` | IPv6-Unterstützung |
-
----
-
-### 2. Konfiguration (`.env`) anlegen
-
-Kopiere die Vorlage `.env.example` nach `.env` und befülle alle Werte:
+Kopiere `.env.example` nach `.env` und befülle alle Werte:
 ```bash
 cp .env.example .env
+nano .env
 ```
 
-> ⚠️ **Sicherheitshinweis zur Secret Rotation & Git-Historie:**
-> Frühere Test-Commits enthielten Default-Schlüssel im Klartext. Erzeuge für den Live-Betrieb zwingend neue, kryptografisch sichere Passwörter und Schlüssel!
-
-Wichtige Produktions-Variablen:
-* **`SECRET_KEY`**: Neuer Zufallsschlüssel (z. B. via `python3 -c "import secrets; print(secrets.token_urlsafe(50))"`).
-* **`DEBUG`**: Zwingend `False`.
+Wichtige Parameter:
+* **`SECRET_KEY`**: Neuer kryptografisch sicherer Schlüssel (`python3 -c "import secrets; print(secrets.token_urlsafe(50))"`).
+* **`DEBUG`**: `False`.
 * **`DOMAIN_NAME`**: Deine Domain (z. B. `lan.meinedomain.de`).
-* **`ALLOWED_HOSTS`**: Kommagetrennt (z. B. `lan.meinedomain.de`).
+* **`ALLOWED_HOSTS`**: `lan.meinedomain.de,localhost,127.0.0.1`.
 * **`CSRF_TRUSTED_ORIGINS`**: `https://lan.meinedomain.de`.
-* **`CERTBOT_EMAIL`**: Deine E-Mail für Let's Encrypt Benachrichtigungen.
-* **`DB_PASSWORD`**: Starkes, zufälliges PostgreSQL-Passwort.
-* **`EMAIL_HOST`**, **`EMAIL_PORT`**, **`EMAIL_HOST_USER`**, **`EMAIL_HOST_PASSWORD`**: Zugangsdaten deines SMTP-Providers.
+* **`DB_PASSWORD`**: Starkes PostgreSQL-Passwort.
+* **`EMAIL_HOST`**, **`EMAIL_PORT`**, **`EMAIL_HOST_USER`**, **`EMAIL_HOST_PASSWORD`**: SMTP-Zugangsdaten.
 
 ---
 
-### 3. Erstinitialisierung & HTTPS-Zertifikate
+### 2. Variante A: Deployment über Cloudflare Tunnel (Empfohlen für VM / Heimserver)
 
-Führe das mitgelieferte Initialisierungsskript aus, um das Nginx-Dummy-Zertifikat anzulegen, die ACME-Challenge zu durchlaufen und das offizielle Let's Encrypt Zertifikat zu beziehen:
-```bash
-bash nginx/init-letsencrypt.sh
-```
-
-Bei jedem späteren Start oder Update genügt ein einfaches:
-```bash
-docker compose up -d
-```
+1. Im [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) einen Tunnel erstellen.
+2. In der `.env` den `CLOUDFLARE_TUNNEL_TOKEN` eintragen.
+3. Public Hostname im Cloudflare Dashboard auf `HTTP` -> `nginx:80` setzen.
+4. Container starten:
+   ```bash
+   docker compose up -d --build
+   # (oder: podman compose up -d --build)
+   ```
 
 ---
 
-### 4. Administrator-Account sicher anlegen
+### 3. Variante B: Deployment auf Linux-VPS mit Let's Encrypt
 
-Nach dem ersten Start kann ein neuer Administrator-Account direkt im Container erstellt werden:
+1. DNS A-Record der Domain auf die öffentliche IPv4 des VPS setzen.
+2. SSL-Bootstrap-Skript ausführen:
+   ```bash
+   bash nginx/init-letsencrypt.sh
+   ```
+
+---
+
+### 4. Administrator anlegen & Deploy-Check
+
 ```bash
+# Eigenen Superuser erstellen
 docker compose exec web python manage.py createsuperuser
-```
 
----
-
-### 5. Deployment-Überprüfung & Diagnose
-
-Prüfe, ob alle Systemchecks und Deploy-Prüfungen ohne Fehler und Warnungen durchlaufen:
-```bash
+# System- & Sicherheitscheck ausführen (sollte 0 Fehler liefern)
 docker compose exec web python manage.py check --deploy
-```
 
-Status aller Container und Logs einsehen:
-```bash
+# Container-Status prüfen
 docker compose ps
-docker compose logs -f web
 ```
 
 ---
 
-## 🛑 Server stoppen
+## 🛑 Container stoppen
+
 ```bash
 docker compose down
+# (oder: podman compose down)
 ```
-
-

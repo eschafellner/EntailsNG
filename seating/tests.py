@@ -114,6 +114,26 @@ class SeatingPlanTests(TestCase):
         data = response.json()
         self.assertEqual(len(data['cells']), 1000)
 
+    def test_seating_plan_page_renders_translation_texts(self):
+        """Testet, dass die Übersetzungs-Tags auf der Sitzplan-Seite ordnungsgemäß mit Text gerendert werden."""
+        self.client.login(username='seatuser', password='password')
+        response = self.client.get(reverse('seating_plan'))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+
+        # Prüfe, dass Titel und Legende gerendert werden
+        self.assertIn('Sitzplan', content)
+        self.assertIn('Frei', content)
+        self.assertIn('Vorgemerkt', content)
+        self.assertIn('Reserviert (Bezahlt)', content)
+        self.assertIn('Dein Platz', content)
+
+        # Prüfe Modal-Texte
+        self.assertIn('SITZPLATZ RESERVIEREN', content)
+        self.assertIn('Abbrechen', content)
+        self.assertIn('Ja, reservieren', content)
+        self.assertIn('verbindlich reservieren', content)
+
 
 
 class SeatingConsistencyAndSignalTests(TestCase):

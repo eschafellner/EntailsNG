@@ -17,6 +17,12 @@ class EventAdminForm(forms.ModelForm):
             "für dieses Event kopiert."
         ),
     )
+    clone_tickets_from = forms.ModelChoiceField(
+        queryset=Event.objects.all(),
+        required=False,
+        label="🎟️ Ticket-Kategorien übernehmen von",
+        help_text="Optional: Kopiert alle Ticket-Kategorien (Namen, Preise, Hinweise) eines anderen Events für dieses Event.",
+    )
 
     class Meta:
         model = Event
@@ -28,6 +34,12 @@ class EventAdminForm(forms.ModelForm):
             self.fields['clone_seating_from'].help_text = (
                 f"ℹ️ Dieses Event hat bereits einen Sitzplan ('{self.instance.seating_plan.name}'). "
                 f"Eine neue Auswahl hier ersetzt den aktuellen Plan durch eine frische Kopie des gewählten Layouts."
+            )
+        if self.instance and self.instance.pk and self.instance.ticket_types.exists():
+            count = self.instance.ticket_types.count()
+            self.fields['clone_tickets_from'].help_text = (
+                f"ℹ️ Dieses Event hat bereits {count} Ticket-Kategorie(n). "
+                f"Eine Auswahl hier kopiert zusätzliche Ticketkategorien aus dem gewählten Event hinzu."
             )
 
 
@@ -75,6 +87,34 @@ class EventAdmin(admin.ModelAdmin):
                 f"🎉 Sitzplan-Layout '{source_plan.name}' wurde erfolgreich mit {cloned.cells.count()} leeren Kacheln für '{obj.title}' eingerichtet!"
             )
 
+        source_ticket_event = form.cleaned_data.get('clone_tickets_from')
+        if source_ticket_event:
+            copied_count = 0
+            for tt in source_ticket_event.ticket_types.all():
+                TicketType.objects.create(
+                    event=obj,
+                    name=tt.name,
+                    price=tt.price,
+                    description=tt.description,
+                    is_active=tt.is_active,
+                )
+                copied_count += 1
+            if copied_count > 0:
+                messages.success(
+                    request,
+                    f"🎟️ {copied_count} Ticket-Kategorie(n) von '{source_ticket_event.title}' erfolgreich für '{obj.title}' übernommen!"
+                )
+
+        # Falls gar keine TicketType existieren, automatisch ein Standard-Ticket anlegen
+        if not obj.ticket_types.exists():
+            TicketType.objects.create(
+                event=obj,
+                name="Standard",
+                price=obj.price,
+                description="",
+                is_active=True,
+            )
+
 
 
 @admin.register(TicketType)
@@ -104,6 +144,22 @@ class EventRegistrationAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'user__first_name', 'user__last_name', 'short_code')
     readonly_fields = ('short_code', 'checkin_token', 'assigned_seat_picker', 'checked_in_at', 'paid_at', 'cancelled_at')
     actions = ['action_check_in_guests', 'action_check_out_guests', 'export_as_csv']
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "ticket_type":
+            object_id = request.resolver_match.kwargs.get('object_id') if request.resolver_match else None
+            if object_id:
+                try:
+                    reg = self.get_object(request, object_id)
+                    if reg and reg.event:
+                        kwargs["queryset"] = TicketType.objects.filter(event=reg.event)
+                except Exception:
+                    pass
+            else:
+                active = Event.objects.get_active()
+                if active:
+                    kwargs["queryset"] = TicketType.objects.filter(event=active)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
     @admin.action(description="📊 CSV-Export für Kasse / Einlass (Excel-kompatibel)")

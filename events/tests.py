@@ -926,6 +926,176 @@ class AdmissionAndPaymentHardeningTests(TestCase):
         self.assertTrue(res_second.json()['already_checked_in'])
 
 
+class MultiEventTicketAndCheckinTests(TestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_superuser(
+            username='staff_scanner', email='staff@example.com', password='password'
+        )
+        self.guest = User.objects.create_user(
+            username='multi_guest', email='guest@example.com', password='password'
+        )
+
+        # Event 1: Vorjahr (inaktiv)
+        self.past_event = Event.objects.create(
+            title='LAN Party 2025',
+            slug='lan-party-2025',
+            is_active=False,
+            status=Event.Status.FINISHED,
+            start_date=timezone.now() - timedelta(days=365),
+            end_date=timezone.now() - timedelta(days=363),
+            price=30.00,
+        )
+        self.past_ticket = TicketType.objects.create(
+            event=self.past_event,
+            name="Frühbucher 2025",
+            price=25.00,
+            is_active=True,
+        )
+        self.past_reg = EventRegistration.objects.create(
+            user=self.guest,
+            event=self.past_event,
+            ticket_type=self.past_ticket,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+
+        # Event 2: Aktuelles Jahr (aktiv)
+        self.active_event = Event.objects.create(
+            title='LAN Party 2026',
+            slug='lan-party-2026',
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() + timedelta(days=30),
+            end_date=timezone.now() + timedelta(days=32),
+            price=35.00,
+        )
+        self.active_ticket = TicketType.objects.create(
+            event=self.active_event,
+            name="Standard 2026",
+            price=35.00,
+            is_active=True,
+        )
+
+    def test_scan_qr_api_rejects_inactive_event_ticket(self):
+        """Scanner verweigert Einlass, wenn der gescannte QR-Code zu einem alten / inaktiven Event gehört."""
+        self.client.login(username='staff_scanner', password='password')
+        res = self.client.post(
+            reverse('api_scan_qr'),
+            data=json.dumps({'code': str(self.past_reg.checkin_token)}),
+            content_type='application/json'
+        )
+        self.assertEqual(res.status_code, 400)
+        data = res.json()
+        self.assertEqual(data['status'], 'event_mismatch')
+        self.assertIn('LAN Party 2025', data['message'])
+        self.assertIn('LAN Party 2026', data['message'])
+
+        # Historische Registrierung darf NICHT eingecheckt worden sein
+        self.past_reg.refresh_from_db()
+        self.assertFalse(self.past_reg.is_checked_in)
+
+    def test_process_checkin_rejects_inactive_event_ticket(self):
+        """process_checkin View verweigert Tickets vergangener Events."""
+        self.client.login(username='staff_scanner', password='password')
+        response = self.client.get(
+            reverse('process_checkin', kwargs={'registration_id': self.past_reg.id, 'token': self.past_reg.checkin_token})
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTemplateUsed(response, 'events/checkin_failed.html')
+        self.assertContains(response, 'LAN Party 2025', status_code=400)
+
+    def test_can_check_in_model_method_validates_active_event(self):
+        """Model-Methode can_check_in schlägt für inaktive Events fehl."""
+        can_ci, reason = self.past_reg.can_check_in()
+        self.assertFalse(can_ci)
+        self.assertIn("LAN Party 2025", reason)
+
+    def test_event_admin_clone_tickets(self):
+        """Beim Speichern eines neuen Events können Ticketkategorien eines Quell-Events geklont werden."""
+        from events.admin import EventAdmin, EventAdminForm
+        from django.contrib.admin.sites import AdminSite
+
+        site = AdminSite()
+        admin_instance = EventAdmin(Event, site)
+
+        new_event = Event(
+            title='LAN Party 2027',
+            slug='lan-party-2027',
+            is_active=False,
+            status=Event.Status.DRAFT,
+            start_date=timezone.now() + timedelta(days=400),
+            end_date=timezone.now() + timedelta(days=402),
+            price=40.00,
+        )
+        new_event.save()
+
+        form = EventAdminForm(data={
+            'title': new_event.title,
+            'slug': new_event.slug,
+            'status': new_event.status,
+            'start_date': new_event.start_date,
+            'end_date': new_event.end_date,
+            'price': new_event.price,
+            'max_guests': 100,
+            'clone_tickets_from': self.past_event.id,
+        }, instance=new_event)
+        self.assertTrue(form.is_valid())
+
+        request = self.client.get('/').wsgi_request
+        request.user = self.staff_user
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        setattr(request, '_messages', FallbackStorage(request))
+
+        admin_instance.save_model(request, new_event, form, change=True)
+        self.assertTrue(new_event.ticket_types.filter(name="Frühbucher 2025").exists())
+
+    def test_event_admin_auto_creates_default_ticket(self):
+        """Wird ein Event ohne Tickets gespeichert, wird automatisch ein Standard-Ticket erzeugt."""
+        from events.admin import EventAdmin, EventAdminForm
+        from django.contrib.admin.sites import AdminSite
+
+        site = AdminSite()
+        admin_instance = EventAdmin(Event, site)
+
+        event_no_tickets = Event(
+            title='Auto Ticket Event',
+            slug='auto-ticket-event',
+            is_active=False,
+            status=Event.Status.DRAFT,
+            start_date=timezone.now() + timedelta(days=200),
+            end_date=timezone.now() + timedelta(days=202),
+            price=45.00,
+        )
+        event_no_tickets.save()
+
+        form = EventAdminForm(data={
+            'title': event_no_tickets.title,
+            'slug': event_no_tickets.slug,
+            'status': event_no_tickets.status,
+            'start_date': event_no_tickets.start_date,
+            'end_date': event_no_tickets.end_date,
+            'price': event_no_tickets.price,
+            'max_guests': 100,
+        }, instance=event_no_tickets)
+        self.assertTrue(form.is_valid())
+
+        request = self.client.get('/').wsgi_request
+        request.user = self.staff_user
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        setattr(request, '_messages', FallbackStorage(request))
+
+        admin_instance.save_model(request, event_no_tickets, form, change=True)
+        self.assertTrue(event_no_tickets.ticket_types.filter(name="Standard", price=45.00).exists())
+
+    def test_dashboard_displays_past_event_notice_when_not_registered(self):
+        """Gast mit Registrierung aus dem Vorjahr sieht den Hinweis auf erforderliche Neuanmeldung."""
+        self.client.login(username='multi_guest', password='password')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'LAN Party 2025')
+        self.assertContains(response, 'LAN Party 2026')
+        self.assertContains(response, 'neue Anmeldung erforderlich')
+
+
 
 
 

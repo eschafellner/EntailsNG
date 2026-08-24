@@ -98,6 +98,17 @@ def dashboard_view(request):
 
 
 
+    past_registrations = []
+    if request.user.is_authenticated:
+        past_regs_qs = EventRegistration.objects.filter(user=request.user)
+        if event:
+            past_regs_qs = past_regs_qs.exclude(event=event)
+        past_registrations = list(
+            past_regs_qs.select_related('event', 'ticket_type')
+            .prefetch_related('seats')
+            .order_by('-event__start_date')
+        )
+
     context = {
         'event': event,
         'upcoming_event': event,
@@ -115,6 +126,7 @@ def dashboard_view(request):
         'event_capacity_percent': cap_stats['capacity_percent'],
         'is_event_expired': is_event_expired,
         'show_onboarding_ticket': show_ticket,
+        'past_registrations': past_registrations,
     }
     return render(request, 'dashboard.html', context)
 
@@ -217,8 +229,25 @@ def toggle_check_in_api(request):
 def process_checkin(request, registration_id, token):
     """Zeigt bei GET eine Vorschau mit Bestätigungs-Button und verarbeitet erst bei POST den Check-in."""
     registration = get_object_or_404(
-        EventRegistration, pk=registration_id, checkin_token=token
+        EventRegistration.objects.select_related('user', 'event', 'ticket_type'),
+        pk=registration_id,
+        checkin_token=token
     )
+
+    active_event = get_active_event()
+    if active_event and registration.event_id != active_event.id:
+        error_msg = f"Check-in abgelehnt: Dieses Ticket gehört zur Veranstaltung '{registration.event.title}' und ist für '{active_event.title}' nicht gültig!"
+        if _wants_json(request):
+            return JsonResponse({'status': 'error', 'message': error_msg}, status=400)
+        return render(
+            request,
+            'events/checkin_failed.html',
+            {
+                'registration': registration,
+                'reason': error_msg,
+            },
+            status=400,
+        )
 
     if registration.payment_status != EventRegistration.PaymentStatus.PAID:
         if _wants_json(request):
@@ -268,7 +297,7 @@ def process_checkin(request, registration_id, token):
     # POST-Request: Zustandsänderung durchführen!
     already_checked_in = registration.is_checked_in
     if not already_checked_in:
-        registration.check_in()
+        registration.check_in(target_event=active_event)
 
     if _wants_json(request):
         return JsonResponse({
@@ -392,7 +421,36 @@ def scan_qr_api(request):
     seat = registration.seats.first()
     seat_label = seat.seat_label if seat else "Kein Platz"
 
-    # 2. Prüfe Zahlungsstatus
+    active_event = get_active_event()
+    if not active_event:
+        return JsonResponse(
+            {'status': 'error', 'message': 'Keine aktive Veranstaltung konfiguriert.'},
+            status=400,
+        )
+
+    # 3. Prüfe, ob die Anmeldung zum aktuell aktiven Event gehört
+    if registration.event_id != active_event.id:
+        return JsonResponse(
+            {
+                'status': 'event_mismatch',
+                'user': registration.user.username,
+                'full_name': registration.user.get_full_name()
+                or registration.user.username,
+                'ticket': (
+                    registration.ticket_type.name
+                    if registration.ticket_type
+                    else "Standard"
+                ),
+                'seat': seat_label,
+                'message': (
+                    f'ABGELEHNT: Dieses Ticket gehört zur Veranstaltung "{registration.event.title}" '
+                    f'und ist für die aktuelle Veranstaltung "{active_event.title}" nicht gültig!'
+                ),
+            },
+            status=400,
+        )
+
+    # 4. Prüfe Zahlungsstatus
     if registration.payment_status != EventRegistration.PaymentStatus.PAID:
         return JsonResponse(
             {
@@ -415,7 +473,7 @@ def scan_qr_api(request):
 
     already_checked_in = registration.is_checked_in
     if not already_checked_in:
-        registration.check_in()
+        registration.check_in(target_event=active_event)
 
     return JsonResponse({
         'status': 'already_checked_in' if already_checked_in else 'success',

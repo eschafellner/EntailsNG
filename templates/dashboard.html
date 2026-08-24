@@ -370,6 +370,11 @@
           <p style="margin: 0 0 16px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #eab308;">
             ⚠️ {% t "seat_not_registered_text" %}
           </p>
+          {% if past_registrations %}
+            <div style="margin: 0 0 16px 0; padding: 10px 12px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #93c5fd;">
+              ℹ️ Du warst bei <strong>{{ past_registrations.0.event.title }}</strong> angemeldet. Für <strong>{{ upcoming_event.title }}</strong> ist eine neue Anmeldung erforderlich.
+            </div>
+          {% endif %}
         {% endif %}
       </div>
 

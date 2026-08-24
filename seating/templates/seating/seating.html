@@ -3,7 +3,7 @@
 {% block title %}Sitzplan – {{ event.title|default:"Haag-networX" }}{% endblock %}
 
 {% block content %}
-<div class="card seating-page-card" style="padding: 16px; border-radius: 16px; position: relative; display: flex; flex-direction: column; min-height: calc(100vh - 130px);">
+<div class="card seating-page-card" style="padding: var(--card-padding, 20px); border-radius: var(--radius, 16px); position: relative; display: flex; flex-direction: column; min-height: calc(100vh - 130px);">
 
   {% if event %}
     <!-- ======================================================================
@@ -11,46 +11,86 @@
          ====================================================================== -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 12px;">
       <div>
-        <p class="eyebrow" style="margin-bottom: 2px;">Saalplan – {{ event.title }}</p>
-        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 28px;">{{ txt_seating_plan_title }}</h1>
+        <p class="eyebrow" style="margin-bottom: 2px; font-size: var(--font-xs, 11px);">Saalplan – {{ event.title }}</p>
+        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: var(--font-3xl, 28px); color: var(--ink);">{% t "seating_plan_title" "Sitzplan" %}</h1>
       </div>
 
-      <!-- Responsive Farb-Legende -->
-      <div style="display: flex; gap: 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; align-items: center; background: var(--paper); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); flex-wrap: wrap;">
-        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; border-radius: 2px; display: inline-block;"></span> {{ txt_seat_legend_free }}</span>
-        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; border-radius: 2px; display: inline-block;"></span> {{ txt_seat_legend_prereserved }}</span>
-        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 2px; display: inline-block;"></span> {{ txt_seat_legend_reserved }}</span>
-        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: rgba(56, 189, 248, 0.3); border: 1px solid #38bdf8; border-radius: 2px; display: inline-block;"></span> Dein Clan</span>
-        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: #f8ab2d; border: 2px solid #ffffff; border-radius: 2px; display: inline-block; box-shadow: 0 0 6px #f8ab2d;"></span> {{ txt_seat_legend_own }}</span>
-        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: #374151; border: 1px solid #4b5563; border-radius: 2px; display: inline-block;"></span> Gesperrt</span>
+      <!-- Responsive Farb- & Symbol-Legende (100% Theme-reaktiv & Barrierefrei) -->
+      <div class="seating-legend" style="display: flex; gap: 8px 14px; font-size: var(--font-sm, 12px); font-family: 'JetBrains Mono', monospace; align-items: center; background: var(--paper); padding: calc(var(--card-padding, 20px) * 0.4) calc(var(--card-padding, 20px) * 0.6); border-radius: calc(var(--radius, 16px) * 0.5); border: 1px solid var(--line); flex-wrap: wrap;">
+        <!-- Frei -->
+        <span style="display: flex; align-items: center; gap: 5px;">
+          <span style="width: 14px; height: 14px; background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3"><circle cx="12" cy="12" r="8"></circle></svg>
+          </span>
+          {% t "seat_legend_free" "Frei" %}
+        </span>
+
+        <!-- Vorgemerkt (gestrichelt + Clock-SVG) -->
+        <span style="display: flex; align-items: center; gap: 5px;">
+          <span style="width: 14px; height: 14px; background: rgba(234, 179, 8, 0.15); border: 1.5px dashed #eab308; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </span>
+          {% t "seat_legend_prereserved" "Vorgemerkt" %}
+        </span>
+
+        <!-- Reserviert (solide + Lock-SVG) -->
+        <span style="display: flex; align-items: center; gap: 5px;">
+          <span style="width: 14px; height: 14px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          </span>
+          {% t "seat_legend_reserved" "Reserviert (Bezahlt)" %}
+        </span>
+
+        <!-- Dein Clan (Shield-SVG) -->
+        <span style="display: flex; align-items: center; gap: 5px;">
+          <span style="width: 14px; height: 14px; background: rgba(56, 189, 248, 0.25); border: 1.5px solid #38bdf8; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          </span>
+          Dein Clan
+        </span>
+
+        <!-- Eigener Platz (Star-SVG mit Glow) -->
+        <span style="display: flex; align-items: center; gap: 5px;">
+          <span style="width: 14px; height: 14px; background: var(--signal, #f8ab2d); border: 1.5px solid #ffffff; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 6px var(--signal, #f8ab2d);">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="var(--navy, #332719)" stroke="var(--navy, #332719)" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          </span>
+          {% t "seat_legend_own" "Dein Platz" %}
+        </span>
+
+        <!-- Gesperrt (Schraffur + Ban-SVG) -->
+        <span style="display: flex; align-items: center; gap: 5px;">
+          <span style="width: 14px; height: 14px; background: repeating-linear-gradient(45deg, #1f2937, #1f2937 2px, #374151 2px, #374151 4px); border: 1px solid #4b5563; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+          </span>
+          Gesperrt
+        </span>
       </div>
     </div>
 
     <!-- Steuerung & Zoom-Bar -->
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
-      <div style="font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+      <div style="font-size: var(--font-sm, 12px); color: var(--muted); font-family: 'JetBrains Mono', monospace;">
         💡 Ziehen zum Verschieben • Scrollen zum Zoomen
       </div>
       <div style="display: flex; gap: 6px; align-items: center;">
-        <span id="zoom-level-badge" style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); padding: 4px 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px;">100%</span>
-        <button type="button" id="btn-zoom-in" title="Vergrößern (+)" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 34px;">🔍 +</button>
-        <button type="button" id="btn-zoom-out" title="Verkleinern (-)" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 34px;">🔍 -</button>
-        <button type="button" id="btn-zoom-reset" title="Plan zentrieren und einpassen" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 34px;">🎯 Einpassen</button>
-        <button type="button" id="btn-fullscreen" title="Vollbild umschalten (F)" style="background: var(--signal); color: var(--navy); border: 1px solid transparent; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: 34px;">⛶ Vollbild</button>
+        <span id="zoom-level-badge" style="font-size: var(--font-xs, 11px); font-family: 'JetBrains Mono', monospace; color: var(--muted); padding: 0 10px; height: var(--btn-height, 38px); display: inline-flex; align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: calc(var(--radius, 16px) * 0.4);">100%</span>
+        <button type="button" id="btn-zoom-in" title="Vergrößern (+)" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0 14px; border-radius: calc(var(--radius, 16px) * 0.4); font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: var(--btn-height, 38px); height: var(--btn-height, 38px); font-size: var(--font-sm, 13px); display: inline-flex; align-items: center; justify-content: center;">🔍 +</button>
+        <button type="button" id="btn-zoom-out" title="Verkleinern (-)" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0 14px; border-radius: calc(var(--radius, 16px) * 0.4); font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: var(--btn-height, 38px); height: var(--btn-height, 38px); font-size: var(--font-sm, 13px); display: inline-flex; align-items: center; justify-content: center;">🔍 -</button>
+        <button type="button" id="btn-zoom-reset" title="Plan zentrieren und einpassen" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0 14px; border-radius: calc(var(--radius, 16px) * 0.4); font-size: var(--font-sm, 12px); font-weight: 600; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: var(--btn-height, 38px); height: var(--btn-height, 38px); display: inline-flex; align-items: center; justify-content: center;">🎯 Einpassen</button>
       </div>
     </div>
 
     <!-- Lade-Indikator -->
-    <div id="seating-status" style="text-align: center; padding: 40px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+    <div id="seating-status" style="text-align: center; padding: 40px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: var(--font-md, 14px);">
       Sitzplan wird geladen...
     </div>
 
     <!-- RESPONSIVER DYNAMISCHER FULL-HEIGHT VIEWPORT CONTAINER -->
-    <div id="viewport" style="width: 100%; flex: 1; min-height: 540px; height: calc(100vh - 260px); overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #111827; position: relative; cursor: grab; touch-action: pan-y pinch-zoom; box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);">
+    <div id="viewport" style="width: 100%; flex: 1; min-height: 540px; height: calc(100vh - 260px); overflow: hidden; border: 1px solid var(--line); border-radius: calc(var(--radius, 16px) * 0.7); background: #0f111a; position: relative; cursor: grab; touch-action: pan-y pinch-zoom; box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);">
 
       <!-- Transform-Canvas Wrapper -->
-      <div id="pan-canvas" style="position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: transform 0.05s ease-out; padding: 20px;">
-        <div id="seating-grid" style="display: grid; gap: 4px; user-select: none;"></div>
+      <div id="pan-canvas" style="position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: transform 0.05s ease-out; padding: 24px;">
+        <div id="seating-grid" style="display: grid; gap: 5px; user-select: none;"></div>
       </div>
 
     </div>
@@ -59,26 +99,26 @@
          NATIVE RESERVIERUNGS-BESTÄTIGUNG (RESPONSIVES MODAL)
          ====================================================================== -->
     <div id="reserve-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px;">
-      <div style="position: relative; background: #ffffff; padding: 24px 20px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); text-align: center; max-width: 360px; width: 100%; border: 1px solid var(--line);">
+      <div style="position: relative; background: var(--panel, #ffffff); padding: calc(var(--card-padding, 20px) * 1.2) var(--card-padding, 20px); border-radius: var(--radius, 16px); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); text-align: center; max-width: 380px; width: 100%; border: 1px solid var(--line);">
 
         <button type="button" onclick="closeReserveModal()" style="position: absolute; top: -10px; right: -10px; background: #ef4444; color: #ffffff; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
           ✕
         </button>
 
-        <h3 style="margin: 0 0 8px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; text-transform: uppercase; color: #111827;">
-          {{ txt_seat_confirm_title }}
+        <h3 style="margin: 0 0 8px 0; font-family: 'Barlow Condensed', sans-serif; font-size: var(--font-xl, 22px); text-transform: uppercase; color: var(--ink);">
+          {% t "seat_confirm_title" "Sitzplatz reservieren" %}
         </h3>
 
-        <p id="reserve-modal-text" style="margin: 0 0 20px 0; font-size: 13px; color: #4b5563; font-family: 'JetBrains Mono', monospace; line-height: 1.5;">
+        <p id="reserve-modal-text" style="margin: 0 0 20px 0; font-size: var(--font-sm, 13px); color: var(--muted); font-family: 'JetBrains Mono', monospace; line-height: 1.5;">
         </p>
 
         <div style="display: flex; gap: 10px; justify-content: center;">
-          <button type="button" onclick="closeReserveModal()" style="background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 12px 16px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer; flex: 1; min-height: 44px;">
-            {{ txt_seat_confirm_no }}
+          <button type="button" onclick="closeReserveModal()" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0 16px; border-radius: calc(var(--radius, 16px) * 0.5); font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: var(--font-sm, 12px); cursor: pointer; flex: 1; min-height: var(--btn-height, 42px); height: var(--btn-height, 42px); display: inline-flex; align-items: center; justify-content: center;">
+            {% t "seat_confirm_no" "Abbrechen" %}
           </button>
 
-          <button type="button" id="btn-confirm-reserve" style="background: #0284c7; color: #ffffff; border: none; padding: 12px 16px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer; flex: 1; min-height: 44px;">
-            {{ txt_seat_confirm_yes }}
+          <button type="button" id="btn-confirm-reserve" style="background: var(--signal); color: var(--navy); border: none; padding: 0 16px; border-radius: calc(var(--radius, 16px) * 0.5); font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: var(--font-sm, 12px); cursor: pointer; flex: 1; min-height: var(--btn-height, 42px); height: var(--btn-height, 42px); display: inline-flex; align-items: center; justify-content: center;">
+            {% t "seat_confirm_yes" "Ja, reservieren" %}
           </button>
         </div>
 
@@ -87,35 +127,17 @@
 
   {% else %}
     <div style="text-align: center; padding: 48px 24px;">
-      <p class="eyebrow" style="margin-bottom: 8px;">Saalplan</p>
-      <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; margin-top: 0; margin-bottom: 16px; color: var(--ink);">
+      <p class="eyebrow" style="margin-bottom: 8px; font-size: var(--font-xs, 11px);">Saalplan</p>
+      <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: var(--font-3xl, 28px); margin-top: 0; margin-bottom: 16px; color: var(--ink);">
         Derzeit gibt es kein aktives/geplantes Event
       </h2>
-      <p style="color: var(--muted); font-size: 15px; max-width: 500px; margin: 0 auto; line-height: 1.6;">
+      <p style="color: var(--muted); font-size: var(--font-md, 15px); max-width: 500px; margin: 0 auto; line-height: 1.6;">
         Schau gerne bald wieder vorbei! Sobald die nächste Veranstaltung angekündigt wird, kannst du dir hier deinen Sitzplatz reservieren.
       </p>
     </div>
   {% endif %}
 
 </div>
-
-
-<style>
-  #viewport.is-fullscreen {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    max-width: none !important;
-    max-height: none !important;
-    z-index: 99990 !important;
-    border-radius: 0 !important;
-    border: none !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-  }
-</style>
 
 {% if event %}
 <script>
@@ -132,18 +154,30 @@ let initialScale = 1;
 
 let targetSeatX = null;
 let targetSeatY = null;
-let isFullscreen = false;
 
 const eventId = "{{ event.id }}";
 const isUserLoggedIn = {{ request.user.is_authenticated|yesno:"true,false" }};
-const rawConfirmText = "{{ txt_seat_confirm_question|escapejs }}";
+{% t "seat_confirm_question" "Möchtest du den Sitzplatz {seat} verbindlich reservieren?" as seat_confirm_q %}
+const rawConfirmText = "{{ seat_confirm_q|escapejs }}";
+
+// Vektor-SVG Icons für Kacheln (Theme-reaktiv via currentColor)
+const SVG_ICONS = {
+  free: `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="position: absolute; top: 2px; right: 2px; opacity: 0.7;"><circle cx="12" cy="12" r="8"></circle></svg>`,
+  pre_reserved: `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; top: 2px; right: 2px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`,
+  reserved: `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; top: 2px; right: 2px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`,
+  clan: `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; top: 2px; right: 2px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`,
+  own: `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" style="position: absolute; top: 2px; right: 2px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`,
+  blocked: `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; top: 2px; right: 2px;"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>`
+};
 
 document.addEventListener('DOMContentLoaded', function() {
   loadSeatingData();
 
-  // Bei Ändern der Fenstergröße Plan neu einpassen
+  // Bei Ändern der Fenstergröße Plan einpassen (nur bei mobiler Ansicht, Desktop behält Zoom)
   window.addEventListener('resize', () => {
-    if (window.lastSeatingData) fitToViewport(window.lastSeatingData);
+    if (window.lastSeatingData && window.innerWidth < 768) {
+      fitToViewport(window.lastSeatingData);
+    }
   });
 });
 
@@ -177,14 +211,13 @@ function renderGrid(data) {
   }
 
   const totalCols = (maxX - minX) + 1;
-  grid.style.gridTemplateColumns = `repeat(${totalCols}, 32px)`;
+  grid.style.gridTemplateColumns = `repeat(${totalCols}, 36px)`;
 
   const cellMap = {};
   data.cells.forEach(c => {
     cellMap[`${c.x}_${c.y}`] = c;
   });
 
-  // Performance-Optimierung für bis zu 1000 Plätze: DocumentFragment zur Vermeidung einzelner Reflows
   const fragment = document.createDocumentFragment();
 
   for (let y = minY; y <= maxY; y++) {
@@ -192,33 +225,39 @@ function renderGrid(data) {
       const cellData = cellMap[`${x}_${y}`];
       const cellEl = document.createElement('div');
 
-      cellEl.style.width = '32px';
-      cellEl.style.height = '32px';
-      cellEl.style.borderRadius = '4px';
+      cellEl.style.width = '36px';
+      cellEl.style.height = '36px';
+      cellEl.style.borderRadius = '5px';
       cellEl.style.display = 'flex';
+      cellEl.style.flexDirection = 'column';
       cellEl.style.alignItems = 'center';
       cellEl.style.justifyContent = 'center';
       cellEl.style.fontSize = '10px';
       cellEl.style.fontWeight = 'bold';
       cellEl.style.fontFamily = "'JetBrains Mono', monospace";
       cellEl.style.boxSizing = 'border-box';
+      cellEl.style.position = 'relative';
+      cellEl.style.transition = 'transform 0.15s ease, box-shadow 0.15s ease';
 
       if (!cellData || cellData.cell_type === 'EMPTY') {
         cellEl.style.background = 'transparent';
 
       } else if (cellData.cell_type === 'SEAT') {
         const seatLabel = cellData.seat_label || `${x},${y}`;
-        cellEl.innerText = seatLabel;
         let tooltipText = "";
+        let statusIconHtml = "";
 
         if (cellData.status === 'FREE') {
-          cellEl.style.background = 'rgba(34, 197, 94, 0.15)';
+          cellEl.style.background = 'rgba(34, 197, 94, 0.12)';
           cellEl.style.border = '1px solid #22c55e';
           cellEl.style.color = '#4ade80';
+          statusIconHtml = SVG_ICONS.free;
           tooltipText = `Platz ${seatLabel}: Frei`;
 
           if (isUserLoggedIn) {
             cellEl.style.cursor = 'pointer';
+            cellEl.onmouseenter = () => { cellEl.style.transform = 'scale(1.08)'; cellEl.style.boxShadow = '0 0 8px rgba(34, 197, 94, 0.4)'; };
+            cellEl.onmouseleave = () => { cellEl.style.transform = 'scale(1)'; cellEl.style.boxShadow = 'none'; };
             cellEl.onclick = function(e) {
               e.stopPropagation();
               openReserveModal(x, y, seatLabel);
@@ -234,26 +273,32 @@ function renderGrid(data) {
             : cellData.occupied_by;
 
           if (isOwnSeat) {
-            // BESONDERE HERVORHEBUNG: Eigener Sitzplatz (Goldgelb mit Glow)
-            cellEl.style.background = '#f8ab2d';
+            // Eigener Sitzplatz: Leuchtendes Theme-Highlight (var(--signal)) mit Star-SVG
+            cellEl.style.background = 'var(--signal, #f8ab2d)';
             cellEl.style.border = '2px solid #ffffff';
-            cellEl.style.color = '#332719';
-            cellEl.style.boxShadow = '0 0 10px #f8ab2d';
+            cellEl.style.color = 'var(--navy, #332719)';
+            cellEl.style.boxShadow = '0 0 12px var(--signal, #f8ab2d)';
             cellEl.style.zIndex = '5';
-            cellEl.title = `Dein reservierter Sitzplatz: ${seatLabel}`;
+            statusIconHtml = SVG_ICONS.own;
+            tooltipText = `Dein reservierter Sitzplatz: ${seatLabel}`;
           } else if (isSameClan) {
-            // Hervorhebung in Blau-Ton für eigene Clan-Mitglieder
-            cellEl.style.background = 'rgba(56, 189, 248, 0.3)';
-            cellEl.style.border = '1px solid #38bdf8';
+            // Clan-Mitglied: Blauer Akzentrahmen + Shield-SVG
+            cellEl.style.background = 'rgba(56, 189, 248, 0.25)';
+            cellEl.style.border = '1.5px solid #38bdf8';
             cellEl.style.color = '#7dd3fc';
+            statusIconHtml = SVG_ICONS.clan;
           } else if (cellData.status === 'PRE_RESERVED') {
-            cellEl.style.background = 'rgba(234, 179, 8, 0.2)';
-            cellEl.style.border = '1px solid #eab308';
+            // Vorgemerkt: Gestrichelter gelber Rand + Clock-SVG
+            cellEl.style.background = 'rgba(234, 179, 8, 0.15)';
+            cellEl.style.border = '1.5px dashed #eab308';
             cellEl.style.color = '#fde047';
+            statusIconHtml = SVG_ICONS.pre_reserved;
           } else {
-            cellEl.style.background = 'rgba(239, 68, 68, 0.2)';
+            // Fest bezahlt / Reserviert: Solider roter Rand + Lock-SVG
+            cellEl.style.background = 'rgba(239, 68, 68, 0.22)';
             cellEl.style.border = '1px solid #ef4444';
             cellEl.style.color = '#fca5a5';
+            statusIconHtml = SVG_ICONS.reserved;
           }
 
           if (!isOwnSeat) {
@@ -264,18 +309,22 @@ function renderGrid(data) {
           }
 
         } else {
-          cellEl.style.background = '#374151';
+          // Gesperrt: Diagonale Schraffur + Ban-SVG
+          cellEl.style.background = 'repeating-linear-gradient(45deg, #1f2937, #1f2937 3px, #374151 3px, #374151 6px)';
           cellEl.style.border = '1px solid #4b5563';
           cellEl.style.color = '#9ca3af';
+          statusIconHtml = SVG_ICONS.blocked;
           tooltipText = 'Platz gesperrt';
         }
+
+        cellEl.innerHTML = `${statusIconHtml}<span>${seatLabel}</span>`;
 
         if (tooltipText) {
           cellEl.title = tooltipText;
         }
 
       } else if (cellData.cell_type === 'DOOR') {
-        cellEl.style.background = 'rgba(56, 189, 248, 0.2)';
+        cellEl.style.background = 'rgba(56, 189, 248, 0.15)';
         cellEl.style.border = '1px dashed #38bdf8';
         cellEl.style.color = '#38bdf8';
         cellEl.innerText = cellData.text_label || '🚪';
@@ -338,12 +387,11 @@ document.getElementById('btn-confirm-reserve').onclick = function() {
   });
 };
 
-/* PAN & ZOOM IMPLEMENTIERUNG MIT MAUS, TOUCH & VOLLBILD */
+/* PAN & ZOOM IMPLEMENTIERUNG MIT MAUS, TOUCH & INTELLIGENTEM DESKTOP-INITIAL-ZOOM */
 function initPanZoom(data) {
   const viewport = document.getElementById('viewport');
   const canvas = document.getElementById('pan-canvas');
   const zoomBadge = document.getElementById('zoom-level-badge');
-  const btnFullscreen = document.getElementById('btn-fullscreen');
 
   function updateTransform() {
     canvas.style.transform = `translate(${pointX}px, ${pointY}px) scale(${currentScale})`;
@@ -367,8 +415,8 @@ function initPanZoom(data) {
     const totalCols = (maxX - minX) + 1;
     const totalRows = (maxY - minY) + 1;
 
-    const gridWidth = (totalCols * 36) + 40;
-    const gridHeight = (totalRows * 36) + 40;
+    const gridWidth = (totalCols * 41) + 48;
+    const gridHeight = (totalRows * 41) + 48;
 
     const scaleX = viewportWidth / gridWidth;
     const scaleY = viewportHeight / gridHeight;
@@ -381,33 +429,54 @@ function initPanZoom(data) {
     updateTransform();
   };
 
-  fitToViewport();
+  function initialSetup(planData = data) {
+    const isDesktop = window.innerWidth >= 768;
+    const viewportWidth = viewport.clientWidth;
+    const viewportHeight = viewport.clientHeight;
 
-  function toggleFullscreen() {
-    isFullscreen = !isFullscreen;
-    viewport.classList.toggle('is-fullscreen', isFullscreen);
-    if (btnFullscreen) {
-      btnFullscreen.innerHTML = isFullscreen ? '✕ Beenden' : '⛶ Vollbild';
-      btnFullscreen.style.background = isFullscreen ? '#ef4444' : 'var(--signal)';
-      btnFullscreen.style.color = isFullscreen ? '#ffffff' : 'var(--navy)';
+    let minX = 0, minY = 0, maxX = planData.columns - 1, maxY = planData.rows - 1;
+    if (planData.cells && planData.cells.length > 0) {
+      minX = Math.min(...planData.cells.map(c => c.x));
+      minY = Math.min(...planData.cells.map(c => c.y));
+      maxX = Math.max(...planData.cells.map(c => c.x), data.columns - 1);
+      maxY = Math.max(...planData.cells.map(c => c.y), data.rows - 1);
     }
-    setTimeout(() => {
-      if (window.lastSeatingData) fitToViewport(window.lastSeatingData);
-    }, 60);
+
+    const totalCols = (maxX - minX) + 1;
+    const totalRows = (maxY - minY) + 1;
+    const gridWidth = (totalCols * 41) + 48;
+    const gridHeight = (totalRows * 41) + 48;
+
+    if (isDesktop) {
+      // Auf Desktop: Mindestens 100% (1.0) Zoom, damit alle Plätze gestochen scharf und groß lesbar sind
+      const fitScale = Math.min(viewportWidth / gridWidth, viewportHeight / gridHeight);
+      currentScale = Math.max(1.0, Math.min(fitScale, 1.3));
+
+      // Intelligentes Zentrieren: Auf eigenen Platz fokussieren falls vorhanden, sonst Raum zentrieren
+      const currentUsername = "{{ request.user.username|escapejs }}";
+      const ownCell = currentUsername && planData.cells ? planData.cells.find(c => c.occupied_by === currentUsername) : null;
+
+      if (ownCell) {
+        const seatPosX = ((ownCell.x - minX) * 41) + 24 + 18;
+        const seatPosY = ((ownCell.y - minY) * 41) + 24 + 18;
+        pointX = (viewportWidth / 2) - (seatPosX * currentScale);
+        pointY = (viewportHeight / 2) - (seatPosY * currentScale);
+      } else {
+        pointX = (viewportWidth - (gridWidth * currentScale)) / 2;
+        pointY = (viewportHeight - (gridHeight * currentScale)) / 2;
+      }
+      updateTransform();
+    } else {
+      fitToViewport(planData);
+    }
   }
 
-  if (btnFullscreen) {
-    btnFullscreen.onclick = toggleFullscreen;
-  }
+  initialSetup();
 
-  // Tastatur-Shortcuts
+  // Tastatur-Shortcuts für Zoom (+/- und 0 für Reset)
   document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    if (e.key === 'f' || e.key === 'F') {
-      toggleFullscreen();
-    } else if (e.key === 'Escape' && isFullscreen) {
-      toggleFullscreen();
-    } else if (e.key === '+' || e.key === '=') {
+    if (e.key === '+' || e.key === '=') {
       currentScale = Math.min(currentScale * 1.2, 3);
       updateTransform();
     } else if (e.key === '-' || e.key === '_') {
@@ -463,12 +532,10 @@ function initPanZoom(data) {
 
   viewport.addEventListener('touchstart', function(e) {
     if (e.touches.length === 1) {
-      // 1 Finger: Pan (Verschieben)
       isPanning = true;
       startX = e.touches[0].clientX - pointX;
       startY = e.touches[0].clientY - pointY;
     } else if (e.touches.length === 2) {
-      // 2 Finger: Pinch-Zoom
       isPanning = false;
       initialTouchDistance = getTouchDistance(e.touches);
       initialScale = currentScale;
@@ -477,7 +544,7 @@ function initPanZoom(data) {
 
   viewport.addEventListener('touchmove', function(e) {
     if (isPanning && e.touches.length === 1) {
-      e.preventDefault();   // nur beim aktiven Verschieben
+      e.preventDefault();
       pointX = e.touches[0].clientX - startX;
       pointY = e.touches[0].clientY - startY;
       updateTransform();

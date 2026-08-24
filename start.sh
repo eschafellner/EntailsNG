@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# EntailsNG - 1-Klick Startskript
+# EntailsNG - 1-Klick Startskript (Unterstützt Podman & Docker)
 # ==============================================================================
 
 set -e
@@ -32,6 +32,23 @@ if [ -f ".env" ]; then
     set +a
 fi
 
+# Prüfe, ob PostgreSQL auf 127.0.0.1:5432 erreichbar ist
+PG_RUNNING=false
+if python3 -c "import socket; s = socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 5432)); s.close()" 2>/dev/null; then
+    PG_RUNNING=true
+fi
+
+# Falls PostgreSQL nicht erreichbar ist, prüfe ob Podman oder Docker Compose gestartet werden kann
+if [ "$PG_RUNNING" = false ] && [ "${DB_ENGINE:-postgresql}" != "sqlite" ]; then
+    if command -v podman-compose &> /dev/null || command -v podman &> /dev/null; then
+        echo -e "${YELLOW}🐘 PostgreSQL läuft nicht. Starte DB & Redis über Podman...${NC}"
+        systemctl --user enable --now podman.socket 2>/dev/null || true
+        podman compose up -d db redis 2>/dev/null || podman-compose up -d db redis 2>/dev/null || true
+    elif command -v docker &> /dev/null; then
+        echo -e "${YELLOW}🐘 PostgreSQL läuft nicht. Starte DB & Redis über Docker...${NC}"
+        docker compose up -d db redis 2>/dev/null || true
+    fi
+fi
 
 # Automatische Erkennung der PostgreSQL Datenbank
 if [ -z "$DB_ENGINE" ]; then
