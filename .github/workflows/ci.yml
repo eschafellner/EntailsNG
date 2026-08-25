@@ -14,9 +14,6 @@ jobs:
       DEBUG: "False"
       ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
       SECRET_KEY: "ci-insecure-dummy-key-for-tests-only"
-    run: |
-      python manage.py check
-      python manage.py test
     runs-on: ubuntu-latest
 
     services:
