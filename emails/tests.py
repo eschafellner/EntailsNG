@@ -133,3 +133,107 @@ class EmailSystemTests(TestCase):
             self.assertIn('timeout', call_kwargs)
             self.assertEqual(call_kwargs['timeout'], 10)
 
+    def test_smtp_password_encrypted_in_db(self):
+        """Prüft, dass das SMTP-Passwort verschlüsselt in der DB gespeichert und korrekt entschlüsselt wird."""
+        raw_pwd = "SuperSecretSMTPPassword123!"
+        self.settings.smtp_password = raw_pwd
+        self.settings.save()
+
+        # In der Datenbank darf NIEMALS das Klartext-Passwort stehen
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT smtp_password FROM emails_generalemailsettings WHERE id = %s", [self.settings.id])
+            db_value = cursor.fetchone()[0]
+
+        self.assertNotEqual(db_value, raw_pwd)
+        self.assertTrue(db_value.startswith("gAAAAA"))  # Fernet Ciphertext Prefix
+
+        # get_smtp_password() muss das Klartext-Passwort liefern
+        self.settings.refresh_from_db()
+        self.assertEqual(self.settings.get_smtp_password(), raw_pwd)
+
+    def test_send_system_email_passes_decrypted_smtp_password(self):
+        """Prüft, dass der Mailservice bei eigenem SMTP-Server das entschlüsselte Passwort an get_connection übergibt."""
+        from unittest.mock import patch
+        raw_pwd = "RelayPassword456!"
+        self.settings.smtp_host = "smtp.relay.example.com"
+        self.settings.smtp_port = 587
+        self.settings.smtp_username = "relayuser"
+        self.settings.set_smtp_password(raw_pwd)
+        self.settings.save()
+
+        with patch('emails.services.get_connection') as mock_get_conn:
+            send_system_email(
+                'payment_confirmation',
+                'testguest@example.com',
+                {'full_name': 'Max', 'event_title': 'LAN', 'amount': '10'},
+            )
+            mock_get_conn.assert_called()
+            call_kwargs = mock_get_conn.call_args[1]
+            self.assertEqual(call_kwargs['host'], "smtp.relay.example.com")
+            self.assertEqual(call_kwargs['username'], "relayuser")
+            self.assertEqual(call_kwargs['password'], raw_pwd)
+
+    def test_admin_form_retains_and_clears_smtp_password(self):
+        """Prüft das Verhalten des Admin-Formulars beim Beibehalten, Aktualisieren und Löschen des Passworts."""
+        from emails.admin import GeneralEmailSettingsForm
+
+        self.settings.set_smtp_password("InitialPassword123")
+        self.settings.save()
+        self.settings.refresh_from_db()
+
+        # 1. Formular ohne Passworteingabe abgesendet -> Altes Passwort muss erhalten bleiben
+        form = GeneralEmailSettingsForm(
+            data={
+                'sender_email': 'test@example.com',
+                'sender_name': 'Test',
+                'is_enabled': True,
+                'smtp_host': 'smtp.test.com',
+                'smtp_port': 587,
+                'smtp_username': 'user',
+                'smtp_password': '',  # Leer gelassen
+            },
+            instance=self.settings,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        saved.refresh_from_db()
+        self.assertEqual(saved.get_smtp_password(), "InitialPassword123")
+
+        # 2. Formular mit neuem Passwort abgesendet -> Neues Passwort muss verschlüsselt gespeichert werden
+        form2 = GeneralEmailSettingsForm(
+            data={
+                'sender_email': 'test@example.com',
+                'sender_name': 'Test',
+                'is_enabled': True,
+                'smtp_host': 'smtp.test.com',
+                'smtp_port': 587,
+                'smtp_username': 'user',
+                'smtp_password': 'BrandNewPassword789!',
+            },
+            instance=self.settings,
+        )
+        self.assertTrue(form2.is_valid(), form2.errors)
+        saved2 = form2.save()
+        saved2.refresh_from_db()
+        self.assertEqual(saved2.get_smtp_password(), "BrandNewPassword789!")
+
+        # 3. Formular mit Lösch-Checkbox -> Passwort wird geleert
+        form3 = GeneralEmailSettingsForm(
+            data={
+                'sender_email': 'test@example.com',
+                'sender_name': 'Test',
+                'is_enabled': True,
+                'smtp_host': 'smtp.test.com',
+                'smtp_port': 587,
+                'smtp_username': 'user',
+                'smtp_password': '',
+                'clear_smtp_password': 'on',
+            },
+            instance=saved2,
+        )
+        self.assertTrue(form3.is_valid(), form3.errors)
+        saved3 = form3.save()
+        saved3.refresh_from_db()
+        self.assertEqual(saved3.get_smtp_password(), "")
+

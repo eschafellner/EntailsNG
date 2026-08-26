@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin, messages
 from django.shortcuts import redirect, render
 from django.urls import path
@@ -6,8 +7,53 @@ from .models import EmailTemplate, GeneralEmailSettings
 from .services import send_test_email
 
 
+class GeneralEmailSettingsForm(forms.ModelForm):
+    smtp_password = forms.CharField(
+        widget=forms.PasswordInput(render_value=False),
+        required=False,
+        label="SMTP Passwort",
+    )
+    clear_smtp_password = forms.BooleanField(
+        required=False,
+        label="Gespeichertes Passwort entfernen",
+        help_text="Häkchen setzen, um das aktuell hinterlegte Passwort zu löschen.",
+    )
+
+    class Meta:
+        model = GeneralEmailSettings
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.smtp_password:
+            self.fields['smtp_password'].help_text = (
+                "🔒 <strong>Passwort ist verschlüsselt hinterlegt.</strong> "
+                "Leer lassen, um das bestehende Passwort beizubehalten."
+            )
+            self.fields['clear_smtp_password'].widget = forms.CheckboxInput()
+        else:
+            self.fields['smtp_password'].help_text = (
+                "Aktuell ist kein SMTP-Passwort hinterlegt (nutzt ggf. .env-Fallback). "
+                "Wird bei Eingabe verschlüsselt gespeichert."
+            )
+            # Checkbox ausblenden, wenn gar kein Passwort existiert
+            self.fields['clear_smtp_password'].widget = forms.HiddenInput()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        clear_requested = cleaned_data.get('clear_smtp_password', False)
+        if clear_requested:
+            cleaned_data['smtp_password'] = ""
+        else:
+            password = cleaned_data.get('smtp_password')
+            if not password and self.instance and self.instance.pk and self.instance.smtp_password:
+                cleaned_data['smtp_password'] = self.instance.smtp_password
+        return cleaned_data
+
+
 @admin.register(GeneralEmailSettings)
 class GeneralEmailSettingsAdmin(admin.ModelAdmin):
+    form = GeneralEmailSettingsForm
     list_display = ('__str__', 'sender_email', 'domain_name', 'is_enabled', 'is_sandbox')
 
     fieldsets = (

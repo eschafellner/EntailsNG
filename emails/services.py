@@ -73,7 +73,7 @@ def send_system_email(template_key, recipient_email, context_data):
                 host=settings.smtp_host,
                 port=settings.smtp_port,
                 username=settings.smtp_username or None,
-                password=settings.smtp_password or None,
+                password=settings.get_smtp_password() or None,
                 use_tls=settings.smtp_use_tls,
                 timeout=timeout,
             )

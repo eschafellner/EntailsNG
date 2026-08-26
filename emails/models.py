@@ -63,7 +63,11 @@ class GeneralEmailSettings(models.Model):
         max_length=150, blank=True, default='', verbose_name="SMTP Benutzername"
     )
     smtp_password = models.CharField(
-        max_length=150, blank=True, default='', verbose_name="SMTP Passwort"
+        max_length=255,
+        blank=True,
+        default='',
+        verbose_name="SMTP Passwort",
+        help_text="Wird in der Datenbank verschlüsselt gespeichert.",
     )
     smtp_use_tls = models.BooleanField(
         default=True, verbose_name="TLS Verschlüsselung nutzen"
@@ -78,9 +82,23 @@ class GeneralEmailSettings(models.Model):
         sandbox = " (SANDBOX MODUS)" if self.is_sandbox else ""
         return f"Allgemeine E-Mail Einstellungen: {status}{sandbox}"
 
+    def get_smtp_password(self) -> str:
+        """Gibt das entschlüsselte SMTP-Passwort für den Versand zurück."""
+        from .crypto import decrypt_smtp_password
+        return decrypt_smtp_password(self.smtp_password)
+
+    def set_smtp_password(self, raw_password: str) -> None:
+        """Verschlüsselt und setzt das SMTP-Passwort."""
+        from .crypto import encrypt_smtp_password
+        self.smtp_password = encrypt_smtp_password(raw_password)
+
     def save(self, *args, **kwargs):
         # Erzwinge Singleton (nur 1 Datensatz)
         self.pk = 1
+        # Passwort automatisch verschlüsseln, falls es im Klartext gesetzt wurde
+        if self.smtp_password:
+            from .crypto import encrypt_smtp_password
+            self.smtp_password = encrypt_smtp_password(self.smtp_password)
         super().save(*args, **kwargs)
 
     @classmethod
