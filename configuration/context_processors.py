@@ -160,6 +160,19 @@ DEFAULT_TEXTS = {
     'pw_reset_confirm_btn': 'Passwort speichern',
     'pw_reset_complete_title': 'Passwort geändert!',
     'pw_reset_complete_text': 'Dein Passwort wurde erfolgreich geändert. Du kannst dich jetzt anmelden.',
+
+    # Sponsoren Modul
+    'dash_sponsors_eyebrow': 'Partner & Förderer',
+    'dash_sponsors_title': 'Partner & Sponsoren',
+    'dash_sponsors_all_link': 'Alle Sponsoren ansehen →',
+    'dash_sponsors_supported_by': 'Unterstützt durch',
+    'sponsors_page_title': 'Unsere Sponsoren',
+    'sponsors_page_eyebrow': 'Partner & Förderer',
+    'sponsors_page_subtitle': 'Ein herzliches Dankeschön an alle Partner und Unterstützer unserer LAN-Party!',
+    'sponsors_visit_website': '🌐 Website besuchen →',
+    'sponsors_empty': 'Aktuell sind keine Sponsoren hinterlegt.',
+    'sponsors_read_more': 'Mehr anzeigen',
+    'sponsors_read_less': 'Weniger anzeigen',
 }
 
 TRANSLATION_CACHE_KEY = 'system_translations'
@@ -236,6 +249,9 @@ def feature_flags(request):
         'tournaments': 'tournament_module',
         'team_list': 'tournament_module',
         'teams': 'tournament_module',
+        'sponsor_list': 'sponsor_module',
+        'sponsors': 'sponsor_module',
+        'sponsoren': 'sponsor_module',
     }
 
     filtered_nav_items = [

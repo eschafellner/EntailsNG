@@ -69,6 +69,8 @@ urlpatterns = [
     path('clans/', include('clans.urls')),
     path('tournaments/', include('tournaments.urls')),
     path('teams/', RedirectView.as_view(pattern_name='team_list', permanent=False)),
+    path('sponsoren/', include('sponsors.urls')),
+    path('sponsors/', RedirectView.as_view(pattern_name='sponsor_list', permanent=False)),
 ]
 
 if getattr(settings, 'SERVE_MEDIA', False) or settings.DEBUG:

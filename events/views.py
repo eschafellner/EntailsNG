@@ -21,6 +21,7 @@ from configuration.models import FeatureFlag
 from news.services import get_latest_news, get_pinned_news
 from info.services import get_event_info
 from seating.services import get_event_capacity_stats
+from sponsors.services import get_random_active_sponsor
 
 # Wie viele News auf dem Dashboard erscheinen. Eine Stelle, ein Wert.
 DASHBOARD_NEWS_LIMIT = 3
@@ -127,6 +128,7 @@ def dashboard_view(request):
         'is_event_expired': is_event_expired,
         'show_onboarding_ticket': show_ticket,
         'past_registrations': past_registrations,
+        'active_sponsor': get_random_active_sponsor(),
     }
     return render(request, 'dashboard.html', context)
 

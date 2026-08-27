@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     'clans',
     'emails',
     'tournaments',
+    'sponsors',
 ]
 
 MIDDLEWARE = [

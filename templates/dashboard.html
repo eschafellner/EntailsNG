@@ -395,6 +395,66 @@
 
   </div>
 
+  {% if active_sponsor %}
+  <!-- ======================================================================
+       SPONSOREN-MODUL (ZUFÄLLIGER AKTIVER SPONSOR)
+       ====================================================================== -->
+  <section class="card dashboard-sponsor-card" style="padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); display: flex; flex-direction: column; gap: 16px;">
+    <!-- Modul-Kopfzeile (im einheitlichen Format wie News / Sitzplatzbuchung) -->
+    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;">
+      <div>
+        <p class="eyebrow" style="margin: 0 0 4px 0;">{% t "dash_sponsors_eyebrow" %}</p>
+        <h3 style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; margin: 0; color: var(--ink);">
+          {% t "dash_sponsors_title" %}
+        </h3>
+      </div>
+      <a href="{% url 'sponsor_list' %}" style="font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--muted); text-transform: uppercase; text-decoration: none;">
+        {% t "dash_sponsors_all_link" %}
+      </a>
+    </div>
+
+    {% if active_sponsor.logo_typ == 'banner' %}
+      <!-- Banner-Darstellung: Bild über volle Breite, zentriert -->
+      <div style="width: 100%; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--line); display: flex; justify-content: center; align-items: center; padding: 12px;">
+        {% if active_sponsor.url %}
+          <a href="{{ active_sponsor.url }}" target="_blank" rel="noopener noreferrer" style="display: block; width: 100%; text-align: center;">
+            <img src="{{ active_sponsor.bild.url }}" alt="{{ active_sponsor.name }} Banner" style="max-width: 100%; max-height: 160px; width: auto; height: auto; object-fit: contain; display: block; margin: 0 auto; border-radius: 6px;">
+          </a>
+        {% else %}
+          <img src="{{ active_sponsor.bild.url }}" alt="{{ active_sponsor.name }} Banner" style="max-width: 100%; max-height: 160px; width: auto; height: auto; object-fit: contain; display: block; margin: 0 auto; border-radius: 6px;">
+        {% endif %}
+      </div>
+    {% else %}
+      <!-- Logo-Darstellung: 20% größeres Logo, größerer Name, zentriert in der Mitte des Moduls -->
+      <div style="display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap; text-align: left; padding: 8px 0;">
+        <div style="flex-shrink: 0; width: 100px; height: 100px; border-radius: 10px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; padding: 8px;">
+          {% if active_sponsor.url %}
+            <a href="{{ active_sponsor.url }}" target="_blank" rel="noopener noreferrer" style="display: flex; width: 100%; height: 100%; align-items: center; justify-content: center;">
+              <img src="{{ active_sponsor.bild.url }}" alt="{{ active_sponsor.name }} Logo" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px;">
+            </a>
+          {% else %}
+            <img src="{{ active_sponsor.bild.url }}" alt="{{ active_sponsor.name }} Logo" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px;">
+          {% endif %}
+        </div>
+        <div>
+          <span style="display: block; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase; margin-bottom: 2px;">
+            {% t "dash_sponsors_supported_by" %}
+          </span>
+          <strong style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; color: var(--ink);">
+            {% if active_sponsor.url %}
+              <a href="{{ active_sponsor.url }}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;">
+                {{ active_sponsor.name }} ↗
+              </a>
+            {% else %}
+              {{ active_sponsor.name }}
+            {% endif %}
+          </strong>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
 </div>
 <script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock %}

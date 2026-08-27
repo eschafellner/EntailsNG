@@ -89,6 +89,11 @@ SYSTEM_ICONS = {
         'stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>'
         '<circle cx="12" cy="12" r="3"></circle></svg>'
     ),
+    'sponsors': (
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>'
+    ),
 }
 
 
@@ -233,6 +238,7 @@ class NavigationItem(models.Model):
         SUPPORT = 'support', 'Support & Hilfe (Rettungsring)'
         SHOP = 'shop', 'Shop & Catering (Einkaufswagen)'
         SETTINGS = 'settings', 'Einstellungen (Regler)'
+        SPONSORS = 'sponsors', 'Sponsoren (Stern / Partner)'
         CUSTOM = 'custom', 'Benutzerdefiniertes SVG (Nur Superuser)'
 
     title = models.CharField(
@@ -266,6 +272,8 @@ class NavigationItem(models.Model):
         'info': 'event_info_detail',
         'seating': 'seating_plan',
         'news': 'news_list',
+        'sponsors': 'sponsor_list',
+        'sponsoren': 'sponsor_list',
     }
 
     class Meta:

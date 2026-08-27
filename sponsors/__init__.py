@@ -1,0 +1,1 @@
+# sponsors app init
