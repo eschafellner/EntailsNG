@@ -379,7 +379,7 @@ class SponsorFrontendViewsTests(TestCase):
         self.assertContains(response, "Aktuell sind keine Sponsoren hinterlegt.")
 
     def test_sponsor_list_view_description_truncation(self):
-        """Beschreibungstexte über 1500 Zeichen werden mit Umschalt-Button gerendert."""
+        """Beschreibungstexte über 1500 Zeichen werden mit Desktop- und Mobile-Kürzungscontainern gerendert."""
         long_text = "<p>" + ("A" * 1600) + "</p>"
         sponsor_long = Sponsor.objects.create(
             name="Langer Text Sponsor",
@@ -390,10 +390,30 @@ class SponsorFrontendViewsTests(TestCase):
         )
         response = self.client.get(reverse('sponsor_list'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f'id="desc-short-{sponsor_long.id}"')
-        self.assertContains(response, f'id="desc-full-{sponsor_long.id}"')
+        self.assertContains(response, f'id="desc-block-{sponsor_long.id}"')
+        self.assertContains(response, 'desc-short-desktop')
+        self.assertContains(response, 'desc-short-mobile')
+        self.assertContains(response, 'desc-full')
         self.assertContains(response, f"toggleSponsorDesc('{sponsor_long.id}')")
         self.assertContains(response, "Mehr anzeigen")
+
+    def test_sponsor_list_view_description_medium_mobile_truncation(self):
+        """Beschreibungstexte zwischen 501 und 1500 Zeichen werden für Mobile gekürzt und auf Desktop voll angezeigt."""
+        med_text = "<p>" + ("B" * 800) + "</p>"
+        sponsor_med = Sponsor.objects.create(
+            name="Mittellanger Text Sponsor",
+            logo_typ=Sponsor.LogoTyp.BANNER,
+            beschreibung=med_text,
+            aktiv_modus=Sponsor.AktivModus.DAUERHAFT,
+            bild=create_dummy_image('med.png'),
+        )
+        response = self.client.get(reverse('sponsor_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'id="desc-block-{sponsor_med.id}"')
+        self.assertContains(response, 'desc-desktop-full')
+        self.assertContains(response, 'desc-short-mobile')
+        self.assertContains(response, 'desc-btn-mobile-only')
+        self.assertContains(response, f"toggleSponsorDesc('{sponsor_med.id}')")
 
     def test_seed_translations_creates_sponsor_keys(self):
         """seed_translations legt alle Sponsoren-Übersetzungsschlüssel in der DB an."""
@@ -439,18 +459,14 @@ class SponsorAdminTests(TestCase):
 
 
 class SponsorNavigationAndSeedFeaturesTests(TestCase):
-    """Testet Menüpunkt- und Feature-Flag Integration."""
+    """Testet Menüpunkt- und Seed-Integration."""
 
-    def test_seed_features_creates_sponsor_module_and_nav_item(self):
-        """seed_features legt das Feature Flag sponsor_module und den Menüpunkt an."""
+    def test_seed_features_creates_sponsor_nav_item(self):
+        """seed_features legt den Menüpunkt Sponsoren an."""
         from django.core.management import call_command
-        from configuration.models import FeatureFlag, NavigationItem
+        from configuration.models import NavigationItem
 
         call_command('seed_features')
-
-        flag = FeatureFlag.objects.filter(key='sponsor_module').first()
-        self.assertIsNotNone(flag)
-        self.assertTrue(flag.is_enabled)
 
         nav_item = NavigationItem.objects.filter(url_name='sponsor_list').first()
         self.assertIsNotNone(nav_item)

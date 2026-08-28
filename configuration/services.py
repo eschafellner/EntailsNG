@@ -5,19 +5,10 @@ from .models import GeneralConfiguration
 
 def should_show_onboarding_ticket(user=None, upcoming_event=None, user_registration=None, feature_flags_dict=None) -> bool:
     """
-    Prüft alle Bedingungen aus FeatureFlag & GeneralConfiguration, um zu entscheiden,
+    Prüft alle Bedingungen aus GeneralConfiguration, um zu entscheiden,
     ob die Ticket-Karte auf dem Dashboard angezeigt werden soll.
-    Verwendet das gecachte Feature-Flag-Dictionary zur Vermeidung redundanter DB-Queries.
     """
-    # 0. Prüfen, ob das Feature-Flag "onboarding_ticket" in den Feature-Flags aktiviert ist
-    if feature_flags_dict is None:
-        from .context_processors import _load_feature_flags
-        feature_flags_dict = _load_feature_flags()
-
-    if not feature_flags_dict.get('onboarding_ticket', True):
-        return False
-
-    # 1. Globale Ticket-Anzeige Schalter aus Allgemeine Konfiguration
+    # 1. Globaler Ticket-Anzeige Schalter aus Allgemeine Konfiguration
     config = GeneralConfiguration.load()
     if not config.ticket_enabled:
         return False

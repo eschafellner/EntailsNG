@@ -1,8 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.core.exceptions import ValidationError
 from configuration.models import (
-    FeatureFlag,
     NavigationItem,
     SiteCustomization,
     SystemTranslation,
@@ -20,11 +20,31 @@ class ConfigurationModelTests(TestCase):
         )
         self.assertEqual(item.get_url(), '/seating/')
 
-    def test_navigation_item_alias_url(self):
-        item = NavigationItem.objects.create(
-            title='Sitzplan', url_name='seating', order=1
-        )
-        self.assertEqual(item.get_url(), '/seating/')
+    def test_navigation_item_alias_urls(self):
+        """Testet alle Aliasse in ALIAS_MAP."""
+        aliases = [
+            ('teams', '/tournaments/teams/all/'),
+            ('tournaments', '/tournaments/'),
+            ('turniere', '/tournaments/'),
+            ('clans', '/clans/'),
+            ('seating', '/seating/'),
+            ('info', '/info/'),
+            ('infos', '/info/'),
+            ('news', '/news/'),
+            ('sponsors', '/sponsoren/'),
+            ('sponsoren', '/sponsoren/'),
+        ]
+        for alias, expected_path in aliases:
+            item = NavigationItem(title='Test', url_name=alias, order=1)
+            item.clean()  # darf keinen ValidationError werfen
+            self.assertEqual(item.get_url(), expected_path, f"Fehler bei Alias: {alias}")
+
+    def test_navigation_item_clean_invalid_url_name(self):
+        """Ungültige URL-Namen werden von clean() abgelehnt."""
+        item = NavigationItem(title='Ungültig', url_name='invalid_unknown_route')
+        with self.assertRaises(ValidationError) as ctx:
+            item.clean()
+        self.assertIn('url_name', ctx.exception.message_dict)
 
     def test_system_translation_cache(self):
         translation = SystemTranslation.objects.create(
@@ -33,28 +53,19 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(translation.key, 'test_key')
         self.assertIn('test_key', str(translation))
 
-    def test_feature_flag_creation(self):
-        flag = FeatureFlag.objects.create(
-            name='Test Feature', key='test_feature', is_enabled=True
-        )
-        self.assertEqual(flag.key, 'test_feature')
-        self.assertTrue(flag.is_enabled)
-        self.assertIn('Test Feature', str(flag))
-
-    def test_feature_flag_context_processor(self):
-        FeatureFlag.objects.create(
-            name='Sitzplan Modul', key='seating_module', is_enabled=False
+    def test_navigation_item_active_toggle_in_context_processor(self):
+        """Inaktive Menüpunkte (is_active=False) werden nicht im Frontend gerendert."""
+        NavigationItem.objects.create(
+            title='Sitzplan Aktiv', url_name='seating_plan', order=1, is_active=True
         )
         NavigationItem.objects.create(
-            title='Sitzplan', url_name='seating_plan', order=1, is_active=True
+            title='Teams Inaktiv', url_name='team_list', order=2, is_active=False
         )
         response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 200)
-        self.assertIn('features', response.context)
-        self.assertFalse(response.context['features'].get('seating_module'))
-        # Ensure seating_plan nav item is filtered out when feature flag is disabled
         nav_titles = [item.title for item in response.context['nav_items']]
-        self.assertNotIn('Sitzplan', nav_titles)
+        self.assertIn('Sitzplan Aktiv', nav_titles)
+        self.assertNotIn('Teams Inaktiv', nav_titles)
 
     def test_health_check_api(self):
         response = self.client.get(reverse('api_health_check'))

@@ -6,6 +6,14 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import NoReverseMatch, reverse
 
+
+def safe_cache_delete(key):
+    """Löscht einen Cache-Schlüssel und fängt Redis-Verbindungsfehler ab."""
+    try:
+        cache.delete(key)
+    except Exception:
+        pass
+
 ALLOWED_SVG_TAGS = {
     'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
     'text', 'tspan', 'defs', 'clippath', 'mask', 'use', 'title', 'desc'
@@ -247,7 +255,7 @@ class NavigationItem(models.Model):
     )
     url_name = models.CharField(
         max_length=100,
-        help_text='Django URL-Name, z. B. dashboard, news_list, seating_plan',
+        help_text='Django URL-Name oder Modulkürzel, z. B. dashboard, teams, tournaments, seating, news, info, clans, sponsors',
     )
     icon_name = models.CharField(
         max_length=50,
@@ -269,7 +277,12 @@ class NavigationItem(models.Model):
     is_active = models.BooleanField(default=True, help_text='Im Menü anzeigen?')
 
     ALIAS_MAP = {
+        'teams': 'team_list',
+        'tournaments': 'tournament_list',
+        'turniere': 'tournament_list',
+        'clans': 'clan_list',
         'info': 'event_info_detail',
+        'infos': 'event_info_detail',
         'seating': 'seating_plan',
         'news': 'news_list',
         'sponsors': 'sponsor_list',
@@ -293,8 +306,10 @@ class NavigationItem(models.Model):
             raise ValidationError({
                 'url_name': (
                     f'"{self.url_name}" ist kein bekannter URL-Name. '
-                    'Gültig sind z. B.: dashboard, event_info_detail, '
-                    'news_list, seating_plan.'
+                    'Gültig sind z. B.: dashboard, teams (team_list), '
+                    'tournaments (tournament_list), seating (seating_plan), '
+                    'news (news_list), info (event_info_detail), clans (clan_list), '
+                    'sponsors (sponsor_list).'
                 )
             })
 
@@ -320,12 +335,11 @@ class NavigationItem(models.Model):
         if self.icon_name != self.IconChoices.CUSTOM and not self.icon_svg:
             self.icon_svg = SYSTEM_ICONS.get(self.icon_name, '')
         super().save(*args, **kwargs)
-        cache.delete('navigation_items')
-        cache.delete('navigation_items')
+        safe_cache_delete('navigation_items')
 
     def delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)
-        cache.delete('navigation_items')
+        safe_cache_delete('navigation_items')
 
 
 class SystemTranslation(models.Model):
@@ -350,52 +364,11 @@ class SystemTranslation(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        cache.delete('system_translations')
+        safe_cache_delete('system_translations')
 
     def delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)
-        cache.delete('system_translations')
-
-
-class FeatureFlag(models.Model):
-    name = models.CharField(
-        max_length=100,
-        verbose_name='Feature Name',
-        help_text='Lesbarer Name der Funktion (z. B. Onboarding Ticket)',
-    )
-    key = models.CharField(
-        max_length=100,
-        unique=True,
-        verbose_name='Schlüssel (Key)',
-        help_text='Eindeutiger Bezeichner (z. B. onboarding_ticket, seating_module)',
-    )
-    is_enabled = models.BooleanField(
-        default=True,
-        verbose_name='Aktiviert',
-        help_text='Schaltet dieses Feature im System ein oder aus',
-    )
-    description = models.TextField(
-        blank=True,
-        verbose_name='Beschreibung',
-        help_text='Erläuterung zur Funktion dieses Feature Flags',
-    )
-
-    class Meta:
-        ordering = ['name']
-        verbose_name = 'Feature Flag'
-        verbose_name_plural = 'Feature Flags'
-
-    def __str__(self):
-        status = 'Aktiv' if self.is_enabled else 'Inaktiv'
-        return f'{self.name} ({self.key}): {status}'
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        cache.delete('feature_flags_dict')
-
-    def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
-        cache.delete('feature_flags_dict')
+        safe_cache_delete('system_translations')
 
 
 class GeneralConfiguration(models.Model):

@@ -1,14 +1,5 @@
-# configuration/admin.py
 from django.contrib import admin
-from .models import FeatureFlag, NavigationItem, SystemTranslation
-
-
-@admin.register(FeatureFlag)
-class FeatureFlagAdmin(admin.ModelAdmin):
-    list_display = ('name', 'key', 'is_enabled', 'description')
-    list_editable = ('is_enabled',)
-    search_fields = ('name', 'key', 'description')
-    ordering = ('name',)
+from .models import NavigationItem, SystemTranslation
 
 
 @admin.register(SystemTranslation)

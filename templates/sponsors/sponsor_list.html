@@ -3,6 +3,55 @@
 
 {% block title %}{% t "sponsors_page_title" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* Responsive Beschreibungstext-Kürzung */
+  .sponsor-desc-block .desc-full {
+    display: none;
+  }
+  .sponsor-desc-block.is-expanded .desc-full {
+    display: block !important;
+  }
+  .sponsor-desc-block.is-expanded .desc-short-desktop,
+  .sponsor-desc-block.is-expanded .desc-short-mobile,
+  .sponsor-desc-block.is-expanded .desc-desktop-full {
+    display: none !important;
+  }
+
+  /* Desktop (> 900px): Bis zu 1500 Zeichen */
+  @media (min-width: 901px) {
+    .sponsor-desc-block .desc-short-desktop {
+      display: block;
+    }
+    .sponsor-desc-block .desc-short-mobile {
+      display: none !important;
+    }
+    .sponsor-desc-block .desc-btn-mobile-only {
+      display: none !important;
+    }
+    .sponsor-desc-block .desc-desktop-full {
+      display: block;
+    }
+  }
+
+  /* Mobile (<= 900px): Bis zu 500 Zeichen */
+  @media (max-width: 900px) {
+    .sponsor-desc-block .desc-short-desktop {
+      display: none !important;
+    }
+    .sponsor-desc-block .desc-short-mobile {
+      display: block;
+    }
+    .sponsor-desc-block .desc-btn-mobile-only {
+      display: inline-block;
+    }
+    .sponsor-desc-block .desc-desktop-full {
+      display: none !important;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div style="display: flex; flex-direction: column; gap: 24px;">
 
@@ -51,15 +100,35 @@
 
           {% if sponsor.beschreibung %}
             {% if sponsor.beschreibung|length > 1500 %}
-              <div class="sponsor-description" id="desc-short-{{ sponsor.id }}" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                {{ sponsor.beschreibung|truncatechars_html:1500|safe }}
+              <div class="sponsor-desc-block" id="desc-block-{{ sponsor.id }}">
+                <div class="sponsor-description desc-short-desktop" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                  {{ sponsor.beschreibung|truncatechars_html:1500|safe }}
+                </div>
+                <div class="sponsor-description desc-short-mobile" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                  {{ sponsor.beschreibung|truncatechars_html:500|safe }}
+                </div>
+                <div class="sponsor-description desc-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                  {{ sponsor.beschreibung|safe }}
+                </div>
+                <button type="button" class="btn-toggle-desc" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start; margin-top: 6px;">
+                  <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
+                </button>
               </div>
-              <div class="sponsor-description" id="desc-full-{{ sponsor.id }}" style="display: none; color: var(--muted); font-size: 14px; line-height: 1.6;">
-                {{ sponsor.beschreibung|safe }}
+            {% elif sponsor.beschreibung|length > 500 %}
+              <div class="sponsor-desc-block" id="desc-block-{{ sponsor.id }}">
+                <div class="sponsor-description desc-desktop-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                  {{ sponsor.beschreibung|safe }}
+                </div>
+                <div class="sponsor-description desc-short-mobile" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                  {{ sponsor.beschreibung|truncatechars_html:500|safe }}
+                </div>
+                <div class="sponsor-description desc-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                  {{ sponsor.beschreibung|safe }}
+                </div>
+                <button type="button" class="btn-toggle-desc desc-btn-mobile-only" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start; margin-top: 6px;">
+                  <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
+                </button>
               </div>
-              <button type="button" class="btn-toggle-desc" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start;">
-                <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
-              </button>
             {% else %}
               <div class="sponsor-description" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
                 {{ sponsor.beschreibung|safe }}
@@ -68,7 +137,7 @@
           {% endif %}
 
         {% else %}
-          <!-- Logo-Darstellung (20% größeres Logo: 170px x 170px / Flex-Row) -->
+          <!-- Logo-Darstellung (170px x 170px / Flex-Row) -->
           <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
             
             <div class="sponsor-logo-wrapper" style="flex-shrink: 0; width: 170px; height: 170px; border-radius: 10px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; padding: 12px;">
@@ -95,15 +164,35 @@
 
               {% if sponsor.beschreibung %}
                 {% if sponsor.beschreibung|length > 1500 %}
-                  <div class="sponsor-description" id="desc-short-{{ sponsor.id }}" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                    {{ sponsor.beschreibung|truncatechars_html:1500|safe }}
+                  <div class="sponsor-desc-block" id="desc-block-{{ sponsor.id }}">
+                    <div class="sponsor-description desc-short-desktop" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                      {{ sponsor.beschreibung|truncatechars_html:1500|safe }}
+                    </div>
+                    <div class="sponsor-description desc-short-mobile" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                      {{ sponsor.beschreibung|truncatechars_html:500|safe }}
+                    </div>
+                    <div class="sponsor-description desc-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                      {{ sponsor.beschreibung|safe }}
+                    </div>
+                    <button type="button" class="btn-toggle-desc" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start; margin-top: 6px;">
+                      <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
+                    </button>
                   </div>
-                  <div class="sponsor-description" id="desc-full-{{ sponsor.id }}" style="display: none; color: var(--muted); font-size: 14px; line-height: 1.6;">
-                    {{ sponsor.beschreibung|safe }}
+                {% elif sponsor.beschreibung|length > 500 %}
+                  <div class="sponsor-desc-block" id="desc-block-{{ sponsor.id }}">
+                    <div class="sponsor-description desc-desktop-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                      {{ sponsor.beschreibung|safe }}
+                    </div>
+                    <div class="sponsor-description desc-short-mobile" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                      {{ sponsor.beschreibung|truncatechars_html:500|safe }}
+                    </div>
+                    <div class="sponsor-description desc-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+                      {{ sponsor.beschreibung|safe }}
+                    </div>
+                    <button type="button" class="btn-toggle-desc desc-btn-mobile-only" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start; margin-top: 6px;">
+                      <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
+                    </button>
                   </div>
-                  <button type="button" class="btn-toggle-desc" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start;">
-                    <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
-                  </button>
                 {% else %}
                   <div class="sponsor-description" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
                     {{ sponsor.beschreibung|safe }}
@@ -127,23 +216,15 @@
 
 <script>
 function toggleSponsorDesc(sponsorId) {
-  var shortEl = document.getElementById('desc-short-' + sponsorId);
-  var fullEl = document.getElementById('desc-full-' + sponsorId);
+  var block = document.getElementById('desc-block-' + sponsorId);
   var btnTextEl = document.getElementById('desc-btn-text-' + sponsorId);
-  if (!shortEl || !fullEl || !btnTextEl) return;
+  if (!block || !btnTextEl) return;
 
+  var isExpanded = block.classList.toggle('is-expanded');
   var readMoreText = "{% t 'sponsors_read_more' %}";
   var readLessText = "{% t 'sponsors_read_less' %}";
 
-  if (fullEl.style.display === 'none') {
-    fullEl.style.display = 'block';
-    shortEl.style.display = 'none';
-    btnTextEl.textContent = readLessText;
-  } else {
-    fullEl.style.display = 'none';
-    shortEl.style.display = 'block';
-    btnTextEl.textContent = readMoreText;
-  }
+  btnTextEl.textContent = isExpanded ? readLessText : readMoreText;
 }
 </script>
 {% endblock %}

@@ -111,10 +111,9 @@ if [ "$LOAD_DEMO" = true ] && [ -f "initial_data.json" ]; then
 import django, os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
-from configuration.models import SystemTranslation, NavigationItem, FeatureFlag
+from configuration.models import SystemTranslation, NavigationItem
 SystemTranslation.objects.all().delete()
 NavigationItem.objects.all().delete()
-FeatureFlag.objects.all().delete()
 " 2>/dev/null || true
     python manage.py loaddata initial_data.json --quiet 2>/dev/null || python manage.py loaddata initial_data.json
     python -c "

@@ -1,7 +1,7 @@
 from django.core.cache import cache
 from django.utils.functional import SimpleLazyObject
 
-from configuration.models import FeatureFlag, NavigationItem, SiteCustomization, SystemTranslation
+from configuration.models import NavigationItem, SiteCustomization, SystemTranslation
 from events.models import Event, EventRegistration
 from seating.services import (
     get_event_capacity_stats,
@@ -190,16 +190,6 @@ def _load_translations():
     return texts
 
 
-def _load_feature_flags():
-    """Lädt alle Feature Flags in EINER Query und cached sie."""
-    flags = cache.get(FEATURE_FLAGS_CACHE_KEY)
-    if flags is None:
-        flags = dict(FeatureFlag.objects.values_list('key', 'is_enabled'))
-        cache.set(FEATURE_FLAGS_CACHE_KEY, flags, CACHE_SECONDS)
-    return flags
-
-
-
 def _get_active_event():
     return Event.objects.get_active()
 
@@ -221,12 +211,10 @@ def _get_user_registration(request):
 def feature_flags(request):
     """
     Schlanker Context Processor:
-    Stellt Navigations-Items, Feature Flags und Site-Customization bereit.
+    Stellt Navigations-Items und Site-Customization bereit.
     upcoming_event und user_registration werden lazy über SimpleLazyObject aufgelöst (0 DB-Queries bei Seiten ohne Event-Bezug).
     """
-    features = _load_feature_flags()
-
-    all_nav_items = cache.get_or_set(
+    nav_items = cache.get_or_set(
         NAV_CACHE_KEY,
         lambda: list(
             NavigationItem.objects.filter(is_active=True).order_by(
@@ -236,37 +224,14 @@ def feature_flags(request):
         CACHE_SECONDS,
     )
 
-    MODULE_FLAG_MAP = {
-        'seating_plan': 'seating_module',
-        'seating': 'seating_module',
-        'news_list': 'news_module',
-        'news': 'news_module',
-        'event_info_detail': 'info_module',
-        'info': 'info_module',
-        'clan_list': 'clan_module',
-        'clans': 'clan_module',
-        'tournament_list': 'tournament_module',
-        'tournaments': 'tournament_module',
-        'team_list': 'tournament_module',
-        'teams': 'tournament_module',
-        'sponsor_list': 'sponsor_module',
-        'sponsors': 'sponsor_module',
-        'sponsoren': 'sponsor_module',
-    }
-
-    filtered_nav_items = [
-        item for item in all_nav_items
-        if features.get(MODULE_FLAG_MAP.get(item.url_name, ''), True)
-    ]
-
     site_customization = SiteCustomization.load()
     css_vars = site_customization.get_css_variables()
     theme_css_inline = "\n".join([f"  {k}: {v};" for k, v in css_vars.items()])
 
     return {
-        'nav_items': filtered_nav_items,
-        'features': features,
-        'feature_flags': features,
+        'nav_items': nav_items,
+        'features': {},
+        'feature_flags': {},
         'site_customization': site_customization,
         'theme_css_vars': theme_css_inline,
         'custom_css': site_customization.custom_css,

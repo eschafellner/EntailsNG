@@ -1,51 +1,6 @@
 from django.core.cache import cache
 from django.core.management.base import BaseCommand
-from configuration.models import FeatureFlag, NavigationItem
-
-DEFAULT_FLAGS = [
-    {
-        'key': 'onboarding_ticket',
-        'name': 'Onboarding Ticket',
-        'is_enabled': True,
-        'description': 'Zeigt das interaktive Ticket-Widget auf dem Dashboard an.',
-    },
-    {
-        'key': 'seating_module',
-        'name': 'Sitzplan-Modul',
-        'is_enabled': True,
-        'description': 'Aktiviert das Sitzplan- und Reservierungs-Modul im Frontend.',
-    },
-    {
-        'key': 'news_module',
-        'name': 'News-Modul',
-        'is_enabled': True,
-        'description': 'Aktiviert die News-Übersicht und Ankündigungen im Frontend.',
-    },
-    {
-        'key': 'info_module',
-        'name': 'Info-Modul',
-        'is_enabled': True,
-        'description': 'Aktiviert die Detail-Informationsseite zur Veranstaltung.',
-    },
-    {
-        'key': 'clan_module',
-        'name': 'Clan-Modul',
-        'is_enabled': True,
-        'description': 'Aktiviert die Clan-Verwaltung und Clanübersicht im Frontend.',
-    },
-    {
-        'key': 'tournament_module',
-        'name': 'Turnier-Modul',
-        'is_enabled': True,
-        'description': 'Aktiviert die Turnier- und Team-Verwaltung im Frontend.',
-    },
-    {
-        'key': 'sponsor_module',
-        'name': 'Sponsoren-Modul',
-        'is_enabled': True,
-        'description': 'Aktiviert die Sponsoren-Übersicht und Banner im Frontend.',
-    },
-]
+from configuration.models import NavigationItem
 
 DEFAULT_NAV_ITEMS = [
     {
@@ -151,26 +106,9 @@ DEFAULT_NAV_ITEMS = [
 
 
 class Command(BaseCommand):
-    help = 'Erstellt/Aktualisiert Feature Flags und Hauptnavigation mit SVG-Icons.'
+    help = 'Erstellt/Aktualisiert die Hauptnavigation mit SVG-Icons.'
 
     def handle(self, *args, **options):
-        # 1. Feature Flags anlegen
-        flags_count = 0
-        for flag_data in DEFAULT_FLAGS:
-            _, created = FeatureFlag.objects.get_or_create(
-                key=flag_data['key'],
-                defaults={
-                    'name': flag_data['name'],
-                    'is_enabled': flag_data['is_enabled'],
-                    'description': flag_data['description'],
-                },
-            )
-            if created:
-                flags_count += 1
-
-        self.stdout.write(self.style.SUCCESS(f'{flags_count} Feature Flags angelegt.'))
-
-        # 2. Navigation Items anlegen/aktualisieren
         for nav_data in DEFAULT_NAV_ITEMS:
             item, created = NavigationItem.objects.get_or_create(
                 title=nav_data['title'],
@@ -195,7 +133,7 @@ class Command(BaseCommand):
         NavigationItem.objects.filter(url_name='info').update(url_name='event_info_detail')
         NavigationItem.objects.filter(url_name='news').update(url_name='news_list')
 
-        cache.delete('navigation_items')
-        cache.delete('feature_flags_dict')
+        from configuration.models import safe_cache_delete
+        safe_cache_delete('navigation_items')
 
         self.stdout.write(self.style.SUCCESS('Menüpunkte und Icons erfolgreich eingerichtet.'))
