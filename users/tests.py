@@ -2,6 +2,7 @@ from datetime import date
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from emails.models import GeneralEmailSettings
 from users.forms import CustomUserCreationForm
 
 User = get_user_model()
@@ -24,6 +25,13 @@ class UserModelTests(TestCase):
 
 
 class RegistrationViewTests(TestCase):
+
+    def setUp(self):
+        self.email_settings = GeneralEmailSettings.load()
+        self.email_settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        self.email_settings.sender_email = 'noreply@example.com'
+        self.email_settings.is_enabled = True
+        self.email_settings.save()
 
     def test_registration_page_get(self):
         response = self.client.get(reverse('register'))
@@ -70,6 +78,12 @@ class RegistrationViewTests(TestCase):
 class DoubleOptInTests(TestCase):
 
     def setUp(self):
+        self.email_settings = GeneralEmailSettings.load()
+        self.email_settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        self.email_settings.sender_email = 'noreply@example.com'
+        self.email_settings.is_enabled = True
+        self.email_settings.save()
+
         self.client.post(
             reverse('register'),
             {
@@ -220,6 +234,12 @@ class ProfileViewTests(TestCase):
 class AuthBackendAndLockoutTests(TestCase):
 
     def setUp(self):
+        self.email_settings = GeneralEmailSettings.load()
+        self.email_settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        self.email_settings.sender_email = 'noreply@example.com'
+        self.email_settings.is_enabled = True
+        self.email_settings.save()
+
         self.user = User.objects.create_user(
             username='authuser',
             email='authuser@example.com',

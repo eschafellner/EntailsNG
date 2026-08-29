@@ -34,6 +34,16 @@ if not SECRET_KEY:
         "Umgebungsvariable SECRET_KEY ist zwingend erforderlich und darf nicht leer sein!"
     )
 
+FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', '')
+if not FIELD_ENCRYPTION_KEY and not DEBUG and 'test' not in sys.argv:
+    import warnings
+    warnings.warn(
+        "FIELD_ENCRYPTION_KEY ist nicht gesetzt. Gespeicherte SMTP-Passwörter "
+        "werden mit dem SECRET_KEY verschlüsselt und sind nach dessen Änderung "
+        "unlesbar.",
+        RuntimeWarning,
+    )
+
 ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
 if ALLOWED_HOSTS_ENV:
     ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',') if h.strip()]
@@ -101,6 +111,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'configuration.context_processors.feature_flags',
+                'emails.context_processors.email_status',
                 'django.contrib.messages.context_processors.messages',
             ],
             'builtins': [
@@ -250,14 +261,14 @@ AUTHENTICATION_BACKENDS = [
 # -----------------------------------------------------------------------------
 # E-Mail Konfiguration (Standard SMTP)
 # -----------------------------------------------------------------------------
-EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'emails.backends.ConfiguredSMTPBackend')
 EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=True)
 EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@entailsng.de')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', '')
 SERVER_EMAIL = os.environ.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
 

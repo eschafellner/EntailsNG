@@ -9900,8 +9900,9 @@
   "model": "emails.generalemailsettings",
   "pk": 1,
   "fields": {
-    "sender_email": "noreply@entailsng.de",
-    "sender_name": "EntailsNG Event-Team",
+    "transport_mode": "unconfigured",
+    "sender_email": "",
+    "sender_name": "",
     "reply_to_email": "",
     "domain_name": "",
     "is_enabled": true,
@@ -9911,7 +9912,10 @@
     "smtp_port": 587,
     "smtp_username": "",
     "smtp_password": "",
-    "smtp_use_tls": true
+    "smtp_use_tls": true,
+    "smtp_use_ssl": false,
+    "smtp_timeout": 10,
+    "credentials_broken": false
   }
 },
 {

@@ -134,18 +134,41 @@ Wichtige Parameter:
 
 ---
 
-### 4. Administrator anlegen & Deploy-Check
-
-```bash
 # Eigenen Superuser erstellen
 docker compose exec web python manage.py createsuperuser
 
 # System- & Sicherheitscheck ausführen (sollte 0 Fehler liefern)
 docker compose exec web python manage.py check --deploy
 
+# E-Mail-Konfiguration & Zustellbarkeit prüfen
+docker compose exec web python manage.py email_doctor
+
 # Container-Status prüfen
 docker compose ps
 ```
+
+---
+
+## ✉️ E-Mail-Versand einrichten
+
+EntailsNG versendet Registrierungsbestätigungen, Tickets und Passwort-Reset-Mails.
+
+1. **Versandwege:**
+   - **Vom Server vorgegeben (`.env`):** Nutzt die in der `.env` definierten `EMAIL_*`-Werte.
+   - **Eigener SMTP-Server (Backend):** SMTP-Zugangsdaten werden direkt im Admin-Bereich unter *Allgemeine E-Mail Einstellungen* hinterlegt und verschlüsselt gespeichert.
+2. **Einrichtung:**
+   - Öffne im Django-Admin den Punkt **Allgemeine E-Mail Einstellungen**.
+   - Wähle den gewünschten **Versandweg** und trage deine **Absenderadresse** ein (die Absenderdomain muss bei deinem Mailanbieter verifiziert sein!).
+   - Klicke auf **Verbindung testen**, um die Erreichbarkeit zu prüfen.
+   - Aktiviere anschließend den Schalter **Gäste erhalten E-Mails**.
+3. **Diagnose-Befehl:**
+   ```bash
+   docker compose exec web python manage.py email_doctor
+   # Optional mit echtem Testversand:
+   docker compose exec web python manage.py email_doctor --send-to orga@meinedomain.de
+   ```
+4. **Sicherheitshinweis:**
+   - `FIELD_ENCRYPTION_KEY` in der `.env` einmalig generieren und beibehalten, damit in der Datenbank gespeicherte Passwörter dauerhaft entschlüsselbar bleiben.
 
 ---
 

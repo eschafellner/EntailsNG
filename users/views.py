@@ -8,6 +8,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from emails.models import GeneralEmailSettings
 from emails.services import send_system_email
 from events.models import EventRegistration
 from .forms import CustomUserCreationForm, UserProfileForm
@@ -28,6 +29,17 @@ class CustomPasswordResetConfirmView(PasswordResetConfirmView):
 
 
 def register_view(request):
+    email_settings = GeneralEmailSettings.load()
+    if not email_settings.is_operational:
+        return render(
+            request,
+            "auth/register.html",
+            {
+                "registration_disabled": True,
+                "disabled_reason": "Die Registrierung ist derzeit vorübergehend nicht möglich, da der E-Mail-Versand nicht eingerichtet oder deaktiviert ist. Bitte wende dich an das Orga-Team.",
+            },
+        )
+
     if request.method == "POST":
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():

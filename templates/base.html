@@ -141,6 +141,16 @@
 
 <!-- ================= HAUPTINHALT ================= -->
 <main class="main-wrapper" id="main-content">
+  {% if email_warning %}
+    <div style="margin-bottom: 20px; padding: 12px 16px; border-radius: 8px; border-left: 4px solid {% if email_warning_is_info %}#0284c7{% else %}#eab308{% endif %}; background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+      <div style="font-size: 13px; color: #f3f4f6;">
+        <strong>{% if email_warning_is_info %}ℹ️ E-Mail Testmodus:{% else %}⚠️ E-Mail Versand-Hinweis (nur für Orga sichtbar):{% endif %}</strong> {{ email_warning }}
+      </div>
+      <a href="{% url 'admin:emails_generalemailsettings_change' 1 %}" style="font-size: 12px; font-weight: 600; color: #38bdf8; text-decoration: underline;">
+        Einstellungen öffnen →
+      </a>
+    </div>
+  {% endif %}
   {% if messages %}
     <ul class="message-list">
       {% for message in messages %}

@@ -1,8 +1,9 @@
 import logging
-from django.conf import settings as django_settings
-from django.core.mail import EmailMultiAlternatives, get_connection
+
+from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
-from .models import EmailTemplate, GeneralEmailSettings
+
+from .models import EmailTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -19,130 +20,128 @@ def safe_format(text, context):
 
 
 def send_system_email(template_key, recipient_email, context_data):
-    """Haupt-Funktion zum Versenden von System-E-Mails basierend auf Templates,
-
-    Einstellungen und Sandbox-Modus.
     """
-    settings = GeneralEmailSettings.load()
+    Versendet eine System-E-Mail auf Basis eines Templates.
 
-    # 1. Prüfen, ob der E-Mail-Versand global aktiviert ist
-    if not settings.is_enabled:
-        logger.info(f"E-Mail-Versand ist global deaktiviert. Template '{template_key}' wird nicht gesendet.")
+    Transport, Absender, Testmodus und Kill-Switch liegen im konfigurierten
+    EMAIL_BACKEND (emails.backends.ConfiguredSMTPBackend). Diese Funktion
+    kümmert sich ausschließlich um Inhalt und Platzhalter.
+    """
+    if not recipient_email:
+        logger.warning("Kein Empfänger für Template '%s' angegeben.", template_key)
         return False
 
-    # 2. Template laden & Prüfen, ob es aktiv ist
     try:
         template = EmailTemplate.objects.get(key=template_key)
     except EmailTemplate.DoesNotExist:
-        logger.warning(f"E-Mail-Template '{template_key}' nicht gefunden.")
+        logger.error(
+            "E-Mail-Template '%s' fehlt in der Datenbank. Wurde "
+            "'manage.py seed_email_templates' ausgeführt?",
+            template_key,
+        )
         return False
 
     if not template.is_active:
-        logger.info(f"E-Mail-Template '{template_key}' ist deaktiviert.")
+        logger.warning(
+            "Template '%s' ist deaktiviert. Die Nachricht an %s wurde nicht gesendet.",
+            template_key, recipient_email,
+        )
         return False
 
-    # 3. Empfänger & Sandbox-Modus auswerten
-    if settings.is_sandbox:
-        if not settings.sandbox_redirect_email:
-            logger.warning("Sandbox-Modus ist aktiv, aber keine Weiterleitungsadresse konfiguriert!")
-            return False
-        target_recipient = settings.sandbox_redirect_email
-        subject_prefix = "[SANDBOX HIGHLIGHT] "
-    else:
-        target_recipient = recipient_email
-        subject_prefix = ""
-
-    if not target_recipient:
-        logger.warning("Keine Ziel-E-Mail-Adresse angegeben.")
-        return False
-
-    # 4. Platzhalter im Betreff & HTML-Inhalt ersetzen
-    subject = subject_prefix + safe_format(template.subject, context_data)
+    subject = safe_format(template.subject, context_data)
     html_content = safe_format(template.content, context_data)
     text_content = strip_tags(html_content)
 
-    sender = f"{settings.sender_name} <{settings.sender_email}>"
-    reply_to = [settings.reply_to_email] if settings.reply_to_email else None
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text_content,
+        to=[recipient_email],
+        # from_email und reply_to setzt das Backend aus den Einstellungen
+    )
+    msg.attach_alternative(html_content, "text/html")
 
-    # 5. E-Mail versenden (Eigenes SMTP-Setup oder Django-Standard)
     try:
-        timeout = getattr(django_settings, 'EMAIL_TIMEOUT', 10)
-        connection = None
-        if settings.smtp_host:
-            connection = get_connection(
-                host=settings.smtp_host,
-                port=settings.smtp_port,
-                username=settings.smtp_username or None,
-                password=settings.get_smtp_password() or None,
-                use_tls=settings.smtp_use_tls,
-                timeout=timeout,
-            )
-        else:
-            connection = get_connection(timeout=timeout)
-
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_content,
-            from_email=sender,
-            to=[target_recipient],
-            reply_to=reply_to,
-            connection=connection,
+        sent = msg.send(fail_silently=False)
+    except Exception as exc:
+        logger.error(
+            "Versand von '%s' an %s fehlgeschlagen: %s",
+            template_key, recipient_email, exc,
         )
-        msg.attach_alternative(html_content, "text/html")
-        msg.send()
-        logger.info(f"E-Mail '{template_key}' erfolgreich an {target_recipient} gesendet.")
+        return False
+
+    if sent:
+        logger.info("E-Mail '%s' an %s gesendet.", template_key, recipient_email)
         return True
 
-    except Exception as e:
-        logger.error(f"Fehler beim Senden der E-Mail '{template_key}' an {target_recipient}: {e}")
-        return False
+    # sent == 0: Backend hat blockiert (Kill-Switch, nicht eingerichtet).
+    # Das Backend hat den Grund bereits geloggt.
+    return False
 
 
 def send_test_email(target_email):
-    """Hilfsfunktion zum Senden einer Test-E-Mail über das Admin-Panel."""
-    settings = GeneralEmailSettings.load()
-    context = {
-        'username': 'Test-Admin',
-        'sender': settings.sender_email,
-        'sandbox_status': 'AKTIV' if settings.is_sandbox else 'INAKTIV',
-    }
-
-    test_subject = "[EntailsNG Test] E-Mail Konfiguration erfolgreich verifiziert"
-    test_html = f"""
-    <h2>EntailsNG E-Mail Test</h2>
-    <p>Hallo <strong>{context['username']}</strong>,</p>
-    <p>dies ist eine automatische Test-E-Mail aus deinem EntailsNG System.</p>
-    <ul>
-        <li><strong>Absender:</strong> {context['sender']}</li>
-        <li><strong>Sandbox-Modus:</strong> {context['sandbox_status']}</li>
-        <li><strong>Ziel-Adresse:</strong> {target_email}</li>
-    </ul>
-    <p>Die SMTP-Einstellungen funktionieren einwandfrei!</p>
     """
-    test_text = strip_tags(test_html)
+    Sendet eine Testnachricht und gibt (erfolg, klartext_meldung) zurück.
 
-    sender = f"{settings.sender_name} <{settings.sender_email}>"
+    Umgeht den Kill-Switch bewusst: der Betreiber will die Verbindung prüfen,
+    bevor er den Versand für Gäste einschaltet.
+    """
+    from .backends import ConfiguredSMTPBackend
+    from .crypto import SecretUnreadable
+    from .diagnostics import explain_smtp_error
+    from .models import GeneralEmailSettings
+
+    cfg = GeneralEmailSettings.load()
+
+    if not target_email:
+        return False, "Bitte eine Zieladresse angeben."
+    if cfg.transport_mode == cfg.TransportMode.UNCONFIGURED:
+        return False, "Wähle zuerst einen Versandweg und speichere die Einstellungen."
+    if not cfg.sender_email:
+        return False, "Es ist keine Absenderadresse hinterlegt."
+
+    backend_wrapper = ConfiguredSMTPBackend(fail_silently=False)
+
+    subject = "EntailsNG: Verbindungstest"
+    lines = [
+        "Diese Nachricht bestätigt, dass EntailsNG E-Mails versenden kann.",
+        "",
+        f"Versandweg: {cfg.get_transport_mode_display()}",
+        f"Absender: {cfg.sender_email}",
+        f"Testmodus: {'ein' if cfg.is_sandbox else 'aus'}",
+        f"Zieladresse: {target_email}",
+    ]
+    text = "\n".join(lines)
+    html = "<p>" + "</p><p>".join(lines) + "</p>"
+
+    msg = EmailMultiAlternatives(subject=subject, body=text, to=[target_email])
+    msg.attach_alternative(html, "text/html")
 
     try:
-        connection = None
-        if settings.smtp_host:
-            connection = get_connection(
-                host=settings.smtp_host,
-                port=settings.smtp_port,
-                username=settings.smtp_username or None,
-                password=settings.smtp_password or None,
-                use_tls=settings.smtp_use_tls,
-            )
+        transport = backend_wrapper._build_backend(cfg)
+        backend_wrapper._apply_sender(cfg, [msg])
+        if cfg.is_sandbox and cfg.sandbox_redirect_email:
+            backend_wrapper._apply_sandbox(cfg, [msg])
+        transport.send_messages([msg])
+    except SecretUnreadable as exc:
+        _record_test(cfg, False, str(exc))
+        return False, str(exc)
+    except Exception as exc:
+        message = explain_smtp_error(exc, cfg)
+        _record_test(cfg, False, message)
+        return False, message
 
-        msg = EmailMultiAlternatives(
-            subject=test_subject,
-            body=test_text,
-            from_email=sender,
-            to=[target_email],
-            connection=connection,
-        )
-        msg.attach_alternative(test_html, "text/html")
-        msg.send()
-        return True, f"Test-E-Mail erfolgreich an {target_email} gesendet!"
-    except Exception as e:
-        return False, f"Fehler beim Senden: {str(e)}"
+    delivered_to = cfg.sandbox_redirect_email if cfg.is_sandbox else target_email
+    message = f"Testnachricht an {delivered_to} gesendet."
+    if cfg.is_sandbox and delivered_to != target_email:
+        message += " (Testmodus ist aktiv, daher umgeleitet.)"
+    _record_test(cfg, True, message)
+    return True, message
+
+
+def _record_test(cfg, ok, message):
+    from django.utils import timezone
+    type(cfg).objects.filter(pk=cfg.pk).update(
+        last_test_at=timezone.now(),
+        last_test_ok=ok,
+        last_test_message=message[:2000],
+    )

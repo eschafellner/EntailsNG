@@ -78,6 +78,7 @@ nano .env
 | Variable | Beispiel-Wert | Woher kommt der Wert? / Was bedeutet er? |
 | :--- | :--- | :--- |
 | `SECRET_KEY` | `dGhpcy1pcy1hLXNhbXBsZS1zZWNyZXQta2V5` | **Wichtig:** Ein geheimer Zufallsschlüssel für Django. Generiere ihn auf der Konsole mit:<br>`python3 -c "import secrets; print(secrets.token_urlsafe(50))"` |
+| `FIELD_ENCRYPTION_KEY` | `cmFuZG9tLWVuY3J5cHRpb24ta2V5...` | **Wichtig:** Einmalig generierter Schlüssel zur Verschlüsselung von Passwörtern (z. B. SMTP-Passwort) in der Datenbank. Unabhängig vom `SECRET_KEY`. |
 | `DEBUG` | `False` | Im Live-Betrieb **immer `False`**! Schützt vor der Anzeige interner Fehlerseiten und Zugangsdaten im Browser. |
 | `DOMAIN_NAME` | `demo.entails-ng.com` | Deine vollständige Domain oder Subdomain, unter der das System erreichbar sein soll. |
 | `ALLOWED_HOSTS` | `demo.entails-ng.com,localhost,127.0.0.1` | Schutz vor Host-Header-Angriffen. Trage deine Domain sowie `localhost,127.0.0.1` (durch Komma getrennt) ein. |
@@ -91,14 +92,14 @@ nano .env
 | `DB_HOST` | `db` | Der Name des Datenbank-Containers in Docker (immer `db` lassen). |
 | `DB_PORT` | `5432` | Standard-PostgreSQL-Port (immer `5432` lassen). |
 | `REDIS_URL` | `redis://redis:6379/1` | Verbindung zum internen Redis-Cache (immer so belassen). |
-| `EMAIL_BACKEND` | `django.core.mail.backends.smtp.EmailBackend` | E-Mail-Treiber (immer so belassen). |
-| `EMAIL_HOST` | `smtp.sendgrid.net` *(oder dein Anbieter)* | Der SMTP-Server deines E-Mail-Providers (z. B. Strato, Hetzner, Gmail, Sendgrid). |
+| `EMAIL_BACKEND` | `emails.backends.ConfiguredSMTPBackend` | E-Mail-Backend für zentrale Steuerung aus dem Admin (Standard belassen). |
+| `EMAIL_HOST` | `smtp.sendgrid.net` *(oder dein Anbieter)* | Der SMTP-Server deines E-Mail-Providers (gilt, wenn im Admin "Vom Server vorgegeben" gewählt ist). |
 | `EMAIL_PORT` | `587` | Port des SMTP-Servers (meist `587` bei TLS oder `465` bei SSL). |
 | `EMAIL_HOST_USER` | `apikey` *(oder dein Mail-Login)* | Dein SMTP-Benutzername. |
 | `EMAIL_HOST_PASSWORD` | `dein-smtp-passwort` | Dein SMTP-Passwort oder API-Schlüssel. |
 | `EMAIL_USE_TLS` | `True` | `True` bei Port 587, `False` bei Port 465. |
 | `EMAIL_USE_SSL` | `False` | `True` bei Port 465, `False` bei Port 587. |
-| `DEFAULT_FROM_EMAIL` | `noreply@deinedomain.de` | Die Absender-Adresse, die Empfänger in ihren E-Mails sehen. |
+| `DEFAULT_FROM_EMAIL` | `noreply@deinedomain.de` | Fallback-Absender-Adresse (wird durch die im Admin hinterlegte Absenderadresse überschrieben). |
 | `SERVER_EMAIL` | `noreply@deinedomain.de` | Absender-Adresse für interne System-Fehlermeldungen. |
 
 *(Speichern in `nano`: `Strg` + `O` → `Enter`, Schließen: `Strg` + `X`).*

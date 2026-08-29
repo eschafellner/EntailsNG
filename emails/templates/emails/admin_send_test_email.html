@@ -2,8 +2,13 @@
 
 {% block content %}
 <div style="max-width: 600px; margin: 20px 0;">
-  <h2>Test-E-Mail senden</h2>
-  <p>Hier kannst du eine Test-E-Mail senden, um deine Absender- und SMTP-Einstellungen sofort zu überprüfen.</p>
+  <h2>Verbindung testen</h2>
+  <p>Hier kannst du eine Testnachricht senden, um die E-Mail-Einstellungen und die Erreichbarkeit des Mailservers zu überprüfen.</p>
+
+  <div style="background: var(--darkened-bg, #1f2937); padding: 14px 18px; border-radius: 8px; border: 1px solid var(--border-color, #374151); margin-bottom: 16px; font-size: 13px;">
+    <p style="margin: 4px 0;"><strong>Versandweg:</strong> {{ transport_mode }}</p>
+    <p style="margin: 4px 0;"><strong>Absender:</strong> {{ sender_email }}</p>
+  </div>
 
   <form method="post" style="background: var(--darkened-bg, #1f2937); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color, #374151);">
     {% csrf_token %}
@@ -13,8 +18,8 @@
     </div>
 
     <div style="display: flex; gap: 10px;">
-      <button type="submit" class="button default" style="padding: 10px 20px; background: #0284c7; color: #ffffff; border: none; border-radius: 6px; cursor: pointer;">
-        🚀 Test-E-Mail jetzt senden
+      <button type="submit" class="button default" style="padding: 10px 20px; background: #0284c7; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+        🔌 Testnachricht jetzt senden
       </button>
       <a href="{% url 'admin:emails_generalemailsettings_changelist' %}" class="button" style="padding: 10px 16px; text-decoration: none;">
         Abbrechen

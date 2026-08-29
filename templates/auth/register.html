@@ -28,24 +28,30 @@
         <p style="color: var(--muted); font-size: 14px;">Erstelle dein Konto, um dich für die LAN-Party anzumelden und dir deinen Platz zu sichern.</p>
       </div>
 
-      {% if form.errors %}
-        <div class="error-list">
-          <strong>Bitte korrigiere folgende Fehler:</strong>
-          <ul>
-            {% for field in form %}
-              {% for error in field.errors %}
+      {% if registration_disabled %}
+        <div class="card" style="background: rgba(153, 27, 27, 0.15); border-left: 4px solid #b91c1c; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+          <h3 style="color: #f87171; font-size: 16px; margin: 0 0 8px 0;">Anmeldung vorübergehend pausiert</h3>
+          <p style="color: #f3f4f6; font-size: 14px; margin: 0; line-height: 1.5;">{{ disabled_reason }}</p>
+        </div>
+      {% else %}
+        {% if form.errors %}
+          <div class="error-list">
+            <strong>Bitte korrigiere folgende Fehler:</strong>
+            <ul>
+              {% for field in form %}
+                {% for error in field.errors %}
+                  <li>{{ error }}</li>
+                {% endfor %}
+              {% endfor %}
+              {% for error in form.non_field_errors %}
                 <li>{{ error }}</li>
               {% endfor %}
-            {% endfor %}
-            {% for error in form.non_field_errors %}
-              <li>{{ error }}</li>
-            {% endfor %}
-          </ul>
-        </div>
-      {% endif %}
+            </ul>
+          </div>
+        {% endif %}
 
-      <form method="post" action="{% url 'register' %}">
-        {% csrf_token %}
+        <form method="post" action="{% url 'register' %}">
+          {% csrf_token %}
 
         <div class="form-group">
           <label for="id_username">Benutzername (Nick):</label>
@@ -74,6 +80,7 @@
 
         <button type="submit" class="primary-btn auth-btn">Konto erstellen & Anmelden</button>
       </form>
+      {% endif %}
 
       <div class="auth-footer">
         Du hast bereits ein Konto? <a href="{% url 'login' %}">Hier anmelden</a>
