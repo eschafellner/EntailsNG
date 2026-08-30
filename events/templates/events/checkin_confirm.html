@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Check-in Bestätigung – EntailsNG{% endblock %}
+{% block title %}{% t "checkin_confirm_title" "Einlass Check-in Bestätigen" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
 <div class="card" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 32px;">
@@ -9,11 +9,11 @@
   </div>
 
   <h1 style="font-family: 'Barlow Condensed', sans-serif; font-size: 32px; margin-bottom: 8px;">
-    Einlass Check-in Bestätigen
+    {% t "checkin_confirm_title" "Einlass Check-in Bestätigen" %}
   </h1>
 
   <p style="color: var(--muted); font-size: 15px; font-family: 'JetBrains Mono', monospace; margin-bottom: 24px;">
-    Gast: <strong style="color: var(--ink);">{{ registration.user.username }}</strong> ({{ registration.user.get_full_name|default:registration.user.username }})
+    {% t "checkin_guest_label" "Gast:" %} <strong style="color: var(--ink);">{{ registration.user.username }}</strong> ({{ registration.user.get_full_name|default:registration.user.username }})
   </p>
 
   <div style="background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 20px; text-align: left; margin-bottom: 24px;">
@@ -40,7 +40,7 @@
   <form method="post" action="{% url 'process_checkin' registration.id registration.checkin_token %}">
     {% csrf_token %}
     <button type="submit" style="width: 100%; background: #22c55e; color: #ffffff; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 14px; cursor: pointer;">
-      ✓ Check-in jetzt durchführen
+      {% t "checkin_perform_btn" "✓ Check-in jetzt durchführen" %}
     </button>
   </form>
 </div>

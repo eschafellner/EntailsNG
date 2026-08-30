@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Übersicht – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
+{% block title %}{% t "dash_page_title" "Übersicht" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
@@ -35,7 +35,7 @@
         </h2>
 
         <div style="display: flex; gap: 20px; font-size: 13px; color: #9ca3af; font-family: 'JetBrains Mono', monospace; flex-wrap: wrap;">
-          <span>👤 <strong style="color: #e5e7eb;">{% t "dash_guest_label" %}:</strong> {{ request.user.username|default:"Gast" }}</span>
+          <span>👤 <strong style="color: #e5e7eb;">{% t "dash_guest_label" %}:</strong> {% if request.user.is_authenticated %}{{ request.user.username }}{% else %}{% t "dash_guest_fallback" "Gast" %}{% endif %}</span>
           <span>🪑 <strong style="color: #e5e7eb;">{% t "dash_seat_label_title" %}:</strong> {{ user_seat_label|default:"Noch nicht reserviert" }}</span>
         </div>
       </div>
@@ -84,7 +84,7 @@
         {% endwith %}
 
         <div style="margin-top: 14px; background: #f3f4f6; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
-          <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #6b7280; text-transform: uppercase; display: block;">Ticket-Code (Für manuelle Eingabe)</span>
+          <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #6b7280; text-transform: uppercase; display: block;">{% t "dash_ticket_code_label" "Ticket-Code (Für manuelle Eingabe)" %}</span>
           <strong style="font-size: 16px; font-family: 'JetBrains Mono', monospace; color: #111827; letter-spacing: 2px;">{{ user_registration.short_code }}</strong>
         </div>
 
@@ -97,9 +97,17 @@
 
   {% else %}
     <!-- ZUSTAND C: ANGEMELDET, ABER NOCH NICHT BEZAHLT (UNPAID / CANCELLED) -->
-    <div style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #eab308; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; display: inline-flex; align-items: center; gap: 6px;" title="Der QR-Code wird nach Zahlungseingang freigeschaltet.">
-      <span style="width: 8px; height: 8px; background: #eab308; border-radius: 50%; display: inline-block;"></span>
-      {% t "dash_qr_payment_pending" %}
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+      <div style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #eab308; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; display: inline-flex; align-items: center; gap: 6px;" title="Der Check-in QR-Code wird nach Zahlungseingang freigeschaltet.">
+        <span style="width: 8px; height: 8px; background: #eab308; border-radius: 50%; display: inline-block;"></span>
+        {% t "dash_qr_payment_pending" %}
+      </div>
+
+      {% if can_show_payment_qr %}
+        <button type="button" onclick="openPaymentQrModal()" class="btn" style="background: #eab308; color: #111827; border: none; padding: 8px 12px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(234, 179, 8, 0.3);">
+          <span>📱</span> {% t "dash_btn_show_payment_qr_short" "Zahlungs-QR anzeigen" %}
+        </button>
+      {% endif %}
     </div>
   {% endif %}
 
@@ -164,7 +172,7 @@
     </div>
   </div>
   <a href="{% url 'news_list' %}" style="background: var(--signal); color: var(--navy); padding: 8px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
-    Details lesen →
+    {% t "dash_news_details_link" "Details lesen →" %}
   </a>
 </div>
 {% endif %}
@@ -235,6 +243,25 @@
     <div class="card" style="padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); display: flex; flex-direction: column; justify-content: space-between; gap: 20px;">
 
       <div>
+        <!-- VERANSTALTUNGSINFOS OBERHALB DER SITZPLAN-PREVIEW (PUNKT 4.1) -->
+        {% if upcoming_event %}
+          <div style="margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line);">
+            <p class="eyebrow" style="margin: 0 0 4px 0; color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase;">
+              {% t "dash_event_eyebrow" "Veranstaltung" %}
+            </p>
+            <h2 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px; color: var(--ink); line-height: 1.15;">
+              {{ upcoming_event.title }}
+            </h2>
+            <p style="margin: 0; font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
+              {% if upcoming_event.start_date.date == upcoming_event.end_date.date %}
+                📅 {{ upcoming_event.start_date|date:"d.m.Y" }}
+              {% else %}
+                📅 {{ upcoming_event.start_date|date:"d.m.Y" }} – {{ upcoming_event.end_date|date:"d.m.Y" }}
+              {% endif %}
+            </p>
+          </div>
+        {% endif %}
+
         <p class="eyebrow" style="margin: 0 0 4px 0; color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase;">
           {% t "seat_card_title" %}
         </p>
@@ -309,10 +336,18 @@
               💳 {% t "status_step_3" %}
             </span>
           {% elif user_status_step == 2 %}
-            <span style="display: inline-flex; align-items: center; gap: 6px; color: #eab308; font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: rgba(234, 179, 8, 0.12); padding: 4px 8px; border-radius: 6px; border: 1px solid #eab308;">
-              <span style="width: 7px; height: 7px; background: #eab308; border-radius: 50%; display: inline-block;"></span>
-              ⏳ {% t "status_step_2" %}
-            </span>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="display: inline-flex; align-items: center; gap: 6px; color: #eab308; font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: rgba(234, 179, 8, 0.12); padding: 4px 8px; border-radius: 6px; border: 1px solid #eab308; width: fit-content;">
+                <span style="width: 7px; height: 7px; background: #eab308; border-radius: 50%; display: inline-block;"></span>
+                ⏳ {% t "status_step_2" %}
+              </span>
+
+              {% if can_show_payment_qr %}
+                <button type="button" onclick="openPaymentQrModal()" style="background: #eab308; color: #111827; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 4px; box-shadow: 0 2px 8px rgba(234, 179, 8, 0.25);">
+                  <span>📱</span> {% t "dash_btn_show_payment_qr" "QR-Code für Banking-App anzeigen" %}
+                </button>
+              {% endif %}
+            </div>
           {% else %}
             <span style="display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: var(--line); padding: 4px 8px; border-radius: 6px;">
               <span style="width: 7px; height: 7px; background: var(--muted); border-radius: 50%; display: inline-block;"></span>
@@ -454,8 +489,79 @@
     {% endif %}
   </section>
   {% endif %}
+{% if can_show_payment_qr and user_registration %}
+<!-- ======================================================================
+     FULLSCREEN MODAL / POPUP FÜR GIROCODE / EPC-QR ÜBERWEISUNG (PUNKT 4.3)
+     ====================================================================== -->
+<div id="payment-qr-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px;">
+  
+  <!-- Modal Box -->
+  <div style="background: #ffffff; color: #111827; padding: 28px; border-radius: 20px; max-width: 420px; width: 100%; text-align: center; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); max-height: 90vh; overflow-y: auto;">
+    
+    <!-- Schließen X Button -->
+    <button type="button" onclick="closePaymentQrModal()" style="position: absolute; top: 16px; right: 16px; background: #f3f4f6; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; cursor: pointer; color: #4b5563; display: flex; align-items: center; justify-content: center; line-height: 1;" aria-label="{% t 'btn_close' 'Schließen' %}">
+      ✕
+    </button>
+
+    <p class="eyebrow" style="margin: 0 0 4px 0; color: #eab308; font-weight: bold; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase;">
+      {% t "dash_payment_modal_eyebrow" "SEPA-Überweisung per GiroCode / QR" %}
+    </p>
+    <h3 style="margin: 0 0 8px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: #111827;">
+      {% t "dash_payment_modal_title" "Zahlung per Banking-App" %}
+    </h3>
+
+    <p style="font-size: 12px; color: #4b5563; margin: 0 0 16px 0; line-height: 1.4;">
+      {% t "dash_payment_modal_subtitle" "Scanne diesen QR-Code mit deiner Banking-App (Sparkasse, Volksbank, DKB, N26, ING etc.), um die Überweisung vorausgefüllt durchzuführen." %}
+    </p>
+
+    <!-- Generierter EPC-QR-Code -->
+    <div style="background: #ffffff; padding: 12px; border-radius: 12px; border: 2px solid #f3f4f6; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+      <img src="{% url 'registration_payment_qr' user_registration.id %}" alt="GiroCode / SEPA-Zahlung QR" style="display: block; width: 200px; height: 200px; margin: 0 auto;">
+    </div>
+
+    <!-- Manuelle Überweisungsdaten (für Nutzer ohne QR-Scan) -->
+    <div style="margin-top: 16px; background: #f9fafb; padding: 12px 16px; border-radius: 10px; border: 1px solid #e5e7eb; text-align: left; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
+      <span style="font-size: 10px; font-weight: bold; color: #6b7280; text-transform: uppercase; display: block; margin-bottom: 8px;">
+        {% t "dash_payment_manual_data_title" "Überweisungsdaten für manuelle Eingabe:" %}
+      </span>
+      <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; word-break: break-all;">
+        <span style="color: #6b7280;">{% t "dash_payment_recipient_label" "Empfänger:" %}</span>
+        <strong style="color: #111827;">{{ general_config.kontoinhaber }}</strong>
+
+        <span style="color: #6b7280;">{% t "dash_payment_iban_label" "IBAN:" %}</span>
+        <strong style="color: #111827; letter-spacing: 0.5px;">{{ general_config.formatted_iban }}</strong>
+
+        {% if general_config.bic %}
+          <span style="color: #6b7280;">{% t "dash_payment_bic_label" "BIC:" %}</span>
+          <strong style="color: #111827;">{{ general_config.bic }}</strong>
+        {% endif %}
+
+        <span style="color: #6b7280;">{% t "dash_payment_amount_label" "Betrag:" %}</span>
+        <strong style="color: #16a34a;">
+          {% if user_registration.ticket_type %}
+            {{ user_registration.ticket_type.price }} €
+          {% else %}
+            {% t "dash_payment_amount_open" "Frei wählbar" %}
+          {% endif %}
+        </strong>
+
+        <span style="color: #6b7280;">{% t "dash_payment_purpose_label" "Verwendungszweck:" %}</span>
+        <strong style="color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; display: inline-block;">{{ request.user.username }}</strong>
+      </div>
+    </div>
+
+    <button type="button" onclick="closePaymentQrModal()" style="margin-top: 16px; width: 100%; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 9px 16px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
+      {% t "btn_close" "Schließen" %}
+    </button>
+  </div>
 
 </div>
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
 <script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock %}
 

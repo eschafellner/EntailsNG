@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Seite nicht gefunden (404) – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
+{% block title %}{% t "error_404_title" "Seite nicht gefunden" %} (404) – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
 <div class="card" style="max-width: 600px; margin: 40px auto; padding: 40px 30px; text-align: center; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);">
@@ -8,17 +8,17 @@
     404
   </div>
   <h1 style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; text-transform: uppercase; margin: 0 0 12px 0; color: var(--ink);">
-    Seite nicht gefunden
+    {% t "error_404_title" "Seite nicht gefunden" %}
   </h1>
   <p style="color: var(--muted); font-size: 15px; line-height: 1.6; margin: 0 0 28px 0;">
-    Die von dir aufgerufene Adresse existiert leider nicht oder wurde verschoben.
+    {% t "error_404_text" "Die von dir aufgerufene Adresse existiert leider nicht oder wurde verschoben." %}
   </p>
   <div style="display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;">
     <a href="{% url 'dashboard' %}" class="primary-btn" style="padding: 10px 20px; font-weight: bold; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
-      🏠 Zur Startseite
+      {% t "btn_back_to_home" "🏠 Zur Startseite" %}
     </a>
     <a href="javascript:history.back()" class="btn" style="padding: 10px 18px; border-radius: 8px; text-decoration: none; border: 1px solid var(--line); color: var(--ink); display: inline-flex; align-items: center;">
-      ← Zurück
+      {% t "btn_back" "← Zurück" %}
     </a>
   </div>
 </div>

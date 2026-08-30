@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}403 – Zugriff verweigert – EntailsNG{% endblock %}
+{% block title %}403 – {% t "error_403_title" "Zugriff verweigert" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
 <div class="card" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 40px 24px;">
@@ -9,15 +9,15 @@
   </div>
 
   <h1 style="font-family: 'Barlow Condensed', sans-serif; font-size: 32px; margin-bottom: 12px; color: var(--ink);">
-    Zugriff verweigert
+    {% t "error_403_title" "Zugriff verweigert" %}
   </h1>
 
   <p style="color: var(--muted); font-size: 15px; font-family: 'JetBrains Mono', monospace; line-height: 1.6; margin-bottom: 28px;">
-    Du hast nicht die erforderlichen Rechte, um auf diese Seite zuzugreifen.
+    {% t "error_403_text" "Du hast nicht die erforderlichen Rechte, um auf diese Seite zuzugreifen." %}
   </p>
 
   <a href="{% url 'dashboard' %}" class="btn-login" style="display: inline-block; width: auto; padding: 12px 24px; text-decoration: none; font-weight: bold;">
-    ← Zurück zur Startseite
+    {% t "btn_back_to_home" "← Zurück zur Startseite" %}
   </a>
 </div>
 {% endblock %}

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Helfer Einlass-Scanner – EntailsNG{% endblock %}
+{% block title %}{% t "scanner_title" "Helfer Einlass-Scanner" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/checkin-scanner.css' %}">
@@ -15,9 +15,9 @@
   <div class="scanner-header">
     <div>
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-        <span class="eyebrow" style="margin: 0;">Einlass-Tool</span>
+        <span class="eyebrow" style="margin: 0;">{% t "scanner_eyebrow" "Einlass-Tool" %}</span>
         <span style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid #0284c7; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: bold; font-family: 'JetBrains Mono', monospace;">
-          🔒 NUR FÜR MITARBEITER
+          🔒 {% t "scanner_staff_only_badge" "NUR FÜR MITARBEITER" %}
         </span>
       </div>
       <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 28px;">
@@ -28,15 +28,15 @@
     <!-- Live Event Stats -->
     <div class="scanner-stats-wrapper">
       <div class="scanner-stat-card">
-        <span>Gäste Gesamt</span>
+        <span>{% t "scanner_guests_total" "Gäste Gesamt" %}</span>
         <strong>{{ total_count }}</strong>
       </div>
       <div class="scanner-stat-card">
-        <span>Bezahlt</span>
+        <span>{% t "status_paid_badge" "Bezahlt" %}</span>
         <strong style="color: #38bdf8;">{{ paid_count }}</strong>
       </div>
       <div class="scanner-stat-card">
-        <span>Eingecheckt</span>
+        <span>{% t "status_step_4" "Eingecheckt" %}</span>
         <strong style="color: #22c55e;" id="stat-checked-in-count">{{ checked_in_count }}</strong>
       </div>
     </div>
@@ -48,9 +48,9 @@
     <!-- KAMERA QR SCANNER CARD -->
     <div class="card scanner-card">
       <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; margin-top: 0; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between;">
-        <span>📷 QR-Code Scanner</span>
+        <span>📷 {% t "scanner_camera_title" "QR-Code Scanner" %}</span>
         <button type="button" id="toggle-camera-btn" class="btn-camera-toggle">
-          Kamera Starten
+          {% t "scanner_camera_start_btn" "Kamera Starten" %}
         </button>
       </h2>
 
@@ -79,7 +79,7 @@
     <div class="card scanner-card" style="display: flex; flex-direction: column; justify-content: space-between;" id="scan-result-card">
       <div>
         <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; margin-top: 0; margin-bottom: 14px;">
-          Scan-Ergebnis
+          {% t "scanner_result_title" "Scan-Ergebnis" %}
         </h2>
 
         <!-- Status Result Banner -->
@@ -108,7 +108,7 @@
   <div class="card" style="padding: 20px; border-radius: 12px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
       <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 24px; margin: 0;">
-        Teilnehmerliste (Manuelle Suche)
+        {% t "scanner_guest_list_title" "Teilnehmerliste (Manuelle Suche)" %}
       </h2>
       <input type="text" id="guest-search-input" placeholder="🔍 Nach Name, Ticket-Code oder Platz suchen..." style="background: #0b0f17; color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; min-width: 280px;">
     </div>

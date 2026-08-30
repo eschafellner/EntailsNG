@@ -72,7 +72,7 @@
         </p>
 
         <div class="timer-badge">
-          ⏳ Code verfällt in: <span id="countdown">15:00</span>
+          {% t "verify_code_expires_in" "⏳ Code verfällt in:" %} <span id="countdown">15:00</span>
         </div>
       </div>
 
@@ -146,7 +146,7 @@
       countdownEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
       if (--duration < 0) {
         clearInterval(timerInterval);
-        countdownEl.textContent = 'ABGELAUFEN';
+        countdownEl.textContent = '{% t "verify_code_expired_badge" "ABGELAUFEN" %}';
         countdownEl.parentElement.style.background = 'rgba(239, 68, 68, 0.2)';
         countdownEl.parentElement.style.color = '#ef4444';
       }

@@ -52,6 +52,20 @@ class GeneralConfigurationAdmin(admin.ModelAdmin):
             },
         ),
         (
+            'Zahlungsdaten für Banküberweisungen / GiroCode',
+            {
+                'fields': (
+                    'kontoinhaber',
+                    'iban',
+                    'bic',
+                ),
+                'description': (
+                    'Bankverbindung für Teilnehmer-Überweisungen. Diese Daten werden für '
+                    'die automatische Erzeugung von GiroCode / SEPA-Zahlungs-QR-Codes im Dashboard verwendet.'
+                ),
+            },
+        ),
+        (
             'System-Diagnose & Fehleranalyse',
             {
                 'fields': (

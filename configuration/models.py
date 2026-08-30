@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import NoReverseMatch, reverse
 
+from .validators import validate_bic, validate_iban
+
 
 def safe_cache_delete(key):
     """Löscht einen Cache-Schlüssel und fängt Redis-Verbindungsfehler ab."""
@@ -409,7 +411,27 @@ class GeneralConfiguration(models.Model):
         help_text="Aktiviert die detaillierte technische Django-Fehlerseite bei Serverfehlern. Im normalen Live-Betrieb sollte dies deaktiviert sein.",
     )
 
-
+    # Zahlungsdaten für Banküberweisungen & GiroCode / EPC-QR
+    kontoinhaber = models.CharField(
+        max_length=70,
+        blank=True,
+        verbose_name="Kontoinhaber",
+        help_text="Name des Empfängers / Kontoinhabers (max. 70 Zeichen für EPC-QR-Standard).",
+    )
+    iban = models.CharField(
+        max_length=34,
+        blank=True,
+        verbose_name="IBAN",
+        help_text="IBAN des Empfängerkontos für SEPA-Überweisungen (ohne Leerzeichen gespeichert).",
+        validators=[validate_iban],
+    )
+    bic = models.CharField(
+        max_length=11,
+        blank=True,
+        verbose_name="BIC / SWIFT",
+        help_text="Optional: BIC der Empfängerbank (8 oder 11 Zeichen).",
+        validators=[validate_bic],
+    )
 
     class Meta:
         verbose_name = "Allgemeine Konfiguration"
@@ -418,8 +440,38 @@ class GeneralConfiguration(models.Model):
     def __str__(self):
         return "Allgemeine Konfiguration"
 
+    @property
+    def has_payment_details(self):
+        """Gibt True zurück, wenn IBAN und Kontoinhaber hinterlegt sind."""
+        return bool(self.iban and self.kontoinhaber)
+
+    @property
+    def formatted_iban(self):
+        """Gibt die IBAN leserlich in 4er-Blöcken formatiert zurück."""
+        if not self.iban:
+            return ""
+        clean = self.iban.replace(" ", "").upper()
+        return " ".join([clean[i:i+4] for i in range(0, len(clean), 4)])
+
+    def clean(self):
+        super().clean()
+        if self.iban:
+            self.iban = re.sub(r'[\s\-]', '', self.iban).upper()
+            validate_iban(self.iban)
+        if self.bic:
+            self.bic = re.sub(r'\s', '', self.bic).upper()
+            validate_bic(self.bic)
+        if self.kontoinhaber:
+            self.kontoinhaber = self.kontoinhaber.strip()
+
     def save(self, *args, **kwargs):
         self.pk = 1
+        if self.iban:
+            self.iban = re.sub(r'[\s\-]', '', self.iban).upper()
+        if self.bic:
+            self.bic = re.sub(r'\s', '', self.bic).upper()
+        if self.kontoinhaber:
+            self.kontoinhaber = self.kontoinhaber.strip()
         super().save(*args, **kwargs)
         cache.delete('general_configuration')
 
@@ -433,6 +485,7 @@ class GeneralConfiguration(models.Model):
             conf, _ = cls.objects.get_or_create(pk=1)
             cache.set('general_configuration', conf, 300)
         return conf
+
 
 
 class SiteCustomization(models.Model):

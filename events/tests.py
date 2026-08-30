@@ -1096,6 +1096,186 @@ class MultiEventTicketAndCheckinTests(TestCase):
         self.assertContains(response, 'neue Anmeldung erforderlich')
 
 
+class PaymentQrAndDashboardEventInfoTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='gamer1', email='gamer1@example.com', password='password'
+        )
+        self.staff_user = User.objects.create_superuser(
+            username='admin', email='admin@example.com', password='password'
+        )
+        self.event = Event.objects.create(
+            title='LAN Party 2026',
+            slug='lan-party-2026',
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() + timedelta(days=10),
+            end_date=timezone.now() + timedelta(days=12),
+        )
+
+    def test_epc_qr_payload_generation(self):
+        """Testet die normgerechte Zusammensetzung des EPC069-12 GiroCode Payloads."""
+        from configuration.models import GeneralConfiguration
+        from events.payment_qr import generate_epc_qr_payload, generate_epc_qr_png
+
+        config = GeneralConfiguration.load()
+        config.kontoinhaber = 'LAN e.V.'
+        config.iban = 'DE89370400440532013000'
+        config.bic = 'GENODEF1S01'
+        config.save()
+
+        ticket = TicketType.objects.create(event=self.event, name='VIP', price=35.50)
+        reg_with_ticket = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            ticket_type=ticket,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+
+        payload = generate_epc_qr_payload(reg_with_ticket, config=config)
+        lines = payload.split('\n')
+        self.assertEqual(len(lines), 12)
+        self.assertEqual(lines[0], 'BCD')
+        self.assertEqual(lines[1], '002')
+        self.assertEqual(lines[2], '1')
+        self.assertEqual(lines[3], 'SCT')
+        self.assertEqual(lines[4], 'GENODEF1S01')
+        self.assertEqual(lines[5], 'LAN e.V.')
+        self.assertEqual(lines[6], 'DE89370400440532013000')
+        self.assertEqual(lines[7], 'EUR35.50')
+        self.assertEqual(lines[8], '')
+        self.assertEqual(lines[9], '')
+        self.assertEqual(lines[10], 'gamer1')
+        # Ohne Ticket -> Betrag bleibt leer
+        user_no_ticket = User.objects.create_user(username='gamer_no_ticket', password='password')
+        reg_no_ticket = EventRegistration.objects.create(
+            user=user_no_ticket,
+            event=self.event,
+            ticket_type=None,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+        payload_no_ticket = generate_epc_qr_payload(reg_no_ticket, config=config)
+        lines_no_ticket = payload_no_ticket.split('\n')
+        self.assertEqual(lines_no_ticket[7], '')  # Betrag leer
+        self.assertEqual(lines_no_ticket[10], 'gamer_no_ticket')
+
+        # PNG Erzeugung liefert valide Bild-Bytes
+        png_bytes = generate_epc_qr_png(reg_with_ticket, config=config)
+        self.assertTrue(len(png_bytes) > 100)
+        self.assertTrue(png_bytes.startswith(b'\x89PNG\r\n\x1a\n'))
+
+    def test_registration_payment_qr_view_access_control(self):
+        """Zugriffsschutz auf Payment-QR: Anonym -> 302, Fremder -> 403, Eigentümer/Staff -> 200."""
+        from configuration.models import GeneralConfiguration
+
+        config = GeneralConfiguration.load()
+        config.kontoinhaber = 'LAN e.V.'
+        config.iban = 'DE89370400440532013000'
+        config.save()
+
+        ticket = TicketType.objects.create(event=self.event, name='Standard', price=20.00)
+        registration = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            ticket_type=ticket,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+
+        other_user = User.objects.create_user(username='stranger', password='password')
+        url = reverse('registration_payment_qr', kwargs={'registration_id': registration.id})
+
+        # 1. Anonym -> Redirect zu Login
+        resp_anon = self.client.get(url)
+        self.assertEqual(resp_anon.status_code, 302)
+
+        # 2. Fremder Benutzer -> 403 Forbidden
+        self.client.login(username='stranger', password='password')
+        resp_other = self.client.get(url)
+        self.assertEqual(resp_other.status_code, 403)
+
+        # 3. Eigentümer -> 200 OK PNG
+        self.client.login(username='gamer1', password='password')
+        resp_owner = self.client.get(url)
+        self.assertEqual(resp_owner.status_code, 200)
+        self.assertEqual(resp_owner['Content-Type'], 'image/png')
+        self.assertIn('private, no-store', resp_owner['Cache-Control'])
+
+        # 4. Staff -> 200 OK PNG
+        self.client.login(username='admin', password='password')
+        resp_staff = self.client.get(url)
+        self.assertEqual(resp_staff.status_code, 200)
+        self.assertEqual(resp_staff['Content-Type'], 'image/png')
+
+    def test_registration_payment_qr_view_paid_or_free_rejected(self):
+        """Bereits bezahlte oder kostenlose Registrierungen erhalten keinen Zahlungs-QR (400)."""
+        from configuration.models import GeneralConfiguration
+
+        config = GeneralConfiguration.load()
+        config.kontoinhaber = 'LAN e.V.'
+        config.iban = 'DE89370400440532013000'
+        config.save()
+
+        user_free = User.objects.create_user(username='user_free', password='password')
+        ticket_free = TicketType.objects.create(event=self.event, name='Free', price=0.00)
+        reg_free = EventRegistration.objects.create(
+            user=user_free,
+            event=self.event,
+            ticket_type=ticket_free,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+
+        user_paid = User.objects.create_user(username='user_paid', password='password')
+        ticket_paid = TicketType.objects.create(event=self.event, name='Paid', price=25.00)
+        reg_already_paid = EventRegistration.objects.create(
+            user=user_paid,
+            event=self.event,
+            ticket_type=ticket_paid,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+
+        # Free Ticket -> 400
+        self.client.login(username='user_free', password='password')
+        url_free = reverse('registration_payment_qr', kwargs={'registration_id': reg_free.id})
+        resp_free = self.client.get(url_free)
+        self.assertEqual(resp_free.status_code, 400)
+
+        # Already Paid -> 400
+        self.client.login(username='user_paid', password='password')
+        url_paid = reverse('registration_payment_qr', kwargs={'registration_id': reg_already_paid.id})
+        resp_paid = self.client.get(url_paid)
+        self.assertEqual(resp_paid.status_code, 400)
+
+    def test_dashboard_event_info_and_single_day_date(self):
+        """Dashboard zeigt Veranstaltungsinformationen über der Sitzplan-Preview; 1-Tages-Events zeigen nur ein Datum."""
+        # 1. Mehrtägiges Event (Start != Ende)
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'LAN Party 2026')
+        start_fmt = self.event.start_date.strftime('%d.%m.%Y')
+        end_fmt = self.event.end_date.strftime('%d.%m.%Y')
+        self.assertContains(response, f'{start_fmt} – {end_fmt}')
+
+        # 2. Eintägiges Event (Start und Ende am selben Tag)
+        now = timezone.now()
+        single_day_event = Event.objects.create(
+            title='1-Day Cup 2026',
+            slug='1-day-cup-2026',
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=now.replace(hour=10, minute=0, second=0),
+            end_date=now.replace(hour=22, minute=0, second=0),
+        )
+        resp_single = self.client.get(reverse('dashboard'))
+        self.assertEqual(resp_single.status_code, 200)
+        self.assertContains(resp_single, '1-Day Cup 2026')
+        single_fmt = single_day_event.start_date.strftime('%d.%m.%Y')
+        self.assertContains(resp_single, f'📅 {single_fmt}')
+        self.assertNotContains(resp_single, f'{single_fmt} – {single_fmt}')
+
+
+
+
 
 
 

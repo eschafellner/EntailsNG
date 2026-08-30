@@ -7,19 +7,49 @@ function openQrModal() {
   const modal = document.getElementById('qr-modal');
   if (modal) modal.style.display = 'flex';
 }
+window.openQrModal = openQrModal;
 
 function closeQrModal() {
   const modal = document.getElementById('qr-modal');
   if (modal) modal.style.display = 'none';
 }
+window.closeQrModal = closeQrModal;
 
-function initQrModal() {
+function openPaymentQrModal() {
+  const modal = document.getElementById('payment-qr-modal');
+  if (modal) modal.style.display = 'flex';
+}
+window.openPaymentQrModal = openPaymentQrModal;
+
+function closePaymentQrModal() {
+  const modal = document.getElementById('payment-qr-modal');
+  if (modal) modal.style.display = 'none';
+}
+window.closePaymentQrModal = closePaymentQrModal;
+
+function initModals() {
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
       closeQrModal();
+      closePaymentQrModal();
     }
   });
+
+  const qrModal = document.getElementById('qr-modal');
+  if (qrModal) {
+    qrModal.addEventListener('click', function(e) {
+      if (e.target === qrModal) closeQrModal();
+    });
+  }
+
+  const paymentModal = document.getElementById('payment-qr-modal');
+  if (paymentModal) {
+    paymentModal.addEventListener('click', function(e) {
+      if (e.target === paymentModal) closePaymentQrModal();
+    });
+  }
 }
+
 
 function initCountdown() {
   const countdownEl = document.getElementById('ticket-countdown');
@@ -148,7 +178,7 @@ function initMinimap() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  initQrModal();
+  initModals();
   initCountdown();
   initMinimap();
 });

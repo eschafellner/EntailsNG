@@ -46,7 +46,7 @@
           <span style="width: 14px; height: 14px; background: rgba(56, 189, 248, 0.25); border: 1.5px solid #38bdf8; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           </span>
-          Dein Clan
+          {% t "seat_legend_clan" "Dein Clan" %}
         </span>
 
         <!-- Eigener Platz (Star-SVG mit Glow) -->
@@ -62,7 +62,7 @@
           <span style="width: 14px; height: 14px; background: repeating-linear-gradient(45deg, #1f2937, #1f2937 2px, #374151 2px, #374151 4px); border: 1px solid #4b5563; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
           </span>
-          Gesperrt
+          {% t "seat_legend_blocked" "Gesperrt" %}
         </span>
       </div>
     </div>
@@ -70,19 +70,19 @@
     <!-- Steuerung & Zoom-Bar -->
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
       <div style="font-size: var(--font-sm, 12px); color: var(--muted); font-family: 'JetBrains Mono', monospace;">
-        💡 Ziehen zum Verschieben • Scrollen zum Zoomen
+        💡 {% t "seating_controls_hint" "Ziehen zum Verschieben • Scrollen zum Zoomen" %}
       </div>
       <div style="display: flex; gap: 6px; align-items: center;">
         <span id="zoom-level-badge" style="font-size: var(--font-xs, 11px); font-family: 'JetBrains Mono', monospace; color: var(--muted); padding: 0 10px; height: var(--btn-height, 38px); display: inline-flex; align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: calc(var(--radius, 16px) * 0.4);">100%</span>
         <button type="button" id="btn-zoom-in" title="Vergrößern (+)" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0 14px; border-radius: calc(var(--radius, 16px) * 0.4); font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: var(--btn-height, 38px); height: var(--btn-height, 38px); font-size: var(--font-sm, 13px); display: inline-flex; align-items: center; justify-content: center;">🔍 +</button>
         <button type="button" id="btn-zoom-out" title="Verkleinern (-)" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0 14px; border-radius: calc(var(--radius, 16px) * 0.4); font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: var(--btn-height, 38px); height: var(--btn-height, 38px); font-size: var(--font-sm, 13px); display: inline-flex; align-items: center; justify-content: center;">🔍 -</button>
-        <button type="button" id="btn-zoom-reset" title="Plan zentrieren und einpassen" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0 14px; border-radius: calc(var(--radius, 16px) * 0.4); font-size: var(--font-sm, 12px); font-weight: 600; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: var(--btn-height, 38px); height: var(--btn-height, 38px); display: inline-flex; align-items: center; justify-content: center;">🎯 Einpassen</button>
+        <button type="button" id="btn-zoom-reset" title="Plan zentrieren und einpassen" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 0 14px; border-radius: calc(var(--radius, 16px) * 0.4); font-size: var(--font-sm, 12px); font-weight: 600; cursor: pointer; font-family: 'JetBrains Mono', monospace; min-height: var(--btn-height, 38px); height: var(--btn-height, 38px); display: inline-flex; align-items: center; justify-content: center;">🎯 {% t "seating_btn_fit" "Einpassen" %}</button>
       </div>
     </div>
 
     <!-- Lade-Indikator -->
     <div id="seating-status" style="text-align: center; padding: 40px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: var(--font-md, 14px);">
-      Sitzplan wird geladen...
+      {% t "seating_loading" "Sitzplan wird geladen..." %}
     </div>
 
     <!-- RESPONSIVER DYNAMISCHER FULL-HEIGHT VIEWPORT CONTAINER -->
@@ -127,12 +127,12 @@
 
   {% else %}
     <div style="text-align: center; padding: 48px 24px;">
-      <p class="eyebrow" style="margin-bottom: 8px; font-size: var(--font-xs, 11px);">Saalplan</p>
+      <p class="eyebrow" style="margin-bottom: 8px; font-size: var(--font-xs, 11px);">{% t "seating_plan_title" "Saalplan" %}</p>
       <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: var(--font-3xl, 28px); margin-top: 0; margin-bottom: 16px; color: var(--ink);">
-        Derzeit gibt es kein aktives/geplantes Event
+        {% t "seating_no_event_title" "Derzeit gibt es kein aktives/geplantes Event" %}
       </h2>
       <p style="color: var(--muted); font-size: var(--font-md, 15px); max-width: 500px; margin: 0 auto; line-height: 1.6;">
-        Schau gerne bald wieder vorbei! Sobald die nächste Veranstaltung angekündigt wird, kannst du dir hier deinen Sitzplatz reservieren.
+        {% t "seating_no_event_desc" "Schau gerne bald wieder vorbei! Sobald die nächste Veranstaltung angekündigt wird, kannst du dir hier deinen Sitzplatz reservieren." %}
       </p>
     </div>
   {% endif %}

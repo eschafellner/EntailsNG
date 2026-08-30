@@ -67,6 +67,19 @@ class ConfigurationModelTests(TestCase):
         self.assertIn('Sitzplan Aktiv', nav_titles)
         self.assertNotIn('Teams Inaktiv', nav_titles)
 
+    def test_legal_links_rendered_in_desktop_and_mobile_menu(self):
+        """Impressum und Datenschutz sind in der Desktop-Sidebar und im mobilen Mehr-Menü vorhanden."""
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        # Desktop-Sidebar
+        self.assertContains(response, 'class="sidebar-legal"')
+        self.assertContains(response, reverse('impressum'))
+        self.assertContains(response, reverse('datenschutz'))
+        # Mobiles Mehr-Menü
+        self.assertContains(response, 'class="mobile-item mobile-more-btn')
+        self.assertContains(response, 'id="mobile-menu-overlay"')
+        self.assertContains(response, 'class="mobile-modal-item')
+
     def test_health_check_api(self):
         response = self.client.get(reverse('api_health_check'))
         self.assertEqual(response.status_code, 200)
@@ -503,6 +516,69 @@ class ConfigurationModelTests(TestCase):
         self.assertIn('features', response.context)
         self.assertIn('nav_items', response.context)
         self.assertIn('site_customization', response.context)
+
+    def test_iban_validation_valid(self):
+        """Gültige IBANs (DE, AT, CH etc.) werden erfolgreich validiert."""
+        from configuration.validators import validate_iban
+        valid_ibans = [
+            'DE89370400440532013000',
+            'DE89 3704 0044 0532 0130 00',  # Mit Leerzeichen
+            'de89-3704-0044-0532-0130-00',  # Klein & mit Bindestrichen
+            'AT611904300234573201',         # Österreich
+            'CH9300762011623852957',        # Schweiz
+        ]
+        for iban in valid_ibans:
+            try:
+                validate_iban(iban)
+            except ValidationError as e:
+                self.fail(f"Valide IBAN '{iban}' wurde fälschlicherweise als ungültig abgewiesen: {e}")
+
+    def test_iban_validation_invalid(self):
+        """Ungültige IBANs (falsche Prüfziffer, zu kurz, zu lang, unzulässige Zeichen) werfen ValidationError."""
+        from configuration.validators import validate_iban
+        invalid_ibans = [
+            'DE89370400440532013001',  # Falsche Prüfziffer
+            'DE12345',                 # Zu kurz
+            'DE8937040044053201300012345678901234567',  # Zu lang (>34)
+            '12345678901234567890',    # Kein Ländercode
+            'DE8937040044053201300!',  # Sonderzeichen
+        ]
+        for iban in invalid_ibans:
+            with self.assertRaises(ValidationError, msg=f"Ungültige IBAN '{iban}' hätte abgelehnt werden müssen"):
+                validate_iban(iban)
+
+    def test_bic_validation(self):
+        """BIC-Validierung akzeptiert 8 und 11 Zeichen und weist fehlerhafte ab."""
+        from configuration.validators import validate_bic
+        # Gültig
+        validate_bic('GENODEF1S01')
+        validate_bic('GENODEF1')
+        validate_bic('genodef1s01')
+        validate_bic('')  # leer erlaubt
+
+        # Ungültig
+        with self.assertRaises(ValidationError):
+            validate_bic('SHORT')
+        with self.assertRaises(ValidationError):
+            validate_bic('TOOLONGBICCODE123')
+        with self.assertRaises(ValidationError):
+            validate_bic('GENO!EF1')
+
+    def test_general_configuration_payment_fields(self):
+        """GeneralConfiguration speichert Zahlungsdaten sauber bereinigt und formatiert die IBAN."""
+        from configuration.models import GeneralConfiguration
+        config = GeneralConfiguration.load()
+        config.kontoinhaber = '  LAN Party e.V.  '
+        config.iban = 'DE89 3704 0044 0532 0130 00'
+        config.bic = ' genodef1s01 '
+        config.clean()
+        config.save()
+
+        self.assertTrue(config.has_payment_details)
+        self.assertEqual(config.kontoinhaber, 'LAN Party e.V.')
+        self.assertEqual(config.iban, 'DE89370400440532013000')
+        self.assertEqual(config.bic, 'GENODEF1S01')
+        self.assertEqual(config.formatted_iban, 'DE89 3704 0044 0532 0130 00')
 
 
 

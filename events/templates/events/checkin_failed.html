@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Check-in Abgelehnt – EntailsNG{% endblock %}
+{% block title %}{% t "checkin_rejected_title" "Check-in Abgelehnt" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
 <div class="card" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 32px;">
@@ -9,20 +9,20 @@
   </div>
 
   <h1 style="font-family: 'Barlow Condensed', sans-serif; font-size: 32px; margin-bottom: 8px; color: #ef4444;">
-    Check-in Abgelehnt
+    {% t "checkin_rejected_title" "Check-in Abgelehnt" %}
   </h1>
 
   <p style="color: var(--muted); font-size: 15px; font-family: 'JetBrains Mono', monospace; margin-bottom: 24px;">
-    Gast: <strong style="color: var(--ink);">{{ registration.user.username }}</strong>
+    {% t "checkin_guest_label" "Gast:" %} <strong style="color: var(--ink);">{{ registration.user.username }}</strong>
   </p>
 
   <div style="background: #fee2e2; border: 1px solid #fca5a5; border-radius: 12px; padding: 20px; text-align: left; margin-bottom: 24px; color: #991b1b;">
-    <strong>Grund für die Ablehnung:</strong>
+    <strong>{% t "checkin_reject_reason" "Grund für die Ablehnung:" %}</strong>
     <p style="margin: 8px 0 0 0; font-size: 14px;">{{ reason|default:"Die Anmeldevoraussetzungen sind nicht erfüllt." }}</p>
   </div>
 
   <a href="{% url 'dashboard' %}" class="btn-login" style="display: inline-block; width: auto; padding: 10px 24px; text-decoration: none; background: var(--navy); color: white;">
-    Zurück zum Dashboard
+    {% t "back_to_dashboard" "Zurück zum Dashboard" %}
   </a>
 </div>
 {% endblock %}

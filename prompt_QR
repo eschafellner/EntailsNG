@@ -1,0 +1,32 @@
+Bitte verbessere den Prompt so dass ein KI Agent die Aufgabe umsetzen kann
+
+Du bist ein Fullstack-Developer und UX Desginer und bekommst die Aufgabe das Projekt Entails-NG zu erweitern.
+Projektkontext
+Projekt: EntailsNG — ein CMS zur Verwaltung von LAN-Partys (Events, Anmeldungen, Tickets, interaktiver Saalplan, QR-Check-in am Einlass,
+News, Clans, Turniere, Teams).
+Stack: Python / Django 6, PostgreSQL, django-tinymce, Pillow. Kein JS-Buildstep.
+
+Aktuell gibt es im Dashboard/Startseite einen Bereich für die Sitzplatzbuchung des jeweiligen Events.
+Jedoch fehlt eine Darstellung der wichtigsten Informatione für das Event.
+Es sollen dort ebenfalls die wichtigsten Informationen zu Veranstaltung angezeigt werden.
+Zeile: Name der Veranstaltung (Große Darstellung wie Sitzplatzwahl)
+Veranstaltungzeitraum (Von und bis Datum) (Etwas kleiner dargestellt)
+Dies soll überhalb der Sitzplan Preview angezeigt werden.
+Die Restlichen Elemente bleiben in der Reihenfolge gleich.
+
+Es gibt das Element dass den Status der Anmeldung wiedergibt. Dies werden wir dahingehend erweitern, dass es eine zusätzlich Funktion bekommt.
+Die Funktion soll einen QR Code generieren, den der User sich anzeigen lassen kann. Dieser QR Code soll die Zahlungsdaten enthalten, so dass der User den Code nur noch mit seiner Bankapp scannen muss und das Formular wird mit den Daten vorbefüllt.
+
+Dazu benötigen wir jedoch eine Erweiterung im Backend, da es derzeit noch keine dezidierten Datenfelder für die Zahlungsfelder ergibt.
+Füge bitte im Backend unter dem Menüpuntk Konfiguration / Allgemeine Konfiguration einen neuen Punkt namens Zahlungsdaten hinzu.
+Hier sollen folgende Daten gepflegt werden.
+IBAN - IBAN des Empfängers
+Kontoinhaber - Name des Empfängerkontos, wichtig aufgrund des IBAN Namensabgleiches
+
+Nun zurück zu QR Funktion.
+
+Der QR Code soll dann folgende Daten übermittel
+IBAN
+Name des Empfängerkontos
+Betrag - der Betrag kann vom jeweiligen Ticket abgeleitet werden, dass der Gast bei der Anmeldung zur Veranstaltung gewählt hat. Steht kein Ticket zur Verfügung ist eine Anmeldung ebenfalls erfolgreich, die Summe soll dann leer bleiben
+Verwendungszweck - es soll der Benutzername angegeben werden

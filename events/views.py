@@ -103,6 +103,16 @@ def dashboard_view(request):
             .order_by('-event__start_date')
         )
 
+    from configuration.models import GeneralConfiguration
+
+    general_config = GeneralConfiguration.load()
+
+    can_show_payment_qr = False
+    if registration and registration.payment_status == EventRegistration.PaymentStatus.UNPAID:
+        ticket_price = registration.ticket_type.price if registration.ticket_type else None
+        if general_config.has_payment_details and (ticket_price is None or ticket_price > 0):
+            can_show_payment_qr = True
+
     context = {
         'event': event,
         'upcoming_event': event,
@@ -122,8 +132,56 @@ def dashboard_view(request):
         'show_onboarding_ticket': show_ticket,
         'past_registrations': past_registrations,
         'active_sponsor': get_random_active_sponsor(),
+        'general_config': general_config,
+        'can_show_payment_qr': can_show_payment_qr,
     }
     return render(request, 'dashboard.html', context)
+
+
+@login_required
+def registration_payment_qr_view(request, registration_id):
+    """
+    Liefert das generierte GiroCode / EPC-QR-Code PNG für die angegebene EventRegistration.
+    Zugriffsschutz: Nur der Eigentümer der Anmeldung oder Staff-Mitglieder.
+    Bedingungen:
+    - Status muss UNPAID sein
+    - Ticketpreis darf nicht 0 sein
+    - Zahlungsdaten (IBAN, Kontoinhaber) müssen in GeneralConfiguration gepflegt sein
+    """
+    from django.core.exceptions import PermissionDenied
+    from django.http import Http404, HttpResponse, HttpResponseBadRequest
+    from configuration.models import GeneralConfiguration
+    from .payment_qr import generate_epc_qr_png
+
+    registration = get_object_or_404(
+        EventRegistration.objects.select_related('user', 'ticket_type', 'event'),
+        pk=registration_id,
+    )
+
+    # 1. Zugriffsschutz
+    if not (request.user == registration.user or request.user.is_staff):
+        raise PermissionDenied("Keine Berechtigung zum Zugriff auf diesen Zahlungs-QR-Code.")
+
+    # 2. Statusprüfung (nur UNPAID)
+    if registration.payment_status != EventRegistration.PaymentStatus.UNPAID:
+        return HttpResponseBadRequest("Zahlungs-QR-Code ist nur für offene Zahlungen verfügbar.")
+
+    # 3. Kostenloses Ticket prüfen
+    if registration.ticket_type and registration.ticket_type.price == 0:
+        return HttpResponseBadRequest("Kostenlose Tickets erfordern keine Zahlung.")
+
+    # 4. Zahlungsdaten prüfen
+    config = GeneralConfiguration.load()
+    if not config.has_payment_details:
+        raise Http404("Zahlungsdaten sind im System noch nicht hinterlegt.")
+
+    # 5. QR-Code Bild erzeugen
+    image_bytes = generate_epc_qr_png(registration, config=config)
+
+    response = HttpResponse(image_bytes, content_type="image/png")
+    response['Cache-Control'] = 'private, no-store, must-revalidate'
+    return response
+
 
 
 

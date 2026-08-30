@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Anmelden – Haag-networX</title>
+  <title>{% t "auth_login_title" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -34,7 +34,7 @@
           {% for error in form.non_field_errors %}
             <div>{{ error }}</div>
           {% empty %}
-            <div>Benutzername/E-Mail-Adresse oder Passwort ist falsch. Bitte versuche es erneut.</div>
+            <div>{% t "auth_login_invalid_credentials" "Benutzername/E-Mail-Adresse oder Passwort ist falsch. Bitte versuche es erneut." %}</div>
           {% endfor %}
         </div>
       {% endif %}
@@ -56,8 +56,8 @@
 
       <div class="auth-footer">
         {% t "auth_no_account" %} <a href="{% url 'register' %}">{% t "auth_register_link" %}</a>
-              <div class="sub-link">
-          <a href="{% url 'password_reset' %}">Passwort vergessen?</a>
+        <div class="sub-link">
+          <a href="{% url 'password_reset' %}">{% t "auth_forgot_password" "Passwort vergessen?" %}</a>
         </div>
       </div>
     </div>

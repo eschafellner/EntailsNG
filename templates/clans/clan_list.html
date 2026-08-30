@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Clan-Übersicht – EntailsNG{% endblock %}
+{% block title %}{% t "clan_list_title" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
 <div style="display: flex; flex-direction: column; gap: 24px;">
@@ -9,19 +9,19 @@
   <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
       <div>
-        <p class="eyebrow" style="margin-bottom: 4px;">Community</p>
+        <p class="eyebrow" style="margin-bottom: 4px;">{% t "clan_eyebrow" "Community" %}</p>
         <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 32px;">
           {% t "clan_list_title" %}
         </h1>
         <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
-          Alle registrierten Gaming-Clans & Teams im Überblick
+          {% t "clan_list_subtitle" "Alle registrierten Gaming-Clans & Teams im Überblick" %}
         </p>
       </div>
 
       <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
         {% if user_membership %}
           <a href="{% url 'clan_detail' slug=user_membership.clan.slug %}" style="background: #0284c7; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; text-decoration: none;">
-            🛡️ Mein Clan ({{ user_membership.clan.name }})
+            🛡️ {% t "clan_my_clan_btn" "Mein Clan" %} ({{ user_membership.clan.name }})
           </a>
         {% elif user.is_authenticated %}
           <a href="{% url 'clan_create' %}" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-decoration: none;">
@@ -69,7 +69,7 @@
 
         <div style="padding-top: 12px; border-top: 1px solid var(--line); text-align: right;">
           <a href="{% url 'clan_detail' slug=item.clan.slug %}" style="font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #0284c7; text-decoration: none;">
-            Clanprofil ansehen →
+            {% t "clan_view_profile_link" "Clanprofil ansehen →" %}
           </a>
         </div>
       </div>

@@ -150,8 +150,38 @@ svg { display: block; }
     box-sizing: border-box;
 }
 .btn-login { background: var(--signal); color: var(--navy); font-weight: 700; border-color: transparent; }
-.user-logout:hover { background: rgba(255,255,255,.14); }
-.sidebar-legal { font-size: calc(var(--foot-font-size, 13px) - 1px); }
+.sidebar-legal {
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: calc(var(--foot-font-size, 13px) - 1px);
+    font-weight: 600;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+}
+.sidebar-legal a {
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.15s ease;
+    text-align: center;
+}
+.sidebar-legal a:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}
+.sidebar-legal-sep {
+    color: rgba(255, 255, 255, 0.35);
+    font-weight: 400;
+    user-select: none;
+}
 
 
     /* DER ENTSCHEIDENDE FIX: Content bekommt Platz neben der Sidebar. */
@@ -729,10 +759,23 @@ h3 {
     }
 
     .mobile-menu-body { display: grid; gap: 4px; }
+    .mobile-menu-divider {
+        height: 1px;
+        margin: 6px 0;
+        background: var(--line);
+    }
     .mobile-modal-item {
         display: flex; align-items: center; gap: 12px;
-        min-height: 50px; padding: 0 12px;
-        border-radius: 12px; font-size: 15px;
+        min-height: 50px; padding: 0 14px;
+        border-radius: 12px; font-size: 15px; font-weight: 500;
+        color: var(--ink); text-decoration: none;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .mobile-modal-item svg {
+        flex-shrink: 0;
+    }
+    .mobile-modal-item:hover {
+        background: var(--paper);
     }
     .mobile-modal-item.active {
         background: var(--signal-soft);

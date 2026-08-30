@@ -21,7 +21,7 @@
 </head>
 <body>
 
-<a class="skip-link" href="#main-content">Zum Inhalt springen</a>
+<a class="skip-link" href="#main-content">{% t "skip_to_content" "Zum Inhalt springen" %}</a>
 
 <!-- ================= MOBILE HEADER BAR ================= -->
 <header class="mobile-header">
@@ -56,7 +56,7 @@
       </a>
     {% else %}
       <a href="{% url 'login' %}" class="mobile-login-btn">
-        Anmelden
+        {% t "nav_login" "Anmelden" %}
       </a>
     {% endif %}
   </div>
@@ -129,9 +129,10 @@
       </div>
     {% endif %}
 
-    <div class="sidebar-legal" style="padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); color: var(--muted); text-align: center;">
-      <a href="{% url 'impressum' %}" style="color: inherit; text-decoration: underline; margin-right: 8px;">Impressum</a>
-      <a href="{% url 'datenschutz' %}" style="color: inherit; text-decoration: underline;">Datenschutz</a>
+    <div class="sidebar-legal" style="display: flex; justify-content: center; align-items: center; text-align: center; gap: 10px; width: 100%;">
+      <a href="{% url 'impressum' %}">{% t "nav_legal_impressum" %}</a>
+      <span class="sidebar-legal-sep" aria-hidden="true">•</span>
+      <a href="{% url 'datenschutz' %}">{% t "nav_legal_datenschutz" %}</a>
     </div>
 
   </div>
@@ -147,7 +148,7 @@
         <strong>{% if email_warning_is_info %}ℹ️ E-Mail Testmodus:{% else %}⚠️ E-Mail Versand-Hinweis (nur für Orga sichtbar):{% endif %}</strong> {{ email_warning }}
       </div>
       <a href="{% url 'admin:emails_generalemailsettings_change' 1 %}" style="font-size: 12px; font-weight: 600; color: #38bdf8; text-decoration: underline;">
-        Einstellungen öffnen →
+        {% t "email_warning_open_settings" "Einstellungen öffnen →" %}
       </a>
     </div>
   {% endif %}
@@ -180,28 +181,25 @@
     {% endwith %}
   {% endfor %}
 
-  {% if nav_items|length > 4 %}
-    <button type="button" class="mobile-item mobile-more-btn"
-            aria-controls="mobile-menu-overlay" aria-expanded="false">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="1"></circle>
-        <circle cx="19" cy="12" r="1"></circle>
-        <circle cx="5" cy="12" r="1"></circle>
-      </svg>
-      <span>Mehr</span>
-    </button>
-  {% endif %}
+  <button type="button" class="mobile-item mobile-more-btn{% if request.path == '/impressum/' or request.path == '/datenschutz/' %} active{% endif %}"
+          aria-controls="mobile-menu-overlay" aria-expanded="false">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="1"></circle>
+      <circle cx="19" cy="12" r="1"></circle>
+      <circle cx="5" cy="12" r="1"></circle>
+    </svg>
+    <span>{% t "nav_more" "Mehr" %}</span>
+  </button>
 </nav>
 
 <!-- ================= MOBILE MEHR-MENÜ ================= -->
-{% if nav_items|length > 4 %}
 <div id="mobile-menu-overlay" class="mobile-menu-overlay" hidden>
   <div class="mobile-menu-modal" role="dialog" aria-modal="true"
-       aria-label="Weitere Menüpunkte">
+       aria-label="{% t 'nav_more_modal_title' 'Weitere Menüpunkte' %}">
     <div class="mobile-menu-header">
-      <span>Weitere Menüpunkte</span>
-      <button type="button" class="mobile-menu-close" aria-label="Schließen">
+      <span>{% t "nav_more_modal_title" "Weitere Menüpunkte" %}</span>
+      <button type="button" class="mobile-menu-close" aria-label="{% t 'btn_close' 'Schließen' %}">
         &times;
       </button>
     </div>
@@ -222,10 +220,33 @@
           </a>
         {% endwith %}
       {% endfor %}
+
+      {% if nav_items|length > 4 %}
+        <div class="mobile-menu-divider"></div>
+      {% endif %}
+
+      <a href="{% url 'impressum' %}"
+         class="mobile-modal-item{% if request.path == '/impressum/' %} active{% endif %}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span>{% t "nav_legal_impressum" %}</span>
+      </a>
+
+      <a href="{% url 'datenschutz' %}"
+         class="mobile-modal-item{% if request.path == '/datenschutz/' %} active{% endif %}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span>{% t "nav_legal_datenschutz" %}</span>
+      </a>
     </div>
   </div>
 </div>
-{% endif %}
 
 <script>
 (function () {

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{{ tournament.title }} – Turniere – EntailsNG{% endblock %}
+{% block title %}{{ tournament.title }} – {% t "tournament_list_title" "Turniere" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -279,18 +279,18 @@
   <!-- Navigation Tabs -->
   <div style="border-bottom: 2px solid var(--line); display: flex; gap: 8px;">
     <button type="button" class="tab-btn active" onclick="openTab('bracket')">
-      🏆 Turnierbaum & Matches
+      {% t "tournament_tab_bracket" "🏆 Turnierbaum & Matches" %}
     </button>
     {% if not tournament.is_generated and preview_data %}
       <button type="button" class="tab-btn" onclick="openTab('preview')">
-        👁️ Vorschau
+        {% t "tournament_tab_preview" "👁️ Vorschau" %}
       </button>
     {% endif %}
     <button type="button" class="tab-btn" onclick="openTab('teams')">
-      👥 Angemeldete Teams ({{ registrations.count }}/{{ tournament.max_teams }})
+      {% t "tournament_tab_teams" "👥 Angemeldete Teams" %} ({{ registrations.count }}/{{ tournament.max_teams }})
     </button>
     <button type="button" class="tab-btn" onclick="openTab('rules')">
-      📜 Regeln & Info
+      {% t "tournament_tab_rules" "📜 Regeln & Info" %}
     </button>
   </div>
 
@@ -300,7 +300,7 @@
       {% if tournament.is_generated %}
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
-            Turnierverlauf
+            {% t "tournament_history_title" "Turnierverlauf" %}
           </h3>
           <div style="display: flex; gap: 8px; align-items: center;">
             {% if user_team %}
@@ -320,7 +320,7 @@
         {% if tournament.mode == 'LEAGUE' %}
           <div style="margin-bottom: 28px;">
             <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin: 0 0 12px 0; color: var(--signal-deep);">
-              📊 Ligatabelle
+              {% t "tournament_league_table" "📊 Ligatabelle" %}
             </h4>
             <div style="overflow-x: auto;">
               <table style="width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
@@ -368,7 +368,7 @@
           </div>
 
           <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin: 0 0 12px 0; color: var(--ink);">
-            📅 Spielplan & Begegnungen
+            {% t "tournament_schedule" "📅 Spielplan & Begegnungen" %}
           </h4>
 
         {# ================== MODUS: GRUPPENPHASE ================== #}
@@ -434,14 +434,14 @@
           </div>
 
           <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin: 0 0 12px 0; color: var(--ink);">
-            ⚔️ Gruppenmatches & KO-Phase
+            {% t "tournament_group_matches" "⚔️ Gruppenmatches & KO-Phase" %}
           </h4>
 
         {# ================== MODUS: FFA ================== #}
         {% elif tournament.mode == 'FFA' %}
           <div style="margin-bottom: 24px;">
             <h4 style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin: 0 0 12px 0; color: var(--signal-deep);">
-              🏆 Free For All – Gesamtwertung
+              {% t "tournament_ffa_standings" "🏆 Free For All – Gesamtwertung" %}
             </h4>
             <div style="overflow-x: auto;">
               <table style="width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
@@ -599,7 +599,7 @@
   <div id="tab-teams" class="tab-content">
     <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
       <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
-        Angemeldete Teams & Teilnehmer
+        {% t "tournament_tab_teams" "Angemeldete Teams" %}
       </h3>
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;">
         {% for reg in registrations %}
@@ -629,7 +629,7 @@
   <div id="tab-rules" class="tab-content">
     <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
       <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
-        Regeln & Turnier-Details
+        {% t "tournament_rules_title" "Regeln & Turnier-Details" %}
       </h3>
       <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink); line-height: 1.6;">
         {% if tournament.description %}

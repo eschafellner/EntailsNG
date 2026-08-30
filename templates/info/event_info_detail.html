@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ event_info.title|default:"Veranstaltungsinformationen" }} – Haag-networX{% endblock %}
+{% block title %}{{ event_info.title|default:"Veranstaltungsinformationen" }} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
 <article class="card">
