@@ -1,4 +1,4 @@
-from django.db.models.signals import pre_delete
+from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
 from configuration.cache import invalidate_event_capacity_cache
 
@@ -19,3 +19,23 @@ def release_seats_on_registration_delete(sender, instance, **kwargs):
     )
     if instance.event_id:
         invalidate_event_capacity_cache(instance.event_id)
+
+
+@receiver([post_save, post_delete], sender='seating.SeatingPlan')
+def invalidate_cache_on_plan_change(sender, instance, **kwargs):
+    """Invalidiert den Kapazitäts-Cache, wenn ein Sitzplan gespeichert oder gelöscht wird."""
+    if instance.event_id:
+        invalidate_event_capacity_cache(instance.event_id)
+
+
+@receiver([post_save, post_delete], sender='seating.SeatingCell')
+def invalidate_cache_on_cell_change(sender, instance, **kwargs):
+    """Invalidiert den Kapazitäts-Cache bei Änderungen oder Löschungen an einzelnen Sitzplätzen."""
+    if instance.plan_id:
+        try:
+            event_id = instance.plan.event_id
+            if event_id:
+                invalidate_event_capacity_cache(event_id)
+        except Exception:
+            pass
+

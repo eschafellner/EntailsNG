@@ -44,6 +44,11 @@ class SeatingPlan(models.Model):
 
     def clean(self):
         super().clean()
+        if self.is_template and self.event_id is not None:
+            raise ValidationError({
+                'is_template': 'Ein Sitzplan mit zugewiesenem Event kann nicht als Vorlage markiert sein. '
+                               'Um einen Plan als Vorlage zu verwenden, darf kein Event ausgewählt sein.'
+            })
         if self.pk:
             old_plan = SeatingPlan.objects.filter(pk=self.pk).first()
             if old_plan and old_plan.event_id and self.event_id != old_plan.event_id:
@@ -60,19 +65,8 @@ class SeatingPlan(models.Model):
     def save(self, *args, **kwargs):
         if self.event_id is None:
             self.is_template = True
-        else:
-            self.is_template = False
-        self.full_clean()
         super().save(*args, **kwargs)
-        if self.event_id:
-            invalidate_event_capacity_cache(self.event_id)
 
-    def delete(self, *args, **kwargs):
-        event_id = self.event_id
-        res = super().delete(*args, **kwargs)
-        if event_id:
-            invalidate_event_capacity_cache(event_id)
-        return res
 
     def clone_for_event(self, new_event=None, new_name=None):
         """Kopiert diesen Sitzplan ohne User-Reservierungen und optional ohne Event."""
@@ -101,7 +95,6 @@ class SeatingPlan(models.Model):
                     cell_type=cell.cell_type,
                     seat_label=cell.seat_label,
                     text_label=cell.text_label,
-                    registration=None,
                     reservation_status=new_status,
                 )
             )
@@ -172,14 +165,18 @@ class SeatingCell(models.Model):
     class Meta:
         verbose_name = "Raster-Kachel"
         verbose_name_plural = "Raster-Kacheln"
-        unique_together = ('plan', 'x', 'y')
         constraints = [
+            models.UniqueConstraint(
+                fields=['plan', 'x', 'y'],
+                name='unique_cell_coordinate_per_plan'
+            ),
             models.CheckConstraint(
                 condition=models.Q(x__gte=1) & models.Q(y__gte=1),
                 name='seating_cell_coords_positive',
                 violation_error_message="Sitzplatz-Koordinaten müssen positiv (>= 1) sein."
             ),
         ]
+
         indexes = [
             models.Index(fields=['plan', 'cell_type', 'reservation_status'], name='seating_plan_type_res_idx'),
             models.Index(fields=['registration'], name='seating_cell_reg_idx'),
@@ -196,18 +193,7 @@ class SeatingCell(models.Model):
                     )
                 })
 
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-        if self.plan_id and self.plan.event_id:
-            invalidate_event_capacity_cache(self.plan.event_id)
 
-    def delete(self, *args, **kwargs):
-        event_id = self.plan.event_id if (self.plan_id and hasattr(self, 'plan')) else None
-        res = super().delete(*args, **kwargs)
-        if event_id:
-            invalidate_event_capacity_cache(event_id)
-        return res
 
     def __str__(self):
         return f"{self.seat_label or f'({self.x},{self.y})'} - {self.get_reservation_status_display()}"

@@ -39,7 +39,7 @@ class RegistrationService:
         # 2. Idempotenz: Bestehende Registrierung prüfen
         existing_reg = EventRegistration.objects.filter(user=user, event=event).first()
         if existing_reg and existing_reg.payment_status != EventRegistration.PaymentStatus.CANCELLED:
-            return existing_reg, False
+            return existing_reg, False, False
 
         # 3. Zentrale fachliche Prüfung via Single Source of Truth
         can_reg, reason = event.can_register(user=None)
@@ -80,13 +80,11 @@ class RegistrationService:
             existing_reg.is_checked_in = False
             existing_reg.checked_in_at = None
             existing_reg.save()
-            return existing_reg, True
+            return existing_reg, False, True
 
         registration = EventRegistration.objects.create(
             user=user,
             event=event,
             ticket_type=selected_ticket
         )
-
-        return registration, True
-
+        return registration, True, False

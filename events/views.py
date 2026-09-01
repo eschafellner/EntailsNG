@@ -3,28 +3,33 @@ import json
 import logging
 import re
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.http import JsonResponse
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import Event, EventRegistration, TicketType
-from .services import RegistrationService
-from .exceptions import RegistrationError
-
-logger = logging.getLogger(__name__)
-
-from news.services import get_latest_news, get_pinned_news
+from configuration.models import GeneralConfiguration
+from configuration.services import should_show_onboarding_ticket
 from info.services import get_event_info
+from news.services import get_latest_news, get_pinned_news
 from seating.services import get_event_capacity_stats
 from sponsors.services import get_random_active_sponsor
 
+from .exceptions import RegistrationError
+from .models import Event, EventRegistration, TicketType
+from .payment_qr import generate_epc_qr_png
+from .services import RegistrationService
+
+logger = logging.getLogger(__name__)
+
 # Wie viele News auf dem Dashboard erscheinen. Eine Stelle, ein Wert.
 DASHBOARD_NEWS_LIMIT = 3
-
 
 
 def get_active_event():
@@ -43,23 +48,13 @@ def get_active_event():
 
 def dashboard_view(request):
     """Startseite. Funktioniert für Gäste und angemeldete Benutzer."""
-    from django.utils import timezone
-    from configuration.services import should_show_onboarding_ticket
-
     event = get_active_event()
-    event_info = get_event_info()
-    latest_news = get_latest_news(limit=DASHBOARD_NEWS_LIMIT)
-    pinned_news = get_pinned_news()
-
+    general_config = GeneralConfiguration.load()
 
     registration = None
     ticket_types = []
-    user_status_step = 1
-    user_seat_label = None
-
     if event:
         ticket_types = list(event.ticket_types.filter(is_active=True))
-
         if request.user.is_authenticated:
             registration = (
                 EventRegistration.objects.filter(event=event, user=request.user)
@@ -67,30 +62,6 @@ def dashboard_view(request):
                 .prefetch_related('seats')
                 .first()
             )
-            if registration:
-                if registration.is_checked_in:
-                    user_status_step = 4
-                elif registration.payment_status == EventRegistration.PaymentStatus.PAID:
-                    user_status_step = 3
-                else:
-                    user_status_step = 2
-
-                seat = registration.seats.first()
-                if seat:
-                    user_seat_label = seat.seat_label or f'Pos ({seat.x},{seat.y})'
-
-    cap_stats = get_event_capacity_stats(event) if event else {'total_seats': 0, 'reserved_seats': 0, 'capacity_percent': 0}
-
-    now = timezone.now()
-    is_event_expired = bool(event and event.end_date and now > event.end_date)
-
-    show_ticket = should_show_onboarding_ticket(
-        user=request.user,
-        upcoming_event=event,
-        user_registration=registration,
-    )
-
-
 
     past_registrations = []
     if request.user.is_authenticated:
@@ -103,37 +74,34 @@ def dashboard_view(request):
             .order_by('-event__start_date')
         )
 
-    from configuration.models import GeneralConfiguration
+    cap_stats = get_event_capacity_stats(event) if event else {'total_seats': 0, 'reserved_seats': 0, 'capacity_percent': 0}
 
-    general_config = GeneralConfiguration.load()
-
-    can_show_payment_qr = False
-    if registration and registration.payment_status == EventRegistration.PaymentStatus.UNPAID:
-        ticket_price = registration.ticket_type.price if registration.ticket_type else None
-        if general_config.has_payment_details and (ticket_price is None or ticket_price > 0):
-            can_show_payment_qr = True
+    show_ticket = should_show_onboarding_ticket(
+        user=request.user,
+        upcoming_event=event,
+        user_registration=registration,
+    )
 
     context = {
         'event': event,
         'upcoming_event': event,
-        'event_info': event_info,
-        'latest_news': latest_news,
-        'pinned_news': pinned_news,
+        'event_info': get_event_info(),
+        'latest_news': get_latest_news(limit=DASHBOARD_NEWS_LIMIT),
+        'pinned_news': get_pinned_news(),
         'registration': registration,
-        'user_registration': registration,
         'is_user_registered': registration is not None,
-        'user_status_step': user_status_step,
-        'user_seat_label': user_seat_label,
+        'user_status_step': registration.status_step if registration else 1,
+        'user_seat_label': registration.seat_label if registration else None,
         'ticket_types': ticket_types,
         'event_total_seats': cap_stats['total_seats'],
         'event_reserved_seats': cap_stats['reserved_seats'],
         'event_capacity_percent': cap_stats['capacity_percent'],
-        'is_event_expired': is_event_expired,
+        'is_event_expired': event.is_expired if event else False,
         'show_onboarding_ticket': show_ticket,
         'past_registrations': past_registrations,
         'active_sponsor': get_random_active_sponsor(),
         'general_config': general_config,
-        'can_show_payment_qr': can_show_payment_qr,
+        'can_show_payment_qr': registration.can_show_payment_qr if registration else False,
     }
     return render(request, 'dashboard.html', context)
 
@@ -148,11 +116,6 @@ def registration_payment_qr_view(request, registration_id):
     - Ticketpreis darf nicht 0 sein
     - Zahlungsdaten (IBAN, Kontoinhaber) müssen in GeneralConfiguration gepflegt sein
     """
-    from django.core.exceptions import PermissionDenied
-    from django.http import Http404, HttpResponse, HttpResponseBadRequest
-    from configuration.models import GeneralConfiguration
-    from .payment_qr import generate_epc_qr_png
-
     registration = get_object_or_404(
         EventRegistration.objects.select_related('user', 'ticket_type', 'event'),
         pk=registration_id,
@@ -197,12 +160,18 @@ def register_for_event(request, event_id):
     ticket_type_id = request.POST.get('ticket_type_id')
 
     try:
-        registration, created = RegistrationService.register_user(
+        registration, created, reactivated = RegistrationService.register_user(
             user=request.user,
             event_id=event_id,
             ticket_type_id=ticket_type_id,
         )
-        if created:
+        if reactivated:
+            messages.success(
+                request,
+                f'Deine Anmeldung für "{registration.event.title}" wurde reaktiviert. '
+                'Bitte wähle bei Bedarf deinen Sitzplatz erneut aus.'
+            )
+        elif created:
             messages.success(
                 request, f'Du bist jetzt für "{registration.event.title}" angemeldet.'
             )
@@ -214,7 +183,11 @@ def register_for_event(request, event_id):
         messages.error(request, str(e))
     except Exception as e:
         logger.exception("Unerwarteter Fehler bei der Event-Registrierung für Event %s von User %s: %s", event_id, request.user, e)
-        messages.error(request, 'Bei der Anmeldung ist ein unerwarteter Fehler aufgetreten.')
+        messages.error(
+            request,
+            'Bei der Anmeldung ist ein unerwarteter Fehler aufgetreten. '
+            'Bitte lade die Seite neu oder wende dich an das Orga-Team.'
+        )
 
     return redirect('dashboard')
 
@@ -229,7 +202,7 @@ def _wants_json(request):
     """Erkennt AJAX-/API-Aufrufe."""
     return (
         request.headers.get('x-requested-with') == 'XMLHttpRequest'
-        or request.headers.get('accept', '').startswith('application/json')
+        or 'application/json' in request.headers.get('accept', '')
     )
 
 
@@ -237,10 +210,9 @@ def _wants_json(request):
 @require_POST
 def toggle_check_in_api(request):
     """Schaltet den Check-in-Status eines Gastes um (Einlass-Tool)."""
-    from django.core.exceptions import ValidationError
     try:
         data = json.loads(request.body)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, AttributeError):
         return JsonResponse(
             {'status': 'error', 'message': 'Ungültige Anfrage.'}, status=400
         )
@@ -254,12 +226,22 @@ def toggle_check_in_api(request):
             status=404,
         )
 
+    active_event = get_active_event()
+    if not active_event or registration.event_id != active_event.id:
+        return JsonResponse(
+            {
+                'status': 'error',
+                'message': 'Check-in abgelehnt: Diese Anmeldung gehört nicht zur aktuellen Veranstaltung.',
+            },
+            status=400,
+        )
+
     if registration.is_checked_in:
         registration.check_out()
         status_msg = 'ausgecheckt'
     else:
         try:
-            registration.check_in(actor=request.user)
+            registration.check_in(actor=request.user, target_event=active_event)
             status_msg = 'eingecheckt'
         except ValidationError as e:
             error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
@@ -288,38 +270,16 @@ def process_checkin(request, registration_id, token):
     )
 
     active_event = get_active_event()
-    if active_event and registration.event_id != active_event.id:
-        error_msg = f"Check-in abgelehnt: Dieses Ticket gehört zur Veranstaltung '{registration.event.title}' und ist für '{active_event.title}' nicht gültig!"
+    can_ci, reason = registration.can_check_in(actor=request.user, target_event=active_event)
+    if not can_ci:
         if _wants_json(request):
-            return JsonResponse({'status': 'error', 'message': error_msg}, status=400)
+            return JsonResponse({'status': 'error', 'message': reason}, status=400)
         return render(
             request,
             'events/checkin_failed.html',
             {
                 'registration': registration,
-                'reason': error_msg,
-            },
-            status=400,
-        )
-
-    if registration.payment_status != EventRegistration.PaymentStatus.PAID:
-        if _wants_json(request):
-            return JsonResponse(
-                {
-                    'status': 'error',
-                    'message': (
-                        f'Check-in abgelehnt: Die Anmeldung von '
-                        f'{registration.user.username} ist nicht bezahlt.'
-                    ),
-                },
-                status=400,
-            )
-        return render(
-            request,
-            'events/checkin_failed.html',
-            {
-                'registration': registration,
-                'reason': 'Zahlung steht noch aus.',
+                'reason': reason,
             },
             status=400,
         )
@@ -350,7 +310,7 @@ def process_checkin(request, registration_id, token):
     # POST-Request: Zustandsänderung durchführen!
     already_checked_in = registration.is_checked_in
     if not already_checked_in:
-        registration.check_in(target_event=active_event)
+        registration.check_in(actor=request.user, target_event=active_event)
 
     if _wants_json(request):
         return JsonResponse({
@@ -368,6 +328,7 @@ def process_checkin(request, registration_id, token):
             'already_checked_in': already_checked_in,
         },
     )
+
 
 
 @staff_member_required
@@ -414,13 +375,21 @@ def scan_qr_api(request):
     """
     # Rate-Limiting gegen automatisiertes Durchprobieren / Flooding
     rate_key = f"rate_limit_scan_qr_{request.user.id}"
-    attempts = cache.get(rate_key, 0)
-    if attempts >= 60:
+    try:
+        if cache.add(rate_key, 1, 60):
+            attempts = 1
+        else:
+            attempts = cache.incr(rate_key)
+    except Exception:
+        attempts = cache.get(rate_key, 0) + 1
+        cache.set(rate_key, attempts, 60)
+
+    if attempts > 60:
         return JsonResponse(
             {'status': 'error', 'message': 'Zu viele Scan-Anfragen in kurzer Zeit. Bitte kurz warten.'},
             status=429,
         )
-    cache.set(rate_key, attempts + 1, 60)
+
 
     try:
         data = json.loads(request.body)

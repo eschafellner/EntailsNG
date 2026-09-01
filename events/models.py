@@ -138,6 +138,12 @@ class Event(models.Model):
         can_reg, _ = self.can_register()
         return can_reg
 
+    @property
+    def is_expired(self):
+        """Prüft, ob das Event zeitlich bereits beendet ist."""
+        return bool(self.end_date and timezone.now() > self.end_date)
+
+
 
     @property
     def active_registrations_count(self):
@@ -168,13 +174,11 @@ class Event(models.Model):
                 count += 1
             self.slug = slug
 
-        if self.start_date and self.end_date and self.end_date <= self.start_date:
-            raise ValidationError({'end_date': 'Das Enddatum muss nach dem Startdatum liegen.'})
-
         with transaction.atomic():
             if self.is_active:
                 Event.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
             super().save(*args, **kwargs)
+
 
 
 
@@ -306,7 +310,6 @@ class EventRegistration(models.Model):
         """
         can_ci, reason = self.can_check_in(actor=actor, target_event=target_event)
         if not can_ci:
-            from django.core.exceptions import ValidationError
             raise ValidationError(reason)
 
         if not self.is_checked_in:
@@ -322,6 +325,34 @@ class EventRegistration(models.Model):
             self.checked_in_at = None
             self.save(update_fields=['is_checked_in', 'checked_in_at'])
 
+    @property
+    def status_step(self):
+        """Ermittelt den 4-Stufen-Statusfortschritt des Teilnehmers (1-4)."""
+        if self.is_checked_in:
+            return 4
+        if self.payment_status == self.PaymentStatus.PAID:
+            return 3
+        return 2
+
+    @property
+    def seat_label(self):
+        """Liefert die Bezeichnung des ersten zugewiesenen Sitzplatzes oder None."""
+        seat = self.seats.first()
+        if seat:
+            return seat.seat_label or f'Pos ({seat.x},{seat.y})'
+        return None
+
+    @property
+    def can_show_payment_qr(self):
+        """Prüft, ob für diese Anmeldung ein GiroCode / Zahlungs-QR angezeigt werden kann."""
+        if self.payment_status != self.PaymentStatus.UNPAID:
+            return False
+        from configuration.models import GeneralConfiguration
+        config = GeneralConfiguration.load()
+        if not config.has_payment_details:
+            return False
+        ticket_price = self.ticket_type.price if self.ticket_type else None
+        return ticket_price is None or ticket_price > 0
 
     created_at = models.DateTimeField(
         auto_now_add=True, verbose_name="Angemeldet am"
@@ -330,7 +361,12 @@ class EventRegistration(models.Model):
     class Meta:
         verbose_name = "Anmeldung"
         verbose_name_plural = "Anmeldungen"
-        unique_together = ('user', 'event')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'event'],
+                name='unique_user_event_registration'
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.username} -> {self.event.title} ({self.get_payment_status_display()})"
@@ -395,10 +431,13 @@ class EventRegistration(models.Model):
     def save(self, *args, **kwargs):
         """
         Schlanke Persistenzmethode:
-        Validiert ausschließlich Datenintegrität und erzeugt ggf. den kryptografischen short_code.
+        Validiert ausschließlich Datenintegrität und erzeugt ggf. den kryptografischen short_code mit Kollisionsschutz.
         """
         if not self.short_code:
-            self.short_code = generate_short_code()
+            code = generate_short_code()
+            while EventRegistration.objects.filter(short_code=code).exists():
+                code = generate_short_code()
+            self.short_code = code
 
         if self.ticket_type and self.event_id and self.ticket_type.event_id != self.event_id:
             raise ValidationError({'ticket_type': "Das ausgewählte Ticket gehört nicht zu diesem Event."})
@@ -416,13 +455,14 @@ class EventRegistration(models.Model):
                 'full_name': self.user.get_full_name() or self.user.username,
                 'event_title': self.event.title,
                 'amount': f"{self.paid_amount:.2f}",
-                'payment_reference': getattr(self, 'payment_reference', f"REG-{self.id}"),
+                'payment_reference': f"REG-{self.id}",
                 'seat_label': seat_label,
                 'ticket_type': self.ticket_type.name if self.ticket_type else "Standard Ticket",
             }
             send_system_email('payment_confirmation', self.user.email, context_data)
         except Exception as e:
-            logger.error("Fehler beim Auslösen der Zahlungsbestätigung: %s", e)
+            logger.exception("Fehler beim Auslösen der Zahlungsbestätigung für Anmeldung %s: %s", self.id, e)
+
 
 
 

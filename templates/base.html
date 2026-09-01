@@ -48,11 +48,11 @@
     {% if user.is_authenticated %}
       {% if user.is_staff %}
         <a href="{% url 'checkin_scanner' %}" class="mobile-scanner-badge" title="Scanner öffnen">
-          📱
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
         </a>
       {% endif %}
       <a href="{% url 'profile' %}" class="mobile-user-link" title="Mein Profil öffnen">
-        👤 {{ user.username }}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>{{ user.username }}
       </a>
     {% else %}
       <a href="{% url 'login' %}" class="mobile-login-btn">
@@ -114,11 +114,12 @@
   <div class="sidebar-foot">
     {% if user.is_authenticated %}
       {% if user.is_staff %}
-        <a href="{% url 'checkin_scanner' %}" style="display: block; margin-bottom: 10px; background: rgba(2, 132, 199, 0.2); color: #38bdf8; border: 1px solid #0284c7; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; font-family: 'JetBrains Mono', monospace; text-decoration: none; text-align: center;">
-          📱 {% t "nav_scanner" %}
+        <a href="{% url 'checkin_scanner' %}" style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 10px; background: rgba(2, 132, 199, 0.2); color: #38bdf8; border: 1px solid #0284c7; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; font-family: 'JetBrains Mono', monospace; text-decoration: none; text-align: center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg> {% t "nav_scanner" %}
         </a>
       {% endif %}
-      <a href="{% url 'profile' %}" class="user-name" style="display: block; text-decoration: none; color: #fffaf2; transition: color 0.2s;" title="Mein Profil öffnen">👤 {{ user.username }}</a>
+      <a href="{% url 'profile' %}" class="user-name" style="display: flex; align-items: center; gap: 6px; text-decoration: none; color: #fffaf2; transition: color 0.2s;" title="Mein Profil öffnen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> {{ user.username }}</a>
+
       <form method="post" action="{% url 'logout' %}" style="margin-bottom: 12px;">
         {% csrf_token %}
         <button type="submit" class="user-logout">{% t "nav_logout" %}</button>

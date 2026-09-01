@@ -253,9 +253,10 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(stats1['reserved_seats'], 0)
         self.assertIsNotNone(cache.get(f"{CAPACITY_CACHE_KEY_PREFIX}{event.id}"))
 
-        # Ändere den Sitzplatz-Status -> `save()` invalidiert den Cache automatisch
-        cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
-        cell.save()
+        # Ändere den Sitzplatz-Status -> `save()` invalidiert den Cache automatisch nach Commit
+        with self.captureOnCommitCallbacks(execute=True):
+            cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+            cell.save()
 
         # Cache muss gelöscht und neu berechnet werden
         stats2 = get_event_capacity_stats(event)
@@ -263,7 +264,8 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(stats2['capacity_percent'], 100)
 
         # 3. Kachel löschen -> Cache muss invalidiert werden
-        cell.delete()
+        with self.captureOnCommitCallbacks(execute=True):
+            cell.delete()
         self.assertIsNone(cache.get(f"{CAPACITY_CACHE_KEY_PREFIX}{event.id}"))
         stats3 = get_event_capacity_stats(event)
         self.assertEqual(stats3['total_seats'], 0)
@@ -276,8 +278,10 @@ class ConfigurationModelTests(TestCase):
             start_date=timezone.now() + timedelta(days=10),
             end_date=timezone.now() + timedelta(days=12),
         )
-        plan.clone_for_event(new_event=event_new)
+        with self.captureOnCommitCallbacks(execute=True):
+            plan.clone_for_event(new_event=event_new)
         self.assertIsNone(cache.get(f"{CAPACITY_CACHE_KEY_PREFIX}{event_new.id}"))
+
 
     def test_dynamic_debug_mode_toggle(self):
         from django.test import RequestFactory, override_settings

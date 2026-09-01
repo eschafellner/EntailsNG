@@ -8,7 +8,8 @@ from django.db.models import Q
 User = get_user_model()
 
 
-def _get_client_ip(request):
+def get_client_ip(request):
+    """Ermittelt die IP-Adresse des Clients sicher, auch hinter Reverse-Proxies."""
     if not request:
         return '127.0.0.1'
 
@@ -29,6 +30,10 @@ def _get_client_ip(request):
                     pass
 
     return remote_addr
+
+
+_get_client_ip = get_client_ip
+
 
 
 

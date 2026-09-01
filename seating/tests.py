@@ -391,7 +391,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         # self.plan gehört zu self.event (2026) und hat belegte Plätze
         self.plan.event = event_2027
         with self.assertRaises(ValidationError) as ctx:
-            self.plan.save()
+            self.plan.clean()
 
         self.assertIn('bereits Teilnehmer-Reservierungen', str(ctx.exception))
 
@@ -419,7 +419,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         )
         free_cell.registration = reg_other
         with self.assertRaises(ValidationError) as ctx:
-            free_cell.save()
+            free_cell.clean()
 
         self.assertIn('Die Registrierung gehört zu Event', str(ctx.exception))
 
@@ -565,6 +565,9 @@ class SeatingConsistencyAndSignalTests(TestCase):
 class SeatingServiceAndSignalTests(TestCase):
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
         self.user1 = User.objects.create_user(username='u1', email='u1@test.com', password='pw')
         self.user2 = User.objects.create_user(username='u2', email='u2@test.com', password='pw')
         self.event = Event.objects.create(
@@ -609,19 +612,23 @@ class SeatingServiceAndSignalTests(TestCase):
     def test_get_event_capacity_stats_service(self):
         from seating.services import get_event_capacity_stats, invalidate_event_capacity_cache
 
-        invalidate_event_capacity_cache(self.event.id)
+        with self.captureOnCommitCallbacks(execute=True):
+            invalidate_event_capacity_cache(self.event.id)
+
         stats = get_event_capacity_stats(self.event)
         self.assertEqual(stats['total_seats'], 2)
         self.assertEqual(stats['reserved_seats'], 0)
 
         # 1 Platz belegen
-        self.seat1.reservation_status = SeatingCell.ReservationStatus.RESERVED
-        self.seat1.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.seat1.reservation_status = SeatingCell.ReservationStatus.RESERVED
+            self.seat1.save()
 
         stats2 = get_event_capacity_stats(self.event)
         self.assertEqual(stats2['total_seats'], 2)
         self.assertEqual(stats2['reserved_seats'], 1)
         self.assertEqual(stats2['capacity_percent'], 50)
+
 
     def test_get_user_seat_map_service(self):
         from seating.services import get_user_seat_map
@@ -719,6 +726,97 @@ class SeatingServiceAndSignalTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("nicht gelöscht werden", response.json()['message'])
+
+    def test_cache_invalidation_executes_on_commit_and_ignores_rollback(self):
+        """Testet, dass Cache-Invalidierung über transaction.on_commit erst nach Commit feuert und bei Rollback nicht."""
+        from django.core.cache import cache
+        from django.db import transaction
+
+        cache_key = f'event_capacity_stats_{self.event.id}'
+        cache.set(cache_key, {'total_seats': 100, 'reserved_seats': 50, 'capacity_percent': 50})
+
+        # 1. Rollback Fall
+        try:
+            with transaction.atomic():
+                self.seat1.reservation_status = SeatingCell.ReservationStatus.RESERVED
+                self.seat1.save()
+                # Während der Transaktion sollte der Cache noch vorhanden sein (wird erst on_commit gelöscht)
+                self.assertIsNotNone(cache.get(cache_key))
+                raise ValueError("Simulierter Rollback")
+        except ValueError:
+            pass
+
+        # Nach Rollback darf der Cache NICHT gelöscht worden sein (auch wenn on_commit callbacks abgefragt werden)
+        self.captureOnCommitCallbacks(execute=True)
+        self.assertIsNotNone(cache.get(cache_key))
+
+        # 2. Commit Fall
+        with self.captureOnCommitCallbacks(execute=True):
+            self.seat1.reservation_status = SeatingCell.ReservationStatus.RESERVED
+            self.seat1.save()
+
+        # Nach erfolgreichem Commit muss der Cache invalidiert sein
+        self.assertIsNone(cache.get(cache_key))
+
+    def test_seating_plan_service_save_grid_direct(self):
+        """Testet den SeatingPlanService direkt."""
+        from seating.services import SeatingPlanService, SeatingPlanValidationError
+
+        # 1. Ungültiges Datenformat
+        with self.assertRaises(SeatingPlanValidationError):
+            SeatingPlanService.save_grid(self.plan, "nicht_eine_liste")
+
+        # 2. Ungültige Koordinaten
+        with self.assertRaises(SeatingPlanValidationError):
+            SeatingPlanService.save_grid(self.plan, [{'x': 'ungültig', 'y': 1}])
+
+        # 3. Außerhalb des Rasters
+        with self.assertRaises(SeatingPlanValidationError):
+            SeatingPlanService.save_grid(self.plan, [{'x': 999, 'y': 999, 'cell_type': 'SEAT'}])
+
+        # 4. Ungültiger Zelltyp
+        with self.assertRaises(SeatingPlanValidationError):
+            SeatingPlanService.save_grid(self.plan, [{'x': 1, 'y': 1, 'cell_type': 'INVALID_TYPE'}])
+
+        # 5. Erfolgreiches Speichern
+        success, msg = SeatingPlanService.save_grid(self.plan, [
+            {'x': 1, 'y': 1, 'cell_type': 'SEAT', 'seat_label': 'A1', 'text_label': ''},
+            {'x': 1, 'y': 2, 'cell_type': 'SEAT', 'seat_label': 'A2', 'text_label': ''},
+        ])
+        self.assertTrue(success)
+
+    def test_reserve_seat_api_bad_request_status_code(self):
+        """Testet, dass fehlerhafte Client-Eingaben in reserve_seat_api als 400 (nicht 500) zurückgegeben werden."""
+        self.client.login(username='u1', password='pw')
+
+        # Ungültiges JSON
+        response = self.client.post(
+            reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+            data='ungültiges json',
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['status'], 'error')
+
+        # Nicht-numerische Koordinaten
+        response = self.client.post(
+            reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+            data=json.dumps({'x': 'abc', 'y': None}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['status'], 'error')
+
+    def test_seating_plan_template_with_event_validation_in_clean(self):
+        """Testet, dass ein Plan nicht gleichzeitig ein Event haben und als Vorlage markiert sein darf."""
+        from django.core.exceptions import ValidationError
+        plan = SeatingPlan(event=self.event, name="Ungültig", columns=5, rows=5, is_template=True)
+        with self.assertRaises(ValidationError):
+            plan.clean()
+
+
+
+
 
 
 

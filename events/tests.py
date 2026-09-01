@@ -335,14 +335,16 @@ class RegistrationRulesTests(TestCase):
         )
 
     def test_registration_success(self):
-        reg, created = RegistrationService.register_user(
+        reg, created, reactivated = RegistrationService.register_user(
             user=self.user1,
             event_id=self.event.id,
             ticket_type_id=self.ticket_type.id
         )
         self.assertTrue(created)
+        self.assertFalse(reactivated)
         self.assertEqual(reg.user, self.user1)
         self.assertEqual(reg.ticket_type, self.ticket_type)
+
 
     def test_registration_rejected_when_draft(self):
         self.event.status = Event.Status.DRAFT
@@ -667,8 +669,9 @@ class EventRegistrationValidationTests(TestCase):
     def test_cancelled_registration_reactivation_positive(self):
         """Positiver Test: Stornierte Registrierung wird bei erneuter Anmeldung reaktiviert statt Duplikat zu erzeugen."""
         ticket = TicketType.objects.create(event=self.event, name="Regular", price=25.00)
-        reg, created = RegistrationService.register_user(self.user, self.event.id, ticket.id)
+        reg, created, reactivated = RegistrationService.register_user(self.user, self.event.id, ticket.id)
         self.assertTrue(created)
+        self.assertFalse(reactivated)
         self.assertEqual(reg.payment_status, EventRegistration.PaymentStatus.UNPAID)
 
         # Registrierung stornieren
@@ -677,16 +680,19 @@ class EventRegistrationValidationTests(TestCase):
         self.assertIsNotNone(reg.cancelled_at)
 
         # Erneute Anmeldung für dasselbe Event (darf keinen IntegrityError werfen!)
-        new_reg, new_created = RegistrationService.register_user(self.user, self.event.id, ticket.id)
-        self.assertTrue(new_created)
+        new_reg, new_created, new_reactivated = RegistrationService.register_user(self.user, self.event.id, ticket.id)
+        self.assertFalse(new_created)
+        self.assertTrue(new_reactivated)
         self.assertEqual(new_reg.pk, reg.pk)
         self.assertEqual(new_reg.payment_status, EventRegistration.PaymentStatus.UNPAID)
         self.assertIsNone(new_reg.cancelled_at)
         self.assertEqual(EventRegistration.objects.filter(user=self.user, event=self.event).count(), 1)
 
+
     def test_negative_event_end_date_before_start_date_fails(self):
-        """Negativer Test: Ein Event mit Enddatum vor Startdatum wirft ValidationError."""
+        """Negativer Test: Ein Event mit Enddatum vor Startdatum wirft ValidationError in clean() und IntegrityError bei save()."""
         from django.core.exceptions import ValidationError
+        from django.db.utils import IntegrityError
         bad_event = Event(
             title="Broken Dates LAN",
             is_active=False,
@@ -694,7 +700,10 @@ class EventRegistrationValidationTests(TestCase):
             end_date=timezone.now() + timedelta(days=5),
         )
         with self.assertRaises(ValidationError):
+            bad_event.clean()
+        with self.assertRaises(IntegrityError):
             bad_event.save()
+
 
     def test_negative_ticket_event_mismatch_fails_clean(self):
         """Negativer Test: Zuweisung eines Tickets eines fremden Events wird von clean() blockiert."""
@@ -754,15 +763,17 @@ class EventRegistrationValidationTests(TestCase):
         )
 
         # Erneute Registrierung über Service
-        reactivated_reg, created = RegistrationService.register_user(
+        reactivated_reg, created, reactivated = RegistrationService.register_user(
             user=self.user,
             event_id=self.event.id
         )
 
-        self.assertTrue(created)
+        self.assertFalse(created)
+        self.assertTrue(reactivated)
         self.assertEqual(reactivated_reg.id, reg.id)
         self.assertEqual(reactivated_reg.payment_status, EventRegistration.PaymentStatus.UNPAID)
         self.assertIsNone(reactivated_reg.cancelled_at)
+
         self.assertIsNone(reactivated_reg.paid_at)
 
     def test_event_effective_status_does_not_mutate_db_status_on_save(self):
@@ -1272,6 +1283,77 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
         single_fmt = single_day_event.start_date.strftime('%d.%m.%Y')
         self.assertContains(resp_single, f'📅 {single_fmt}')
         self.assertNotContains(resp_single, f'{single_fmt} – {single_fmt}')
+
+
+    def test_event_and_registration_properties(self):
+        """Testet die Model-Properties is_expired, status_step, seat_label, can_show_payment_qr."""
+        # 1. Event.is_expired
+        self.assertFalse(self.event.is_expired)
+        past_event = Event.objects.create(
+            title='Past Event',
+            slug='past-event',
+            is_active=False,
+            start_date=timezone.now() - timedelta(days=10),
+            end_date=timezone.now() - timedelta(days=8),
+        )
+        self.assertTrue(past_event.is_expired)
+
+        # 2. EventRegistration.status_step
+        reg = EventRegistration.objects.create(
+            event=self.event,
+            user=self.user,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+        self.assertEqual(reg.status_step, 2)
+
+        reg.payment_status = EventRegistration.PaymentStatus.PAID
+        reg.save()
+        self.assertEqual(reg.status_step, 3)
+
+        reg.is_checked_in = True
+        reg.save()
+        self.assertEqual(reg.status_step, 4)
+
+        # 3. EventRegistration.seat_label
+        self.assertIsNone(reg.seat_label)
+        plan = SeatingPlan.objects.create(event=self.event, name="Halle", columns=5, rows=5)
+        cell = SeatingCell.objects.create(
+            plan=plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT,
+            seat_label="Reihe 1 / Platz 1", registration=reg
+        )
+        self.assertEqual(reg.seat_label, "Reihe 1 / Platz 1")
+
+    def test_short_code_generation_and_collision_retry(self):
+        """Testet die automatische Generierung des Ticket-Kurzcodes."""
+        reg1 = EventRegistration.objects.create(event=self.event, user=self.user)
+        self.assertTrue(bool(reg1.short_code))
+        self.assertEqual(len(reg1.short_code), 8)
+
+    def test_toggle_check_in_api_rejects_inactive_event(self):
+        """Testet, dass toggle_check_in_api Anmeldungen für nicht-aktive Events ablehnt."""
+        other_event = Event.objects.create(
+            title='Inaktives Event',
+            slug='inaktives-event',
+            is_active=False,
+            start_date=timezone.now() + timedelta(days=20),
+            end_date=timezone.now() + timedelta(days=22),
+        )
+        reg_other = EventRegistration.objects.create(
+            event=other_event,
+            user=self.user,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+        self.client.force_login(self.staff_user)
+        response = self.client.post(
+            reverse('api_toggle_check_in'),
+            data=json.dumps({'registration_id': reg_other.id}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('nicht zur aktuellen Veranstaltung', response.json()['message'])
+
+
+
 
 
 

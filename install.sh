@@ -43,15 +43,18 @@ echo -e "${GREEN}✓ Alle Abhängigkeiten wurden erfolgreich installiert.${NC}\n
 
 # 3b. Konfigurationsdatei (.env) initialisieren falls nicht vorhanden
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
-    echo -e "${YELLOW}   Erstelle lokale .env Datei mit sicherem Zufallsschlüssel...${NC}"
+    echo -e "${YELLOW}   Erstelle lokale .env Datei mit sicheren Zufallsschlüsseln...${NC}"
     cp .env.example .env
     RANDOM_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
+    RANDOM_ENCRYPT=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
     sed -i "s|SECRET_KEY=hier-einen-langen-zufaelligen-secret-key-eintragen|SECRET_KEY=${RANDOM_SECRET}|" .env
+    sed -i "s|FIELD_ENCRYPTION_KEY=hier-einen-langen-zufaelligen-schluessel-eintragen|FIELD_ENCRYPTION_KEY=${RANDOM_ENCRYPT}|" .env
     sed -i "s|DEBUG=False|DEBUG=True|" .env
     sed -i "s|ALLOWED_HOSTS=lan.meinedomain.de|ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0|" .env
     sed -i "s|CSRF_TRUSTED_ORIGINS=https://lan.meinedomain.de|CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000|" .env
     echo -e "${GREEN}✓ .env erfolgreich initialisiert.${NC}\n"
 fi
+
 
 if [ -f ".env" ]; then
     set -a

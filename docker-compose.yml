@@ -87,10 +87,23 @@ services:
       - ./data/certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: entailsng_cloudflared
+    restart: unless-stopped
+    profiles:
+      - tunnel
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate run
+    depends_on:
+      - nginx
+
 volumes:
   postgres_data:
   redis_data:
   static_data:
   media_data:
+
 
 

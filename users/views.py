@@ -11,6 +11,7 @@ from django.utils import timezone
 from emails.models import GeneralEmailSettings
 from emails.services import send_system_email
 from events.models import EventRegistration
+from .auth_backends import get_client_ip
 from .forms import CustomUserCreationForm, UserProfileForm
 from .models import EmailVerificationCode
 
@@ -88,16 +89,24 @@ def verify_email_view(request):
 
     if request.method == "POST":
         # IP-basiertes Rate-Limiting gegen Brute-Force auf Verifizierungscodes
-        client_ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
+        client_ip = get_client_ip(request)
         rate_key = f"rate_limit_verify_email_{client_ip}"
-        attempts = cache.get(rate_key, 0)
-        if attempts >= 10:
+        try:
+            if cache.add(rate_key, 1, 60):
+                attempts = 1
+            else:
+                attempts = cache.incr(rate_key)
+        except Exception:
+            attempts = cache.get(rate_key, 0) + 1
+            cache.set(rate_key, attempts, 60)
+
+        if attempts > 10:
             messages.error(
                 request,
                 "Zu viele Verifizierungsversuche von deiner IP-Adresse. Bitte warte eine Minute.",
             )
             return render(request, "auth/verify_email.html", {'user_email': user.email, 'user_id': user.id})
-        cache.set(rate_key, attempts + 1, 60)
+
 
         # Einzelnen Code-String aus Formular oder den 6 Ziffernfeldern zusammenbauen
         code_input = request.POST.get('code', '').strip()

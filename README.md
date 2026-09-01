@@ -134,6 +134,9 @@ Wichtige Parameter:
 
 ---
 
+### 4. Erste Schritte nach dem Start (Superuser & Checks)
+
+```bash
 # Eigenen Superuser erstellen
 docker compose exec web python manage.py createsuperuser
 
@@ -146,6 +149,7 @@ docker compose exec web python manage.py email_doctor
 # Container-Status prüfen
 docker compose ps
 ```
+
 
 ---
 

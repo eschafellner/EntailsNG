@@ -3,34 +3,37 @@ Zentrales, abhängigkeitsfreies Cache-Management-Modul für EntailsNG.
 Verhindert zirkuläre Importe zwischen events, seating, configuration und context_processors.
 """
 from django.core.cache import cache
+from django.db import transaction
 
 
 def invalidate_event_capacity_cache(event_id):
-    """Invalidiert die aggregierten Kapazitätsstatistiken eines Events."""
+    """Invalidiert die aggregierten Kapazitätsstatistiken eines Events garantiert erst nach DB-Commit."""
     if event_id:
-        cache.delete(f'event_capacity_stats_{event_id}')
+        cache_key = f'event_capacity_stats_{event_id}'
+        transaction.on_commit(lambda: cache.delete(cache_key))
 
 
 def invalidate_navigation_cache():
     """Invalidiert den Cache für die Hauptnavigation."""
-    cache.delete('navigation_items')
+    transaction.on_commit(lambda: cache.delete('navigation_items'))
 
 
 def invalidate_site_customization_cache():
     """Invalidiert den Cache für Theme und Branding."""
-    cache.delete('site_customization')
+    transaction.on_commit(lambda: cache.delete('site_customization'))
 
 
 def invalidate_system_translations_cache():
     """Invalidiert den Cache für System-Übersetzungen."""
-    cache.delete('system_translations')
+    transaction.on_commit(lambda: cache.delete('system_translations'))
 
 
 def invalidate_feature_flags_cache():
     """Invalidiert den Cache für Feature Flags."""
-    cache.delete('feature_flags_dict')
+    transaction.on_commit(lambda: cache.delete('feature_flags_dict'))
 
 
 def invalidate_general_configuration_cache():
     """Invalidiert den Cache für die allgemeine Systemkonfiguration."""
-    cache.delete('general_configuration')
+    transaction.on_commit(lambda: cache.delete('general_configuration'))
+

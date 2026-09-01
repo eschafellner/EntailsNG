@@ -35,26 +35,26 @@
         </h2>
 
         <div style="display: flex; gap: 20px; font-size: 13px; color: #9ca3af; font-family: 'JetBrains Mono', monospace; flex-wrap: wrap;">
-          <span>👤 <strong style="color: #e5e7eb;">{% t "dash_guest_label" %}:</strong> {% if request.user.is_authenticated %}{{ request.user.username }}{% else %}{% t "dash_guest_fallback" "Gast" %}{% endif %}</span>
-          <span>🪑 <strong style="color: #e5e7eb;">{% t "dash_seat_label_title" %}:</strong> {{ user_seat_label|default:"Noch nicht reserviert" }}</span>
+          <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 2px;" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> <strong style="color: #e5e7eb;">{% t "dash_guest_label" %}:</strong> {% if request.user.is_authenticated %}{{ request.user.username }}{% else %}{% t "dash_guest_fallback" "Gast" %}{% endif %}</span>
+          <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 2px;" aria-hidden="true"><path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"></path><path d="M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v5z"></path><path d="M5 18v3"></path><path d="M19 18v3"></path></svg> <strong style="color: #e5e7eb;">{% t "dash_seat_label_title" %}:</strong> {{ user_seat_label|default:"Noch nicht reserviert" }}</span>
         </div>
       </div>
 
 <!-- INTERAKTIVER QR-CODE / CHECK-IN / ZAHLUNGS-STATUS -->
-{% if is_user_registered and user_registration %}
+{% if is_user_registered and registration %}
 <div style="text-align: right;">
 
-  {% if user_registration.is_checked_in %}
+  {% if registration.is_checked_in %}
     <!-- ZUSTAND A: BEREITS EINGECHECKT -->
     <div style="background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #86efac; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: bold; display: inline-flex; align-items: center; gap: 6px;">
       <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block;"></span>
       {% t "dash_status_checked_in" %}
     </div>
 
-  {% elif user_registration.payment_status == 'PAID' %}
+  {% elif registration.payment_status == 'PAID' %}
     <!-- ZUSTAND B: BEZAHLT, BEREIT ZUM EINLASS MIT MODAL POPUP -->
     <button type="button" onclick="openQrModal()" class="btn" style="background: #22c55e; color: #ffffff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);">
-      <span>📱</span> {% t "dash_btn_show_ticket" %}
+      <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></span> {% t "dash_btn_show_ticket" %}
     </button>
 
     <!-- FULLSCREEN MODAL / POPUP FÜR QR CODE AM EINLASS -->
@@ -76,7 +76,7 @@
         </h3>
 
         <!-- Großer QR-Code (240x240px für schnelle Lesbarkeit) -->
-        {% url 'process_checkin' registration_id=user_registration.id token=user_registration.checkin_token as checkin_path %}
+        {% url 'process_checkin' registration_id=registration.id token=registration.checkin_token as checkin_path %}
         {% with full_url=request.scheme|add:"://"|add:request.get_host|add:checkin_path %}
           <div style="background: #ffffff; padding: 12px; border-radius: 12px; border: 2px solid #f3f4f6; display: inline-block;">
             <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={{ full_url|urlencode }}" alt="Check-In QR" style="display: block; width: 220px; height: 220px; margin: 0 auto;">
@@ -85,7 +85,7 @@
 
         <div style="margin-top: 14px; background: #f3f4f6; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
           <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #6b7280; text-transform: uppercase; display: block;">{% t "dash_ticket_code_label" "Ticket-Code (Für manuelle Eingabe)" %}</span>
-          <strong style="font-size: 16px; font-family: 'JetBrains Mono', monospace; color: #111827; letter-spacing: 2px;">{{ user_registration.short_code }}</strong>
+          <strong style="font-size: 16px; font-family: 'JetBrains Mono', monospace; color: #111827; letter-spacing: 2px;">{{ registration.short_code }}</strong>
         </div>
 
         <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #374151; font-weight: bold; display: block; margin-top: 12px;">
@@ -105,7 +105,7 @@
 
       {% if can_show_payment_qr %}
         <button type="button" onclick="openPaymentQrModal()" class="btn" style="background: #eab308; color: #111827; border: none; padding: 8px 12px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(234, 179, 8, 0.3);">
-          <span>📱</span> {% t "dash_btn_show_payment_qr_short" "Zahlungs-QR anzeigen" %}
+          <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></span> {% t "dash_btn_show_payment_qr_short" "Zahlungs-QR anzeigen" %}
         </button>
       {% endif %}
     </div>
@@ -113,6 +113,7 @@
 
 </div>
 {% endif %}
+
 
     </div>
 
@@ -489,7 +490,8 @@
     {% endif %}
   </section>
   {% endif %}
-{% if can_show_payment_qr and user_registration %}
+
+{% if can_show_payment_qr and registration %}
 <!-- ======================================================================
      FULLSCREEN MODAL / POPUP FÜR GIROCODE / EPC-QR ÜBERWEISUNG (PUNKT 4.3)
      ====================================================================== -->
@@ -516,7 +518,7 @@
 
     <!-- Generierter EPC-QR-Code -->
     <div style="background: #ffffff; padding: 12px; border-radius: 12px; border: 2px solid #f3f4f6; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
-      <img src="{% url 'registration_payment_qr' user_registration.id %}" alt="GiroCode / SEPA-Zahlung QR" style="display: block; width: 200px; height: 200px; margin: 0 auto;">
+      <img src="{% url 'registration_payment_qr' registration.id %}" alt="GiroCode / SEPA-Zahlung QR" style="display: block; width: 200px; height: 200px; margin: 0 auto;">
     </div>
 
     <!-- Manuelle Überweisungsdaten (für Nutzer ohne QR-Scan) -->
@@ -538,8 +540,8 @@
 
         <span style="color: #6b7280;">{% t "dash_payment_amount_label" "Betrag:" %}</span>
         <strong style="color: #16a34a;">
-          {% if user_registration.ticket_type %}
-            {{ user_registration.ticket_type.price }} €
+          {% if registration.ticket_type %}
+            {{ registration.ticket_type.price }} €
           {% else %}
             {% t "dash_payment_amount_open" "Frei wählbar" %}
           {% endif %}

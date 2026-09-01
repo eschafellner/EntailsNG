@@ -94,3 +94,139 @@ def clone_seating_plan(source_plan, target_event, new_name=None):
     if not source_plan:
         return None
     return source_plan.clone_for_event(new_event=target_event, new_name=new_name)
+
+
+class SeatingPlanValidationError(Exception):
+    """Fehler bei der Validierung von Sitzplan-Rasterdaten."""
+    pass
+
+
+class SeatingPlanService:
+    """Zentraler Service für die Validierung und Persistenz von Sitzplan-Rasterdaten."""
+
+    @staticmethod
+    def save_grid(plan, cells_data):
+        """
+        Validiert und speichert ein Zellraster atomar für den angegebenen Sitzplan.
+        Schützt belegte Plätze vor Löschung und Typ-Änderung.
+
+        Rückgabe: Tuple (success: bool, message: str) oder wirft SeatingPlanValidationError
+        """
+        from django.db import transaction
+
+        if not isinstance(cells_data, list):
+            raise SeatingPlanValidationError('Ungültiges Datenformat: "cells" muss eine Liste sein.')
+
+        valid_cell_types = set(SeatingCell.CellType.values)
+        sent_coords = {}
+
+        for idx, c in enumerate(cells_data):
+            if not isinstance(c, dict):
+                raise SeatingPlanValidationError(f'Ungültiger Kacheleintrag an Index {idx}.')
+
+            # 1. Koordinaten validieren
+            try:
+                x = int(c.get('x'))
+                y = int(c.get('y'))
+            except (ValueError, TypeError):
+                raise SeatingPlanValidationError(f'Ungültige Koordinaten an Index {idx}.')
+
+            if not (1 <= x <= plan.columns and 1 <= y <= plan.rows):
+                raise SeatingPlanValidationError(
+                    f'Koordinaten ({x},{y}) liegen außerhalb des Rasters ({plan.columns}x{plan.rows}).'
+                )
+
+            # 2. Zelltyp validieren
+            cell_type = c.get('cell_type', SeatingCell.CellType.EMPTY)
+            if cell_type not in valid_cell_types:
+                raise SeatingPlanValidationError(
+                    f'Ungültiger Zelltyp "{cell_type}" an Position ({x},{y}).'
+                )
+
+            # 3. Feldlängen validieren
+            seat_label = str(c.get('seat_label', '') or '')[:20]
+            text_label = str(c.get('text_label', '') or '')[:50]
+
+            sent_coords[(x, y)] = {
+                'cell_type': cell_type,
+                'seat_label': seat_label,
+                'text_label': text_label,
+            }
+
+        with transaction.atomic():
+            existing_cells = {
+                (cell.x, cell.y): cell
+                for cell in SeatingCell.objects.filter(plan=plan).select_related('registration__user')
+            }
+
+            # 4. Schutz belegter / reservierter Plätze vor Löschung
+            coords_to_delete = set(existing_cells.keys()) - set(sent_coords.keys())
+            for coord in coords_to_delete:
+                cell = existing_cells[coord]
+                if cell.registration is not None or cell.reservation_status in [
+                    SeatingCell.ReservationStatus.RESERVED,
+                    SeatingCell.ReservationStatus.PRE_RESERVED,
+                ]:
+                    user_name = cell.registration.user.username if cell.registration else "einem Teilnehmer"
+                    raise SeatingPlanValidationError(
+                        f'Kachel an Position ({coord[0]},{coord[1]}) kann nicht gelöscht werden, da sie aktuell von {user_name} belegt/reserviert ist.'
+                    )
+
+            if coords_to_delete:
+                pks_to_delete = [existing_cells[coord].pk for coord in coords_to_delete]
+                SeatingCell.objects.filter(pk__in=pks_to_delete).delete()
+
+            cells_to_create = []
+            cells_to_update = []
+
+            # 5. Bestehende Kacheln updaten oder neue zur Bulk-Erstellung sammeln
+            for coord, cdata in sent_coords.items():
+                x, y = coord
+                cell_type = cdata['cell_type']
+                seat_label = cdata['seat_label']
+                text_label = cdata['text_label']
+
+                if coord in existing_cells:
+                    cell = existing_cells[coord]
+
+                    # Schutz vor destruktiver Typ-Änderung belegter Plätze
+                    if cell.registration is not None and cell_type != SeatingCell.CellType.SEAT:
+                        user_name = cell.registration.user.username
+                        raise SeatingPlanValidationError(
+                            f'Sitzplatz ({x},{y}) kann nicht in "{cell_type}" umgewandelt werden, da er von {user_name} belegt ist.'
+                        )
+
+                    if (cell.cell_type != cell_type or
+                        cell.seat_label != seat_label or
+                        cell.text_label != text_label):
+                        cell.cell_type = cell_type
+                        cell.seat_label = seat_label
+                        cell.text_label = text_label
+                        cells_to_update.append(cell)
+                else:
+                    cells_to_create.append(
+                        SeatingCell(
+                            plan=plan,
+                            x=x,
+                            y=y,
+                            cell_type=cell_type,
+                            seat_label=seat_label,
+                            text_label=text_label,
+                        )
+                    )
+
+            if cells_to_create:
+                SeatingCell.objects.bulk_create(cells_to_create, batch_size=500)
+            if cells_to_update:
+                SeatingCell.objects.bulk_update(
+                    cells_to_update,
+                    fields=['cell_type', 'seat_label', 'text_label'],
+                    batch_size=500
+                )
+
+            # Einmalige Cache-Invalidierung nach DB-Commit (über transaction.on_commit in invalidate_event_capacity_cache)
+            if plan.event_id:
+                invalidate_event_capacity_cache(plan.event_id)
+
+        return True, "Sitzplan erfolgreich gespeichert!"
+
