@@ -62,17 +62,17 @@
             </div>
             {% if team.captain_id == user.id %}
               <span style="background: rgba(248, 171, 45, 0.2); color: var(--signal-deep); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;">
-                👑 Kapitän
+                {% t "team_captain_badge" "👑 Kapitän" %}
               </span>
             {% endif %}
           </div>
 
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 12px;">
-            👥 {{ team.get_accepted_members.count }} Mitglied(er) | Code: <code>{{ team.invite_code }}</code>
+            👥 {{ team.get_accepted_members.count }} {% t "team_members_unit" "Mitglied(er)" %} | Code: <code>{{ team.invite_code }}</code>
           </div>
 
           <a href="{% url 'team_detail' slug=team.slug %}" style="display: block; text-align: center; background: #0284c7; color: white; padding: 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
-            Team verwalten →
+            {% t "team_manage_btn" "Team verwalten →" %}
           </a>
         </div>
       {% endfor %}
@@ -85,29 +85,30 @@
                 {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
               </h3>
               <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px;">
-                📁 Archiviert ({{ team.event.title|default:"Früheres Event" }})
+                📁 {% t "team_archived_banner_title" "Archiviert" %} ({{ team.event.title|default:"Früheres Event" }})
               </div>
             </div>
             <span style="background: var(--line); color: var(--muted); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;">
-              Archiv
+              {% t "team_archived_badge" "ARCHIV" %}
             </span>
           </div>
 
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 12px;">
-            👥 {{ team.get_accepted_members.count }} Mitglieder
+            👥 {{ team.get_accepted_members.count }} {% t "team_members_unit" "Mitglied(er)" %}
           </div>
 
           <div style="display: flex; gap: 8px;">
             <a href="{% url 'team_detail' slug=team.slug %}" style="flex: 1; text-align: center; background: var(--line); color: var(--ink); padding: 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-decoration: none;">
-              Details
+              {% t "btn_details" "Details" %}
             </a>
             {% if active_event and team.captain_id == user.id %}
               <a href="{% url 'team_reactivate' slug=team.slug %}" style="flex: 1.4; text-align: center; background: #22c55e; color: white; padding: 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; text-decoration: none;">
-                🔄 Reaktivieren
+                🔄 {% t "team_reactivate_for_event" "Reaktivieren" %}
               </a>
             {% endif %}
           </div>
         </div>
+
       {% endfor %}
     </div>
   </div>

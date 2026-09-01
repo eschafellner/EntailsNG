@@ -156,25 +156,32 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
             ("CYBERPUNK", "Cyberpunk Neon", "#06b6d4", "#ec4899", "#090d16"),
             ("SLATE_BLUE", "Slate Blue", "#3b82f6", "#8b5cf6", "#0f172a"),
             ("EMERALD", "Emerald Gaming", "#10b981", "#f59e0b", "#06130e"),
+            ("QUAKE_99", "Quake 99", "#EA580C", "#CA8A04", "#18181B"),
+            ("ARENA_PRO", "Arena Pro", "#FF4655", "#00E599", "#0B0E14"),
+            ("CYBERDECK", "Cyberdeck", "#00F0FF", "#FF007F", "#0A0915"),
+            ("MAINFRAME", "Mainframe", "#22C55E", "#FACC15", "#050805"),
+            ("DAYLIGHT", "Daylight Projector", "#1D4ED8", "#0284C7", "#F8FAFC"),
         ]
         html = ['<div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px;">']
         for key, name, p, s, bg in swatches:
             is_active = (obj.theme_preset == key) if obj else (key == 'WARM_AMBER')
-            border = '2px solid #22c55e' if is_active else '1px solid #374151'
+            border = '2px solid #22c55e' if is_active else ('1px solid #cbd5e1' if bg == '#F8FAFC' else '1px solid #374151')
             badge = ' <span style="background:#22c55e;color:#000;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:bold;">AKTIV</span>' if is_active else ''
+            text_color = '#0F172A' if bg == '#F8FAFC' else '#ffffff'
             html.append(f'''
-                <div style="background: {bg}; border: {border}; padding: 12px; border-radius: 8px; width: 175px; color: #fff; font-family: sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                <div style="background: {bg}; border: {border}; padding: 12px; border-radius: 8px; width: 175px; color: {text_color}; font-family: sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
                     <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px;">{name}{badge}</div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <span style="background:{p}; width: 22px; height: 22px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255,255,255,0.3);" title="Primärfarbe: {p}"></span>
-                        <span style="background:{s}; width: 22px; height: 22px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255,255,255,0.3);" title="Sekundärfarbe: {s}"></span>
-                        <span style="background:{bg}; width: 22px; height: 22px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255,255,255,0.3);" title="Hintergrund: {bg}"></span>
+                        <span style="background:{p}; width: 22px; height: 22px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.15);" title="Primärfarbe: {p}"></span>
+                        <span style="background:{s}; width: 22px; height: 22px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.15);" title="Sekundärfarbe: {s}"></span>
+                        <span style="background:{bg}; width: 22px; height: 22px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.15);" title="Hintergrund: {bg}"></span>
                     </div>
                 </div>
             ''')
         html.append('</div>')
         return mark_safe(''.join(html))
     theme_preset_preview.short_description = "Vorschau der Farb-Themes (Color Swatches)"
+
 
     def get_urls(self):
         urls = super().get_urls()

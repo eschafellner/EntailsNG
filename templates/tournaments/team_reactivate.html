@@ -7,12 +7,12 @@
 
   <!-- Header Card -->
   <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
-    <p class="eyebrow" style="margin-bottom: 4px; color: #22c55e;">Reaktivierungs-Assistent</p>
+    <p class="eyebrow" style="margin-bottom: 4px; color: #22c55e;">{% t "team_reactivate_wizard_eyebrow" "Reaktivierungs-Assistent" %}</p>
     <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 32px; color: var(--ink);">
       🔄 Team '{{ team.name }}' für {{ active_event.title }} reaktivieren
     </h1>
     <p style="margin: 8px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.5;">
-      Übernimm dein eingespieltes Team direkt in die neue LAN-Party. Prüfe hier den Roster-Status deiner Mitspieler und wähle aus, wer im Team bleiben soll.
+      {% t "team_reactivate_wizard_desc" "Übernimm dein eingespieltes Team direkt in die neue LAN-Party. Prüfe hier den Roster-Status deiner Mitspieler und wähle aus, wer im Team bleiben soll." %}
     </p>
   </div>
 
@@ -24,10 +24,10 @@
       <!-- Spielauswahl -->
       <div>
         <label style="display: block; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; color: var(--ink); margin-bottom: 6px;">
-          🎮 Zugeordnetes Spiel
+          {% t "team_reactivate_game_label" "🎮 Zugeordnetes Spiel" %}
         </label>
         <select name="game_id" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 13px; background: var(--panel); color: var(--ink);">
-          <option value="">-- Allgemeines / Spielübergreifendes Team --</option>
+          <option value="">{% t "team_reactivate_game_all" "-- Allgemeines / Spielübergreifendes Team --" %}</option>
           {% for g in games %}
             <option value="{{ g.id }}" {% if team.game_id == g.id %}selected{% endif %}>
               {{ g.name }} ({{ g.team_size }}v{{ g.team_size }})
@@ -40,10 +40,10 @@
       <div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
           <label style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; color: var(--ink); margin: 0;">
-            👥 Smart Roster Check (Mitglieder übernehmen)
+            {% t "team_reactivate_roster_title" "👥 Smart Roster Check (Mitglieder übernehmen)" %}
           </label>
           <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted);">
-            Abgewählte Spieler werden aus dem Team entfernt
+            {% t "team_reactivate_roster_hint" "Abgewählte Spieler werden aus dem Team entfernt" %}
           </span>
         </div>
 
@@ -62,7 +62,7 @@
                   <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: bold; color: var(--ink);">
                     {{ item.user.username }}
                     {% if item.is_captain %}
-                      <span style="color: var(--signal-deep); font-size: 11px; margin-left: 6px;">👑 Kapitän</span>
+                      <span style="color: var(--signal-deep); font-size: 11px; margin-left: 6px;">{% t "team_captain_badge" "👑 Kapitän" %}</span>
                     {% endif %}
                   </div>
                   <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-top: 2px;">
@@ -82,11 +82,11 @@
               <div>
                 {% if item.is_registered %}
                   <span style="background: rgba(34, 197, 94, 0.15); color: #16a34a; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
-                    Bereit
+                    {% t "team_reactivate_registered_badge" "Bereit" %}
                   </span>
                 {% else %}
                   <span style="background: rgba(234, 179, 8, 0.15); color: #b45309; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
-                    Nicht registriert
+                    {% t "team_reactivate_unregistered_badge" "Nicht registriert" %}
                   </span>
                 {% endif %}
               </div>
@@ -99,19 +99,20 @@
       <div style="padding-top: 16px; border-top: 1px solid var(--line);">
         <label style="display: flex; align-items: center; gap: 10px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink); cursor: pointer;">
           <input type="checkbox" name="reset_invite_code" value="1" style="width: 16px; height: 16px;">
-          <span>Neuen Einladungscode für die aktuelle LAN generieren</span>
+          <span>{% t "team_reactivate_new_code_label" "Neuen Einladungscode für die aktuelle LAN generieren" %}</span>
         </label>
       </div>
 
       <!-- Actions -->
       <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line);">
         <a href="{% url 'team_detail' slug=team.slug %}" style="padding: 10px 18px; border-radius: 8px; background: var(--line); color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px; text-decoration: none;">
-          Abbrechen
+          {% t "btn_cancel" "Abbrechen" %}
         </a>
         <button type="submit" style="padding: 10px 22px; border-radius: 8px; background: #22c55e; color: white; border: none; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; cursor: pointer;">
-          🚀 Team jetzt für {{ active_event.title }} reaktivieren
+          {% t "team_reactivate_submit_btn" "🚀 Team jetzt reaktivieren" %}
         </button>
       </div>
+
 
     </div>
   </form>

@@ -498,6 +498,11 @@ class SiteCustomization(models.Model):
         CYBERPUNK = 'CYBERPUNK', 'Cyberpunk Neon'
         SLATE_BLUE = 'SLATE_BLUE', 'Slate Blue'
         EMERALD = 'EMERALD', 'Emerald Gaming'
+        QUAKE_99 = 'QUAKE_99', 'Quake 99 (Retro LAN)'
+        ARENA_PRO = 'ARENA_PRO', 'Arena Pro (Esports Tactical)'
+        CYBERDECK = 'CYBERDECK', 'Cyberdeck (Neon Synthwave)'
+        MAINFRAME = 'MAINFRAME', 'Mainframe (Terminal Green)'
+        DAYLIGHT = 'DAYLIGHT', 'Daylight Projector (High-Contrast Light)'
         CUSTOM = 'CUSTOM', 'Benutzerdefiniert'
 
     class UIScale(models.TextChoices):
@@ -687,7 +692,73 @@ class SiteCustomization(models.Model):
                 '--amber': '#059669',
                 '--amber-soft': '#ecfdf5',
             },
+            self.ThemePreset.QUAKE_99: {
+                '--ink': '#E4E4E7',
+                '--muted': '#A1A1AA',
+                '--line': '#3F3F46',
+                '--paper': '#18181B',
+                '--panel': '#27272A',
+                '--navy': '#121215',
+                '--signal': '#EA580C',
+                '--signal-deep': '#C2410C',
+                '--signal-soft': 'rgba(234, 88, 12, 0.15)',
+                '--amber': '#CA8A04',
+                '--amber-soft': 'rgba(202, 138, 4, 0.15)',
+            },
+            self.ThemePreset.ARENA_PRO: {
+                '--ink': '#FFFFFF',
+                '--muted': '#8892B0',
+                '--line': '#222836',
+                '--paper': '#0B0E14',
+                '--panel': '#151922',
+                '--navy': '#070A0F',
+                '--signal': '#FF4655',
+                '--signal-deep': '#E02B3B',
+                '--signal-soft': 'rgba(255, 70, 85, 0.15)',
+                '--amber': '#00E599',
+                '--amber-soft': 'rgba(0, 229, 153, 0.15)',
+            },
+            self.ThemePreset.CYBERDECK: {
+                '--ink': '#E0E7FF',
+                '--muted': '#94A3B8',
+                '--line': '#2A244D',
+                '--paper': '#0A0915',
+                '--panel': '#121024',
+                '--navy': '#06050D',
+                '--signal': '#00F0FF',
+                '--signal-deep': '#00B4D8',
+                '--signal-soft': 'rgba(0, 240, 255, 0.15)',
+                '--amber': '#FF007F',
+                '--amber-soft': 'rgba(255, 0, 127, 0.15)',
+            },
+            self.ThemePreset.MAINFRAME: {
+                '--ink': '#86EFAC',
+                '--muted': '#4ADE80',
+                '--line': '#1A2E1C',
+                '--paper': '#050805',
+                '--panel': '#0C130D',
+                '--navy': '#020402',
+                '--signal': '#22C55E',
+                '--signal-deep': '#16A34A',
+                '--signal-soft': 'rgba(34, 197, 94, 0.15)',
+                '--amber': '#FACC15',
+                '--amber-soft': 'rgba(250, 204, 21, 0.15)',
+            },
+            self.ThemePreset.DAYLIGHT: {
+                '--ink': '#0F172A',
+                '--muted': '#64748B',
+                '--line': '#E2E8F0',
+                '--paper': '#F8FAFC',
+                '--panel': '#FFFFFF',
+                '--navy': '#0F172A',
+                '--signal': '#1D4ED8',
+                '--signal-deep': '#1E40AF',
+                '--signal-soft': '#DBEAFE',
+                '--amber': '#0284C7',
+                '--amber-soft': '#E0F2FE',
+            },
         }
+
 
         base_vars = presets.get(self.theme_preset, presets[self.ThemePreset.WARM_AMBER]).copy()
 

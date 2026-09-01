@@ -179,6 +179,35 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(xl_vars['--font-base'], '17px')
         self.assertEqual(xl_vars['--card-padding'], '32px')
 
+        # Test alle neuen Themes
+        for preset in [
+            SiteCustomization.ThemePreset.QUAKE_99,
+            SiteCustomization.ThemePreset.ARENA_PRO,
+            SiteCustomization.ThemePreset.CYBERDECK,
+            SiteCustomization.ThemePreset.MAINFRAME,
+            SiteCustomization.ThemePreset.DAYLIGHT,
+        ]:
+            custom.theme_preset = preset
+            custom.primary_color = ''
+            custom.save()
+            vars_dict = custom.get_css_variables()
+            self.assertIn('--paper', vars_dict)
+            self.assertIn('--panel', vars_dict)
+            self.assertIn('--signal', vars_dict)
+            self.assertIn('--amber', vars_dict)
+            self.assertIn('--ink', vars_dict)
+            self.assertIn('--muted', vars_dict)
+            self.assertIn('--line', vars_dict)
+
+        # Quake 99 specific check
+        custom.theme_preset = SiteCustomization.ThemePreset.QUAKE_99
+        self.assertEqual(custom.get_css_variables()['--signal'], '#EA580C')
+
+        # Daylight specific check
+        custom.theme_preset = SiteCustomization.ThemePreset.DAYLIGHT
+        self.assertEqual(custom.get_css_variables()['--paper'], '#F8FAFC')
+
+
 
 
     def test_legal_views(self):

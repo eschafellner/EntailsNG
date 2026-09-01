@@ -16,7 +16,9 @@ DEFAULT_TEXTS = {
     'btn_close': 'Schließen',
     'btn_cancel': 'Abbrechen',
     'btn_save': 'Speichern',
+    'btn_details': 'Details',
     'btn_back': '← Zurück',
+
     'btn_back_to_home': '🏠 Zur Startseite',
     'btn_accept': '✓ Akzeptieren',
     'btn_reject': '✕ Ablehnen',
@@ -375,7 +377,52 @@ DEFAULT_TEXTS = {
     'checkin_rejection_reason_label': 'Grund für die Ablehnung:',
     'checkin_btn_back_dashboard': 'Zurück zum Dashboard',
     'back_to_dashboard': 'Zurück zum Dashboard',
+    'checkin_field_event': 'VERANSTALTUNG',
+    'checkin_field_payment_status': 'ZAHLUNGSSTATUS',
+    'checkin_field_ticket': 'TICKET',
+    'checkin_field_seat': 'SITZPLATZ',
+    'checkin_field_time': 'CHECK-IN ZEIT',
+
+    # Erweiterte Team & Turnier Übersetzungsschlüssel
+    'team_archived_banner_title': 'Archiviertes Team',
+    'team_archived_banner_desc': 'Dieses Team wurde aus einer früheren LAN-Party archiviert. Ergebnisse und Matches bleiben historisch erhalten.',
+    'team_archived_badge': 'ARCHIV',
+    'team_active_badge': 'AKTIV',
+    'team_captain_label': 'Kapitän:',
+    'team_captain_badge': '👑 Kapitän',
+    'team_founded_label': 'Gegründet am:',
+    'team_manage_btn': 'Team verwalten →',
+    'team_members_unit': 'Mitglied(er)',
+    'team_reactivate_for_event': 'Reaktivieren',
+    'team_reactivate_wizard_eyebrow': 'Reaktivierungs-Assistent',
+    'team_reactivate_wizard_desc': 'Übernimm dein eingespieltes Team direkt in die neue LAN-Party. Prüfe hier den Roster-Status deiner Mitspieler und wähle aus, wer im Team bleiben soll.',
+    'team_reactivate_game_label': '🎮 Zugeordnetes Spiel',
+    'team_reactivate_game_all': '-- Allgemeines / Spielübergreifendes Team --',
+    'team_reactivate_roster_title': '👥 Smart Roster Check (Mitglieder übernehmen)',
+    'team_reactivate_roster_hint': 'Abgewählte Spieler werden aus dem Team entfernt',
+    'team_reactivate_registered_badge': 'Bereit',
+    'team_reactivate_unregistered_badge': 'Nicht registriert',
+    'team_reactivate_new_code_label': 'Neuen Einladungscode für die aktuelle LAN generieren',
+    'team_reactivate_submit_btn': '🚀 Team jetzt reaktivieren',
+    'tournament_detail_format_solo': '1v1 Solo',
+    'tournament_detail_event_label': 'Veranstaltung:',
+    'tournament_detail_admin_label': 'Orga-Admin:',
+    'tournament_detail_generate_tree': 'Baum jetzt generieren',
+    'tournament_detail_tree_generated': 'Baum generiert',
+    'tournament_detail_registered_badge': 'Angemeldet',
+    'tournament_detail_unregister_btn': 'Abmelden',
+    'tournament_detail_login_required': 'Bitte anmelden:',
+    'tournament_detail_solo_register_btn': 'Jetzt als Einzelspieler anmelden (1-Click)',
+    'tournament_detail_team_select_label': 'Team auswählen',
+
+    # Erweiterte Dashboard Hinweistexte & Fehler
+    'dash_past_event_reregister_hint_1': 'Du warst bei',
+    'dash_past_event_reregister_hint_2': 'angemeldet. Für',
+    'dash_past_event_reregister_hint_3': 'ist eine neue Anmeldung erforderlich.',
+    'error_500_title': 'Unerwarteter Serverfehler',
+    'error_500_text': 'Beim Verarbeiten deiner Anfrage ist ein interner Serverfehler aufgetreten. Der Fehler wurde im System protokolliert. Bitte versuche es in wenigen Momenten erneut.',
 }
+
 
 TRANSLATION_CACHE_KEY = 'system_translations'
 FEATURE_FLAGS_CACHE_KEY = 'feature_flags_dict'

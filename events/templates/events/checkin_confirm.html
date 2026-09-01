@@ -19,22 +19,23 @@
   <div style="background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 20px; text-align: left; margin-bottom: 24px;">
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; font-family: 'JetBrains Mono', monospace;">
       <div>
-        <span style="color: var(--muted); display: block; font-size: 11px;">VERANSTALTUNG</span>
+        <span style="color: var(--muted); display: block; font-size: 11px;">{% t "checkin_field_event" "VERANSTALTUNG" %}</span>
         <strong>{{ registration.event.title }}</strong>
       </div>
       <div>
-        <span style="color: var(--muted); display: block; font-size: 11px;">ZAHLUNGSSTATUS</span>
+        <span style="color: var(--muted); display: block; font-size: 11px;">{% t "checkin_field_payment_status" "ZAHLUNGSSTATUS" %}</span>
         <strong style="color: #22c55e;">✔ {{ registration.get_payment_status_display }}</strong>
       </div>
       <div>
-        <span style="color: var(--muted); display: block; font-size: 11px;">TICKET</span>
+        <span style="color: var(--muted); display: block; font-size: 11px;">{% t "checkin_field_ticket" "TICKET" %}</span>
         <strong>{{ registration.ticket_type.name|default:"Standard Ticket" }}</strong>
       </div>
       <div>
-        <span style="color: var(--muted); display: block; font-size: 11px;">SITZPLATZ</span>
+        <span style="color: var(--muted); display: block; font-size: 11px;">{% t "checkin_field_seat" "SITZPLATZ" %}</span>
         <strong>{{ seat_label }}</strong>
       </div>
     </div>
+
   </div>
 
   <form method="post" action="{% url 'process_checkin' registration.id registration.checkin_token %}">
