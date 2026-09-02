@@ -369,6 +369,14 @@ class EmailServicesTests(TestCase):
         res = safe_format(text, {'name': 'Max', 'score': None})
         self.assertEqual(res, "Hello Max, score: , missing: {missing}")
 
+    def test_safe_format_escape_html(self):
+        text = "<p>User: {username}</p>"
+        res = safe_format(text, {'username': '<script>alert(1)</script>'}, escape_html=True)
+        self.assertEqual(res, "<p>User: &lt;script&gt;alert(1)&lt;/script&gt;</p>")
+
+        res_plain = safe_format(text, {'username': '<script>alert(1)</script>'}, escape_html=False)
+        self.assertEqual(res_plain, "<p>User: <script>alert(1)</script></p>")
+
     @override_settings(EMAIL_BACKEND='emails.backends.ConfiguredSMTPBackend')
     @patch('emails.backends.SMTPBackend')
     def test_send_system_email_success(self, mock_smtp_cls):

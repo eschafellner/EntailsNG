@@ -283,6 +283,9 @@ if BEHIND_PROXY:
 else:
     SECURE_PROXY_SSL_HEADER = None
 
+USE_X_FORWARDED_FOR = env_bool('USE_X_FORWARDED_FOR', default=BEHIND_PROXY)
+NUM_PROXIES = int(os.environ.get('NUM_PROXIES', '1'))
+
 if not DEBUG:
     SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', default=True)
     SECURE_REDIRECT_EXEMPT = [

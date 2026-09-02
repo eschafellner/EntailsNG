@@ -16,6 +16,14 @@ def safe_cache_delete(key):
     except Exception:
         pass
 
+
+def safe_cache_delete_many(keys):
+    """Löscht mehrere Cache-Schlüssel und fängt Redis-Verbindungsfehler ab."""
+    try:
+        cache.delete_many(keys)
+    except Exception:
+        pass
+
 ALLOWED_SVG_TAGS = {
     'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
     'text', 'tspan', 'defs', 'clippath', 'mask', 'use', 'title', 'desc'
@@ -624,7 +632,7 @@ class SiteCustomization(models.Model):
         self.clean()
         self.pk = 1
         super().save(*args, **kwargs)
-        cache.delete_many(['site_customization', 'system_translations', 'navigation_items'])
+        safe_cache_delete_many(['site_customization', 'system_translations', 'navigation_items'])
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Die Individualisierungs-Einstellungen können nicht gelöscht werden.")

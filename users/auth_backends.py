@@ -9,15 +9,36 @@ User = get_user_model()
 
 
 def get_client_ip(request):
-    """Ermittelt die IP-Adresse des Clients sicher, auch hinter Reverse-Proxies."""
+    """Ermittelt die IP-Adresse des Clients sicher, auch hinter Reverse-Proxies und Cloudflare."""
     if not request:
         return '127.0.0.1'
 
-    remote_addr = request.META.get('REMOTE_ADDR', '127.0.0.1')
-    use_x_forwarded_for = getattr(settings, 'USE_X_FORWARDED_FOR', False)
+    behind_proxy = getattr(settings, 'BEHIND_PROXY', False)
+    use_x_forwarded_for = getattr(settings, 'USE_X_FORWARDED_FOR', behind_proxy)
     num_proxies = getattr(settings, 'NUM_PROXIES', 1)
 
-    if use_x_forwarded_for:
+    if behind_proxy or use_x_forwarded_for:
+        # 1. Cloudflare Edge liefert die reale Client-IP in CF-Connecting-IP
+        cf_ip = request.META.get('HTTP_CF_CONNECTING_IP')
+        if cf_ip:
+            candidate = cf_ip.strip()
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass
+
+        # 2. Reverse Proxy (Nginx) liefert X-Real-IP
+        real_ip = request.META.get('HTTP_X_REAL_IP')
+        if real_ip:
+            candidate = real_ip.strip()
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass
+
+        # 3. Standard X-Forwarded-For Kette
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             ips = [ip.strip() for ip in x_forwarded_for.split(',') if ip.strip()]
@@ -29,7 +50,7 @@ def get_client_ip(request):
                 except ValueError:
                     pass
 
-    return remote_addr
+    return request.META.get('REMOTE_ADDR', '127.0.0.1')
 
 
 _get_client_ip = get_client_ip

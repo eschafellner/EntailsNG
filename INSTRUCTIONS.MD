@@ -137,7 +137,7 @@ nano .env
 
 ## 🟢 Schritt 4A: Bereitstellung über Cloudflare Tunnel (Weg A)
 
-*(Die einfachste und sicherste Methode für Heimserver, DSL-Anschlüsse und lokale VMs).*
+*(Die einfachste und sicherste Methode für Heimserver, Mini-PCs, DSL-Anschlüsse und lokale VMs).*
 
 ### 1. Tunnel im Cloudflare Dashboard anlegen:
 1. Öffne das [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) → **Networks** → **Tunnels**.
@@ -155,12 +155,16 @@ nano .env
 6. Klicke auf **Save hostname**.
 7. Stelle unter *Cloudflare Dashboard* → *Deine Domain* → *SSL/TLS* die Verschlüsselung auf **Full** (oder **Full (strict)**).
 
+> [!TIP]
+> **Tipp für Heimserver mit Pi-hole oder bestehendem Webserver:**
+> Falls Port 80 oder 443 auf deinem Heimserver bereits belegt ist, kannst du in deiner `.env` einfach Ausweichports angeben (z. B. `HTTP_PORT=8080` und `HTTPS_PORT=8443`). Der Cloudflare Tunnel verbindet sich containerintern trotzdem direkt über Port 80 mit Nginx!
+
 ### 2. Container mit Tunnel starten:
 ```bash
 docker compose --profile tunnel up -d --build
 ```
 
-Fertig! Deine LAN-Party-Webseite ist jetzt weltweit unter `https://lan.meinedomain.de` erreichbar.
+Fertig! Nginx startet dank intelligenter Proxy-Erkennung und integriertem Fallback-Zertifikat sofort und ohne Redirect-Schleifen. Deine LAN-Party-Webseite ist jetzt weltweit unter `https://lan.meinedomain.de` erreichbar.
 
 ---
 
@@ -182,7 +186,7 @@ sudo ufw enable
 ```bash
 bash nginx/init-letsencrypt.sh
 ```
-Das Skript erstellt die Zertifikate automatisch, bindet sie ein und startet alle Container.
+Das Skript erstellt die Zertifikate automatisch, bindet sie ein und startet alle Container inklusive automatischer Zertifikatserneuerung.
 
 ---
 
@@ -191,7 +195,7 @@ Das Skript erstellt die Zertifikate automatisch, bindet sie ein und startet alle
 Für lokales Testen oder Vor-Ort-Betrieb ohne Internet:
 
 ```bash
-# 1. Setup ausführen (einmalig)
+# 1. Setup ausführen (einmalig, optional mit Demo-Daten)
 ./install.sh --demo
 
 # 2. Server starten
@@ -206,10 +210,15 @@ Rufe im Browser auf: `http://127.0.0.1:8000/`
 Sobald die Container laufen, führe folgende Schritte durch:
 
 ### 1. Administrator-Konto erstellen:
+Frische Installationen starten aus Sicherheitsgründen standardmäßig mit einer sauberen, leeren Datenbank ohne Testbenutzer. Lege daher dein persönliches Administrator-Konto an:
 ```bash
 docker compose exec web python manage.py createsuperuser
 ```
 Gib deinen gewünschten Benutzernamen, E-Mail-Adresse und ein Passwort ein.
+
+> [!NOTE]
+> Falls du stattdessen für einen schnellen Test vorbereitete Demo-Accounts (`admin`, `orga`, `gamer1`, `gamer2` mit Kennwort `EntailsDemo2026!`) laden möchtest, führe einfach aus:
+> `docker compose exec web python manage.py loaddata initial_data.json`
 
 ### 2. Im Admin-Bereich einloggen:
 Öffne `https://deine-domain.de/admin/` und melde dich an.

@@ -425,5 +425,34 @@ class AuthBackendAndLockoutTests(TestCase):
             )
 
 
+class ClientIPDetectionTests(TestCase):
+    def test_get_client_ip_cf_connecting_ip(self):
+        from users.auth_backends import get_client_ip
+        from django.test import RequestFactory
+        rf = RequestFactory()
+        request = rf.get('/', HTTP_CF_CONNECTING_IP='203.0.113.19', REMOTE_ADDR='172.18.0.5')
+        with self.settings(BEHIND_PROXY=True):
+            ip = get_client_ip(request)
+            self.assertEqual(ip, '203.0.113.19')
+
+    def test_get_client_ip_x_real_ip(self):
+        from users.auth_backends import get_client_ip
+        from django.test import RequestFactory
+        rf = RequestFactory()
+        request = rf.get('/', HTTP_X_REAL_IP='198.51.100.42', REMOTE_ADDR='172.18.0.5')
+        with self.settings(BEHIND_PROXY=True):
+            ip = get_client_ip(request)
+            self.assertEqual(ip, '198.51.100.42')
+
+    def test_get_client_ip_fallback_remote_addr(self):
+        from users.auth_backends import get_client_ip
+        from django.test import RequestFactory
+        rf = RequestFactory()
+        request = rf.get('/', REMOTE_ADDR='127.0.0.1')
+        ip = get_client_ip(request)
+        self.assertEqual(ip, '127.0.0.1')
+
+
+
 
 

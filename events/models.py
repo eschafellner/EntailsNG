@@ -176,7 +176,10 @@ class Event(models.Model):
 
         with transaction.atomic():
             if self.is_active:
-                Event.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+                active_events = Event.objects.filter(is_active=True)
+                if self.pk:
+                    active_events = active_events.exclude(pk=self.pk)
+                active_events.update(is_active=False)
             super().save(*args, **kwargs)
 
 

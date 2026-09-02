@@ -50,7 +50,12 @@ fi
 echo "📦 Sammle statische Dateien..."
 python manage.py collectstatic --noinput
 
-# 5. Idempotenter Fixture-Import (nur beim allerersten Start, um modifizierte Daten bei Restarts zu schützen)
+# 5. Optionaler Demo-Daten-Import (nur wenn explizit gewünscht via DEMO_MODE=true oder LOAD_DEMO_DATA=true)
+LOAD_DEMO=0
+if [ "${DEMO_MODE:-0}" = "1" ] || [ "${DEMO_MODE:-false}" = "true" ] || [ "${LOAD_DEMO_DATA:-0}" = "1" ] || [ "${LOAD_DEMO_DATA:-false}" = "true" ]; then
+    LOAD_DEMO=1
+fi
+
 IS_INITIALIZED=$(python -c "
 import os, django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -59,8 +64,8 @@ from users.models import User
 print('true' if User.objects.filter(is_superuser=True).exists() else 'false')
 " 2>/dev/null || echo "false")
 
-if [ "$IS_INITIALIZED" = "false" ] && [ -f "initial_data.json" ]; then
-    echo "📥 Erster Systemstart erkannt: Lade initial_data.json..."
+if [ "$LOAD_DEMO" = "1" ] && [ "$IS_INITIALIZED" = "false" ] && [ -f "initial_data.json" ]; then
+    echo "📥 DEMO_MODE aktiv: Lade Beispieldaten (initial_data.json)..."
     python -c "
 import os, django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -82,8 +87,15 @@ with connection.cursor() as cursor:
     for sql in statements:
         cursor.execute(sql)
 " 2>/dev/null || true
+    echo "✓ Demo-Daten erfolgreich geladen."
 else
-    echo "ℹ️ Datenbank enthält bereits Daten. Überspringe Fixture-Import zur Erhaltung der Datenintegrität."
+    if [ "$IS_INITIALIZED" = "false" ]; then
+        echo "ℹ️ Saubere Produktiv-Installation: Keine Testbenutzer geladen."
+        echo "💡 Erstelle deinen Administrator-Account nach dem Start mit:"
+        echo "   docker compose exec web python manage.py createsuperuser"
+    else
+        echo "ℹ️ Datenbank enthält bereits Daten. Überspringe Fixture-Import zur Erhaltung der Datenintegrität."
+    fi
 fi
 
 # 6. System-Seeds ausführen (get_or_create: idempotent)

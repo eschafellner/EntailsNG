@@ -22,8 +22,8 @@ def generate_epc_qr_payload(registration, config=None):
     # BIC (optional im SEPA-Raum)
     bic = re.sub(r'\s', '', str(config.bic or '')).upper()
 
-    # Name des Empfängers / Kontoinhabers (max. 70 Zeichen)
-    kontoinhaber = (config.kontoinhaber or '').strip()[:70]
+    # Name des Empfängers / Kontoinhabers (max. 70 Zeichen, bereinigt von Zeilenumbrüchen)
+    kontoinhaber = re.sub(r'[\r\n]+', ' ', str(config.kontoinhaber or '')).strip()[:70]
 
     # IBAN des Empfängers (ohne Leerzeichen, Großbuchstaben, max. 34 Zeichen)
     iban = re.sub(r'[\s\-]', '', str(config.iban or '')).upper()
@@ -37,9 +37,11 @@ def generate_epc_qr_payload(registration, config=None):
     purpose_code = ''  # Verwendungszweck-Code (z.B. CHAR, leer lassen)
     structured_ref = ''  # Strukturierte Referenz (z.B. ISO 11649 RF-Creditor-Reference, leer lassen)
 
-    # Unstrukturierter Verwendungszweck: Login-Username (max. 140 Zeichen)
+    # Unstrukturierter Verwendungszweck: Login-Username + Ticket-Code (max. 140 Zeichen, bereinigt von Zeilenumbrüchen)
     username = registration.user.username if registration.user else ''
-    unstructured_remittance = str(username).strip()[:140]
+    ref_suffix = f" {registration.short_code}" if getattr(registration, 'short_code', None) else f" #{registration.id}"
+    remittance_raw = f"{username}{ref_suffix}".strip()
+    unstructured_remittance = re.sub(r'[\r\n]+', ' ', remittance_raw)[:140]
 
     beneficiary_info = ''  # Hinweis an Zahler (optional, leer lassen)
 

@@ -1,21 +1,27 @@
 import logging
 
 from django.core.mail import EmailMultiAlternatives
-from django.utils.html import strip_tags
+from django.utils.html import escape, strip_tags
 
 from .models import EmailTemplate
 
 logger = logging.getLogger(__name__)
 
 
-def safe_format(text, context):
-    """Ersetzt Platzhalter wie {username} gefahrlos im Text."""
+def safe_format(text, context, escape_html=False):
+    """
+    Ersetzt Platzhalter wie {username} gefahrlos im Text.
+    Wenn escape_html=True, werden die eingefügten Variablenwerte HTML-sicher maskiert.
+    """
     if not text:
         return ""
     result = text
     for key, value in context.items():
         placeholder = f"{{{key}}}"
-        result = result.replace(placeholder, str(value if value is not None else ""))
+        val_str = str(value if value is not None else "")
+        if escape_html:
+            val_str = escape(val_str)
+        result = result.replace(placeholder, val_str)
     return result
 
 
@@ -48,8 +54,8 @@ def send_system_email(template_key, recipient_email, context_data):
         )
         return False
 
-    subject = safe_format(template.subject, context_data)
-    html_content = safe_format(template.content, context_data)
+    subject = safe_format(template.subject, context_data, escape_html=False)
+    html_content = safe_format(template.content, context_data, escape_html=True)
     text_content = strip_tags(html_content)
 
     msg = EmailMultiAlternatives(

@@ -1157,7 +1157,7 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
         self.assertEqual(lines[7], 'EUR35.50')
         self.assertEqual(lines[8], '')
         self.assertEqual(lines[9], '')
-        self.assertEqual(lines[10], 'gamer1')
+        self.assertTrue(lines[10].startswith('gamer1'))
         # Ohne Ticket -> Betrag bleibt leer
         user_no_ticket = User.objects.create_user(username='gamer_no_ticket', password='password')
         reg_no_ticket = EventRegistration.objects.create(
@@ -1169,7 +1169,14 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
         payload_no_ticket = generate_epc_qr_payload(reg_no_ticket, config=config)
         lines_no_ticket = payload_no_ticket.split('\n')
         self.assertEqual(lines_no_ticket[7], '')  # Betrag leer
-        self.assertEqual(lines_no_ticket[10], 'gamer_no_ticket')
+        self.assertTrue(lines_no_ticket[10].startswith('gamer_no_ticket'))
+
+        # Prüfung gegen Zeilenumbruch-Injection im Kontoinhaber
+        config.kontoinhaber = 'LAN e.V.\r\nATTACKER'
+        config.save()
+        payload_injected = generate_epc_qr_payload(reg_with_ticket, config=config)
+        self.assertEqual(len(payload_injected.split('\n')), 12)
+        self.assertEqual(payload_injected.split('\n')[5], 'LAN e.V. ATTACKER')
 
         # PNG Erzeugung liefert valide Bild-Bytes
         png_bytes = generate_epc_qr_png(reg_with_ticket, config=config)

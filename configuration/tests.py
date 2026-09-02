@@ -378,6 +378,16 @@ class ConfigurationModelTests(TestCase):
                 self.assertEqual(res_staff.status_code, 500)
                 self.assertIn(b"Test-Fehler", res_staff.content)
 
+    def test_dynamic_debug_middleware_ignores_404_and_403(self):
+        from django.http import Http404
+        from django.core.exceptions import PermissionDenied
+        from django.test import RequestFactory
+        from configuration.middleware import DynamicDebugMiddleware
+        rf = RequestFactory()
+        request = rf.get('/')
+        middleware = DynamicDebugMiddleware(lambda req: None)
+        self.assertIsNone(middleware.process_exception(request, Http404("Not found")))
+        self.assertIsNone(middleware.process_exception(request, PermissionDenied("Forbidden")))
 
     @override_settings(DEBUG=False, ALLOWED_HOSTS=['testserver', '127.0.0.1', 'localhost'])
     def test_custom_404_template_rendering_when_debug_false(self):

@@ -1,6 +1,8 @@
 import logging
 import sys
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
+from django.http import Http404
 from django.views.debug import technical_500_response
 from .models import GeneralConfiguration
 
@@ -25,6 +27,10 @@ class DynamicDebugMiddleware:
         return self.get_response(request)
 
     def process_exception(self, request, exception):
+        # 404 Not Found und 403 Forbidden sind reguläre HTTP-Zustände und keine 500er-Serverfehler
+        if isinstance(exception, (Http404, PermissionDenied)):
+            return None
+
         try:
             # 1. In Produktion niemals sensible Debug-Seiten mit Umgebungsvariablen/Secrets im Browser rendern
             if not getattr(settings, 'DEBUG', False):

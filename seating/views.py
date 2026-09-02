@@ -228,6 +228,7 @@ def reserve_seat_api(request, event_id):
         # 5. Neuen Platz über die Geschäftslogik reservieren
         success, message = cell.reserve_for_user(registration)
         if success:
+            invalidate_event_capacity_cache(event_id)
             return JsonResponse({'status': 'success', 'message': message})
         else:
             transaction.set_rollback(True)
@@ -280,6 +281,7 @@ def release_seat_api(request, event_id):
         # Freigabe-Methode des Modells aufrufen
         success, message = cell.release_seat(registration=registration)
         if success:
+            invalidate_event_capacity_cache(event_id)
             return JsonResponse({
                 'status': 'success',
                 'message': 'Sitzplatz erfolgreich freigegeben.',

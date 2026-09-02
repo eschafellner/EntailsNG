@@ -76,9 +76,9 @@ class Sponsor(models.Model):
     bild = models.ImageField(
         upload_to='sponsors/',
         verbose_name="Logo- oder Banner-Datei",
-        help_text="Logo- oder Banner-Datei. Erlaubte Formate: JPG, PNG, WebP, GIF, SVG. Maximale Dateigröße: 10 MB.",
+        help_text="Logo- oder Banner-Datei. Erlaubte Formate: JPG, PNG, WebP, GIF. Maximale Dateigröße: 10 MB.",
         validators=[
-            FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg']),
+            FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp', 'gif']),
             validate_sponsor_image_file_size,
         ],
     )
