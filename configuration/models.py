@@ -907,6 +907,33 @@ class SiteCustomization(models.Model):
         return base_vars
 
 
+class SystemErrorLog(models.Model):
+    """
+    Protokolliert serverseitige Ausnahmen und 500er-Fehler zur einfachen
+    Einsichtnahme und Diagnose direkt im Django Admin Backend.
+    """
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="Zeitpunkt")
+    path = models.CharField(max_length=500, verbose_name="URL / Pfad")
+    method = models.CharField(max_length=10, default="GET", verbose_name="HTTP-Methode")
+    exception_type = models.CharField(max_length=255, db_index=True, verbose_name="Ausnahme-Typ")
+    error_message = models.TextField(verbose_name="Fehlermeldung")
+    traceback = models.TextField(verbose_name="Python-Traceback")
+    user = models.CharField(max_length=150, blank=True, default="Anonym", verbose_name="Benutzer")
+    ip_address = models.CharField(max_length=45, blank=True, null=True, verbose_name="IP-Adresse")
+    resolved = models.BooleanField(default=False, db_index=True, verbose_name="Behoben?")
+    resolved_at = models.DateTimeField(null=True, blank=True, verbose_name="Behoben am")
+
+    class Meta:
+        verbose_name = "System-Fehlerprotokoll"
+        verbose_name_plural = "System-Fehlerprotokolle"
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        time_str = self.timestamp.strftime('%d.%m.%Y %H:%M') if self.timestamp else 'Neu'
+        return f"#{self.pk} [{time_str}] {self.exception_type} an {self.path}"
+
+
+
 
 
 

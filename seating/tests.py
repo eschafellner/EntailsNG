@@ -814,6 +814,15 @@ class SeatingServiceAndSignalTests(TestCase):
         with self.assertRaises(ValidationError):
             plan.clean()
 
+    def test_seating_plan_admin_changelist_without_events(self):
+        """Testet, dass die Sitzplan-Adminliste fehlerfrei rendert, wenn keine Events existieren oder Vorlagen angezeigt werden."""
+        admin_user = User.objects.create_superuser(username='seating_admin', email='sadmin@example.com', password='password')
+        self.client.force_login(admin_user)
+        template_plan = SeatingPlan.objects.create(name='Vorlage 1', columns=10, rows=10, is_template=True, event=None)
+        response = self.client.get('/admin/seating/seatingplan/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Master-Vorlage')
+
 
 
 

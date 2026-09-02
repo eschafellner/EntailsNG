@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import NavigationItem, SystemTranslation
+from django.utils import timezone
+from django.utils.html import format_html
+from django.utils.safestring import mark_safe
+from .models import NavigationItem, SystemTranslation, SystemErrorLog
 
 
 @admin.register(SystemTranslation)
@@ -211,5 +214,108 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
                 if field not in readonly:
                     readonly.append(field)
         return readonly
+
+
+@admin.register(SystemErrorLog)
+class SystemErrorLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'id_badge',
+        'timestamp',
+        'method_badge',
+        'path',
+        'exception_type_badge',
+        'user',
+        'resolved_badge',
+    )
+    list_filter = ('resolved', 'method', 'exception_type', 'timestamp')
+    search_fields = ('path', 'error_message', 'traceback', 'user', 'ip_address')
+    readonly_fields = (
+        'timestamp',
+        'path',
+        'method',
+        'exception_type',
+        'error_message',
+        'formatted_traceback',
+        'user',
+        'ip_address',
+        'resolved_at',
+    )
+    fields = (
+        'timestamp',
+        'resolved',
+        'resolved_at',
+        'path',
+        'method',
+        'user',
+        'ip_address',
+        'exception_type',
+        'error_message',
+        'formatted_traceback',
+    )
+    actions = ['mark_as_resolved', 'mark_as_unresolved', 'delete_resolved_logs']
+
+    @admin.display(description="Fehler-ID", ordering="id")
+    def id_badge(self, obj):
+        return format_html(
+            '<span style="font-family: monospace; font-weight: bold; background: #374151; color: #f9fafb; padding: 2px 8px; border-radius: 4px;">#{}</span>',
+            obj.pk,
+        )
+
+    @admin.display(description="Methode", ordering="method")
+    def method_badge(self, obj):
+        colors = {
+            'GET': '#0284c7',
+            'POST': '#16a34a',
+            'PUT': '#ca8a04',
+            'DELETE': '#dc2626',
+        }
+        color = colors.get(obj.method.upper(), '#6b7280')
+        return format_html(
+            '<span style="font-weight: bold; color: white; background: {}; padding: 2px 6px; border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.method,
+        )
+
+    @admin.display(description="Ausnahme-Typ", ordering="exception_type")
+    def exception_type_badge(self, obj):
+        return format_html(
+            '<span style="font-family: monospace; color: #f87171; font-weight: 600;">{}</span>',
+            obj.exception_type,
+        )
+
+    @admin.display(description="Status", ordering="resolved")
+    def resolved_badge(self, obj):
+        if obj.resolved:
+            return mark_safe(
+                '<span style="background: #14532d; color: #86efac; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">✓ Behoben</span>'
+            )
+        return mark_safe(
+            '<span style="background: #7f1d1d; color: #fca5a5; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">🚨 Offen</span>'
+        )
+
+    @admin.display(description="Vollständiger Python-Traceback")
+    def formatted_traceback(self, obj):
+        if not obj.traceback:
+            return "-"
+        return format_html(
+            '<pre style="background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px; line-height: 1.5; overflow-x: auto; max-height: 500px; white-space: pre-wrap;">{}</pre>',
+            obj.traceback,
+        )
+
+    @admin.action(description="Ausgewählte Fehler als 'Behoben' markieren")
+    def mark_as_resolved(self, request, queryset):
+        count = queryset.update(resolved=True, resolved_at=timezone.now())
+        self.message_user(request, f"{count} Fehlerprotokoll(e) als behoben markiert.")
+
+    @admin.action(description="Ausgewählte Fehler als 'Offen' markieren")
+    def mark_as_unresolved(self, request, queryset):
+        count = queryset.update(resolved=False, resolved_at=None)
+        self.message_user(request, f"{count} Fehlerprotokoll(e) wieder auf offen gesetzt.")
+
+    @admin.action(description="Alle behobenen Fehlerprotokolle unwiderruflich löschen")
+    def delete_resolved_logs(self, request, queryset):
+        deleted, _ = SystemErrorLog.objects.filter(resolved=True).delete()
+        self.message_user(request, f"{deleted} behobene(s) Fehlerprotokoll(e) erfolgreich gelöscht.")
+
 
 

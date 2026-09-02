@@ -70,6 +70,13 @@
       Beim Verarbeiten deiner Anfrage ist ein interner Serverfehler aufgetreten.<br>
       Der Fehler wurde im System protokolliert. Bitte versuche es in wenigen Momenten erneut.
     </p>
+    {% if error_id %}
+    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 24px; text-align: center;">
+      <span style="font-size: 13px; color: #f87171; font-weight: 600;">Fehler-Referenz:</span>
+      <span style="font-family: monospace; font-size: 14px; font-weight: bold; background: #374151; color: #f9fafb; padding: 2px 8px; border-radius: 4px; margin-left: 6px;">#{{ error_id }}</span>
+      <p style="font-size: 12px; color: #9ca3af; margin: 6px 0 0 0;">Dieser Fehler wurde im Admin-Backend unter <i>System-Fehlerprotokolle</i> erfasst.</p>
+    </div>
+    {% endif %}
     <a href="/" class="btn">🏠 Zur Startseite</a>
   </div>
 </body>

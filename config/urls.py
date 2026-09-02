@@ -80,3 +80,14 @@ if getattr(settings, 'SERVE_MEDIA', False) or settings.DEBUG:
     ]
 
 
+def custom_500_handler(request):
+    from django.http import HttpResponseServerError
+    from django.template.loader import render_to_string
+    error_id = getattr(request, 'system_error_id', None)
+    content = render_to_string('500.html', {'error_id': error_id, 'request': request}, request=request)
+    return HttpResponseServerError(content)
+
+
+handler500 = custom_500_handler
+
+

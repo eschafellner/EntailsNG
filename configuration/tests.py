@@ -624,6 +624,65 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(config.formatted_iban, 'DE89 3704 0044 0532 0130 00')
 
 
+class SystemErrorLogTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username='err_admin', email='err_admin@example.com', password='password'
+        )
+
+    def test_middleware_captures_unhandled_exception(self):
+        from configuration.middleware import DynamicDebugMiddleware
+        from configuration.models import SystemErrorLog
+        from config.urls import custom_500_handler
+        from django.test import RequestFactory, override_settings
+
+        rf = RequestFactory()
+        request = rf.get('/test-error-endpoint/')
+        request.user = self.admin
+
+        middleware = DynamicDebugMiddleware(lambda req: None)
+        with override_settings(DEBUG=False):
+            response = middleware.process_exception(request, RuntimeError("Test-Systemfehler"))
+
+        self.assertIsNone(response)
+        self.assertTrue(hasattr(request, 'system_error_id'))
+
+        log = SystemErrorLog.objects.latest('id')
+        self.assertEqual(log.path, '/test-error-endpoint/')
+        self.assertEqual(log.exception_type, 'RuntimeError')
+        self.assertEqual(log.error_message, 'Test-Systemfehler')
+        self.assertEqual(log.user, 'err_admin')
+        self.assertFalse(log.resolved)
+
+        # Teste 500-Handler mit Fehler-Referenz
+        handler_resp = custom_500_handler(request)
+        self.assertEqual(handler_resp.status_code, 500)
+        self.assertIn("Fehler-Referenz:", handler_resp.content.decode())
+        self.assertIn(f"#{log.id}", handler_resp.content.decode())
+
+    def test_system_error_log_admin_views(self):
+        from configuration.models import SystemErrorLog
+        log = SystemErrorLog.objects.create(
+            path='/admin-error/',
+            method='POST',
+            exception_type='ValueError',
+            error_message='Ungültiger Wert',
+            traceback='Traceback (most recent call last):\n  File "foo.py", line 1, in bar',
+            user='err_admin',
+        )
+
+        self.client.force_login(self.admin)
+        resp_list = self.client.get('/admin/configuration/systemerrorlog/')
+        self.assertEqual(resp_list.status_code, 200)
+        self.assertContains(resp_list, f"#{log.pk}")
+        self.assertContains(resp_list, "/admin-error/")
+
+        resp_detail = self.client.get(f'/admin/configuration/systemerrorlog/{log.pk}/change/')
+        self.assertEqual(resp_detail.status_code, 200)
+        self.assertContains(resp_detail, "Ungültiger Wert")
+        self.assertContains(resp_detail, "foo.py")
+
+
 
 
 

@@ -46,10 +46,10 @@ class SeatingPlanAdmin(admin.ModelAdmin):
     @admin.display(description="Typ / Status")
     def plan_type_badge(self, obj):
         if obj.event:
-            return format_html(
+            return mark_safe(
                 '<span style="background: #1e3a8a; color: #93c5fd; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">📅 Event-Sitzplan</span>'
             )
-        return format_html(
+        return mark_safe(
             '<span style="background: #14532d; color: #86efac; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">⭐ Master-Vorlage</span>'
         )
 
