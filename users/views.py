@@ -11,6 +11,7 @@ from django.utils import timezone
 from emails.models import GeneralEmailSettings
 from emails.services import send_system_email
 from events.models import EventRegistration
+from configuration.templatetags.translations import t as get_translation
 from .auth_backends import get_client_ip
 from .forms import CustomUserCreationForm, UserProfileForm
 from .models import EmailVerificationCode
@@ -139,7 +140,10 @@ def verify_email_view(request):
             login(request, user, backend='users.auth_backends.EmailOrUsernameBackend')
             messages.success(
                 request,
-                "E-Mail erfolgreich verifiziert! Willkommen bei EntailsNG.",
+                get_translation(
+                    'register_verify_success',
+                    'E-Mail erfolgreich verifiziert! Willkommen bei EntailsNG.'
+                ),
             )
             return redirect("dashboard")
         else:

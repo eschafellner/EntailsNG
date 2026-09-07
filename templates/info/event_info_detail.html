@@ -3,17 +3,64 @@
 {% block title %}{{ event_info.title|default:"Veranstaltungsinformationen" }} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
-<article class="card">
-  <p class="eyebrow">{{ event_info.subtitle|default:"Alle Fakten im Überblick" }}</p>
-  <h1>{% if event_info and event_info.title %}{{ event_info.title }}{% else %}{% t "info_title" %}{% endif %}</h1>
-  <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">
+<div style="max-width: 900px; margin: 0 auto;">
 
-  <div class="event-content" style="line-height: 1.7; color: var(--ink);">
-    {% if event_info and event_info.content %}
-      {{ event_info.content|safe }}
+  {% if all_pages and all_pages|length > 1 %}
+    <nav class="info-tabs-nav" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 16px; scrollbar-width: thin;" aria-label="Informationsseiten">
+      {% for p in all_pages %}
+        {% with p_url=p.get_absolute_url %}
+          <a href="{{ p_url }}"
+             style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; transition: all 0.2s; {% if p.slug == current_page.slug or request.path == p_url %}background: var(--accent, #f59e0b); color: #111827; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);{% else %}background: var(--card-bg, #111827); color: var(--muted, #9ca3af); border: 1px solid var(--line, #374151);{% endif %}">
+            {% if p.login_required %}
+              <span title="Nur für angemeldete Teilnehmer" style="font-size: 11px;">🔒</span>
+            {% endif %}
+            {{ p.title }}
+            {% if not p.is_active %}
+              <span style="font-size: 10px; background: #7f1d1d; color: #fca5a5; padding: 1px 4px; border-radius: 3px;">Entwurf</span>
+            {% endif %}
+          </a>
+        {% endwith %}
+      {% endfor %}
+    </nav>
+  {% endif %}
+
+  <article class="card">
+    {% if event_info %}
+      {% if event_info.subtitle %}
+        <p class="eyebrow">{{ event_info.subtitle }}</p>
+      {% endif %}
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+        <h1 style="margin: 0;">{{ event_info.title }}</h1>
+        {% if user.is_staff %}
+          <a href="{% url 'admin:info_eventinfo_change' event_info.pk %}"
+             class="btn"
+             style="background: transparent; border: 1px solid var(--line, #374151); color: var(--muted, #9ca3af); font-size: 12px; padding: 4px 10px; border-radius: 6px; text-decoration: none;"
+             title="Im Admin-Bereich bearbeiten">
+            ✏️ Seite bearbeiten
+          </a>
+        {% endif %}
+      </div>
+      <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">
+
+      <div class="event-content" style="line-height: 1.7; color: var(--ink);">
+        {% if event_info.content %}
+          {{ event_info.content|safe }}
+        {% else %}
+          <p style="color: var(--muted);">{% t "info_empty" "Zu diesem Thema wurden noch keine Informationen hinterlegt." %}</p>
+        {% endif %}
+      </div>
     {% else %}
-      <p style="color: var(--muted);">{% t "info_empty" %}</p>
+      <h1>{% t "info_title" "Veranstaltungsinformationen" %}</h1>
+      <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">
+      <p style="color: var(--muted);">{% t "info_empty" "Es wurden noch keine Informationsseiten hinterlegt." %}</p>
+      {% if user.is_staff %}
+        <div style="margin-top: 20px;">
+          <a href="{% url 'admin:info_eventinfo_add' %}" class="btn" style="padding: 8px 16px; background: var(--accent, #f59e0b); color: #111827; font-weight: bold; border-radius: 6px; text-decoration: none;">
+            ➕ Erste Inhaltsseite anlegen
+          </a>
+        </div>
+      {% endif %}
     {% endif %}
-  </div>
-</article>
+  </article>
+</div>
 {% endblock %}

@@ -309,19 +309,22 @@ class NavigationItem(models.Model):
 
     def clean(self):
         """Verhindert Tippfehler und schützt vor XSS in SVG-Icons."""
-        target = self.ALIAS_MAP.get(self.url_name, self.url_name)
-        try:
-            reverse(target)
-        except NoReverseMatch:
-            raise ValidationError({
-                'url_name': (
-                    f'"{self.url_name}" ist kein bekannter URL-Name. '
-                    'Gültig sind z. B.: dashboard, teams (team_list), '
-                    'tournaments (tournament_list), seating (seating_plan), '
-                    'news (news_list), info (event_info_detail), clans (clan_list), '
-                    'sponsors (sponsor_list).'
-                )
-            })
+        if self.url_name and (self.url_name.startswith('/') or self.url_name.startswith(('http://', 'https://'))):
+            pass
+        else:
+            target = self.ALIAS_MAP.get(self.url_name, self.url_name)
+            try:
+                reverse(target)
+            except NoReverseMatch:
+                raise ValidationError({
+                    'url_name': (
+                        f'"{self.url_name}" ist kein bekannter URL-Name und kein gültiger Pfad. '
+                        'Gültig sind z. B.: dashboard, teams (team_list), '
+                        'tournaments (tournament_list), seating (seating_plan), '
+                        'news (news_list), info (event_info_detail), clans (clan_list), '
+                        'sponsors (sponsor_list) oder absolute Pfade wie /info/catering/.'
+                    )
+                })
 
         if self.icon_name == self.IconChoices.CUSTOM and self.icon_svg:
             self.icon_svg = sanitize_and_validate_svg(self.icon_svg)
@@ -335,6 +338,8 @@ class NavigationItem(models.Model):
         return self.icon_svg or SYSTEM_ICONS.get('dashboard', '')
 
     def get_url(self):
+        if self.url_name and (self.url_name.startswith('/') or self.url_name.startswith(('http://', 'https://'))):
+            return self.url_name
         target = self.ALIAS_MAP.get(self.url_name, self.url_name)
         try:
             return reverse(target)
@@ -660,6 +665,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': '#fff0d2',
                 '--amber': '#d97817',
                 '--amber-soft': '#ffead0',
+                '--sidebar-text': '#fffaf2',
+                '--sidebar-nav-text': '#eadfce',
+                '--sidebar-nav-hover-bg': 'rgba(255, 255, 255, 0.08)',
+                '--sidebar-nav-hover-text': '#ffffff',
+                '--sidebar-nav-active-bg': '#ffffff',
+                '--sidebar-nav-active-text': '#332719',
+                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
             },
             self.ThemePreset.CYBERPUNK: {
                 '--ink': '#e2e8f0',
@@ -673,6 +685,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': 'rgba(0, 240, 255, 0.15)',
                 '--amber': '#ff0055',
                 '--amber-soft': 'rgba(255, 0, 85, 0.15)',
+                '--sidebar-text': '#e2e8f0',
+                '--sidebar-nav-text': '#94a3b8',
+                '--sidebar-nav-hover-bg': 'rgba(0, 240, 255, 0.12)',
+                '--sidebar-nav-hover-text': '#00f0ff',
+                '--sidebar-nav-active-bg': '#00f0ff',
+                '--sidebar-nav-active-text': '#0b0d14',
+                '--sidebar-border': 'rgba(42, 45, 61, 0.6)',
             },
             self.ThemePreset.SLATE_BLUE: {
                 '--ink': '#1e293b',
@@ -686,6 +705,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': '#dbeafe',
                 '--amber': '#2563eb',
                 '--amber-soft': '#eff6ff',
+                '--sidebar-text': '#f8fafc',
+                '--sidebar-nav-text': '#cbd5e1',
+                '--sidebar-nav-hover-bg': 'rgba(59, 130, 246, 0.15)',
+                '--sidebar-nav-hover-text': '#ffffff',
+                '--sidebar-nav-active-bg': '#3b82f6',
+                '--sidebar-nav-active-text': '#ffffff',
+                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
             },
             self.ThemePreset.EMERALD: {
                 '--ink': '#111827',
@@ -699,6 +725,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': '#d1fae5',
                 '--amber': '#059669',
                 '--amber-soft': '#ecfdf5',
+                '--sidebar-text': '#f3f4f6',
+                '--sidebar-nav-text': '#a7f3d0',
+                '--sidebar-nav-hover-bg': 'rgba(16, 185, 129, 0.15)',
+                '--sidebar-nav-hover-text': '#ffffff',
+                '--sidebar-nav-active-bg': '#10b981',
+                '--sidebar-nav-active-text': '#064e3b',
+                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
             },
             self.ThemePreset.QUAKE_99: {
                 '--ink': '#E4E4E7',
@@ -712,6 +745,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': 'rgba(234, 88, 12, 0.15)',
                 '--amber': '#CA8A04',
                 '--amber-soft': 'rgba(202, 138, 4, 0.15)',
+                '--sidebar-text': '#E4E4E7',
+                '--sidebar-nav-text': '#A1A1AA',
+                '--sidebar-nav-hover-bg': 'rgba(234, 88, 12, 0.15)',
+                '--sidebar-nav-hover-text': '#ffffff',
+                '--sidebar-nav-active-bg': '#EA580C',
+                '--sidebar-nav-active-text': '#ffffff',
+                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
             },
             self.ThemePreset.ARENA_PRO: {
                 '--ink': '#FFFFFF',
@@ -725,6 +765,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': 'rgba(255, 70, 85, 0.15)',
                 '--amber': '#00E599',
                 '--amber-soft': 'rgba(0, 229, 153, 0.15)',
+                '--sidebar-text': '#FFFFFF',
+                '--sidebar-nav-text': '#8892B0',
+                '--sidebar-nav-hover-bg': 'rgba(255, 70, 85, 0.15)',
+                '--sidebar-nav-hover-text': '#ffffff',
+                '--sidebar-nav-active-bg': '#FF4655',
+                '--sidebar-nav-active-text': '#ffffff',
+                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
             },
             self.ThemePreset.CYBERDECK: {
                 '--ink': '#E0E7FF',
@@ -738,6 +785,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': 'rgba(0, 240, 255, 0.15)',
                 '--amber': '#FF007F',
                 '--amber-soft': 'rgba(255, 0, 127, 0.15)',
+                '--sidebar-text': '#E0E7FF',
+                '--sidebar-nav-text': '#94A3B8',
+                '--sidebar-nav-hover-bg': 'rgba(0, 240, 255, 0.12)',
+                '--sidebar-nav-hover-text': '#00F0FF',
+                '--sidebar-nav-active-bg': '#FF007F',
+                '--sidebar-nav-active-text': '#ffffff',
+                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
             },
             self.ThemePreset.MAINFRAME: {
                 '--ink': '#86EFAC',
@@ -751,6 +805,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': 'rgba(34, 197, 94, 0.15)',
                 '--amber': '#FACC15',
                 '--amber-soft': 'rgba(250, 204, 21, 0.15)',
+                '--sidebar-text': '#86EFAC',
+                '--sidebar-nav-text': '#4ADE80',
+                '--sidebar-nav-hover-bg': 'rgba(34, 197, 94, 0.12)',
+                '--sidebar-nav-hover-text': '#86EFAC',
+                '--sidebar-nav-active-bg': '#22C55E',
+                '--sidebar-nav-active-text': '#020402',
+                '--sidebar-border': 'rgba(34, 197, 94, 0.2)',
             },
             self.ThemePreset.DAYLIGHT: {
                 '--ink': '#0F172A',
@@ -764,6 +825,13 @@ class SiteCustomization(models.Model):
                 '--signal-soft': '#DBEAFE',
                 '--amber': '#0284C7',
                 '--amber-soft': '#E0F2FE',
+                '--sidebar-text': '#F8FAFC',
+                '--sidebar-nav-text': '#94A3B8',
+                '--sidebar-nav-hover-bg': 'rgba(255, 255, 255, 0.08)',
+                '--sidebar-nav-hover-text': '#ffffff',
+                '--sidebar-nav-active-bg': '#ffffff',
+                '--sidebar-nav-active-text': '#0F172A',
+                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
             },
         }
 

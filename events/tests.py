@@ -1360,6 +1360,101 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
         self.assertIn('nicht zur aktuellen Veranstaltung', response.json()['message'])
 
 
+class EventRegistrationAdminPaymentEmailTests(TestCase):
+    def setUp(self):
+        from emails.models import EmailTemplate, GeneralEmailSettings
+        email_settings = GeneralEmailSettings.load()
+        email_settings.is_enabled = True
+        email_settings.transport_mode = 'env'
+        email_settings.sender_email = 'noreply@example.com'
+        email_settings.save()
+        EmailTemplate.objects.get_or_create(
+            key='payment_confirmation',
+            defaults={
+                'name': 'Zahlungsbestätigung',
+                'subject': 'Zahlung bestätigt für {event_title}',
+                'content': 'Hallo {username}, Betrag: {amount}',
+                'is_active': True,
+            },
+        )
+        self.staff_user = User.objects.create_superuser(username='super_admin', email='super@example.com', password='password')
+        self.user = User.objects.create_user(username='player1', email='player1@example.com', password='password')
+        self.event = Event.objects.create(
+            title='LAN Party 2026',
+            slug='lan-2026',
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=5),
+            end_date=timezone.now() + timedelta(days=7),
+            price=35.00,
+        )
+        self.ticket = TicketType.objects.create(event=self.event, name='Standard', price=35.00)
+        self.reg = EventRegistration.objects.create(
+            event=self.event,
+            user=self.user,
+            ticket_type=self.ticket,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+
+    def test_admin_save_model_sends_email_when_payment_status_changed_to_paid(self):
+        from events.admin import EventRegistrationAdmin
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+        from unittest.mock import patch
+
+        admin = EventRegistrationAdmin(EventRegistration, AdminSite())
+        rf = RequestFactory()
+        request = rf.post('/admin/events/eventregistration/')
+        request.user = self.staff_user
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.contrib.messages.middleware import MessageMiddleware
+        SessionMiddleware(lambda r: None).process_request(request)
+        MessageMiddleware(lambda r: None).process_request(request)
+
+        class DummyForm:
+            changed_data = ['payment_status']
+
+        self.reg.payment_status = EventRegistration.PaymentStatus.PAID
+
+        with patch('events.models.send_system_email') as mock_send:
+            with self.captureOnCommitCallbacks(execute=True):
+                admin.save_model(request, self.reg, DummyForm(), change=True)
+
+            mock_send.assert_called_once()
+            self.assertEqual(mock_send.call_args[0][0], 'payment_confirmation')
+            self.assertEqual(mock_send.call_args[0][1], 'player1@example.com')
+            self.reg.refresh_from_db()
+            self.assertIsNotNone(self.reg.paid_at)
+            self.assertEqual(self.reg.paid_amount, 35.00)
+
+    def test_admin_action_mark_as_paid_sends_email(self):
+        from events.admin import EventRegistrationAdmin
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+        from unittest.mock import patch
+
+        admin = EventRegistrationAdmin(EventRegistration, AdminSite())
+        rf = RequestFactory()
+        request = rf.post('/admin/events/eventregistration/')
+        request.user = self.staff_user
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.contrib.messages.middleware import MessageMiddleware
+        SessionMiddleware(lambda r: None).process_request(request)
+        MessageMiddleware(lambda r: None).process_request(request)
+
+        qs = EventRegistration.objects.filter(pk=self.reg.pk)
+
+        with patch('events.models.send_system_email') as mock_send:
+            with self.captureOnCommitCallbacks(execute=True):
+                admin.action_mark_as_paid(request, qs)
+
+            mock_send.assert_called_once()
+            self.assertEqual(mock_send.call_args[0][0], 'payment_confirmation')
+            self.assertEqual(mock_send.call_args[0][1], 'player1@example.com')
+            self.reg.refresh_from_db()
+            self.assertEqual(self.reg.payment_status, EventRegistration.PaymentStatus.PAID)
+            self.assertIsNotNone(self.reg.paid_at)
+
+
 
 
 

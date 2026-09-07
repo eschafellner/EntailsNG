@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib import admin, messages
+from django.db import transaction
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from seating.models import SeatingCell, SeatingPlan
@@ -143,7 +144,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
     )  # <-- NEU: Filter nach Check-in
     search_fields = ('user__username', 'user__first_name', 'user__last_name', 'short_code')
     readonly_fields = ('short_code', 'checkin_token', 'assigned_seat_picker', 'checked_in_at', 'paid_at', 'cancelled_at')
-    actions = ['action_check_in_guests', 'action_check_out_guests', 'export_as_csv']
+    actions = ['action_mark_as_paid', 'action_check_in_guests', 'action_check_out_guests', 'export_as_csv']
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "ticket_type":
@@ -218,7 +219,19 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         return response
 
     def save_model(self, request, obj, form, change):
-        """Setzt den Zeitstempel automatisch, wenn im Admin das Häkchen manuell gesetzt wird, und prüft den Bezahlstatus."""
+        """Setzt den Zeitstempel automatisch, wenn im Admin das Häkchen manuell gesetzt wird, prüft den Bezahlstatus und löst bei Status 'Bezahlt' die E-Mail aus."""
+        became_paid = (
+            obj.payment_status == EventRegistration.PaymentStatus.PAID
+            and (not change or 'payment_status' in form.changed_data)
+        )
+
+        if became_paid:
+            if not obj.paid_at:
+                obj.paid_at = timezone.now()
+            if (not obj.paid_amount or obj.paid_amount == 0) and obj.ticket_type:
+                obj.paid_amount = obj.ticket_type.price
+            obj.cancelled_at = None
+
         if obj.is_checked_in and obj.payment_status != EventRegistration.PaymentStatus.PAID:
             messages.error(
                 request,
@@ -235,6 +248,34 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
         from seating.services import sync_seat_status_with_payment
         sync_seat_status_with_payment(obj)
+
+        if became_paid:
+            transaction.on_commit(obj.send_payment_confirmation_email)
+            self.message_user(
+                request,
+                f"Zahlungsbestätigung für '{obj.user.username}' wurde erfolgreich verbucht und per E-Mail versendet.",
+                level=messages.SUCCESS,
+            )
+
+    @admin.action(description="💶 Ausgewählte Anmeldungen als BEZAHLT markieren (inkl. E-Mail)")
+    def action_mark_as_paid(self, request, queryset):
+        success_count = 0
+        for reg in queryset:
+            if reg.payment_status != EventRegistration.PaymentStatus.PAID:
+                reg.mark_as_paid(send_email=True)
+                success_count += 1
+        if success_count > 0:
+            self.message_user(
+                request,
+                f"{success_count} Anmeldung(en) erfolgreich als bezahlt markiert und Zahlungsbestätigung per E-Mail versendet.",
+                level=messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                "Alle ausgewählten Anmeldungen waren bereits als bezahlt markiert.",
+                level=messages.INFO,
+            )
 
 
     @admin.display(description="Einlass-Status", ordering="is_checked_in")

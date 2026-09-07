@@ -46,6 +46,12 @@ class ConfigurationModelTests(TestCase):
             item.clean()
         self.assertIn('url_name', ctx.exception.message_dict)
 
+    def test_navigation_item_clean_and_get_url_with_absolute_path(self):
+        """Absolute Pfade und URLs werden von clean() akzeptiert und von get_url() unverändert geliefert."""
+        item = NavigationItem(title='Catering', url_name='/info/catering/', order=10)
+        item.clean()
+        self.assertEqual(item.get_url(), '/info/catering/')
+
     def test_system_translation_cache(self):
         translation = SystemTranslation.objects.create(
             key='test_key', text='Test Text'
@@ -198,6 +204,15 @@ class ConfigurationModelTests(TestCase):
             self.assertIn('--ink', vars_dict)
             self.assertIn('--muted', vars_dict)
             self.assertIn('--line', vars_dict)
+            self.assertIn('--sidebar-text', vars_dict)
+            self.assertIn('--sidebar-nav-text', vars_dict)
+            self.assertIn('--sidebar-nav-active-bg', vars_dict)
+
+        # Mainframe (Terminal Green) specific check
+        custom.theme_preset = SiteCustomization.ThemePreset.MAINFRAME
+        mainframe_vars = custom.get_css_variables()
+        self.assertEqual(mainframe_vars['--sidebar-nav-text'], '#4ADE80')
+        self.assertEqual(mainframe_vars['--sidebar-nav-active-bg'], '#22C55E')
 
         # Quake 99 specific check
         custom.theme_preset = SiteCustomization.ThemePreset.QUAKE_99
