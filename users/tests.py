@@ -153,6 +153,11 @@ class DoubleOptInTests(TestCase):
         # Da Cooldown aktiv, wurde kein neuer Code erzeugt
         self.assertEqual(self.user.verification_codes.count(), 1)
 
+    def test_resend_code_get_redirects_safely(self):
+        """GET auf resend_verification_code wirft keinen 500er-Fehler, sondern leitet sauber um."""
+        response = self.client.get(reverse('resend_verification_code'))
+        self.assertRedirects(response, reverse('verify_email'))
+
 
 
 class PasswordResetTests(TestCase):
@@ -180,6 +185,12 @@ class PasswordResetTests(TestCase):
 class ProfileViewTests(TestCase):
 
     def setUp(self):
+        self.email_settings = GeneralEmailSettings.load()
+        self.email_settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        self.email_settings.sender_email = 'noreply@example.com'
+        self.email_settings.is_enabled = True
+        self.email_settings.save()
+
         self.user = User.objects.create_user(
             username='profuser',
             email='old@example.com',
@@ -198,20 +209,113 @@ class ProfileViewTests(TestCase):
         self.assertTemplateUsed(response, 'users/profile.html')
         self.assertContains(response, 'profuser')
 
-    def test_update_profile(self):
+    def test_update_profile_birthday_only(self):
+        """Reine Stammdatenänderung (ohne E-Mail) wird sofort gespeichert ohne Code-Generierung."""
         self.client.login(username='profuser', password='OldPassword123!')
         response = self.client.post(
             reverse('profile'),
             {
                 'update_profile': '1',
-                'email': 'new@example.com',
+                'email': 'old@example.com',
                 'birthday': '1995-03-12',
             },
         )
         self.assertRedirects(response, reverse('profile'))
         self.user.refresh_from_db()
-        self.assertEqual(self.user.email, 'new@example.com')
+        self.assertEqual(self.user.email, 'old@example.com')
         self.assertEqual(self.user.birthday, date(1995, 3, 12))
+        self.assertEqual(self.user.verification_codes.count(), 0)
+
+    def test_update_profile_email_initiates_double_opt_in(self):
+        """E-Mail-Änderung ändert user.email NICHT sofort, sondern erzeugt Verifizierungscode für new_email."""
+        from django.core import mail
+        self.client.login(username='profuser', password='OldPassword123!')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('profile'),
+                {
+                    'update_profile': '1',
+                    'email': 'new@example.com',
+                    'birthday': '1995-03-12',
+                },
+            )
+        self.assertRedirects(response, reverse('profile'))
+        self.user.refresh_from_db()
+        # Bisherige E-Mail bleibt aktiv!
+        self.assertEqual(self.user.email, 'old@example.com')
+        # Geburtstag wurde dennoch aktualisiert
+        self.assertEqual(self.user.birthday, date(1995, 3, 12))
+
+        # Code wurde für new@example.com angelegt
+        code_obj = self.user.verification_codes.filter(new_email='new@example.com').first()
+        self.assertIsNotNone(code_obj)
+        self.assertFalse(code_obj.is_used)
+
+        # Mail wurde an new@example.com gesendet
+        self.assertTrue(any('new@example.com' in m.to for m in mail.outbox))
+
+    def test_confirm_email_change_success(self):
+        """Bestätigung mit gültigem Code schließt E-Mail-Änderung erfolgreich ab."""
+        from users.models import EmailVerificationCode
+        self.client.login(username='profuser', password='OldPassword123!')
+        code_obj = EmailVerificationCode.generate_for_user(
+            self.user, valid_minutes=15, new_email='confirmed@example.com'
+        )
+
+        response = self.client.post(
+            reverse('profile'),
+            {
+                'confirm_email_change': '1',
+                'verification_code': code_obj.code,
+            },
+        )
+        self.assertRedirects(response, reverse('profile'))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'confirmed@example.com')
+        code_obj.refresh_from_db()
+        self.assertTrue(code_obj.is_used)
+
+    def test_confirm_email_change_invalid_code(self):
+        """Falscher Code ändert E-Mail nicht und registriert Fehlversuch."""
+        from users.models import EmailVerificationCode
+        self.client.login(username='profuser', password='OldPassword123!')
+        code_obj = EmailVerificationCode.generate_for_user(
+            self.user, valid_minutes=15, new_email='target@example.com'
+        )
+
+        response = self.client.post(
+            reverse('profile'),
+            {
+                'confirm_email_change': '1',
+                'verification_code': '000000',
+            },
+        )
+        self.assertRedirects(response, reverse('profile'))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'old@example.com')
+        code_obj.refresh_from_db()
+        self.assertFalse(code_obj.is_used)
+        self.assertEqual(code_obj.failed_attempts, 1)
+
+    def test_cancel_email_change(self):
+        """Abbrechen entwertet den Code und behält die bisherige Adresse bei."""
+        from users.models import EmailVerificationCode
+        self.client.login(username='profuser', password='OldPassword123!')
+        code_obj = EmailVerificationCode.generate_for_user(
+            self.user, valid_minutes=15, new_email='cancel@example.com'
+        )
+
+        response = self.client.post(
+            reverse('profile'),
+            {
+                'cancel_email_change': '1',
+            },
+        )
+        self.assertRedirects(response, reverse('profile'))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'old@example.com')
+        code_obj.refresh_from_db()
+        self.assertTrue(code_obj.is_used)
 
     def test_change_password(self):
         self.client.login(username='profuser', password='OldPassword123!')

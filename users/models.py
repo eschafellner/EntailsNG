@@ -101,6 +101,12 @@ class EmailVerificationCode(models.Model):
     failed_attempts = models.PositiveSmallIntegerField(
         default=0, verbose_name="Fehlgeschlagene Versuche"
     )
+    new_email = models.EmailField(
+        blank=True,
+        null=True,
+        verbose_name="Neue E-Mail-Adresse",
+        help_text="Wird bei E-Mail-Änderungen im Profil gesetzt. Bleibt bei Erstregistrierung leer.",
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -108,21 +114,32 @@ class EmailVerificationCode(models.Model):
         verbose_name_plural = "E-Mail Verifizierungscodes"
 
     def __str__(self):
-        return f"Code {self.code} für {self.user.username} (Gültig bis {self.expires_at.strftime('%H:%M')})"
+        target = f" (neue E-Mail: {self.new_email})" if self.new_email else ""
+        return f"Code {self.code} für {self.user.username}{target} (Gültig bis {self.expires_at.strftime('%H:%M')})"
 
     @classmethod
-    def generate_for_user(cls, user, valid_minutes=15):
+    def generate_for_user(cls, user, valid_minutes=15, new_email=None):
         """Erstellt einen neuen kryptografisch sicheren 6-stelligen Code und invalidiert alte unbenutzte Codes."""
         import secrets
         from datetime import timedelta
         from django.utils import timezone
 
-        # Vorherige unbenutzte Codes für diesen Benutzer entwerten
-        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        # Vorherige unbenutzte Codes für diesen Benutzer und diesen Zweck entwerten
+        query = cls.objects.filter(user=user, is_used=False)
+        if new_email:
+            query = query.filter(new_email__isnull=False)
+        else:
+            query = query.filter(new_email__isnull=True)
+        query.update(is_used=True)
 
         secure_code = f"{secrets.randbelow(900000) + 100000:06d}"
         expires_at = timezone.now() + timedelta(minutes=valid_minutes)
-        return cls.objects.create(user=user, code=secure_code, expires_at=expires_at)
+        return cls.objects.create(
+            user=user,
+            code=secure_code,
+            expires_at=expires_at,
+            new_email=new_email,
+        )
 
     def is_valid(self):
         from django.utils import timezone

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import logging
 import secrets
 import uuid
@@ -53,7 +54,20 @@ class Event(models.Model):
     end_date = models.DateTimeField(verbose_name="Endzeitpunkt")
 
     max_guests = models.PositiveIntegerField(default=50, verbose_name="Max. Teilnehmer")
-    price = models.DecimalField(max_digits=6, decimal_places=2, default=0.00, verbose_name="Ticketpreis (€)")
+
+    @property
+    def price(self):
+        """
+        Abgeleiteter Anzeigewert: Liefert den Mindestpreis der aktiven Tickets (Single Source of Truth).
+        """
+        if hasattr(self, '_initial_price'):
+            return self._initial_price
+        cheapest = self.ticket_types.filter(is_active=True).order_by('price').first()
+        return cheapest.price if cheapest else Decimal('0.00')
+
+    @price.setter
+    def price(self, value):
+        self._initial_price = Decimal(str(value)) if value is not None else Decimal('0.00')
 
     status = models.CharField(
         max_length=20,
@@ -212,6 +226,20 @@ class TicketType(models.Model):
         return f"{self.event.title} - {self.name} ({self.price} €)"
 
 
+class CheckInResult(tuple):
+    """
+    Ergebnisobjekt der Einlassprüfung.
+    Rückwärtskompatibel als 2-Tupel (allowed: bool, reason: str) entpackbar,
+    bietet aber zusätzlich .allowed, .reason und .code für APIs.
+    """
+    def __new__(cls, allowed: bool, reason: str = "", code: str = "ok"):
+        instance = super().__new__(cls, (allowed, reason))
+        instance.allowed = allowed
+        instance.reason = reason
+        instance.code = code
+        return instance
+
+
 class EventRegistration(models.Model):
     class PaymentStatus(models.TextChoices):
         UNPAID = 'UNPAID', 'Offen'
@@ -291,29 +319,42 @@ class EventRegistration(models.Model):
         help_text="8-stelliger unerratbarer Code für die manuelle Einlass-Eingabe",
     )
 
-    def can_check_in(self, actor=None, target_event=None):
+    def can_check_in(self, target_event=None, actor=None):
         """
         Zentrale fachliche Prüfung, ob der Gast für das Event eingecheckt werden darf.
-        Rückgabe: Tuple (can_check_in: bool, reason: str)
+        Rückgabe: CheckInResult (entpackbar als: allowed, reason) mit .code
         """
         if self.payment_status != self.PaymentStatus.PAID:
-            return False, f"Check-in abgelehnt: Die Anmeldung von {self.user.username} ist nicht bezahlt (Status: {self.get_payment_status_display()})."
+            return CheckInResult(
+                False,
+                f"ABGELEHNT: Die Anmeldung von {self.user.username} ist noch NICHT BEZAHLT.",
+                code="unpaid"
+            )
         if self.event and self.event.status == Event.Status.CANCELLED:
-            return False, f"Check-in abgelehnt: Die Veranstaltung '{self.event.title}' wurde abgesagt."
-        
+            return CheckInResult(
+                False,
+                f"Check-in abgelehnt: Die Veranstaltung '{self.event.title}' wurde abgesagt.",
+                code="event_cancelled"
+            )
+
         active_event = target_event or Event.objects.get_active()
         if active_event and self.event_id != active_event.id:
-            return False, f"Check-in abgelehnt: Dieses Ticket gehört zur Veranstaltung '{self.event.title}' und ist für '{active_event.title}' nicht gültig!"
-        return True, ""
+            return CheckInResult(
+                False,
+                f"ABGELEHNT: Dieses Ticket gehört zur Veranstaltung '{self.event.title}' "
+                f"und ist für die aktuelle Veranstaltung '{active_event.title}' nicht gültig!",
+                code="event_mismatch"
+            )
+        return CheckInResult(True, "", code="ok")
 
-    def check_in(self, actor=None, target_event=None):
+    def check_in(self, target_event=None, actor=None):
         """
         Zentrale Methode zum Einchecken des Gastes (Single Source of Truth).
         Prüft zwingend den Bezahlstatus und die Gültigkeit der Anmeldung vor der Zustandsänderung.
         """
-        can_ci, reason = self.can_check_in(actor=actor, target_event=target_event)
-        if not can_ci:
-            raise ValidationError(reason)
+        result = self.can_check_in(target_event=target_event)
+        if not result.allowed:
+            raise ValidationError(result.reason)
 
         if not self.is_checked_in:
             self.is_checked_in = True
@@ -386,64 +427,25 @@ class EventRegistration(models.Model):
             raise ValidationError({'ticket_type': "Die ausgewählte Ticketkategorie ist inaktiv."})
 
     def mark_as_paid(self, amount=None, send_email=True):
-        """
-        Explizite Geschäftslogik-Methode: Markiert die Anmeldung als bezahlt.
-        Führt gezielt alle zugehörigen Seiteneffekte aus:
-        - Zeitstempel & Betrag setzen
-        - Sitzplatz auf RESERVED aktualisieren (Bulk)
-        - E-Mail nach erfolgreichem DB-Commit via transaction.on_commit versenden
-        """
-        self.payment_status = self.PaymentStatus.PAID
-        if not self.paid_at:
-            self.paid_at = timezone.now()
-        if amount is not None:
-            self.paid_amount = amount
-        elif (not self.paid_amount or self.paid_amount == 0) and self.ticket_type:
-            self.paid_amount = self.ticket_type.price
-        self.cancelled_at = None
-        self.save()
-
-        # Sitzplätze synchronisieren (Bulk Update ohne N+1)
-        self.seats.filter(reservation_status='PRE').update(reservation_status='RESERVED')
-        if self.event_id:
-            invalidate_event_capacity_cache(self.event_id)
-
-        # E-Mail erst NACH erfolgreichem DB-Commit versenden
-        if send_email:
-            transaction.on_commit(self.send_payment_confirmation_email)
+        """Delegiert an PaymentService zur Entkopplung von Persistenz und Seiteneffekten."""
+        from .services import PaymentService
+        return PaymentService.mark_paid(self, amount=amount, send_email=send_email)
 
     def mark_as_cancelled(self):
-        """
-        Explizite Geschäftslogik-Methode: Storniert die Anmeldung.
-        Führt gezielt alle zugehörigen Bereinigungen aus:
-        - Check-in Flags zurücksetzen
-        - Storno-Zeitstempel setzen
-        - Zugewiesene Sitzplätze freigeben (Bulk)
-        """
-        self.payment_status = self.PaymentStatus.CANCELLED
-        self.is_checked_in = False
-        self.checked_in_at = None
-        self.cancelled_at = timezone.now()
-        self.save()
-
-        # Sitzplätze atomar freigeben (Bulk Update)
-        self.seats.update(registration=None, reservation_status='FREE')
-        if self.event_id:
-            invalidate_event_capacity_cache(self.event_id)
+        """Delegiert an PaymentService zur Entkopplung von Persistenz und Seiteneffekten."""
+        from .services import PaymentService
+        return PaymentService.mark_cancelled(self)
 
     def save(self, *args, **kwargs):
         """
         Schlanke Persistenzmethode:
-        Validiert ausschließlich Datenintegrität und erzeugt ggf. den kryptografischen short_code mit Kollisionsschutz.
+        Erzeugt ggf. den kryptografischen short_code mit Kollisionsschutz.
         """
         if not self.short_code:
             code = generate_short_code()
             while EventRegistration.objects.filter(short_code=code).exists():
                 code = generate_short_code()
             self.short_code = code
-
-        if self.ticket_type and self.event_id and self.ticket_type.event_id != self.event_id:
-            raise ValidationError({'ticket_type': "Das ausgewählte Ticket gehört nicht zu diesem Event."})
 
         super().save(*args, **kwargs)
 

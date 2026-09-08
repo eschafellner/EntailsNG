@@ -79,7 +79,10 @@
       {% if messages %}
         {% for message in messages %}
           <div class="message message-{{ message.tags }}" style="margin-bottom: 16px; border-radius: 8px; font-size: 13px;">
-            {{ message }}
+            <span class="message-badge">
+              {% if 'error' in message.tags %}Fehler{% elif 'success' in message.tags %}Erfolg{% elif 'warning' in message.tags %}Hinweis{% else %}Info{% endif %}
+            </span>
+            <span class="message-text">{{ message }}</span>
           </div>
         {% endfor %}
       {% endif %}

@@ -89,4 +89,28 @@ class Command(BaseCommand):
 - {reset_link}: Vollständiger Link zum Festlegen des neuen Passworts''',
             },
         )
+
+        # 5. Template "E-Mail-Änderung Verifizierung"
+        EmailTemplate.objects.get_or_create(
+            key='email_change_verification',
+            defaults={
+                'name': 'E-Mail-Änderung Verifizierung',
+                'subject': 'Bestätigungscode zur E-Mail-Änderung: {code}',
+                'content': '''<h2>E-Mail-Adresse ändern</h2>
+<p>Hallo <strong>{full_name}</strong>,</p>
+<p>du hast die Änderung deiner E-Mail-Adresse für deinen EntailsNG-Account auf diese Adresse beantragt. Bitte verwende den folgenden 6-stelligen Bestätigungscode, um die Änderung zu bestätigen:</p>
+<div style="background: #111827; border: 2px solid #0284c7; color: #38bdf8; padding: 20px; border-radius: 12px; font-size: 32px; font-weight: bold; font-family: monospace; letter-spacing: 8px; text-align: center; margin: 20px 0;">
+  {code}
+</div>
+<p>Dieser Code ist <strong>{valid_minutes} Minuten</strong> lang gültig.</p>
+<p>Falls du diese Änderung nicht beantragt hast, kannst du diese E-Mail ignorieren. Deine bisherige E-Mail-Adresse bleibt unverändert erhalten.</p>
+<p>Viele Grüße,<br>Dein EntailsNG Team</p>''',
+                'is_active': True,
+                'placeholder_info': '''Verfügbare Platzhalter für diese Vorlage:
+- {username}: Benutzername des Teilnehmers
+- {full_name}: Vor- und Nachname (oder Benutzername)
+- {code}: 6-stelliger numerischer Verifizierungscode
+- {valid_minutes}: Gültigkeitsdauer in Minuten (z. B. 15)''',
+            },
+        )
         self.stdout.write(self.style.SUCCESS("Alle Standard E-Mail-Templates sind auf dem neuesten Stand."))

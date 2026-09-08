@@ -96,12 +96,7 @@ class TournamentRegistrationService:
             tournament = Tournament.objects.select_for_update().select_related('game', 'event').get(pk=tournament_id)
 
             # 1. Privilegien-Check (Staff / Superuser / Turnier-Admin)
-            is_privileged = actor and (
-                actor.is_staff or
-                actor.is_superuser or
-                actor == tournament.tournament_admin or
-                actor == tournament.tournament_support
-            )
+            is_privileged = tournament.is_managed_by(actor)
 
             # 2. Vor-Ort Check-in des anmeldenden Benutzers prüfen
             if not is_privileged and not check_user_event_checkin(user, tournament.event):
@@ -208,7 +203,7 @@ class TournamentRegistrationService:
             if team_id:
                 query = query.filter(team_id=team_id)
 
-            is_privileged = actor and (actor.is_staff or actor == tournament.tournament_admin or actor == tournament.tournament_support)
+            is_privileged = tournament.is_managed_by(actor)
 
             if not is_privileged:
                 query = query.filter(team__memberships__user=user, team__memberships__status=TeamMember.Status.ACCEPTED)

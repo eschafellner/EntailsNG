@@ -305,7 +305,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
         for reg in queryset:
             try:
-                reg.check_in(actor=request.user)
+                reg.check_in()
                 success_count += 1
             except ValidationError:
                 failed_users.append(reg.user.username)

@@ -160,6 +160,20 @@ class Tournament(models.Model):
             and (self.registration_end is None or now <= self.registration_end)
         )
 
+    def is_managed_by(self, user):
+        """
+        Zentrale Autorisierungsprüfung: Prüft, ob der angegebene Benutzer
+        Turnier-Administrator, Support oder System-Staff/Superuser ist.
+        """
+        if not user or not user.is_authenticated:
+            return False
+        return bool(
+            user.is_staff
+            or user.is_superuser
+            or user == self.tournament_admin
+            or user == self.tournament_support
+        )
+
     def can_register(self, user=None, team=None):
         """
         Zentrale Validierung, ob ein Team oder Spieler für dieses Turnier angemeldet werden darf.

@@ -37,9 +37,11 @@ def send_system_email(template_key, recipient_email, context_data):
         logger.warning("Kein Empfänger für Template '%s' angegeben.", template_key)
         return False
 
-    try:
-        template = EmailTemplate.objects.get(key=template_key)
-    except EmailTemplate.DoesNotExist:
+    template = EmailTemplate.objects.filter(key=template_key).first()
+    if not template and template_key == 'email_change_verification':
+        template = EmailTemplate.objects.filter(key='email_verification').first()
+
+    if not template:
         logger.error(
             "E-Mail-Template '%s' fehlt in der Datenbank. Wurde "
             "'manage.py seed_email_templates' ausgeführt?",

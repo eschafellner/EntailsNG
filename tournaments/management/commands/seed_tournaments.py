@@ -11,7 +11,7 @@ class Command(BaseCommand):
     help = 'Erstellt Demo-Spiele, Demoturniere und Beispieldaten für das Turnier-Modul.'
 
     def handle(self, *args, **options):
-        active_event = Event.objects.filter(is_active=True).first()
+        active_event = Event.objects.get_active()
         if not active_event:
             active_event = Event.objects.create(
                 title="Entails-NG Summer LAN 2026",

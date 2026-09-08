@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from configuration.context_processors import get_translation
 from configuration.models import GeneralConfiguration
 from configuration.services import should_show_onboarding_ticket
 from info.services import get_event_info
@@ -168,12 +169,21 @@ def register_for_event(request, event_id):
         if reactivated:
             messages.success(
                 request,
-                f'Deine Anmeldung für "{registration.event.title}" wurde reaktiviert. '
-                'Bitte wähle bei Bedarf deinen Sitzplatz erneut aus.'
+                get_translation(
+                    'msg_event_reg_reactivated',
+                    'Deine Anmeldung für "{event_title}" wurde reaktiviert. '
+                    'Bitte wähle bei Bedarf deinen Sitzplatz erneut aus.',
+                    event_title=registration.event.title,
+                ),
             )
         elif created:
             messages.success(
-                request, f'Du bist jetzt für "{registration.event.title}" angemeldet.'
+                request,
+                get_translation(
+                    'msg_event_reg_success',
+                    'Du bist jetzt für "{event_title}" angemeldet.',
+                    event_title=registration.event.title,
+                ),
             )
         else:
             messages.info(
@@ -270,7 +280,7 @@ def process_checkin(request, registration_id, token):
     )
 
     active_event = get_active_event()
-    can_ci, reason = registration.can_check_in(actor=request.user, target_event=active_event)
+    can_ci, reason = registration.can_check_in(target_event=active_event)
     if not can_ci:
         if _wants_json(request):
             return JsonResponse({'status': 'error', 'message': reason}, status=400)
@@ -310,7 +320,7 @@ def process_checkin(request, registration_id, token):
     # POST-Request: Zustandsänderung durchführen!
     already_checked_in = registration.is_checked_in
     if not already_checked_in:
-        registration.check_in(actor=request.user, target_event=active_event)
+        registration.check_in(target_event=active_event)
 
     if _wants_json(request):
         return JsonResponse({
@@ -450,11 +460,12 @@ def scan_qr_api(request):
             status=400,
         )
 
-    # 3. Prüfe, ob die Anmeldung zum aktuell aktiven Event gehört
-    if registration.event_id != active_event.id:
+    # Zentrale fachliche Prüfung (Single Source of Truth)
+    result = registration.can_check_in(target_event=active_event)
+    if not result.allowed:
         return JsonResponse(
             {
-                'status': 'event_mismatch',
+                'status': result.code,
                 'user': registration.user.username,
                 'full_name': registration.user.get_full_name()
                 or registration.user.username,
@@ -464,31 +475,7 @@ def scan_qr_api(request):
                     else "Standard"
                 ),
                 'seat': seat_label,
-                'message': (
-                    f'ABGELEHNT: Dieses Ticket gehört zur Veranstaltung "{registration.event.title}" '
-                    f'und ist für die aktuelle Veranstaltung "{active_event.title}" nicht gültig!'
-                ),
-            },
-            status=400,
-        )
-
-    # 4. Prüfe Zahlungsstatus
-    if registration.payment_status != EventRegistration.PaymentStatus.PAID:
-        return JsonResponse(
-            {
-                'status': 'unpaid',
-                'user': registration.user.username,
-                'full_name': registration.user.get_full_name()
-                or registration.user.username,
-                'ticket': (
-                    registration.ticket_type.name
-                    if registration.ticket_type
-                    else "Standard"
-                ),
-                'seat': seat_label,
-                'message': (
-                    f'ABGELEHNT: Die Anmeldung von {registration.user.username} ist noch NICHT BEZAHLT.'
-                ),
+                'message': result.reason,
             },
             status=400,
         )

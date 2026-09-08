@@ -723,7 +723,7 @@ class EventRegistrationValidationTests(TestCase):
             ticket_type=foreign_ticket
         )
         with self.assertRaises(ValidationError):
-            reg.save()
+            reg.full_clean()
 
     def test_explicit_domain_methods_isolate_side_effects(self):
         """Architektur-Test: mark_as_paid() und mark_as_cancelled() führen gezielt Seiteneffekte aus."""

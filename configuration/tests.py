@@ -59,6 +59,22 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(translation.key, 'test_key')
         self.assertIn('test_key', str(translation))
 
+    def test_get_translation_helper(self):
+        from configuration.context_processors import get_translation
+        # Test fallback default text
+        self.assertEqual(get_translation('unknown_key', 'Fallback {name}', name='Entails'), 'Fallback Entails')
+        # Test predefined DEFAULT_TEXTS key with kwargs formatting
+        msg = get_translation('msg_team_created', team_name='Alpha', invite_code='1234')
+        self.assertEqual(msg, 'Team "Alpha" erfolgreich gegründet! Einladungscode: 1234')
+        # Test database override
+        SystemTranslation.objects.update_or_create(
+            key='msg_team_created',
+            defaults={'text': 'Team {team_name} gegründet! Code: {invite_code}'}
+        )
+        msg_custom = get_translation('msg_team_created', team_name='Alpha', invite_code='1234')
+        self.assertEqual(msg_custom, 'Team Alpha gegründet! Code: 1234')
+
+
     def test_navigation_item_active_toggle_in_context_processor(self):
         """Inaktive Menüpunkte (is_active=False) werden nicht im Frontend gerendert."""
         NavigationItem.objects.create(

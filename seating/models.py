@@ -204,15 +204,17 @@ class SeatingCell(models.Model):
         Prüft vorab, ob ein Sitzplatz für den angegebenen Benutzer reserviert werden kann,
         ohne den Zustand der Kachel oder bisheriger Sitze zu verändern.
         """
+        from events.models import Event, EventRegistration
+
         if not registration:
             return False, "Keine gültige Anmeldung vorhanden."
 
-        if getattr(registration, 'payment_status', None) == 'CANCELLED':
+        if registration.payment_status == EventRegistration.PaymentStatus.CANCELLED:
             return False, "Deine Anmeldung ist storniert. Bitte melde dich erneut an."
 
-        event = getattr(registration, 'event', None)
+        event = registration.event
         if event and hasattr(event, 'effective_status'):
-            if event.effective_status in ('CANCELLED', 'FINISHED', 'DRAFT'):
+            if event.effective_status in (Event.Status.CANCELLED, Event.Status.FINISHED, Event.Status.DRAFT):
                 return False, "Für diese Veranstaltung können keine Plätze mehr gewählt werden."
 
         if self.cell_type != self.CellType.SEAT:

@@ -168,41 +168,44 @@ def verify_email_view(request):
 
 
 def resend_verification_code_view(request):
-    if request.method == "POST":
-        user_id = request.session.get('pending_verification_user_id')
-        if not user_id:
-            return redirect("login")
+    if request.method != "POST":
+        return redirect("verify_email")
 
-        try:
-            user = User.objects.get(pk=user_id)
-        except User.DoesNotExist:
-            return redirect("login")
+    user_id = request.session.get('pending_verification_user_id')
+    if not user_id:
+        return redirect("login")
 
-        # Cooldown Schutz (maximal 1 Code alle 60 Sekunden)
-        last_code = EmailVerificationCode.objects.filter(user=user).order_by('-created_at').first()
-        if last_code and (timezone.now() - last_code.created_at) < timedelta(seconds=60):
-            messages.warning(
-                request,
-                "Bitte warte kurz (ca. 1 Minute), bevor du einen neuen Code anforderst.",
-            )
-            return redirect("verify_email")
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return redirect("login")
 
-        with transaction.atomic():
-            # Neuen Code generieren & E-Mail erst nach Commit senden
-            code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
+    # Cooldown Schutz (maximal 1 Code alle 60 Sekunden)
+    last_code = EmailVerificationCode.objects.filter(
+        user=user, new_email__isnull=True
+    ).order_by('-created_at').first()
+    if last_code and (timezone.now() - last_code.created_at) < timedelta(seconds=60):
+        messages.warning(
+            request,
+            "Bitte warte kurz (ca. 1 Minute), bevor du einen neuen Code anforderst.",
+        )
+        return redirect("verify_email")
 
-            context_data = {
-                'username': user.username,
-                'full_name': user.get_full_name() or user.username,
-                'code': code_obj.code,
-                'valid_minutes': 15,
-            }
-            transaction.on_commit(
-                lambda: send_system_email('email_verification', user.email, context_data)
-            )
+    with transaction.atomic():
+        # Neuen Code generieren & E-Mail erst nach Commit senden
+        code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
 
-        messages.info(request, f"Ein neuer Bestätigungscode wurde an {user.email} gesendet.")
+        context_data = {
+            'username': user.username,
+            'full_name': user.get_full_name() or user.username,
+            'code': code_obj.code,
+            'valid_minutes': 15,
+        }
+        transaction.on_commit(
+            lambda: send_system_email('email_verification', user.email, context_data)
+        )
 
+    messages.info(request, f"Ein neuer Bestätigungscode wurde an {user.email} gesendet.")
     return redirect("verify_email")
 
 
@@ -220,19 +223,155 @@ def profile_view(request):
     profile_form = UserProfileForm(instance=user)
     password_form = PasswordChangeForm(user=user)
 
+    pending_email_code = EmailVerificationCode.objects.filter(
+        user=user, is_used=False, new_email__isnull=False, expires_at__gt=timezone.now()
+    ).order_by('-created_at').first()
+
     if request.method == "POST":
         if "update_profile" in request.POST:
             profile_form = UserProfileForm(request.POST, instance=user)
             if profile_form.is_valid():
-                profile_form.save()
-                messages.success(
-                    request, "Deine Profil-Stammdaten wurden aktualisiert."
-                )
+                user = profile_form.save()
+                if profile_form.pending_new_email:
+                    email_settings = GeneralEmailSettings.load()
+                    if not email_settings.is_operational:
+                        messages.error(
+                            request,
+                            "E-Mail-Änderung ist derzeit vorübergehend nicht möglich, da der E-Mail-Versand nicht eingerichtet oder deaktiviert ist.",
+                        )
+                    else:
+                        target_email = profile_form.pending_new_email
+                        with transaction.atomic():
+                            code_obj = EmailVerificationCode.generate_for_user(
+                                user, valid_minutes=15, new_email=target_email
+                            )
+                            context_data = {
+                                'username': user.username,
+                                'full_name': user.get_full_name() or user.username,
+                                'code': code_obj.code,
+                                'valid_minutes': 15,
+                                'new_email': target_email,
+                            }
+                            transaction.on_commit(
+                                lambda: send_system_email(
+                                    'email_change_verification', target_email, context_data
+                                )
+                            )
+                        messages.info(
+                            request,
+                            get_translation(
+                                'msg_email_change_initiated',
+                                'Ein Bestätigungscode wurde an "{new_email}" gesendet. Bitte gib den Code ein, um die Änderung abzuschließen.',
+                                new_email=target_email,
+                            ),
+                        )
+                else:
+                    messages.success(
+                        request, "Deine Profil-Stammdaten wurden aktualisiert."
+                    )
                 return redirect("profile")
             else:
                 messages.error(
                     request, "Bitte korrigiere die Fehler im Formular."
                 )
+
+        elif "confirm_email_change" in request.POST:
+            code_input = request.POST.get('verification_code', '').strip()
+            if not code_input:
+                digits = [request.POST.get(f'digit{i}', '').strip() for i in range(1, 7)]
+                code_input = "".join(digits)
+
+            if not pending_email_code or not pending_email_code.is_valid():
+                messages.error(request, "Der Bestätigungscode ist ungültig oder abgelaufen.")
+                return redirect("profile")
+
+            if secrets.compare_digest(pending_email_code.code, code_input):
+                # Prüfen, ob die neue Adresse inzwischen anderweitig vergeben wurde
+                if User.objects.filter(email__iexact=pending_email_code.new_email).exclude(pk=user.pk).exists():
+                    messages.error(
+                        request,
+                        "Diese E-Mail-Adresse wird inzwischen bereits von einem anderen Konto verwendet."
+                    )
+                else:
+                    with transaction.atomic():
+                        new_email_addr = pending_email_code.new_email
+                        user.email = new_email_addr
+                        user.save(update_fields=['email'])
+                        pending_email_code.is_used = True
+                        pending_email_code.save(update_fields=['is_used'])
+                    messages.success(
+                        request,
+                        get_translation(
+                            'msg_email_change_success',
+                            'Deine E-Mail-Adresse wurde erfolgreich auf "{new_email}" geändert.',
+                            new_email=new_email_addr,
+                        ),
+                    )
+            else:
+                pending_email_code.register_failed_attempt()
+                remaining = max(0, 5 - pending_email_code.failed_attempts)
+                if remaining > 0:
+                    messages.error(
+                        request,
+                        f"Ungültiger Bestätigungscode. Noch {remaining} Versuch(e) verbleibend.",
+                    )
+                else:
+                    messages.error(
+                        request,
+                        "Zu viele Fehlversuche. Dieser Bestätigungscode wurde gesperrt. Bitte fordere einen neuen Code an.",
+                    )
+            return redirect("profile")
+
+        elif "resend_email_change_code" in request.POST:
+            if not pending_email_code:
+                return redirect("profile")
+
+            if (timezone.now() - pending_email_code.created_at) < timedelta(seconds=60):
+                messages.warning(
+                    request,
+                    "Bitte warte kurz (ca. 1 Minute), bevor du einen neuen Code anforderst.",
+                )
+                return redirect("profile")
+
+            target_email = pending_email_code.new_email
+            with transaction.atomic():
+                new_code = EmailVerificationCode.generate_for_user(
+                    user, valid_minutes=15, new_email=target_email
+                )
+                context_data = {
+                    'username': user.username,
+                    'full_name': user.get_full_name() or user.username,
+                    'code': new_code.code,
+                    'valid_minutes': 15,
+                    'new_email': target_email,
+                }
+                transaction.on_commit(
+                    lambda: send_system_email(
+                        'email_change_verification', target_email, context_data
+                    )
+                )
+            messages.info(
+                request,
+                get_translation(
+                    'msg_email_change_resend',
+                    'Ein neuer Bestätigungscode wurde an "{new_email}" gesendet.',
+                    new_email=target_email,
+                ),
+            )
+            return redirect("profile")
+
+        elif "cancel_email_change" in request.POST:
+            if pending_email_code:
+                pending_email_code.is_used = True
+                pending_email_code.save(update_fields=['is_used'])
+                messages.info(
+                    request,
+                    get_translation(
+                        'msg_email_change_cancelled',
+                        'Die E-Mail-Änderung wurde abgebrochen.',
+                    ),
+                )
+            return redirect("profile")
 
         elif "change_password" in request.POST:
             password_form = PasswordChangeForm(user=user, data=request.POST)
@@ -254,5 +393,6 @@ def profile_view(request):
         'profile_form': profile_form,
         'password_form': password_form,
         'registrations': registrations,
+        'pending_email_code': pending_email_code,
     }
     return render(request, "users/profile.html", context)

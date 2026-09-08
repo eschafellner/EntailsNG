@@ -38,6 +38,48 @@
         {% t "profile_edit_title" "Profil bearbeiten" %}
       </h3>
 
+      {% if pending_email_code %}
+        <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-left: 4px solid var(--accent, #38bdf8); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+            <div style="font-weight: 700; color: var(--ink); font-size: 14px;">
+              ⏳ {% t "profile_email_change_pending_title" "E-Mail-Änderung ausstehend" %}
+            </div>
+            <span style="font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+              {% t "profile_code_valid_until" "Gültig bis:" %} {{ pending_email_code.expires_at|date:"H:i" }} Uhr
+            </span>
+          </div>
+          <p style="margin: 0 0 12px 0; font-size: 13px; color: var(--ink);">
+            {% t "profile_email_change_hint" "Wir haben einen 6-stelligen Bestätigungscode an" %}
+            <strong style="color: var(--accent, #38bdf8);">{{ pending_email_code.new_email }}</strong>
+            {% t "profile_email_change_hint_2" "gesendet. Bitte gib den Code hier ein, um die neue Adresse zu aktivieren:" %}
+          </p>
+
+          <form method="post" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+            {% csrf_token %}
+            <input type="text" name="verification_code" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="123456" required class="form-control" style="width: 140px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: bold; letter-spacing: 4px;">
+            <button type="submit" name="confirm_email_change" class="btn-login" style="padding: 9px 18px; font-size: 13px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; width: auto;">
+              ✓ {% t "profile_confirm_email_btn" "Bestätigen" %}
+            </button>
+          </form>
+
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <form method="post" style="display: inline;">
+              {% csrf_token %}
+              <button type="submit" name="resend_email_change_code" style="background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; text-decoration: underline; padding: 0;">
+                🔄 {% t "profile_resend_code_btn" "Neuen Code anfordern" %}
+              </button>
+            </form>
+            <span style="color: var(--line);">|</span>
+            <form method="post" style="display: inline;">
+              {% csrf_token %}
+              <button type="submit" name="cancel_email_change" style="background: none; border: none; color: var(--danger, #ef4444); font-size: 12px; cursor: pointer; text-decoration: underline; padding: 0;">
+                ✕ {% t "profile_cancel_change_btn" "Änderung abbrechen" %}
+              </button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+
       <form method="post">
         {% csrf_token %}
 
@@ -50,6 +92,11 @@
         <div class="form-group">
           <label for="id_email">{% t "auth_email_label" "E-Mail-Adresse:" %}</label>
           <input type="email" name="email" id="id_email" class="form-control" value="{{ profile_form.email.value|default:'' }}" required>
+          {% if pending_email_code %}
+            <small style="color: var(--amber, #f59e0b); font-size: 11px; display: block; margin-top: 4px;">
+              ⚠️ {% t "profile_email_change_pending_note" "Eine Änderung auf" %} <strong>{{ pending_email_code.new_email }}</strong> {% t "profile_email_change_pending_note_2" "steht noch aus." %}
+            </small>
+          {% endif %}
           {% if profile_form.email.errors %}
             <div style="color: var(--danger); font-size: 12px; margin-top: 4px;">{{ profile_form.email.errors.0 }}</div>
           {% endif %}

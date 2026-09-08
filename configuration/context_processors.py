@@ -422,6 +422,17 @@ DEFAULT_TEXTS = {
     'dash_past_event_reregister_hint_3': 'ist eine neue Anmeldung erforderlich.',
     'error_500_title': 'Unerwarteter Serverfehler',
     'error_500_text': 'Beim Verarbeiten deiner Anfrage ist ein interner Serverfehler aufgetreten. Der Fehler wurde im System protokolliert. Bitte versuche es in wenigen Momenten erneut.',
+
+    # Flash-Meldungen & Benachrichtigungen
+    'msg_event_reg_success': 'Du bist jetzt für "{event_title}" angemeldet.',
+    'msg_event_reg_reactivated': 'Deine Anmeldung für "{event_title}" wurde reaktiviert. Bitte wähle bei Bedarf deinen Sitzplatz erneut aus.',
+    'msg_team_created': 'Team "{team_name}" erfolgreich gegründet! Einladungscode: {invite_code}',
+    'msg_team_joined': 'Du bist dem Team "{team_name}" erfolgreich beigetreten!',
+    'msg_bracket_generated': 'Turnierbaum für "{tournament_title}" erfolgreich generiert! Das Turnier läuft jetzt.',
+    'msg_email_change_initiated': 'Ein Bestätigungscode wurde an "{new_email}" gesendet. Bitte gib den Code ein, um die Änderung abzuschließen.',
+    'msg_email_change_success': 'Deine E-Mail-Adresse wurde erfolgreich auf "{new_email}" geändert.',
+    'msg_email_change_cancelled': 'Die E-Mail-Änderung wurde abgebrochen.',
+    'msg_email_change_resend': 'Ein neuer Bestätigungscode wurde an "{new_email}" gesendet.',
 }
 
 
@@ -438,6 +449,34 @@ def _load_translations():
         texts = dict(SystemTranslation.objects.values_list('key', 'text'))
         cache.set(TRANSLATION_CACHE_KEY, texts, CACHE_SECONDS)
     return texts
+
+
+def get_translation(key: str, default: str = None, **kwargs) -> str:
+    """
+    Gibt die Übersetzung für den angegebenen Schlüssel zurück.
+    Unterstützt optionale String-Formatierungs-Keywords (**kwargs).
+    """
+    if not key:
+        return ""
+
+    text = None
+    try:
+        texts = _load_translations()
+        if key in texts and texts[key]:
+            text = texts[key]
+    except Exception:
+        pass
+
+    if text is None:
+        text = default if default is not None else DEFAULT_TEXTS.get(key, key)
+
+    if kwargs and isinstance(text, str):
+        try:
+            return text.format(**kwargs)
+        except Exception:
+            return text
+
+    return text
 
 
 def _get_active_event():

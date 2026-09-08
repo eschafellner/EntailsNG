@@ -74,6 +74,11 @@ class UserProfileForm(forms.ModelForm):
         model = User
         fields = ("email", "birthday")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.original_email = self.instance.email if (self.instance and self.instance.pk) else ""
+        self.pending_new_email = None
+
     def clean_email(self):
         email = self.cleaned_data.get('email', '').strip()
         query = User.objects.filter(email__iexact=email)
@@ -93,6 +98,20 @@ class UserProfileForm(forms.ModelForm):
                     "Bitte gib ein gültiges Geburtsdatum mit 4-stelligem Jahr an (z. B. 1998)."
                 )
         return birthday
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        submitted_email = self.cleaned_data.get('email', '').strip()
+        if self.original_email and submitted_email.lower() != self.original_email.lower():
+            # Bisherige E-Mail beibehalten bis zur Double-Opt-In Bestätigung
+            user.email = self.original_email
+            self.pending_new_email = submitted_email
+        else:
+            self.pending_new_email = None
+
+        if commit:
+            user.save()
+        return user
 
 
 

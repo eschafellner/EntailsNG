@@ -88,3 +88,63 @@ class RegistrationService:
             ticket_type=selected_ticket
         )
         return registration, True, False
+
+
+class PaymentService:
+    """
+    Zentraler Service für Zahlungs- und Stornierungs-Orchestrierung.
+    Kapselt Statusänderungen, Sitzplatz-Updates, Cache-Invalidierung und E-Mail-Versand.
+    """
+
+    @staticmethod
+    @transaction.atomic
+    def mark_paid(registration, amount=None, send_email=True):
+        from seating.models import SeatingCell
+        from configuration.cache import invalidate_event_capacity_cache
+
+        registration.payment_status = EventRegistration.PaymentStatus.PAID
+        if not registration.paid_at:
+            registration.paid_at = timezone.now()
+        if amount is not None:
+            registration.paid_amount = amount
+        elif (not registration.paid_amount or registration.paid_amount == 0) and registration.ticket_type:
+            registration.paid_amount = registration.ticket_type.price
+        registration.cancelled_at = None
+        registration.save()
+
+        # Sitzplätze synchronisieren (Bulk Update ohne N+1 mit Enum)
+        registration.seats.filter(
+            reservation_status=SeatingCell.ReservationStatus.PRE_RESERVED
+        ).update(reservation_status=SeatingCell.ReservationStatus.RESERVED)
+
+        if registration.event_id:
+            invalidate_event_capacity_cache(registration.event_id)
+
+        # E-Mail erst NACH erfolgreichem DB-Commit versenden
+        if send_email:
+            transaction.on_commit(registration.send_payment_confirmation_email)
+
+        return registration
+
+    @staticmethod
+    @transaction.atomic
+    def mark_cancelled(registration):
+        from seating.models import SeatingCell
+        from configuration.cache import invalidate_event_capacity_cache
+
+        registration.payment_status = EventRegistration.PaymentStatus.CANCELLED
+        registration.is_checked_in = False
+        registration.checked_in_at = None
+        registration.cancelled_at = timezone.now()
+        registration.save()
+
+        # Sitzplätze atomar freigeben (Bulk Update mit Enum)
+        registration.seats.update(
+            registration=None,
+            reservation_status=SeatingCell.ReservationStatus.FREE
+        )
+        if registration.event_id:
+            invalidate_event_capacity_cache(registration.event_id)
+
+        return registration
+
