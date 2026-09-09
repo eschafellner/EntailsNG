@@ -79,6 +79,22 @@ class SeatingPlanTests(TestCase):
             SeatingCell.ReservationStatus.FREE,
         )
 
+    def test_seating_page_renders_modular_script_and_config(self):
+        self.client.login(username='seatuser', password='password')
+        response = self.client.get(reverse('seating_plan'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="seating-config"')
+        self.assertContains(response, 'static/js/seating.js')
+        self.assertContains(response, f'"eventId": "{self.event.id}"')
+        self.assertContains(response, '"isUserLoggedIn": true')
+        self.assertContains(response, '"username": "seatuser"')
+        # Whitelabeling: kein hardcodiertes "Haag-networX" im Titel
+        self.assertNotContains(response, 'Haag-networX')
+        # Offline Fonts: Lokales fonts.css statt externer Google Fonts CDN-Links
+        self.assertContains(response, 'static/css/fonts.css')
+        self.assertNotContains(response, 'fonts.googleapis.com')
+        self.assertNotContains(response, 'fonts.gstatic.com')
+
     def test_1000_seats_performance(self):
         # Erstelle 1000 Sitzplatz-Kacheln (50x20)
         large_event = Event.objects.create(
@@ -200,6 +216,25 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.assertEqual(self.plan.cells.count(), 3)
         self.seat_cell.refresh_from_db()
         self.assertEqual(self.seat_cell.seat_label, 'B1-Updated')
+
+    def test_save_seating_plan_blocked_cells(self):
+        admin_user = User.objects.create_user(
+            username='seating_admin_block', email='sablock@example.com', password='password', is_staff=True
+        )
+        self.client.login(username='seating_admin_block', password='password')
+
+        cells_payload = [
+            {'x': 1, 'y': 1, 'cell_type': SeatingCell.CellType.SEAT, 'seat_label': 'A1', 'text_label': ''},
+            {'x': 2, 'y': 2, 'cell_type': SeatingCell.CellType.SEAT, 'seat_label': 'X1', 'text_label': '', 'reservation_status': 'BLOCKED'},
+        ]
+        response = self.client.post(
+            reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
+            data=json.dumps({'cells': cells_payload}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        blocked_cell = self.plan.cells.get(x=2, y=2)
+        self.assertEqual(blocked_cell.reservation_status, SeatingCell.ReservationStatus.BLOCKED)
 
     def test_save_seating_plan_editor_validations(self):
         admin_user = User.objects.create_user(
@@ -822,6 +857,74 @@ class SeatingServiceAndSignalTests(TestCase):
         response = self.client.get('/admin/seating/seatingplan/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Master-Vorlage')
+
+    def test_unpaid_seat_overwrite_disabled(self):
+        """Wenn allow_unpaid_seat_overwrite=False, kann ein zahlender Gast den vorgemerkten Platz nicht überschreiben."""
+        self.event.status = Event.Status.REGISTRATION_OPEN
+        self.event.allow_unpaid_seat_overwrite = False
+        self.event.save()
+
+        user_unpaid = User.objects.create_user(username='unpaid_guest', password='password')
+        reg_unpaid = EventRegistration.objects.create(
+            user=user_unpaid, event=self.event, payment_status=EventRegistration.PaymentStatus.UNPAID
+        )
+        success, msg = self.seat1.reserve_for_user(reg_unpaid)
+        self.assertTrue(success)
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.PRE_RESERVED)
+
+        # Zahlender Gast versucht zu reservieren
+        user_paid = User.objects.create_user(username='paid_guest', password='password')
+        reg_paid = EventRegistration.objects.create(
+            user=user_paid, event=self.event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+        can_res, msg = self.seat1.can_reserve_for_user(reg_paid)
+        self.assertFalse(can_res)
+        self.assertIn("nicht gestattet", msg)
+
+    def test_unpaid_seat_overwrite_enabled_sends_email(self):
+        """Wenn allow_unpaid_seat_overwrite=True, überschreibt der zahlende Gast und der unbezahlte Gast erhält eine E-Mail."""
+        from django.core import mail
+        from django.core.management import call_command
+        from emails.models import GeneralEmailSettings
+
+        call_command('seed_email_templates')
+        email_settings = GeneralEmailSettings.load()
+        email_settings.is_enabled = True
+        email_settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        email_settings.sender_email = 'noreply@example.com'
+        email_settings.save()
+
+        self.event.status = Event.Status.REGISTRATION_OPEN
+        self.event.allow_unpaid_seat_overwrite = True
+        self.event.save()
+
+        user_unpaid = User.objects.create_user(username='unpaid_guest2', email='unpaid2@example.com', password='password')
+        reg_unpaid = EventRegistration.objects.create(
+            user=user_unpaid, event=self.event, payment_status=EventRegistration.PaymentStatus.UNPAID
+        )
+        success, msg = self.seat1.reserve_for_user(reg_unpaid)
+        self.assertTrue(success)
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.PRE_RESERVED)
+
+        # Zahlender Gast überschreibt
+        user_paid = User.objects.create_user(username='paid_guest2', email='paid2@example.com', password='password')
+        reg_paid = EventRegistration.objects.create(
+            user=user_paid, event=self.event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            success, msg = self.seat1.reserve_for_user(reg_paid)
+
+        self.assertTrue(success)
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.registration, reg_paid)
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
+        # E-Mail an unpaid2@example.com prüfen
+        self.assertTrue(any('unpaid2@example.com' in m.to for m in mail.outbox))
+        email = [m for m in mail.outbox if 'unpaid2@example.com' in m.to][0]
+        self.assertIn(self.seat1.seat_label, email.subject)
+
 
 
 

@@ -1,6 +1,6 @@
 import logging
 import math
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from events.models import EventRegistration
 from tournaments.exceptions import (
@@ -503,6 +503,107 @@ class TournamentMatchService:
                         tournament.save(update_fields=['status'])
 
             return match, winner_team
+
+
+def check_and_advance_bye_or_walkover(match):
+    """
+    Prüft, ob ein Match durch ein Freilos oder den Rückzug eines Teams
+    nur noch einen einzigen Teilnehmer hat, und rückt diesen automatisch vor.
+    """
+    from tournaments.models import TournamentMatch
+
+    if match.status == TournamentMatch.Status.COMPLETED or match.is_bye:
+        return
+
+    # Prüfen, ob genau ein Team gesetzt ist und der andere Slot leer ist
+    if (match.team1 and not match.team2) or (match.team2 and not match.team1):
+        prev_matches = list(TournamentMatch.objects.filter(
+            tournament=match.tournament,
+            next_match_winner=match
+        ))
+        # Wenn alle Vorgänger-Matches bereits fertig sind (oder keine existieren):
+        if not prev_matches or all(m.status == TournamentMatch.Status.COMPLETED for m in prev_matches):
+            active_team = match.team1 or match.team2
+            match.is_bye = True
+            match.winner = active_team
+            match.status = TournamentMatch.Status.COMPLETED
+            match.decision_reason = match.decision_reason or "Freilos / Walkover"
+            match.save(update_fields=['is_bye', 'winner', 'status', 'decision_reason'])
+
+            if match.next_match_winner:
+                next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
+                if match.next_match_winner_slot == 1:
+                    next_w.team1 = active_team
+                elif match.next_match_winner_slot == 2:
+                    next_w.team2 = active_team
+                else:
+                    if not next_w.team1:
+                        next_w.team1 = active_team
+                    elif not next_w.team2:
+                        next_w.team2 = active_team
+
+                if next_w.team1 and next_w.team2 and not next_w.is_bye and next_w.status == TournamentMatch.Status.PENDING:
+                    next_w.status = TournamentMatch.Status.READY
+                next_w.save()
+                check_and_advance_bye_or_walkover(next_w)
+
+
+def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
+    """
+    Wickelt alle offenen Matches eines Teams in generierten oder laufenden Turnieren
+    als Walkover / Freilos für den jeweiligen Gegner ab, sodass der Turnierbaum
+    nicht blockiert wird.
+    """
+    from tournaments.models import TournamentMatch, TournamentMatchParticipant
+
+    with transaction.atomic():
+        # 1. FFA-Matches
+        TournamentMatchParticipant.objects.filter(
+            team=team,
+            match__status__in=[
+                TournamentMatch.Status.PENDING,
+                TournamentMatch.Status.READY,
+                TournamentMatch.Status.IN_PROGRESS,
+            ]
+        ).update(is_disqualified=True)
+
+        # 2. KO- / 1v1-Matches
+        open_matches = list(
+            TournamentMatch.objects.select_for_update().filter(
+                models.Q(team1=team) | models.Q(team2=team),
+                status__in=[
+                    TournamentMatch.Status.PENDING,
+                    TournamentMatch.Status.READY,
+                    TournamentMatch.Status.IN_PROGRESS,
+                ]
+            ).order_by('round_number')
+        )
+
+        for match in open_matches:
+            match.refresh_from_db()
+            if match.status == TournamentMatch.Status.COMPLETED:
+                continue
+
+            opponent = match.team2 if match.team1 == team else match.team1
+            if opponent:
+                # Gegner gewinnt kampflos
+                TournamentMatchService.update_match_score(
+                    match_id=match.id,
+                    score1=0 if match.team1 == team else 1,
+                    score2=1 if match.team1 == team else 0,
+                    winner_id=opponent.id,
+                    decision_reason=reason,
+                )
+            else:
+                # Noch kein Gegner vorhanden: Slot des forfeiting Teams leeren
+                if match.team1 == team:
+                    match.team1 = None
+                if match.team2 == team:
+                    match.team2 = None
+                match.decision_reason = reason
+                match.save(update_fields=['team1', 'team2', 'decision_reason'])
+                check_and_advance_bye_or_walkover(match)
+
 
 
 class LeagueStandingService:

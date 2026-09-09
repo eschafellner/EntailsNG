@@ -1264,6 +1264,75 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
         resp_paid = self.client.get(url_paid)
         self.assertEqual(resp_paid.status_code, 400)
 
+    def test_registration_checkin_qr_view_access_control(self):
+        """Zugriffsschutz auf Check-In-QR: Anonym -> 302, Fremder -> 403, Unbezahlt -> 400, Bezahlt/Staff -> 200 PNG."""
+        from events.payment_qr import generate_checkin_qr_png
+
+        # Direkte Prüfung der Bild-Generierung
+        test_png = generate_checkin_qr_png('https://example.com/test')
+        self.assertTrue(test_png.startswith(b'\x89PNG\r\n\x1a\n'))
+
+        ticket = TicketType.objects.create(event=self.event, name='Standard', price=20.00)
+        reg = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            ticket_type=ticket,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+
+        other_user = User.objects.create_user(username='qr_stranger', password='password')
+        url = reverse('registration_checkin_qr', kwargs={'registration_id': reg.id})
+
+        # 1. Anonym -> Redirect zu Login
+        resp_anon = self.client.get(url)
+        self.assertEqual(resp_anon.status_code, 302)
+
+        # 2. Fremder Benutzer -> 403 Forbidden
+        self.client.login(username='qr_stranger', password='password')
+        resp_other = self.client.get(url)
+        self.assertEqual(resp_other.status_code, 403)
+
+        # 3. Eigentümer bei unbezahlt -> 400 Bad Request
+        self.client.login(username='gamer1', password='password')
+        resp_unpaid = self.client.get(url)
+        self.assertEqual(resp_unpaid.status_code, 400)
+
+        # 4. Status auf BEZAHLT ändern
+        reg.payment_status = EventRegistration.PaymentStatus.PAID
+        reg.save()
+
+        # Eigentümer bei bezahlt -> 200 OK PNG
+        resp_owner = self.client.get(url)
+        self.assertEqual(resp_owner.status_code, 200)
+        self.assertEqual(resp_owner['Content-Type'], 'image/png')
+        self.assertIn('private, no-store', resp_owner['Cache-Control'])
+        self.assertTrue(resp_owner.content.startswith(b'\x89PNG\r\n\x1a\n'))
+
+        # 5. Staff -> 200 OK PNG
+        self.client.login(username='admin', password='password')
+        resp_staff = self.client.get(url)
+        self.assertEqual(resp_staff.status_code, 200)
+        self.assertEqual(resp_staff['Content-Type'], 'image/png')
+
+    def test_dashboard_renders_local_checkin_qr_no_external_leak(self):
+        """Dashboard rendert lokalen Check-In QR-Link und enthält keinen Verweis auf externe APIs."""
+        ticket = TicketType.objects.create(event=self.event, name='Standard', price=20.00)
+        reg_paid = EventRegistration.objects.create(
+            user=self.user,
+            event=self.event,
+            ticket_type=ticket,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+
+        self.client.login(username='gamer1', password='password')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+        local_qr_url = reverse('registration_checkin_qr', kwargs={'registration_id': reg_paid.id})
+        self.assertContains(response, local_qr_url)
+        self.assertNotContains(response, 'api.qrserver.com')
+
+
     def test_dashboard_event_info_and_single_day_date(self):
         """Dashboard zeigt Veranstaltungsinformationen über der Sitzplan-Preview; 1-Tages-Events zeigen nur ein Datum."""
         # 1. Mehrtägiges Event (Start != Ende)
@@ -1451,8 +1520,38 @@ class EventRegistrationAdminPaymentEmailTests(TestCase):
             self.assertEqual(mock_send.call_args[0][0], 'payment_confirmation')
             self.assertEqual(mock_send.call_args[0][1], 'player1@example.com')
             self.reg.refresh_from_db()
-            self.assertEqual(self.reg.payment_status, EventRegistration.PaymentStatus.PAID)
             self.assertIsNotNone(self.reg.paid_at)
+
+    def test_admin_save_model_cancels_registration(self):
+        from events.admin import EventRegistrationAdmin
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+
+        admin = EventRegistrationAdmin(EventRegistration, AdminSite())
+        rf = RequestFactory()
+        request = rf.post('/admin/events/eventregistration/')
+        request.user = self.staff_user
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.contrib.messages.middleware import MessageMiddleware
+        SessionMiddleware(lambda r: None).process_request(request)
+        MessageMiddleware(lambda r: None).process_request(request)
+
+        class DummyForm:
+            changed_data = ['payment_status']
+
+        self.reg.is_checked_in = True
+        self.reg.checked_in_at = timezone.now()
+        self.reg.save()
+
+        self.reg.payment_status = EventRegistration.PaymentStatus.CANCELLED
+        admin.save_model(request, self.reg, DummyForm(), change=True)
+
+        self.reg.refresh_from_db()
+        self.assertEqual(self.reg.payment_status, EventRegistration.PaymentStatus.CANCELLED)
+        self.assertFalse(self.reg.is_checked_in)
+        self.assertIsNone(self.reg.checked_in_at)
+        self.assertIsNotNone(self.reg.cancelled_at)
+
 
 
 

@@ -76,12 +76,9 @@
         </h3>
 
         <!-- Großer QR-Code (240x240px für schnelle Lesbarkeit) -->
-        {% url 'process_checkin' registration_id=registration.id token=registration.checkin_token as checkin_path %}
-        {% with full_url=request.scheme|add:"://"|add:request.get_host|add:checkin_path %}
-          <div style="background: #ffffff; padding: 12px; border-radius: 12px; border: 2px solid #f3f4f6; display: inline-block;">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={{ full_url|urlencode }}" alt="Check-In QR" style="display: block; width: 220px; height: 220px; margin: 0 auto;">
-          </div>
-        {% endwith %}
+        <div style="background: #ffffff; padding: 12px; border-radius: 12px; border: 2px solid #f3f4f6; display: inline-block;">
+          <img src="{% url 'registration_checkin_qr' registration.id %}" alt="Check-In QR" style="display: block; width: 220px; height: 220px; margin: 0 auto;">
+        </div>
 
         <div style="margin-top: 14px; background: #f3f4f6; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
           <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #6b7280; text-transform: uppercase; display: block;">{% t "dash_ticket_code_label" "Ticket-Code (Für manuelle Eingabe)" %}</span>

@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
+from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.utils.text import slugify
@@ -131,7 +132,24 @@ class ClanMembership(models.Model):
         verbose_name = "Clan-Mitgliedschaft"
         verbose_name_plural = "Clan-Mitgliedschaften"
         unique_together = ('user', 'clan')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(status='ACCEPTED'),
+                name='unique_active_clan_membership_per_user',
+                violation_error_message="Ein Benutzer kann zu jedem Zeitpunkt nur in genau einem aktiven Clan Mitglied sein.",
+            ),
+        ]
         ordering = ['role', 'created_at']
+
+    def clean(self):
+        super().clean()
+        if self.status == self.Status.ACCEPTED and self.user_id:
+            qs = ClanMembership.objects.filter(user_id=self.user_id, status=self.Status.ACCEPTED)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
+                raise ValidationError("Ein Benutzer kann zu jedem Zeitpunkt nur in genau einem aktiven Clan Mitglied sein.")
 
     def __str__(self):
         return f"{self.user.username} @ {self.clan.name} ({self.get_role_display()} - {self.get_status_display()})"

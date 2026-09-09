@@ -1,5 +1,5 @@
 from django import template
-from configuration.context_processors import DEFAULT_TEXTS, _load_translations, get_translation
+from configuration.translations import DEFAULT_TEXTS, _load_translations, get_translation
 
 register = template.Library()
 

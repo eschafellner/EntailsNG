@@ -28,7 +28,7 @@
 
 .scanner-stat-card {
   text-align: center;
-  background: #0b0f17;
+  background: var(--paper);
   padding: 8px 16px;
   border-radius: 8px;
   border: 1px solid var(--line);
@@ -45,6 +45,24 @@
   font-size: 18px;
   color: var(--ink);
 }
+
+.scanner-input {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.scanner-input:focus {
+  outline: none;
+  border-color: var(--accent, #0284c7);
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+}
+
 
 .scanner-grid {
   display: grid;
@@ -75,7 +93,7 @@
 .scanner-placeholder {
   text-align: center;
   padding: 30px;
-  color: var(--muted);
+  color: #94a3b8;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
 }

@@ -146,11 +146,18 @@ class SeatingPlanService:
             # 3. Feldlängen validieren
             seat_label = str(c.get('seat_label', '') or '')[:20]
             text_label = str(c.get('text_label', '') or '')[:50]
+            raw_res_status = c.get('reservation_status')
+            reservation_status = (
+                SeatingCell.ReservationStatus.BLOCKED
+                if raw_res_status == SeatingCell.ReservationStatus.BLOCKED
+                else SeatingCell.ReservationStatus.FREE
+            )
 
             sent_coords[(x, y)] = {
                 'cell_type': cell_type,
                 'seat_label': seat_label,
                 'text_label': text_label,
+                'reservation_status': reservation_status,
             }
 
         with transaction.atomic():
@@ -185,6 +192,7 @@ class SeatingPlanService:
                 cell_type = cdata['cell_type']
                 seat_label = cdata['seat_label']
                 text_label = cdata['text_label']
+                res_status = cdata['reservation_status']
 
                 if coord in existing_cells:
                     cell = existing_cells[coord]
@@ -196,12 +204,19 @@ class SeatingPlanService:
                             f'Sitzplatz ({x},{y}) kann nicht in "{cell_type}" umgewandelt werden, da er von {user_name} belegt ist.'
                         )
 
+                    # Status nur ändern, wenn kein User registriert ist
+                    target_res_status = cell.reservation_status
+                    if cell.registration is None and cell_type == SeatingCell.CellType.SEAT:
+                        target_res_status = res_status
+
                     if (cell.cell_type != cell_type or
                         cell.seat_label != seat_label or
-                        cell.text_label != text_label):
+                        cell.text_label != text_label or
+                        cell.reservation_status != target_res_status):
                         cell.cell_type = cell_type
                         cell.seat_label = seat_label
                         cell.text_label = text_label
+                        cell.reservation_status = target_res_status
                         cells_to_update.append(cell)
                 else:
                     cells_to_create.append(
@@ -212,6 +227,7 @@ class SeatingPlanService:
                             cell_type=cell_type,
                             seat_label=seat_label,
                             text_label=text_label,
+                            reservation_status=res_status if cell_type == SeatingCell.CellType.SEAT else SeatingCell.ReservationStatus.FREE,
                         )
                     )
 
@@ -220,7 +236,7 @@ class SeatingPlanService:
             if cells_to_update:
                 SeatingCell.objects.bulk_update(
                     cells_to_update,
-                    fields=['cell_type', 'seat_label', 'text_label'],
+                    fields=['cell_type', 'seat_label', 'text_label', 'reservation_status'],
                     batch_size=500
                 )
 

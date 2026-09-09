@@ -67,7 +67,7 @@
           ODER 8-STELLIGEN TICKET-CODE / TOKEN MANUELL EINGEBEN (Z. B. USB-SCANNER):
         </label>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="manual-code-input" placeholder="8-stelliger Ticket-Code (z. B. K7QM2XZ4) oder Token..." style="flex: 1; background: #0b0f17; color: var(--ink); border: 1px solid var(--line); padding: 10px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+          <input type="text" id="manual-code-input" class="scanner-input" placeholder="8-stelliger Ticket-Code (z. B. K7QM2XZ4) oder Token..." style="flex: 1;">
           <button type="button" id="btn-manual-scan" style="background: #0284c7; color: #ffffff; border: none; padding: 10px 18px; border-radius: 8px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
             Prüfen
           </button>
@@ -83,7 +83,7 @@
         </h2>
 
         <!-- Status Result Banner -->
-        <div id="scan-status-banner" style="padding: 24px; border-radius: 10px; background: #0b0f17; border: 1px solid var(--line); text-align: center; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div id="scan-status-banner" style="padding: 24px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); text-align: center; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
           <span style="font-size: 36px; margin-bottom: 8px;">🔍</span>
           <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted);">
             Bereit zum Scannen. Bitte QR-Code in das Kamerafeld halten oder 8-stelligen Ticket-Code eingeben.
@@ -92,12 +92,12 @@
       </div>
 
       <!-- Quick Details Card -->
-      <div id="scan-details-box" style="display: none; margin-top: 16px; background: #0b0f17; padding: 14px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+      <div id="scan-details-box" style="display: none; margin-top: 16px; background: var(--paper); padding: 14px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <div><span style="color: var(--muted);">GAST:</span> <strong id="res-user" style="color: #ffffff;">-</strong></div>
-          <div><span style="color: var(--muted);">NAME:</span> <strong id="res-name" style="color: #ffffff;">-</strong></div>
-          <div><span style="color: var(--muted);">SITZPLATZ:</span> <strong id="res-seat" style="color: #38bdf8;">-</strong></div>
-          <div><span style="color: var(--muted);">TICKET:</span> <strong id="res-ticket" style="color: #ffffff;">-</strong></div>
+          <div><span style="color: var(--muted);">GAST:</span> <strong id="res-user" style="color: var(--ink);">-</strong></div>
+          <div><span style="color: var(--muted);">NAME:</span> <strong id="res-name" style="color: var(--ink);">-</strong></div>
+          <div><span style="color: var(--muted);">SITZPLATZ:</span> <strong id="res-seat" style="color: var(--accent, #0284c7);">-</strong></div>
+          <div><span style="color: var(--muted);">TICKET:</span> <strong id="res-ticket" style="color: var(--ink);">-</strong></div>
         </div>
       </div>
     </div>
@@ -110,7 +110,7 @@
       <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 24px; margin: 0;">
         {% t "scanner_guest_list_title" "Teilnehmerliste (Manuelle Suche)" %}
       </h2>
-      <input type="text" id="guest-search-input" placeholder="🔍 Nach Name, Ticket-Code oder Platz suchen..." style="background: #0b0f17; color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; min-width: 280px;">
+      <input type="text" id="guest-search-input" class="scanner-input" placeholder="🔍 Nach Name, Ticket-Code oder Platz suchen..." style="min-width: 280px; padding: 8px 14px; font-size: 12px;">
     </div>
 
     <div style="overflow-x: auto;">
@@ -127,7 +127,7 @@
         </thead>
         <tbody id="guest-table-body">
           {% for reg in registrations %}
-            <tr class="guest-row" data-search="{{ reg.user.username|lower }} {{ reg.user.get_full_name|lower }} {{ reg.short_code|lower }} {% for s in reg.seats.all %}{{ s.seat_label|lower }} {% endfor %}" style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+            <tr class="guest-row" data-search="{{ reg.user.username|lower }} {{ reg.user.get_full_name|lower }} {{ reg.short_code|lower }} {% for s in reg.seats.all %}{{ s.seat_label|lower }} {% endfor %}" style="border-bottom: 1px solid var(--line);">
               <td style="padding: 10px;">
                 <strong style="color: var(--ink);">{{ reg.user.username }}</strong>
                 {% if reg.user.get_full_name %}

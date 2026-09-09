@@ -4,7 +4,7 @@ from django.db.models.signals import post_migrate
 
 def seed_default_system_translations(sender, **kwargs):
     try:
-        from configuration.context_processors import DEFAULT_TEXTS
+        from configuration.translations import DEFAULT_TEXTS
         from configuration.models import SystemTranslation
 
         for key, text in DEFAULT_TEXTS.items():

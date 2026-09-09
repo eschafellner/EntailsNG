@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from configuration.cache import invalidate_event_capacity_cache
+from emails.services import send_system_email
 
 
 class SeatingPlan(models.Model):
@@ -231,6 +232,10 @@ class SeatingCell(models.Model):
         )
 
         if self.reservation_status == self.ReservationStatus.PRE_RESERVED and self.registration != registration:
+            event = getattr(self.plan, 'event', None)
+            allow_overwrite = getattr(event, 'allow_unpaid_seat_overwrite', True) if event else True
+            if not allow_overwrite:
+                return False, "Dieser Platz ist bereits vorgemerkt. Eine Überschreibung ist bei dieser Veranstaltung nicht gestattet."
             if not has_paid:
                 return False, "Platz bereits vorgemerkt. Nur zahlende Gäste können ihn überschreiben."
 
@@ -246,6 +251,9 @@ class SeatingCell(models.Model):
             getattr(registration, 'payment_status', None) == 'PAID'
         )
 
+        overwritten_registration = None
+        if self.registration and self.registration != registration:
+            overwritten_registration = self.registration
 
         self.registration = registration
         if has_paid:
@@ -255,8 +263,30 @@ class SeatingCell(models.Model):
             self.reservation_status = self.ReservationStatus.PRE_RESERVED
             msg = "Platz erfolgreich vorgemerkt."
 
-
         self.save()
+
+        if (
+            overwritten_registration
+            and overwritten_registration.user
+            and overwritten_registration.user.email
+        ):
+            target_user = overwritten_registration.user
+            event = getattr(self.plan, 'event', None)
+            event_title = event.title if event else "LAN-Party"
+            seat_label = self.seat_label or f"({self.x}, {self.y})"
+            context_data = {
+                'username': target_user.username,
+                'full_name': target_user.get_full_name() or target_user.username,
+                'event_title': event_title,
+                'seat_label': seat_label,
+                'seating_url': '/seating/',
+            }
+            transaction.on_commit(
+                lambda u=target_user, ctx=context_data: send_system_email(
+                    'seat_overwritten', u.email, ctx
+                )
+            )
+
         return True, msg
 
     def release_seat(self, registration=None, is_admin=False):

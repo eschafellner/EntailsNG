@@ -6,7 +6,7 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #1e293b; padding: 15px 20px; border-radius: 8px; }
-        .tools { display: flex; gap: 10px; margin-bottom: 20px; background: #1e293b; padding: 15px; border-radius: 8px; }
+        .tools { display: flex; gap: 10px; margin-bottom: 20px; background: #1e293b; padding: 15px; border-radius: 8px; flex-wrap: wrap; }
         .tool-btn { padding: 8px 16px; border: 2px solid transparent; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; }
         .tool-btn.active { border-color: white; transform: scale(1.05); }
         .grid-container { overflow: auto; background: #1e293b; padding: 20px; border-radius: 8px; display: inline-block; }
@@ -37,16 +37,32 @@
 </div>
 
 <div class="tools">
-    <button class="tool-btn active" style="background:#22c55e" onclick="setTool('SEAT', this)">🟢 Sitzplatz (Frei)</button>
-    <button class="tool-btn" style="background:#64748b" onclick="setTool('WALL', this)">⬛ Wand</button>
-    <button class="tool-btn" style="background:#8b5cf6" onclick="setTool('DOOR', this)">🟣 Tür</button>
-    <button class="tool-btn" style="background:#0284c7" onclick="setTool('LABEL', this)">🔵 Beschriftung</button>
-    <button class="tool-btn" style="background:#334155" onclick="setTool('EMPTY', this)">⚪ Löschen / Gang</button>
+    <button type="button" class="tool-btn active" style="background:#22c55e" onclick="setTool('SEAT', this)">🟢 Sitzplatz (Frei)</button>
+    <button type="button" class="tool-btn" style="background:#ef4444" onclick="setTool('BLOCKED', this)">⛔ Gesperrt</button>
+    <button type="button" class="tool-btn" style="background:#64748b" onclick="setTool('WALL', this)">⬛ Wand</button>
+    <button type="button" class="tool-btn" style="background:#8b5cf6" onclick="setTool('DOOR', this)">🟣 Tür</button>
+    <button type="button" class="tool-btn" style="background:#0284c7" onclick="setTool('LABEL', this)">🔵 Beschriftung</button>
+    <button type="button" class="tool-btn" style="background:#334155" onclick="setTool('EMPTY', this)">⚪ Löschen / Gang</button>
 </div>
 
 <div class="grid-container">
     <div id="grid" class="grid" style="grid-template-columns: repeat({{ plan.columns }}, 32px);"></div>
 </div>
+
+<!-- Modal Dialog für Beschriftung -->
+<div id="label-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:999; align-items:center; justify-content:center;">
+    <div style="background:#1e293b; color:#f8fafc; border:1px solid #334155; border-radius:10px; padding:20px; min-width:320px; box-shadow:0 10px 25px rgba(0,0,0,0.5); font-family:sans-serif;">
+        <h3 style="margin-top:0; margin-bottom:12px; font-size:16px;">Beschriftung bearbeiten</h3>
+        <input type="text" id="label-modal-input" placeholder="z. B. Bühne, Bar, Notausgang..." style="width:100%; box-sizing:border-box; background:#0f172a; color:#f8fafc; border:1px solid #475569; padding:8px 12px; border-radius:6px; font-size:14px; margin-bottom:16px;">
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <button type="button" id="label-modal-cancel" style="background:#334155; color:#cbd5e1; border:none; padding:8px 14px; border-radius:6px; font-size:13px; cursor:pointer;">Abbrechen</button>
+            <button type="button" id="label-modal-save" style="background:#0284c7; color:#ffffff; border:none; padding:8px 16px; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">Übernehmen</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notifications Container -->
+<div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:1000; display:flex; flex-direction:column; gap:10px; pointer-events:none; font-family:sans-serif;"></div>
 
 <script>
     const planId = {{ plan.id }};
@@ -58,14 +74,14 @@
     let currentTool = 'SEAT';
     let isMouseDown = false;
     let seatCounter = 1;
-    let isPromptOpen = false; // Verhindert Mehrfach-Prompts
+    let isPromptOpen = false;
 
     const gridData = {};
 
     // Initialisiere Leergitter
     for (let y = 1; y <= rows; y++) {
         for (let x = 1; x <= columns; x++) {
-            gridData[`${x}_${y}`] = { x, y, cell_type: 'EMPTY', seat_label: '', text_label: '' };
+            gridData[`${x}_${y}`] = { x, y, cell_type: 'EMPTY', seat_label: '', text_label: '', reservation_status: 'FREE' };
         }
     }
 
@@ -82,7 +98,8 @@
             for (let x = 1; x <= columns; x++) {
                 const data = gridData[`${x}_${y}`];
                 const cell = document.createElement('div');
-                cell.className = `cell ${data.cell_type}`;
+                const isBlocked = data.cell_type === 'SEAT' && data.reservation_status === 'BLOCKED';
+                cell.className = isBlocked ? 'cell BLOCKED' : `cell ${data.cell_type}`;
                 cell.dataset.x = x;
                 cell.dataset.y = y;
 
@@ -92,12 +109,12 @@
                 // Einzelklick vs. Dragging unterscheiden
                 cell.addEventListener('mousedown', (e) => {
                     isMouseDown = true;
-                    applyTool(x, y, cell, true); // true = echter Klick
+                    applyTool(x, y, cell, true);
                 });
 
                 cell.addEventListener('mouseenter', () => {
                     if (isMouseDown && !isPromptOpen) {
-                        applyTool(x, y, cell, false); // false = nur Drüberfahren/Ziehen
+                        applyTool(x, y, cell, false);
                     }
                 });
 
@@ -114,12 +131,78 @@
         btn.classList.add('active');
     }
 
-function applyTool(x, y, el, isDirectClick) {
+    function openLabelModal(initialText, callback) {
+        isPromptOpen = true;
+        const modal = document.getElementById('label-modal');
+        const input = document.getElementById('label-modal-input');
+        const btnSave = document.getElementById('label-modal-save');
+        const btnCancel = document.getElementById('label-modal-cancel');
+
+        input.value = initialText || '';
+        modal.style.display = 'flex';
+        input.focus();
+        input.select();
+
+        function cleanup() {
+            modal.style.display = 'none';
+            isPromptOpen = false;
+            btnSave.onclick = null;
+            btnCancel.onclick = null;
+            input.onkeydown = null;
+        }
+
+        btnSave.onclick = () => {
+            const val = input.value.trim();
+            cleanup();
+            if (val) callback(val);
+        };
+
+        btnCancel.onclick = () => cleanup();
+
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                btnSave.click();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                btnCancel.click();
+            }
+        };
+    }
+
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: auto;
+            background: ${type === 'success' ? '#15803d' : '#b91c1c'};
+            color: #ffffff;
+            border: 1px solid ${type === 'success' ? '#22c55e' : '#ef4444'};
+        `;
+        toast.innerText = (type === 'success' ? '✓ ' : '✕ ') + message;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-10px)';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    function applyTool(x, y, el, isDirectClick) {
         if (isPromptOpen) return;
 
         const item = gridData[`${x}_${y}`];
 
-        // 1. NEU: GESPERRT-Werkzeug (BLOCKED)
+        // 1. GESPERRT-Werkzeug (BLOCKED)
         if (currentTool === 'BLOCKED') {
             item.cell_type = 'SEAT';
             item.reservation_status = 'BLOCKED';
@@ -129,23 +212,17 @@ function applyTool(x, y, el, isDirectClick) {
             return;
         }
 
-        // 2. BEI BESCHRIFTUNG (LABEL): Nur bei direktem Einzel-Klick abfragen
+        // 2. BEI BESCHRIFTUNG (LABEL): Dialog nur bei direktem Einzel-Klick
         if (currentTool === 'LABEL') {
             if (!isDirectClick) return;
-
-            isPromptOpen = true;
             isMouseDown = false;
-
-            setTimeout(() => {
-                const txt = prompt("Text für Beschriftung:", item.text_label || "Bühne");
-                if (txt !== null && txt.trim() !== "") {
-                    item.cell_type = 'LABEL';
-                    item.text_label = txt;
-                    el.className = `cell LABEL`;
-                    el.innerText = txt;
-                }
-                isPromptOpen = false;
-            }, 50);
+            openLabelModal(item.text_label || "Bühne", (txt) => {
+                item.cell_type = 'LABEL';
+                item.text_label = txt;
+                item.reservation_status = 'FREE';
+                el.className = `cell LABEL`;
+                el.innerText = txt;
+            });
             return;
         }
 
@@ -176,9 +253,13 @@ function applyTool(x, y, el, isDirectClick) {
         })
         .then(res => res.json())
         .then(data => {
-            alert(data.message);
+            if (data.status === 'success') {
+                showToast(data.message, 'success');
+            } else {
+                showToast(data.message || 'Fehler beim Speichern', 'error');
+            }
         })
-        .catch(err => alert("Fehler beim Speichern: " + err));
+        .catch(err => showToast("Fehler beim Speichern: " + err, 'error'));
     }
 
     renderGrid();

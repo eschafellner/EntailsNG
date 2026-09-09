@@ -76,6 +76,16 @@ class Event(models.Model):
         verbose_name="Status"
     )
 
+    allow_unpaid_seat_overwrite = models.BooleanField(
+        default=True,
+        verbose_name="Sitzplatz-Überschreibung nicht bezahlter Gäste",
+        choices=[
+            (True, "Ja, Überschreibung nicht bezahlter Gäste möglich"),
+            (False, "Nein, Überschreibung nicht bezahlter Gäste möglich"),
+        ],
+        help_text="Legt fest, ob zahlende Gäste vorgemerkte Plätze unbezahlter Teilnehmer übernehmen dürfen.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Zuletzt geändert")
 

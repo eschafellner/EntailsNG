@@ -289,3 +289,31 @@ class ClanModuleTests(TestCase):
         self.assertTrue(clan.check_password('plain_secret_123'))
         self.assertFalse(clan.check_password('wrong_secret'))
 
+    def test_unique_active_clan_membership_constraint(self):
+        """Ein Nutzer kann nur in genau einem Clan aktiv (ACCEPTED) sein; PENDING in weiteren Clans ist erlaubt."""
+        from django.db import IntegrityError
+        from django.core.exceptions import ValidationError
+
+        clan1 = Clan.objects.create(name='Clan One', password='pass')
+        clan2 = Clan.objects.create(name='Clan Two', password='pass')
+
+        # 1. Erste aktive Mitgliedschaft
+        m1 = ClanMembership.objects.create(
+            user=self.user_a, clan=clan1, role=ClanMembership.Role.MEMBER, status=ClanMembership.Status.ACCEPTED
+        )
+
+        # 2. Zweite Mitgliedschaft PENDING in Clan 2 ist erlaubt
+        m2 = ClanMembership.objects.create(
+            user=self.user_a, clan=clan2, role=ClanMembership.Role.MEMBER, status=ClanMembership.Status.PENDING
+        )
+        self.assertIsNotNone(m2.pk)
+
+        # 3. Zweite Mitgliedschaft auf ACCEPTED setzen scheitert an clean() und DB-Constraint
+        m2.status = ClanMembership.Status.ACCEPTED
+        with self.assertRaises(ValidationError):
+            m2.full_clean()
+
+        with self.assertRaises(IntegrityError):
+            m2.save()
+
+

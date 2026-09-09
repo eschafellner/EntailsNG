@@ -11,7 +11,7 @@ from django.utils import timezone
 from emails.models import GeneralEmailSettings
 from emails.services import send_system_email
 from events.models import EventRegistration
-from configuration.templatetags.translations import t as get_translation
+from configuration.translations import get_translation
 from .auth_backends import get_client_ip
 from .forms import CustomUserCreationForm, UserProfileForm
 from .models import EmailVerificationCode

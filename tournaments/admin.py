@@ -119,7 +119,7 @@ class TeamAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     raw_id_fields = ('captain', 'event')
     inlines = [TeamMemberInline]
-    actions = ['action_archive_teams', 'action_unarchive_teams']
+    actions = ['action_archive_teams', 'action_unarchive_teams', 'action_forfeit_and_disqualify']
 
     @admin.action(description="Ausgewählte Teams archivieren")
     def action_archive_teams(self, request, queryset):
@@ -146,6 +146,30 @@ class TeamAdmin(admin.ModelAdmin):
     def action_unarchive_teams(self, request, queryset):
         count = queryset.update(is_archived=False)
         self.message_user(request, f"{count} Team(s) als aktiv markiert.", messages.SUCCESS)
+
+    @admin.action(description="Ausgewählte Teams aus laufenden Turnieren zurückziehen (Walkover vergeben)")
+    def action_forfeit_and_disqualify(self, request, queryset):
+        from tournaments.services import forfeit_team_in_active_tournaments
+        count = 0
+        for team in queryset:
+            if team.is_in_active_tournament():
+                forfeit_team_in_active_tournaments(team, reason="Admin-Entscheidung / Disqualifikation")
+                count += 1
+        if count > 0:
+            self.message_user(
+                request,
+                f"{count} Team(s) erfolgreich aus Turnieren zurückgezogen und Freilose an Gegner vergeben.",
+                messages.SUCCESS
+            )
+        else:
+            self.message_user(request, "Keines der ausgewählten Teams befindet sich in einem aktiven Turnier.", messages.INFO)
+
+    def delete_model(self, request, obj):
+        obj.delete(force=True)
+
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            obj.delete(force=True)
 
 
 @admin.register(TeamMember)

@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 
-from configuration.context_processors import get_translation
+from configuration.translations import get_translation
 from events.models import Event, EventRegistration
 
 from tournaments.models import (

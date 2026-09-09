@@ -1359,6 +1359,85 @@ class TeamFeedbackAndIntegrityTests(TestCase):
         self.assertEqual(res, 'in_active_tournament')
         self.assertTrue(Team.objects.filter(id=self.team.id).exists())
 
+    def test_forfeit_and_walkover_on_forced_team_delete_during_tournament(self):
+        """Wenn ein Team mit force=True gelöscht oder zurückgezogen wird, erhält der Gegner ein Freilos/Walkover."""
+        cap1 = User.objects.create_user(username="cap_fo1", password="password")
+        EventRegistration.objects.create(user=cap1, event=self.event, is_checked_in=True)
+        team1 = Team.objects.create(name="Team 1", captain=cap1, game=self.game, event=self.event)
+        TeamMember.objects.create(team=team1, user=cap1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        for i in range(2, 6):
+            p = User.objects.create_user(username=f"fo1_p{i}", password="password")
+            EventRegistration.objects.create(user=p, event=self.event, is_checked_in=True)
+            TeamMember.objects.create(team=team1, user=p, status=TeamMember.Status.ACCEPTED)
+
+        cap2 = User.objects.create_user(username="cap_fo2", password="password")
+        EventRegistration.objects.create(user=cap2, event=self.event, is_checked_in=True)
+        team2 = Team.objects.create(name="Team 2", captain=cap2, game=self.game, event=self.event)
+        TeamMember.objects.create(team=team2, user=cap2, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        for i in range(2, 6):
+            p = User.objects.create_user(username=f"fo2_p{i}", password="password")
+            EventRegistration.objects.create(user=p, event=self.event, is_checked_in=True)
+            TeamMember.objects.create(team=team2, user=p, status=TeamMember.Status.ACCEPTED)
+
+        TournamentRegistrationService.register_team(self.tournament.id, cap1, team1.id)
+        TournamentRegistrationService.register_team(self.tournament.id, cap2, team2.id)
+
+        generate_bracket(self.tournament)
+
+        match = TournamentMatch.objects.filter(tournament=self.tournament, team1=team1, team2=team2).first()
+        self.assertIsNotNone(match)
+        self.assertEqual(match.status, TournamentMatch.Status.READY)
+
+        # Team 1 wird forciert gelöscht (z. B. Admin-Eingriff oder Disqualifikation)
+        team1.delete(force=True)
+
+        # Match muss als COMPLETED gewertet sein, Sieger ist Team 2
+        match.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(match.winner, team2)
+        self.assertIn("Walkover", match.decision_reason)
+
+    def test_solo_team_leave_team_with_force_forfeit(self):
+        """Ein Solo-Spieler kann sein Team mit force_forfeit=True verlassen; der Gegner gewinnt kampflos."""
+        solo_game = Game.objects.create(name="1v1 Starcraft", team_size=1)
+        tournament_1v1 = Tournament.objects.create(
+            title="SC 1v1 Cup",
+            game=solo_game,
+            event=self.event,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.REGISTRATION_OPEN,
+            is_generated=False,
+            max_teams=4,
+            registration_start=timezone.now() - timezone.timedelta(hours=1),
+            registration_end=timezone.now() + timezone.timedelta(hours=2),
+        )
+
+        solo_cap = User.objects.create_user(username="solo_runner", password="password")
+        EventRegistration.objects.create(user=solo_cap, event=self.event, is_checked_in=True)
+        solo_team = Team.objects.create(name="Solo Runner", captain=solo_cap, game=solo_game, event=self.event, is_solo=True)
+        TeamMember.objects.create(team=solo_team, user=solo_cap, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        opp_cap = User.objects.create_user(username="opp_runner", password="password")
+        EventRegistration.objects.create(user=opp_cap, event=self.event, is_checked_in=True)
+        opp_team = Team.objects.create(name="Opp Runner", captain=opp_cap, game=solo_game, event=self.event, is_solo=True)
+        TeamMember.objects.create(team=opp_team, user=opp_cap, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        TournamentRegistrationService.register_team(tournament_1v1.id, solo_cap, solo_team.id)
+        TournamentRegistrationService.register_team(tournament_1v1.id, opp_cap, opp_team.id)
+
+        generate_bracket(tournament_1v1)
+
+        match = TournamentMatch.objects.filter(tournament=tournament_1v1, team1=solo_team, team2=opp_team).first()
+        self.assertIsNotNone(match)
+
+        res = solo_team.leave_team(solo_cap, force_forfeit=True)
+        self.assertEqual(res, 'deleted')
+
+        match.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(match.winner, opp_team)
+
+
 
 
 

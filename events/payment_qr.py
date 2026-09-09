@@ -82,3 +82,23 @@ def generate_epc_qr_png(registration, config=None, box_size=8, border=2):
     buffer = io.BytesIO()
     img.save(buffer, format='PNG')
     return buffer.getvalue()
+
+
+def generate_checkin_qr_png(url, box_size=8, border=2):
+    """
+    Erzeugt das PNG-Bild eines Check-In QR-Codes im Speicher und liefert die Bytes zurück.
+    """
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=ERROR_CORRECT_M,
+        box_size=box_size,
+        border=border,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    return buffer.getvalue()
+

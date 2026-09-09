@@ -60,7 +60,13 @@ class ConfigurationModelTests(TestCase):
         self.assertIn('test_key', str(translation))
 
     def test_get_translation_helper(self):
-        from configuration.context_processors import get_translation
+        from configuration.translations import get_translation as gt_module, DEFAULT_TEXTS as dt_module
+        from configuration.context_processors import get_translation, DEFAULT_TEXTS
+
+        # Test backward-compatibility re-exports
+        self.assertIs(get_translation, gt_module)
+        self.assertIs(DEFAULT_TEXTS, dt_module)
+
         # Test fallback default text
         self.assertEqual(get_translation('unknown_key', 'Fallback {name}', name='Entails'), 'Fallback Entails')
         # Test predefined DEFAULT_TEXTS key with kwargs formatting

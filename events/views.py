@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import uuid
 
 from django.conf import settings
 from django.contrib import messages
@@ -11,10 +12,11 @@ from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from configuration.context_processors import get_translation
+from configuration.translations import get_translation
 from configuration.models import GeneralConfiguration
 from configuration.services import should_show_onboarding_ticket
 from info.services import get_event_info
@@ -24,7 +26,7 @@ from sponsors.services import get_random_active_sponsor
 
 from .exceptions import RegistrationError
 from .models import Event, EventRegistration, TicketType
-from .payment_qr import generate_epc_qr_png
+from .payment_qr import generate_checkin_qr_png, generate_epc_qr_png
 from .services import RegistrationService
 
 logger = logging.getLogger(__name__)
@@ -145,6 +147,42 @@ def registration_payment_qr_view(request, registration_id):
     response = HttpResponse(image_bytes, content_type="image/png")
     response['Cache-Control'] = 'private, no-store, must-revalidate'
     return response
+
+
+@login_required
+def registration_checkin_qr_view(request, registration_id):
+    """
+    Liefert das generierte Check-In QR-Code PNG für die angegebene EventRegistration.
+    Zugriffsschutz: Nur der Eigentümer der Anmeldung oder Staff-Mitglieder.
+    Bedingungen:
+    - Status muss PAID sein
+    """
+    registration = get_object_or_404(
+        EventRegistration.objects.select_related('user', 'event'),
+        pk=registration_id,
+    )
+
+    if not (request.user == registration.user or request.user.is_staff):
+        raise PermissionDenied("Keine Berechtigung zum Zugriff auf diesen Check-in-QR-Code.")
+
+    if registration.payment_status != EventRegistration.PaymentStatus.PAID:
+        return HttpResponseBadRequest("Check-in-QR-Code ist nur für bezahlte Anmeldungen verfügbar.")
+
+    if not registration.checkin_token:
+        registration.checkin_token = uuid.uuid4()
+        registration.save(update_fields=['checkin_token'])
+
+    checkin_path = reverse(
+        'process_checkin',
+        kwargs={'registration_id': registration.id, 'token': registration.checkin_token},
+    )
+    full_url = request.build_absolute_uri(checkin_path)
+
+    image_bytes = generate_checkin_qr_png(full_url)
+    response = HttpResponse(image_bytes, content_type="image/png")
+    response['Cache-Control'] = 'private, no-store, must-revalidate'
+    return response
+
 
 
 

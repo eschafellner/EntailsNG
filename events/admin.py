@@ -42,6 +42,16 @@ class EventAdminForm(forms.ModelForm):
                 f"ℹ️ Dieses Event hat bereits {count} Ticket-Kategorie(n). "
                 f"Eine Auswahl hier kopiert zusätzliche Ticketkategorien aus dem gewählten Event hinzu."
             )
+        if 'allow_unpaid_seat_overwrite' in self.fields:
+            self.fields['allow_unpaid_seat_overwrite'].required = False
+
+    def clean_allow_unpaid_seat_overwrite(self):
+        val = self.cleaned_data.get('allow_unpaid_seat_overwrite')
+        if val is None or val == '':
+            if self.instance and self.instance.pk and self.instance.allow_unpaid_seat_overwrite is not None:
+                return self.instance.allow_unpaid_seat_overwrite
+            return True
+        return val
 
 
 class TicketTypeInline(admin.TabularInline):
@@ -219,18 +229,15 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         return response
 
     def save_model(self, request, obj, form, change):
-        """Setzt den Zeitstempel automatisch, wenn im Admin das Häkchen manuell gesetzt wird, prüft den Bezahlstatus und löst bei Status 'Bezahlt' die E-Mail aus."""
+        """Setzt den Zeitstempel automatisch, wenn im Admin das Häkchen manuell gesetzt wird, prüft den Bezahlstatus und delegiert Zahlungs- und Stornierungslogik an mark_as_paid / mark_as_cancelled."""
         became_paid = (
             obj.payment_status == EventRegistration.PaymentStatus.PAID
             and (not change or 'payment_status' in form.changed_data)
         )
-
-        if became_paid:
-            if not obj.paid_at:
-                obj.paid_at = timezone.now()
-            if (not obj.paid_amount or obj.paid_amount == 0) and obj.ticket_type:
-                obj.paid_amount = obj.ticket_type.price
-            obj.cancelled_at = None
+        became_cancelled = (
+            obj.payment_status == EventRegistration.PaymentStatus.CANCELLED
+            and (not change or 'payment_status' in form.changed_data)
+        )
 
         if obj.is_checked_in and obj.payment_status != EventRegistration.PaymentStatus.PAID:
             messages.error(
@@ -244,18 +251,19 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         elif not obj.is_checked_in:
             obj.checked_in_at = None
 
-        super().save_model(request, obj, form, change)
-
-        from seating.services import sync_seat_status_with_payment
-        sync_seat_status_with_payment(obj)
-
         if became_paid:
-            transaction.on_commit(obj.send_payment_confirmation_email)
+            obj.mark_as_paid(amount=obj.paid_amount or None, send_email=True)
             self.message_user(
                 request,
                 f"Zahlungsbestätigung für '{obj.user.username}' wurde erfolgreich verbucht und per E-Mail versendet.",
                 level=messages.SUCCESS,
             )
+        elif became_cancelled:
+            obj.mark_as_cancelled()
+        else:
+            super().save_model(request, obj, form, change)
+            from seating.services import sync_seat_status_with_payment
+            sync_seat_status_with_payment(obj)
 
     @admin.action(description="💶 Ausgewählte Anmeldungen als BEZAHLT markieren (inkl. E-Mail)")
     def action_mark_as_paid(self, request, queryset):

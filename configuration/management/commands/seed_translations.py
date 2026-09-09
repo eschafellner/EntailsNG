@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from configuration.context_processors import DEFAULT_TEXTS
+from configuration.translations import DEFAULT_TEXTS
 from configuration.models import SystemTranslation
 
 

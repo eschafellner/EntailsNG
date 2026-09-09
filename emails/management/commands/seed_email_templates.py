@@ -113,4 +113,36 @@ class Command(BaseCommand):
 - {valid_minutes}: Gültigkeitsdauer in Minuten (z. B. 15)''',
             },
         )
+
+        # 6. Template "Sitzplatz-Vormerkung überschrieben"
+        EmailTemplate.objects.get_or_create(
+            key='seat_overwritten',
+            defaults={
+                'name': 'Sitzplatz-Vormerkung überschrieben',
+                'subject': 'Dein vorgemerkter Sitzplatz {seat_label} für {event_title} wurde vergeben',
+                'content': '''<h2>Sitzplatz-Vormerkung vergeben</h2>
+<p>Hallo <strong>{full_name}</strong>,</p>
+<p>dein vorgemerkter Sitzplatz <strong>{seat_label}</strong> für die Veranstaltung <strong>{event_title}</strong> wurde von einem zahlenden Gast übernommen.</p>
+<div style="background: #1e293b; color: #ffffff; padding: 16px; border-radius: 8px; margin: 16px 0;">
+  <p><strong>Veranstaltung:</strong> {event_title}</p>
+  <p><strong>Bisheriger Platz:</strong> {seat_label}</p>
+  <p><strong>Status:</strong> Bitte wähle im Sitzplan einen neuen Sitzplatz aus.</p>
+</div>
+<p>Sobald du dein Ticket bezahlst, ist dein Sitzplatz fest für dich gesichert und kann nicht mehr überschrieben werden.</p>
+<div style="text-align: center; margin: 24px 0;">
+  <a href="{seating_url}" style="background: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;">
+    🪑 Neuen Sitzplatz wählen
+  </a>
+</div>
+<p>Viele Grüße,<br>Dein EntailsNG Event Team</p>''',
+                'is_active': True,
+                'placeholder_info': '''Verfügbare Platzhalter für diese Vorlage:
+- {username}: Benutzername des Teilnehmers
+- {full_name}: Vor- und Nachname (oder Benutzername)
+- {event_title}: Name der Veranstaltung
+- {seat_label}: Bezeichnung des bisherigen Sitzplatzes
+- {seating_url}: Link zum Sitzplan''',
+            },
+        )
+
         self.stdout.write(self.style.SUCCESS("Alle Standard E-Mail-Templates sind auf dem neuesten Stand."))

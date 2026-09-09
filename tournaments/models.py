@@ -310,18 +310,22 @@ class Team(models.Model):
 
     def delete(self, *args, **kwargs):
         force = kwargs.pop('force', False)
-        if not force and self.is_in_active_tournament():
-            from django.core.exceptions import ValidationError
-            raise ValidationError(
-                f"Das Team '{self.name}' kann nicht gelöscht werden, da es in einem laufenden oder generierten Turnier registriert ist."
-            )
+        if self.is_in_active_tournament():
+            if not force:
+                from django.core.exceptions import ValidationError
+                raise ValidationError(
+                    f"Das Team '{self.name}' kann nicht gelöscht werden, da es in einem laufenden oder generierten Turnier registriert ist."
+                )
+            from tournaments.services import forfeit_team_in_active_tournaments
+            forfeit_team_in_active_tournaments(self, reason=f"Walkover: Team '{self.name}' gelöscht")
         super().delete(*args, **kwargs)
 
-    def leave_team(self, user):
+    def leave_team(self, user, force_forfeit=False):
         """
         Entfernt einen User aus dem Team.
         Wenn der Kapitän austritt, geht die Kapitänswürde an ein beliebiges anderes aktives Mitglied.
-        Verlässt das letzte Mitglied das Team, wird das Team gelöscht (außer bei aktivem Turnier).
+        Verlässt das letzte Mitglied das Team, wird das Team gelöscht.
+        Bei aktivem Turnier: Mit force_forfeit=True werden offene Matches als Walkover abgewickelt.
         """
         membership = self.memberships.filter(user=user).first()
         if not membership:
@@ -330,13 +334,16 @@ class Team(models.Model):
         if self.is_in_active_tournament():
             accepted_count = self.memberships.filter(status=TeamMember.Status.ACCEPTED).count()
             if accepted_count <= 1:
-                return 'in_active_tournament'
+                if not force_forfeit:
+                    return 'in_active_tournament'
+                from tournaments.services import forfeit_team_in_active_tournaments
+                forfeit_team_in_active_tournaments(self, reason=f"Walkover: Aufgabe durch Austritt von {user.username}")
 
         membership.delete()
 
         remaining_memberships = self.memberships.filter(status=TeamMember.Status.ACCEPTED).order_by('joined_at')
         if not remaining_memberships.exists():
-            self.delete()
+            self.delete(force=True)
             return 'deleted'
 
         if self.captain_id == user.id:
