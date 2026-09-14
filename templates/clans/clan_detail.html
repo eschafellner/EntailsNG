@@ -38,17 +38,29 @@
         {% endif %}
 
         {% if current_clan_membership and current_clan_membership.status == 'ACCEPTED' %}
-          <form method="post" action="{% url 'clan_leave' slug=clan.slug %}"
-                {% if is_last_member %}
-                  onsubmit="return confirm('⚠️ Achtung: Du bist das letzte Mitglied im Clan \'{{ clan.name|escapejs }}\'. Wenn du den Clan verlässt, wird der Clan unwiderruflich aufgelöst und gelöscht. Möchtest du wirklich fortfahren?');"
-                {% else %}
-                  onsubmit="return confirm('Möchtest du den Clan \'{{ clan.name|escapejs }}\' wirklich verlassen?');"
-                {% endif %}>
-            {% csrf_token %}
-            <button type="submit" style="background: #dc2626; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+          <div id="leave-clan-container" style="display: inline-flex; align-items: center; gap: 8px;">
+            <button type="button" id="btn-show-leave-clan" onclick="toggleLeaveClanConfirm(true)" style="background: #dc2626; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
               🚪 {% t "clan_leave_btn" "Clan verlassen" %}
             </button>
-          </form>
+            <div id="leave-clan-confirm" style="display: none; align-items: center; gap: 8px; background: rgba(220, 38, 38, 0.12); border: 1px solid #dc2626; padding: 6px 14px; border-radius: 8px;">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #991b1b; font-weight: bold; max-width: 320px; line-height: 1.3;">
+                {% if is_last_member %}
+                  ⚠️ Letztes Mitglied: Clan wird aufgelöst!
+                {% else %}
+                  Clan wirklich verlassen?
+                {% endif %}
+              </span>
+              <form method="post" action="{% url 'clan_leave' slug=clan.slug %}" style="display: inline; margin: 0;">
+                {% csrf_token %}
+                <button type="submit" style="background: #dc2626; color: white; border: none; padding: 5px 12px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; cursor: pointer;">
+                  ✓ Ja
+                </button>
+              </form>
+              <button type="button" onclick="toggleLeaveClanConfirm(false)" style="background: var(--line); color: var(--ink); border: none; padding: 5px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;">
+                ✕ Abbrechen
+              </button>
+            </div>
+          </div>
         {% endif %}
 
       </div>
@@ -119,17 +131,36 @@
 
             <!-- Admin Actions for Member -->
             {% if is_clan_admin and item.user != request.user %}
-              <form method="post" action="{% url 'clan_manage_member' slug=clan.slug membership_id=item.membership.id %}" style="display: inline-flex; gap: 6px;">
-                {% csrf_token %}
+              <div style="display: inline-flex; align-items: center; gap: 6px;">
                 {% if item.membership.role != 'ADMIN' %}
-                  <button type="submit" name="action" value="promote" title="Zum Admin befördern" style="background: var(--line); color: var(--ink); border: 1px solid var(--line); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer;">
-                    👑 {% t "clan_make_admin_btn" "Admin machen" %}
-                  </button>
+                  <form method="post" action="{% url 'clan_manage_member' slug=clan.slug membership_id=item.membership.id %}" style="display: inline; margin: 0;">
+                    {% csrf_token %}
+                    <button type="submit" name="action" value="promote" title="Zum Admin befördern" style="background: var(--line); color: var(--ink); border: 1px solid var(--line); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer;">
+                      👑 {% t "clan_make_admin_btn" "Admin machen" %}
+                    </button>
+                  </form>
                 {% endif %}
-                <button type="submit" name="action" value="kick" onclick="return confirm('Mitglied {{ item.user.username }} wirklich aus dem Clan entfernen?');" title="Aus Clan entfernen" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer;">
-                  🗑️ {% t "clan_kick_btn" "Kick" %}
-                </button>
-              </form>
+
+                <div id="clan-kick-container-{{ item.membership.id }}" style="display: inline-flex; align-items: center; gap: 6px;">
+                  <button type="button" id="btn-show-clan-kick-{{ item.membership.id }}" onclick="toggleClanKickConfirm('{{ item.membership.id }}', true)" title="Aus Clan entfernen" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer;">
+                    🗑️ {% t "clan_kick_btn" "Kick" %}
+                  </button>
+                  <div id="clan-kick-confirm-{{ item.membership.id }}" style="display: none; align-items: center; gap: 6px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; padding: 3px 8px; border-radius: 4px;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #b91c1c; font-weight: bold;">
+                      {{ item.user.username }} entfernen?
+                    </span>
+                    <form method="post" action="{% url 'clan_manage_member' slug=clan.slug membership_id=item.membership.id %}" style="display: inline; margin: 0;">
+                      {% csrf_token %}
+                      <button type="submit" name="action" value="kick" style="background: #dc2626; color: white; border: none; padding: 3px 8px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold; cursor: pointer;">
+                        ✓ Ja
+                      </button>
+                    </form>
+                    <button type="button" onclick="toggleClanKickConfirm('{{ item.membership.id }}', false)" style="background: var(--line); color: var(--ink); border: none; padding: 3px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; cursor: pointer;">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              </div>
             {% endif %}
           </div>
         </div>
@@ -193,4 +224,30 @@
   {% endif %}
 
 </div>
+
+<script>
+function toggleLeaveClanConfirm(show) {
+  var btn = document.getElementById('btn-show-leave-clan');
+  var box = document.getElementById('leave-clan-confirm');
+  if (show) {
+    if (btn) btn.style.display = 'none';
+    if (box) box.style.display = 'inline-flex';
+  } else {
+    if (box) box.style.display = 'none';
+    if (btn) btn.style.display = 'inline-block';
+  }
+}
+
+function toggleClanKickConfirm(membershipId, show) {
+  var btn = document.getElementById('btn-show-clan-kick-' + membershipId);
+  var box = document.getElementById('clan-kick-confirm-' + membershipId);
+  if (show) {
+    if (btn) btn.style.display = 'none';
+    if (box) box.style.display = 'inline-flex';
+  } else {
+    if (box) box.style.display = 'none';
+    if (btn) btn.style.display = 'inline-block';
+  }
+}
+</script>
 {% endblock %}

@@ -130,7 +130,11 @@ class TournamentRegistrationService:
                     team.save(update_fields=['event'])
 
                 # 3.3 Spiel-Passung prüfen
-                if team.game and tournament.game and team.game != tournament.game:
+                if not team.game:
+                    raise TournamentRegistrationError(
+                        f"Dem Team '{team.name}' ist kein Spiel zugeordnet. Bitte ordne dem Team im Teammanager das Spiel '{tournament.game.name}' zu."
+                    )
+                if tournament.game and team.game != tournament.game:
                     raise TournamentRegistrationError(
                         f"Das Team '{team.name}' ist für das Spiel '{team.game.name}' registriert, das Turnier ist jedoch für '{tournament.game.name}'."
                     )
@@ -149,6 +153,10 @@ class TournamentRegistrationService:
                 if len(accepted_members) < tournament.game.team_size:
                     raise TournamentRegistrationError(
                         f"Das Team '{team.name}' hat nur {len(accepted_members)} von {tournament.game.team_size} erforderlichen Mitgliedern."
+                    )
+                if len(accepted_members) > tournament.game.team_size:
+                    raise TournamentRegistrationError(
+                        f"Das Team '{team.name}' hat {len(accepted_members)} Mitglieder. Für '{tournament.game.name}' sind maximal {tournament.game.team_size} Spieler erlaubt."
                     )
 
                 if not is_privileged:
@@ -496,11 +504,13 @@ class TournamentMatchService:
             elif match.bracket_type == TournamentMatch.BracketType.GROUP:
                 if tournament.mode == Tournament.Mode.GROUP_STAGE:
                     GroupStageStandingService.check_and_advance_group_stage(tournament)
-                elif tournament.mode == Tournament.Mode.LEAGUE:
-                    remaining_matches = tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists()
-                    if not remaining_matches:
-                        tournament.status = Tournament.Status.FINISHED
-                        tournament.save(update_fields=['status'])
+
+            # Globale Abschlussprüfung: Wenn keine offenen Spiele mehr existieren, ist das Turnier beendet
+            if tournament.status != Tournament.Status.FINISHED:
+                has_open_matches = tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists()
+                if not has_open_matches and tournament.matches.exists():
+                    tournament.status = Tournament.Status.FINISHED
+                    tournament.save(update_fields=['status'])
 
             return match, winner_team
 

@@ -951,3 +951,57 @@ h3 {
         border-bottom: 2px dashed #374151;
     }
 }
+
+/* =============================================================================
+   MODAL OVERLAY SYSTEM (GLOBAL)
+   ============================================================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.modal-box {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 460px;
+    width: 100%;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+    position: relative;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.modal-close-btn:hover {
+    color: var(--ink);
+    background: var(--line);
+}
+

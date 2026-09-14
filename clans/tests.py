@@ -316,4 +316,30 @@ class ClanModuleTests(TestCase):
         with self.assertRaises(IntegrityError):
             m2.save()
 
+    def test_clan_detail_inline_leave_and_kick(self):
+        """Clan Detailansicht nutzt moderne Inline-Bestätigungen für Verlassen und Kicken (kein confirm/alert)."""
+        clan = Clan.objects.create(name='Inline Test Clan', password='pass')
+        ClanMembership.objects.create(
+            user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
+        )
+        m_b = ClanMembership.objects.create(
+            user=self.user_b, clan=clan, role=ClanMembership.Role.MEMBER, status=ClanMembership.Status.ACCEPTED
+        )
+
+        self.client.login(username='leader', password='password')
+        response = self.client.get(reverse('clan_detail', kwargs={'slug': clan.slug}))
+        self.assertEqual(response.status_code, 200)
+
+        content = response.content.decode('utf-8')
+        # Inline-Bestätigung für Verlassen
+        self.assertIn('id="leave-clan-confirm"', content)
+        self.assertIn('toggleLeaveClanConfirm', content)
+        # Inline-Bestätigung für Kicken
+        self.assertIn(f'id="clan-kick-confirm-{m_b.id}"', content)
+        self.assertIn('toggleClanKickConfirm', content)
+        # Keine störenden Browserdialoge
+        self.assertNotIn('confirm(', content)
+        self.assertNotIn('alert(', content)
+
+
 

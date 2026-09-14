@@ -40,80 +40,100 @@
   </div>
 
   <!-- Tournament Grid -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(390px, 1fr)); gap: 24px;">
     {% for tournament in tournaments %}
-      <div class="card" style="padding: 20px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
+      <div class="card" style="padding: 24px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
         <div>
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-            <span style="background: var(--navy); color: var(--signal); padding: 4px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
-              {{ tournament.get_mode_display }}
-            </span>
+          <!-- Header Badges: Modus, Teamgröße & Status -->
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span style="background: var(--navy); color: var(--signal); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+                {{ tournament.get_mode_display }}
+              </span>
+              <span style="background: rgba(248, 171, 45, 0.15); color: var(--signal-deep); border: 1px solid rgba(248, 171, 45, 0.35); padding: 4px 9px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+                {% if tournament.game.team_size == 1 %}{% t "tournament_format_solo" "👤 1v1 Solo" %}{% else %}{% t "tournament_format_team" "👥 {size}v{size} Team" size=tournament.game.team_size %}{% endif %}
+              </span>
+            </div>
+
             {% if tournament.status == 'OPEN' %}
-              <span style="background: rgba(16, 185, 129, 0.2); color: #047857; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+              <span style="background: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
                 🟢 {% t "tournament_status_open" "Anmeldephase" %}
               </span>
             {% elif tournament.status == 'IN_PROGRESS' %}
-              <span style="background: rgba(2, 132, 199, 0.2); color: #0284c7; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+              <span style="background: rgba(2, 132, 199, 0.15); color: #0284c7; border: 1px solid rgba(2, 132, 199, 0.3); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
                 ⚔️ {% t "tournament_status_running" "Läuft aktuell" %}
               </span>
             {% elif tournament.status == 'FINISHED' %}
-              <span style="background: rgba(100, 116, 139, 0.2); color: #475569; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+              <span style="background: rgba(100, 116, 139, 0.15); color: #475569; border: 1px solid rgba(100, 116, 139, 0.3); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
                 🏁 {% t "tournament_status_finished" "Beendet" %}
               </span>
             {% else %}
-              <span style="background: rgba(100, 116, 139, 0.15); color: var(--muted); padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+              <span style="background: rgba(100, 116, 139, 0.15); color: var(--muted); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
                 {{ tournament.get_status_display }}
               </span>
             {% endif %}
           </div>
 
-          <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
+          <!-- Game & Tournament Info -->
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 18px;">
             {% if tournament.game.logo %}
-              <img src="{{ tournament.game.logo.url }}" alt="{{ tournament.game.name }}" style="width: 52px; height: 52px; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); padding: 4px; background: #fff;">
+              <img src="{{ tournament.game.logo.url }}" alt="{{ tournament.game.name }}" style="width: 68px; height: 68px; object-fit: contain; border-radius: 10px; border: 1px solid var(--line); padding: 6px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-shrink: 0;">
             {% else %}
-              <div style="width: 52px; height: 52px; background: var(--navy); color: var(--signal); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: bold;">
+              <div style="width: 68px; height: 68px; background: var(--navy); color: var(--signal); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
                 🎮
               </div>
             {% endif %}
-            <div>
-              <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+            <div style="min-width: 0;">
+              <h2 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px; line-height: 1.15; color: var(--ink); word-break: break-word;">
                 {{ tournament.title }}
               </h2>
-              <p style="margin: 2px 0 0 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
-                {{ tournament.game.name }} ({% if tournament.game.team_size == 1 %}1v1 Solo{% else %}{{ tournament.game.team_size }}v{{ tournament.game.team_size }}{% endif %})
+              <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span>🎮 {{ tournament.game.name }}</span>
+                {% if tournament.game.mode %}
+                  <span style="color: var(--line);">|</span>
+                  <span style="color: var(--ink); opacity: 0.8;">{{ tournament.game.mode }}</span>
+                {% endif %}
               </p>
             </div>
           </div>
 
-          <div style="margin-bottom: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
-            👥 {% t "tournament_teams_label" "Teams" %}: <strong>{{ tournament.registered_teams_count }} / {{ tournament.max_teams }}</strong>
-            <div style="width: 100%; height: 6px; background: var(--line); border-radius: 3px; margin-top: 4px; overflow: hidden;">
-              <div style="width: {% widthratio tournament.registered_teams_count tournament.max_teams 100 %}%; height: 100%; background: var(--signal); transition: width 0.3s;"></div>
+          <!-- Structured Key Stats Card -->
+          <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 6px;">
+                <span>👥 {% t "tournament_teams_label" "Angemeldete Teams" %}</span>
+                <strong>{{ tournament.registered_teams_count }} / {{ tournament.max_teams }}</strong>
+              </div>
+              <div style="width: 100%; height: 7px; background: var(--line); border-radius: 4px; overflow: hidden;">
+                <div style="width: {% widthratio tournament.registered_teams_count tournament.max_teams 100 %}%; height: 100%; background: var(--signal); transition: width 0.3s;"></div>
+              </div>
             </div>
-          </div>
 
-          <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 16px;">
-            {% t "tournament_reg_deadline_label" "📅 Anmeldeschluss:" %} {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line); flex-wrap: wrap; gap: 6px;">
+              <span>📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong>{{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr</strong></span>
+              <span>👤 {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_admin_default" "Orga-Team" %}{% endif %}</span>
+            </div>
           </div>
         </div>
 
-        <div style="padding-top: 12px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+        <!-- Card Footer Actions -->
+        <div style="padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
-            {% t "tournament_admin_label" "Admin:" %} {{ tournament.tournament_admin.username|default:"Orga-Team" }}
+            ID: #{{ tournament.id }}
           </span>
           {% if tournament.is_registration_open %}
-            <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: var(--signal); color: var(--navy); padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: var(--signal); color: var(--navy); padding: 9px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
               {% t "tournament_register_btn" "🎮 Jetzt anmelden →" %}
             </a>
           {% else %}
-            <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: #0284c7; color: white; padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
-              {% t "tournament_details_btn" "Details & Baum →" %}
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: #0284c7; color: white; padding: 9px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+              {% t "tournament_details_btn" "Details & Spielplan →" %}
             </a>
           {% endif %}
         </div>
       </div>
     {% empty %}
-      <div class="card" style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+      <div class="card" style="grid-column: 1 / -1; padding: 48px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace; border-radius: 14px;">
         {% t "tournament_empty_list" "🕹️ Aktuell sind keine Turniere für diese Veranstaltung angelegt." %}
       </div>
     {% endfor %}

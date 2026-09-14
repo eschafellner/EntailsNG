@@ -102,8 +102,7 @@ def tournament_detail(request, slug):
             captain=request.user,
             is_archived=False,
             is_solo=False,
-        ).filter(
-            models.Q(game=tournament.game) | models.Q(game__isnull=True)
+            game=tournament.game,
         ).filter(
             models.Q(event=tournament.event) | models.Q(event__isnull=True)
         ).distinct()
@@ -116,20 +115,44 @@ def tournament_detail(request, slug):
     registration_not_started_yet = bool(tournament.registration_start and now < tournament.registration_start)
     registration_ended = bool(tournament.registration_end and now > tournament.registration_end)
 
-    # Vorschau-Daten generieren falls Turnierbaum noch nicht generiert
+    # Vorschau-Daten generieren: Exklusiv für Turnier-Admins / Staff vor Bracket-Generierung (Variante B)
     preview_data = None
-    if not tournament.is_generated:
+    if is_admin and not tournament.is_generated:
         preview_data = TournamentBracketService.get_bracket_preview(tournament.id)
 
-    # Standings & Modus-spezifische Tabellendaten
+    # Standings & Modus-spezifische Match- und Tabellendaten
     league_standings = []
     group_a_standings = []
     group_b_standings = []
     ffa_match = None
     ffa_participants = []
+    wb_matches = []
+    lb_matches = []
+    grand_final_matches = []
+    se_matches = []
+    podium = {'first': None, 'second': None, 'third': None}
 
     if tournament.is_generated:
-        if tournament.mode == Tournament.Mode.LEAGUE:
+        # Automatischer Sync: Wenn alle Matches beendet sind, Status auf FINISHED setzen
+        if tournament.status != Tournament.Status.FINISHED:
+            has_open_matches = matches.exclude(status=TournamentMatch.Status.COMPLETED).exists()
+            if not has_open_matches and matches.exists():
+                tournament.status = Tournament.Status.FINISHED
+                tournament.save(update_fields=['status'])
+
+        if tournament.mode == Tournament.Mode.DOUBLE_ELIMINATION:
+            wb_matches = matches.filter(bracket_type=TournamentMatch.BracketType.WINNERS).order_by('round_number', 'match_number')
+            lb_matches = matches.filter(bracket_type=TournamentMatch.BracketType.LOSERS).order_by('round_number', 'match_number')
+            grand_final_matches = matches.filter(bracket_type__in=[
+                TournamentMatch.BracketType.GRAND_FINAL,
+                TournamentMatch.BracketType.GRAND_FINAL_RESET
+            ]).order_by('round_number', 'id')
+        elif tournament.mode == Tournament.Mode.SINGLE_ELIMINATION:
+            se_matches = matches.filter(bracket_type__in=[
+                TournamentMatch.BracketType.WINNERS,
+                TournamentMatch.BracketType.FINAL
+            ]).order_by('round_number', 'match_number')
+        elif tournament.mode == Tournament.Mode.LEAGUE:
             league_standings = LeagueStandingService.calculate_league_standings(tournament)
         elif tournament.mode == Tournament.Mode.GROUP_STAGE:
             group_a_standings = GroupStageStandingService.calculate_group_standings(tournament, 'Gruppe A')
@@ -138,6 +161,45 @@ def tournament_detail(request, slug):
             ffa_match = tournament.matches.filter(bracket_type=TournamentMatch.BracketType.FFA).first()
             if ffa_match:
                 ffa_participants = list(ffa_match.participants.select_related('team').order_by('rank', '-score', 'id'))
+
+        # Ermittlung des Sieger-Podiums für abgeschlossene Turniere
+        if tournament.status == Tournament.Status.FINISHED:
+            if tournament.mode == Tournament.Mode.DOUBLE_ELIMINATION:
+                gf = matches.filter(bracket_type__in=[
+                    TournamentMatch.BracketType.GRAND_FINAL_RESET,
+                    TournamentMatch.BracketType.GRAND_FINAL
+                ]).filter(status=TournamentMatch.Status.COMPLETED).order_by('-round_number', '-id').first()
+                if gf and gf.winner:
+                    podium['first'] = gf.winner
+                    podium['second'] = gf.team2 if gf.winner == gf.team1 else gf.team1
+                lb_final = matches.filter(bracket_type=TournamentMatch.BracketType.LOSERS, status=TournamentMatch.Status.COMPLETED).order_by('-round_number', '-match_number').first()
+                if lb_final and lb_final.loser:
+                    podium['third'] = lb_final.loser
+            elif tournament.mode == Tournament.Mode.SINGLE_ELIMINATION:
+                final_m = matches.filter(bracket_type=TournamentMatch.BracketType.FINAL, status=TournamentMatch.Status.COMPLETED).first()
+                if final_m and final_m.winner:
+                    podium['first'] = final_m.winner
+                    podium['second'] = final_m.loser
+            elif tournament.mode == Tournament.Mode.LEAGUE and league_standings:
+                if len(league_standings) >= 1:
+                    podium['first'] = league_standings[0]['team']
+                if len(league_standings) >= 2:
+                    podium['second'] = league_standings[1]['team']
+                if len(league_standings) >= 3:
+                    podium['third'] = league_standings[2]['team']
+            elif tournament.mode == Tournament.Mode.GROUP_STAGE:
+                final_m = matches.filter(bracket_type=TournamentMatch.BracketType.FINAL, status=TournamentMatch.Status.COMPLETED).order_by('-round_number').first()
+                if final_m and final_m.winner:
+                    podium['first'] = final_m.winner
+                    podium['second'] = final_m.loser
+            elif tournament.mode == Tournament.Mode.FFA and ffa_participants:
+                ranked = [p for p in ffa_participants if p.rank]
+                if len(ranked) >= 1:
+                    podium['first'] = ranked[0].team
+                if len(ranked) >= 2:
+                    podium['second'] = ranked[1].team
+                if len(ranked) >= 3:
+                    podium['third'] = ranked[2].team
 
     context = {
         'tournament': tournament,
@@ -148,6 +210,11 @@ def tournament_detail(request, slug):
         'is_registered': is_registered,
         'registrations': registrations,
         'matches': matches,
+        'wb_matches': wb_matches,
+        'lb_matches': lb_matches,
+        'grand_final_matches': grand_final_matches,
+        'se_matches': se_matches,
+        'podium': podium,
         'preview_data': preview_data,
         'my_user_teams': my_user_teams,
         'tournament_is_full': tournament_is_full,
@@ -180,9 +247,24 @@ def tournament_register(request, slug):
             actor=request.user,
         )
         if created:
-            messages.success(request, f"Team '{reg.team.name}' erfolgreich für '{tournament.title}' angemeldet!")
+            messages.success(
+                request,
+                get_translation(
+                    'msg_tournament_reg_success',
+                    'Team "{team_name}" erfolgreich für "{tournament_title}" angemeldet!',
+                    team_name=reg.team.name,
+                    tournament_title=tournament.title,
+                ),
+            )
         else:
-            messages.info(request, f"Dein Team '{reg.team.name}' ist bereits angemeldet.")
+            messages.info(
+                request,
+                get_translation(
+                    'msg_tournament_already_registered',
+                    'Dein Team "{team_name}" ist bereits angemeldet.',
+                    team_name=reg.team.name,
+                ),
+            )
     except TournamentError as e:
         messages.error(request, str(e))
 
@@ -205,7 +287,15 @@ def tournament_unregister(request, slug):
             team_id=team_id,
             actor=request.user,
         )
-        messages.success(request, f"Team '{team_name}' erfolgreich vom Turnier '{tournament.title}' abgemeldet.")
+        messages.success(
+            request,
+            get_translation(
+                'msg_tournament_unreg_success',
+                'Team "{team_name}" erfolgreich vom Turnier "{tournament_title}" abgemeldet.',
+                team_name=team_name,
+                tournament_title=tournament.title,
+            ),
+        )
     except TournamentError as e:
         messages.error(request, str(e))
 
@@ -223,7 +313,10 @@ def tournament_generate_bracket(request, slug):
     is_admin = tournament.is_managed_by(request.user)
 
     if not is_admin:
-        messages.error(request, "Keine Berechtigung zur Generierung des Turnierbaums.")
+        messages.error(
+            request,
+            get_translation('msg_tournament_no_perm_bracket', 'Keine Berechtigung zur Generierung des Turnierbaums.'),
+        )
         return redirect('tournament_detail', slug=slug)
 
     try:
@@ -246,7 +339,8 @@ def tournament_generate_bracket(request, slug):
 @require_POST
 def match_update_score(request, match_id):
     """
-    Quick-Result Modal für Turnier-Admins: Trägt Spielergebnisse ein und rückt Sieger vor.
+    Quick-Result Modal für Turnier-Admins und Teilnehmer: Trägt Spielergebnisse ein und rückt Sieger vor.
+    Teilnehmer können als Fairplay-Schutz nur die eigene Niederlage bestätigen.
     """
     match_obj = get_object_or_404(
         TournamentMatch.objects.select_related('tournament', 'team1', 'team2'),
@@ -255,15 +349,51 @@ def match_update_score(request, match_id):
     tournament = match_obj.tournament
 
     is_admin = tournament.is_managed_by(request.user)
+    is_team1_member = bool(match_obj.team1 and match_obj.team1.is_member(request.user))
+    is_team2_member = bool(match_obj.team2 and match_obj.team2.is_member(request.user))
 
-    if not is_admin:
-        return JsonResponse({'success': False, 'error': 'Keine Berechtigung zur Ergebniseingabe.'}, status=403)
+    if not is_admin and not is_team1_member and not is_team2_member:
+        return JsonResponse({'success': False, 'error': 'Keine Berechtigung zur Ergebniseingabe für dieses Match.'}, status=403)
+
+    if not is_admin and match_obj.status == TournamentMatch.Status.COMPLETED:
+        return JsonResponse({'success': False, 'error': 'Dieses Match wurde bereits gewertet und kann nur von einem Turnier-Admin bearbeitet werden.'}, status=403)
+
+    if not match_obj.team1 or not match_obj.team2:
+        return JsonResponse({'success': False, 'error': 'Das Match ist noch nicht vollständig mit Teams besetzt.'}, status=400)
 
     try:
         score1 = request.POST.get('score_team1', 0)
         score2 = request.POST.get('score_team2', 0)
         winner_id = request.POST.get('winner_id')
-        decision_reason = request.POST.get('decision_reason')
+        decision_reason = (request.POST.get('decision_reason') or '').strip()
+
+        # Teilnehmer-Schutz: Darf nur die eigene Niederlage bestätigen (Gegner als Sieger)
+        if not is_admin:
+            try:
+                s1 = int(score1)
+                s2 = int(score2)
+            except (ValueError, TypeError):
+                return JsonResponse({'success': False, 'error': 'Ungültiges Punkteformat übergeben.'}, status=400)
+
+            if is_team1_member and not is_team2_member:
+                if winner_id and int(winner_id) != match_obj.team2.id:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Teilnehmer können nur die eigene Niederlage bestätigen. Um einen Sieg für dein Team einzutragen, muss der Gegner das Ergebnis bestätigen oder ein Admin kontaktiert werden.'
+                    }, status=400)
+                winner_id = match_obj.team2.id
+                if not decision_reason:
+                    decision_reason = f"Niederlage bestätigt durch {request.user.username} ({match_obj.team1.name})"
+
+            elif is_team2_member and not is_team1_member:
+                if winner_id and int(winner_id) != match_obj.team1.id:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Teilnehmer können nur die eigene Niederlage bestätigen. Um einen Sieg für dein Team einzutragen, muss der Gegner das Ergebnis bestätigen oder ein Admin kontaktiert werden.'
+                    }, status=400)
+                winner_id = match_obj.team1.id
+                if not decision_reason:
+                    decision_reason = f"Niederlage bestätigt durch {request.user.username} ({match_obj.team2.name})"
 
         match_updated, winner_team = TournamentMatchService.update_match_score(
             match_id=match_obj.id,
@@ -274,7 +404,14 @@ def match_update_score(request, match_id):
             actor=request.user,
         )
 
-        messages.success(request, f"Ergebnis gespeichert! Sieger: {winner_team.name}")
+        messages.success(
+            request,
+            get_translation(
+                'msg_tournament_score_saved',
+                'Ergebnis gespeichert! Sieger: {winner_name}',
+                winner_name=winner_team.name,
+            ),
+        )
         return JsonResponse({'success': True, 'winner': winner_team.name})
     except TournamentError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
@@ -297,7 +434,10 @@ def match_update_ffa_score(request, match_id):
     is_admin = tournament.is_managed_by(request.user)
 
     if not is_admin:
-        messages.error(request, "Keine Berechtigung zur Ergebniseingabe.")
+        messages.error(
+            request,
+            get_translation('msg_tournament_no_perm_score', 'Keine Berechtigung zur Ergebniseingabe.'),
+        )
         return redirect('tournament_detail', slug=tournament.slug)
 
     try:
@@ -325,7 +465,14 @@ def match_update_ffa_score(request, match_id):
             actor=request.user,
         )
 
-        messages.success(request, f"FFA-Ergebnisse für '{tournament.title}' erfolgreich gespeichert!")
+        messages.success(
+            request,
+            get_translation(
+                'msg_tournament_ffa_scores_saved',
+                'FFA-Ergebnisse für "{tournament_title}" erfolgreich gespeichert!',
+                tournament_title=tournament.title,
+            ),
+        )
     except TournamentError as e:
         messages.error(request, str(e))
     except Exception as e:
@@ -399,14 +546,21 @@ def team_create(request):
     game_id = request.POST.get('game_id')
 
     if not name:
-        messages.error(request, "Bitte gib einen Teamnamen ein.")
+        messages.error(request, get_translation('msg_team_name_required', 'Bitte gib einen Teamnamen ein.'))
+        return redirect('team_list')
+
+    if not game_id:
+        messages.error(request, get_translation('msg_team_game_required', 'Bitte wähle ein Spiel für das Team aus.'))
+        return redirect('team_list')
+
+    game = Game.objects.filter(id=game_id).first()
+    if not game:
+        messages.error(request, get_translation('msg_team_game_invalid', 'Das ausgewählte Spiel ist ungültig.'))
         return redirect('team_list')
 
     if Team.objects.filter(name__iexact=name, is_archived=False).exists():
-        messages.error(request, "Ein aktives Team mit diesem Namen existiert bereits.")
+        messages.error(request, get_translation('msg_team_name_exists', 'Ein aktives Team mit diesem Namen existiert bereits.'))
         return redirect('team_list')
-
-    game = Game.objects.filter(id=game_id).first() if game_id else None
 
     team = Team.objects.create(
         name=name,
@@ -474,11 +628,13 @@ def team_detail(request, slug):
             })
 
     is_team_archived = team.is_archived or bool(active_event and team.event_id and team.event_id != active_event.id)
+    is_team_full = bool(team.game and len(accepted_members) >= team.game.team_size)
 
     context = {
         'team': team,
         'active_event': active_event,
         'is_team_archived': is_team_archived,
+        'is_team_full': is_team_full,
         'accepted_members': accepted_members,
         'roster_with_event_status': roster_with_event_status,
         'pending_members': pending_members,
@@ -499,11 +655,11 @@ def team_reactivate(request, slug):
     active_event = Event.objects.get_active()
 
     if not team.is_captain(request.user) and not request.user.is_staff:
-        messages.error(request, "Nur der Teamkapitän kann das Team reaktivieren.")
+        messages.error(request, get_translation('msg_team_reactivate_captain_only', 'Nur der Teamkapitän kann das Team reaktivieren.'))
         return redirect('team_detail', slug=team.slug)
 
     if not active_event:
-        messages.error(request, "Derzeit ist keine aktive Veranstaltung vorhanden, für die das Team reaktiviert werden kann.")
+        messages.error(request, get_translation('msg_team_reactivate_no_event', 'Derzeit ist keine aktive Veranstaltung vorhanden, für die das Team reaktiviert werden kann.'))
         return redirect('team_detail', slug=team.slug)
 
     accepted_members = list(team.get_accepted_members())
@@ -525,7 +681,15 @@ def team_reactivate(request, slug):
             # Mitglieder bereinigen (Kapitän bleibt immer)
             TeamMember.objects.filter(team=team).exclude(user=team.captain).exclude(user_id__in=keep_user_ids).delete()
 
-        messages.success(request, f"Team '{team.name}' wurde erfolgreich für '{active_event.title}' reaktiviert!")
+        messages.success(
+            request,
+            get_translation(
+                'msg_team_reactivated',
+                'Team "{team_name}" wurde erfolgreich für "{event_title}" reaktiviert!',
+                team_name=team.name,
+                event_title=active_event.title,
+            ),
+        )
         return redirect('team_detail', slug=team.slug)
 
     # GET: Roster vorbereiten
@@ -562,17 +726,37 @@ def team_join_by_code(request):
     code = request.POST.get('invite_code', '').strip().upper()
 
     if not code:
-        messages.error(request, "Bitte gib einen Einladungscode ein.")
+        messages.error(request, get_translation('msg_team_code_required', 'Bitte gib einen Einladungscode ein.'))
         return redirect('team_list')
 
     team = Team.objects.filter(invite_code=code).first()
     if not team:
-        messages.error(request, "Ungültiger Einladungscode.")
+        messages.error(request, get_translation('msg_team_code_invalid', 'Ungültiger Einladungscode.'))
         return redirect('team_list')
 
     if team.is_member(request.user):
-        messages.info(request, f"Du bist bereits Mitglied im Team '{team.name}'.")
+        messages.info(
+            request,
+            get_translation(
+                'msg_team_already_member',
+                'Du bist bereits Mitglied im Team "{team_name}".',
+                team_name=team.name,
+            ),
+        )
         return redirect('team_detail', slug=team.slug)
+
+    if team.game and team.get_accepted_members().count() >= team.game.team_size:
+        messages.error(
+            request,
+            get_translation(
+                'msg_team_full',
+                'Das Team "{team_name}" ist bereits voll (maximal {max_players} Spieler für {game_name}).',
+                team_name=team.name,
+                max_players=team.game.team_size,
+                game_name=team.game.name,
+            ),
+        )
+        return redirect('team_list')
 
     membership, created = TeamMember.objects.get_or_create(
         team=team,
@@ -611,20 +795,48 @@ def team_leave(request, slug):
     if res == 'in_active_tournament':
         messages.error(
             request,
-            f"Du kannst das Team '{team.name}' nicht verlassen, da es an einem laufenden Turnier teilnimmt. Wende dich bitte an die Turnierleitung."
+            get_translation(
+                'msg_team_leave_in_tournament',
+                'Du kannst das Team "{team_name}" nicht verlassen, da es an einem laufenden Turnier teilnimmt. Wende dich bitte an die Turnierleitung.',
+                team_name=team.name,
+            ),
         )
         return redirect('team_detail', slug=slug)
     elif res == 'deleted':
-        messages.info(request, f"Du hast das Team '{team.name}' verlassen. Da du das letzte Mitglied warst, wurde das Team gelöscht.")
+        messages.info(
+            request,
+            get_translation(
+                'msg_team_leave_deleted',
+                'Du hast das Team "{team_name}" verlassen. Da du das letzte Mitglied warst, wurde das Team gelöscht.',
+                team_name=team.name,
+            ),
+        )
         return redirect('team_list')
     elif res == 'captain_transferred':
-        messages.warning(request, f"Du hast das Team '{team.name}' verlassen. Die Kapitänswürde wurde an ein anderes Mitglied übertragen.")
+        messages.warning(
+            request,
+            get_translation(
+                'msg_team_leave_captain_transferred',
+                'Du hast das Team "{team_name}" verlassen. Die Kapitänswürde wurde an ein anderes Mitglied übertragen.',
+                team_name=team.name,
+            ),
+        )
         return redirect('team_list')
     elif res == 'left':
-        messages.success(request, f"Du hast das Team '{team.name}' verlassen.")
+        messages.success(
+            request,
+            get_translation(
+                'msg_team_left',
+                'Du hast das Team "{team_name}" verlassen.',
+                team_name=team.name,
+            ),
+        )
         return redirect('team_list')
     else:
-        messages.error(request, "Du bist kein Mitglied dieses Teams.")
+        messages.error(
+            request,
+            get_translation('msg_team_not_member', 'Du bist kein Mitglied dieses Teams.'),
+        )
         return redirect('team_detail', slug=slug)
 
 
@@ -639,31 +851,53 @@ def team_kick_member(request, slug, user_id):
     if team.is_in_active_tournament():
         messages.error(
             request,
-            f"Mitglieder können während eines laufenden Turniers nicht aus dem Team entfernt werden. Wende dich bitte an die Turnierleitung."
+            get_translation(
+                'msg_team_kick_in_tournament',
+                'Mitglieder können während eines laufenden Turniers nicht aus dem Team entfernt werden. Wende dich bitte an die Turnierleitung.',
+            ),
         )
         return redirect('team_detail', slug=slug)
 
     if not team.is_captain(request.user) and not request.user.is_staff:
-        messages.error(request, "Nur der Kapitän oder Administratoren können Mitglieder entfernen.")
+        messages.error(
+            request,
+            get_translation('msg_team_kick_forbidden', 'Nur der Kapitän oder Administratoren können Mitglieder entfernen.'),
+        )
         return redirect('team_detail', slug=slug)
 
     try:
         target_user_id = int(user_id)
     except (ValueError, TypeError):
-        messages.error(request, "Ungültige Benutzer-ID.")
+        messages.error(
+            request,
+            get_translation('msg_team_invalid_user_id', 'Ungültige Benutzer-ID.'),
+        )
         return redirect('team_detail', slug=slug)
 
     if target_user_id == team.captain_id:
-        messages.error(request, "Der Kapitän kann sich nicht selbst kicken. Nutze stattdessen 'Team verlassen'.")
+        messages.error(
+            request,
+            get_translation('msg_team_kick_self', 'Der Kapitän kann sich nicht selbst kicken. Nutze stattdessen "Team verlassen".'),
+        )
         return redirect('team_detail', slug=slug)
 
     membership = TeamMember.objects.filter(team=team, user_id=target_user_id).select_related('user').first()
     if membership:
         kicked_username = membership.user.username
         membership.delete()
-        messages.success(request, f"Mitglied '{kicked_username}' wurde aus dem Team entfernt.")
+        messages.success(
+            request,
+            get_translation(
+                'msg_team_kicked',
+                'Mitglied "{username}" wurde aus dem Team entfernt.',
+                username=kicked_username,
+            ),
+        )
     else:
-        messages.error(request, "Mitglied nicht gefunden.")
+        messages.error(
+            request,
+            get_translation('msg_team_member_not_found', 'Mitglied nicht gefunden.'),
+        )
 
     return redirect('team_detail', slug=slug)
 
@@ -678,7 +912,23 @@ def team_apply(request, slug):
     team = get_object_or_404(Team, slug=slug)
 
     if team.is_member(request.user):
-        messages.info(request, "Du bist bereits Mitglied in diesem Team.")
+        messages.info(
+            request,
+            get_translation('msg_team_apply_already_member', 'Du bist bereits Mitglied in diesem Team.'),
+        )
+        return redirect('team_detail', slug=slug)
+
+    if team.game and team.get_accepted_members().count() >= team.game.team_size:
+        messages.error(
+            request,
+            get_translation(
+                'msg_team_apply_full',
+                'Das Team "{team_name}" ist bereits voll (maximal {max_players} Spieler für {game_name}).',
+                team_name=team.name,
+                max_players=team.game.team_size,
+                game_name=team.game.name,
+            ),
+        )
         return redirect('team_detail', slug=slug)
 
     TeamMember.objects.get_or_create(
@@ -690,7 +940,14 @@ def team_apply(request, slug):
         }
     )
 
-    messages.success(request, f"Bewerbung an Team '{team.name}' gesendet!")
+    messages.success(
+        request,
+        get_translation(
+            'msg_team_applied',
+            'Bewerbung an Team "{team_name}" gesendet!',
+            team_name=team.name,
+        ),
+    )
     return redirect('team_detail', slug=slug)
 
 
@@ -703,12 +960,34 @@ def team_accept_membership(request, slug, membership_id):
     team = get_object_or_404(Team, slug=slug)
 
     if not team.is_captain(request.user) and not request.user.is_staff:
-        messages.error(request, "Nur der Kapitän kann Bewerbungen annehmen.")
+        messages.error(
+            request,
+            get_translation('msg_team_accept_forbidden', 'Nur der Kapitän kann Bewerbungen annehmen.'),
+        )
+        return redirect('team_detail', slug=slug)
+
+    if team.game and team.get_accepted_members().count() >= team.game.team_size:
+        messages.error(
+            request,
+            get_translation(
+                'msg_team_accept_full',
+                'Das Team "{team_name}" hat die maximale Mitgliederanzahl ({max_players} Spieler) bereits erreicht.',
+                team_name=team.name,
+                max_players=team.game.team_size,
+            ),
+        )
         return redirect('team_detail', slug=slug)
 
     membership = get_object_or_404(TeamMember, id=membership_id, team=team)
     membership.status = TeamMember.Status.ACCEPTED
     membership.save()
 
-    messages.success(request, f"Bewerbung von '{membership.user.username}' angenommen!")
+    messages.success(
+        request,
+        get_translation(
+            'msg_team_application_accepted',
+            'Bewerbung von "{username}" angenommen!',
+            username=membership.user.username,
+        ),
+    )
     return redirect('team_detail', slug=slug)

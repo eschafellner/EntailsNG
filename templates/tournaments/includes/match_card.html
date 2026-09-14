@@ -1,0 +1,48 @@
+<div class="match-card {% if user_team and match.team1 == user_team or match.team2 == user_team %}is-my-team{% endif %}">
+  <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); display: flex; justify-content: space-between;">
+    <span>
+      {% if match.group_name %}{{ match.group_name }} | {% endif %}Match #{{ match.match_number }}
+    </span>
+    <span>{{ match.get_status_display }}</span>
+  </div>
+
+  <div class="team-slot {% if match.winner == match.team1 %}is-winner{% endif %} {% if user_team and match.team1 == user_team %}is-my-team-slot{% endif %}">
+    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;" title="{% if match.team1 %}{{ match.team1.name }}{% endif %}">
+      {% if match.team1 %}
+        {% if user_team and match.team1 == user_team %}⭐ {% endif %}{{ match.team1.name }}
+      {% else %}
+        {% if match.is_bye %}{% t "tournament_match_bye" "Freilos (BYE)" %}{% else %}{% t "tournament_match_tbd" "TBD" %}{% endif %}
+      {% endif %}
+    </span>
+    <strong>{{ match.score_team1|default:"-" }}</strong>
+  </div>
+
+  <div class="team-slot {% if match.winner == match.team2 %}is-winner{% endif %} {% if user_team and match.team2 == user_team %}is-my-team-slot{% endif %}">
+    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;" title="{% if match.team2 %}{{ match.team2.name }}{% endif %}">
+      {% if match.team2 %}
+        {% if user_team and match.team2 == user_team %}⭐ {% endif %}{{ match.team2.name }}
+      {% else %}
+        {% t "tournament_match_tbd" "TBD" %}
+      {% endif %}
+    </span>
+    <strong>{{ match.score_team2|default:"-" }}</strong>
+  </div>
+
+  {% if match.status != 'COMPLETED' and not match.is_bye and match.team1 and match.team2 %}
+    {% if is_admin %}
+      <button type="button" onclick="openScoreModal({{ match.id }}, '{{ match.team1.name|escapejs }}', '{{ match.team2.name|escapejs }}', {{ match.team1.id }}, {{ match.team2.id }}, true, 0)" style="margin-top: 6px; background: #0284c7; color: white; border: none; padding: 5px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer; width: 100%;">
+        {% t "tournament_match_enter_score_btn" "✏️ Ergebnis eintragen" %}
+      </button>
+    {% elif user_team %}
+      {% if match.team1 == user_team %}
+        <button type="button" onclick="openScoreModal({{ match.id }}, '{{ match.team1.name|escapejs }}', '{{ match.team2.name|escapejs }}', {{ match.team1.id }}, {{ match.team2.id }}, false, 1)" style="margin-top: 6px; background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid #f87171; padding: 5px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer; width: 100%; font-weight: bold;">
+          {% t "tournament_match_report_defeat_btn" "🏳️ Niederlage melden" %}
+        </button>
+      {% elif match.team2 == user_team %}
+        <button type="button" onclick="openScoreModal({{ match.id }}, '{{ match.team1.name|escapejs }}', '{{ match.team2.name|escapejs }}', {{ match.team1.id }}, {{ match.team2.id }}, false, 2)" style="margin-top: 6px; background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid #f87171; padding: 5px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer; width: 100%; font-weight: bold;">
+          {% t "tournament_match_report_defeat_btn" "🏳️ Niederlage melden" %}
+        </button>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+</div>

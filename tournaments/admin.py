@@ -53,6 +53,34 @@ class TournamentAdmin(admin.ModelAdmin):
         return obj.registrations.count()
     registered_count.short_description = "Angemeldete Teams"
 
+    def formfield_for_choice_field(self, db_field, request, **kwargs):
+        if db_field.name == 'mode':
+            from configuration.translations import get_translation
+            kwargs['choices'] = [
+                (val, get_translation(key, default))
+                for val, key, default in [
+                    (Tournament.Mode.SINGLE_ELIMINATION, 'tournament_mode_single_elimination', 'Single Elimination (KO-System)'),
+                    (Tournament.Mode.DOUBLE_ELIMINATION, 'tournament_mode_double_elimination', 'Double Elimination (Winner + Loser Bracket)'),
+                    (Tournament.Mode.LEAGUE, 'tournament_mode_league', 'Liga (Jeder gegen Jeden)'),
+                    (Tournament.Mode.GROUP_STAGE, 'tournament_mode_group_stage', 'Gruppenspiele mit anschließendem KO-System'),
+                    (Tournament.Mode.FFA, 'tournament_mode_ffa', 'Alle in einem (Free-For-All / Deathmatch)'),
+                ]
+            ]
+        elif db_field.name == 'status':
+            from configuration.translations import get_translation
+            kwargs['choices'] = [
+                (val, get_translation(key, default))
+                for val, key, default in [
+                    (Tournament.Status.DRAFT, 'tournament_status_draft', 'Entwurf'),
+                    (Tournament.Status.REGISTRATION_OPEN, 'tournament_status_open', 'Anmeldung geöffnet'),
+                    (Tournament.Status.REGISTRATION_CLOSED, 'tournament_status_closed', 'Anmeldung geschlossen'),
+                    (Tournament.Status.IN_PROGRESS, 'tournament_status_running', 'Turnier läuft'),
+                    (Tournament.Status.FINISHED, 'tournament_status_finished', 'Beendet'),
+                    (Tournament.Status.CANCELLED, 'tournament_status_cancelled', 'Abgesagt'),
+                ]
+            ]
+        return super().formfield_for_choice_field(db_field, request, **kwargs)
+
     @admin.action(description="Turnierbaum generieren & Turnier starten")
     def action_close_registration_and_generate_bracket(self, request, queryset):
         for tournament in queryset:

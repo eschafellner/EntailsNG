@@ -1243,6 +1243,7 @@ class TeamFeedbackAndIntegrityTests(TestCase):
 
     def test_join_team_by_code_accepts_pending_application(self):
         """Ausstehende PENDING-Bewerbungen werden bei Eingabe des korrekten Einladungscodes auf ACCEPTED gesetzt."""
+        TeamMember.objects.filter(team=self.team, user=self.player5).delete()
         applicant = User.objects.create_user(username="applicant_val", password="password")
         # 1. Apply to team
         membership = TeamMember.objects.create(
@@ -1261,6 +1262,10 @@ class TeamFeedbackAndIntegrityTests(TestCase):
         membership.refresh_from_db()
         self.assertEqual(membership.status, TeamMember.Status.ACCEPTED)
         self.assertContains(response, "erfolgreich beigetreten")
+
+        # Roster wiederherstellen
+        membership.delete()
+        TeamMember.objects.create(team=self.team, user=self.player5, status=TeamMember.Status.ACCEPTED)
 
     def test_team_registration_validation_rules(self):
         """Umfassende Prüfung der Validierungsregeln für Team-Turnieranmeldungen."""
@@ -1288,6 +1293,13 @@ class TeamFeedbackAndIntegrityTests(TestCase):
         with self.assertRaises(TournamentRegistrationError) as cm:
             TournamentRegistrationService.register_team(self.tournament.id, self.captain, self.team.id)
         self.assertIn("registriert, das Turnier ist jedoch für", str(cm.exception))
+
+        # 3b. Team ohne Spiel wird abgelehnt
+        self.team.game = None
+        self.team.save()
+        with self.assertRaises(TournamentRegistrationError) as cm:
+            TournamentRegistrationService.register_team(self.tournament.id, self.captain, self.team.id)
+        self.assertIn("kein Spiel zugeordnet", str(cm.exception))
         self.team.game = self.game
         self.team.save()
 
@@ -1303,6 +1315,16 @@ class TeamFeedbackAndIntegrityTests(TestCase):
             TournamentRegistrationService.register_team(self.tournament.id, self.captain, self.team.id)
         self.assertIn("erforderlichen Mitgliedern", str(cm.exception))
         TeamMember.objects.create(team=self.team, user=self.player5, status=TeamMember.Status.ACCEPTED)
+
+        # 5b. Team mit zu vielen Mitgliedern (> 5) wird abgelehnt
+        player6 = User.objects.create_user(username="p6_val", password="password")
+        EventRegistration.objects.create(user=player6, event=self.event, is_checked_in=True)
+        m6 = TeamMember.objects.create(team=self.team, user=player6, status=TeamMember.Status.ACCEPTED)
+        with self.assertRaises(TournamentRegistrationError) as cm:
+            TournamentRegistrationService.register_team(self.tournament.id, self.captain, self.team.id)
+        self.assertIn("maximal 5 Spieler erlaubt", str(cm.exception))
+        m6.delete()
+        player6.delete()
 
         # 6. Teammitglied nicht eingecheckt wird abgelehnt
         reg5 = EventRegistration.objects.get(user=self.player5, event=self.event)
@@ -1436,6 +1458,561 @@ class TeamFeedbackAndIntegrityTests(TestCase):
         match.refresh_from_db()
         self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
         self.assertEqual(match.winner, opp_team)
+
+    def test_tournament_detail_inline_bracket_and_score_validation(self):
+        """Turnieransicht nutzt Inline-Bestätigung zur Bracket-Generierung und Inline-Fehleranzeige für Scores."""
+        staff_admin = User.objects.create_user(username="staff_admin_test", password="password", is_staff=True)
+        self.client.login(username="staff_admin_test", password="password")
+        response = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
+        self.assertEqual(response.status_code, 200)
+
+        content = response.content.decode('utf-8')
+        # Inline Bracket-Generierung
+        self.assertIn('id="bracket-generate-confirm"', content)
+        self.assertIn('toggleGenerateBracketConfirm', content)
+        # Inline Fehleranzeige & Validierung für Matchergebnisse
+        self.assertIn('id="scoreFormError"', content)
+        self.assertIn('checkTieWarning', content)
+        # Keine Browser-Dialoge
+        self.assertNotIn('confirm(', content)
+        self.assertNotIn('alert(', content)
+
+    def test_team_detail_inline_leave_and_kick(self):
+        """Team-Detailansicht nutzt moderne Inline-Bestätigungen für Team-Verlassen und Kicken."""
+        self.client.login(username="cap_val", password="password")
+        response = self.client.get(reverse('team_detail', kwargs={'slug': self.team.slug}))
+        self.assertEqual(response.status_code, 200)
+
+        content = response.content.decode('utf-8')
+        # Inline Team verlassen
+        self.assertIn('id="leave-team-confirm"', content)
+        self.assertIn('toggleLeaveTeamConfirm', content)
+        # Inline Kicken für Teammitglieder (player2 ist Mitglied in self.team)
+        self.assertIn(f'id="kick-confirm-{self.player2.id}"', content)
+        self.assertIn('toggleKickMemberConfirm', content)
+        # Keine Browser-Dialoge
+        self.assertNotIn('confirm(', content)
+        self.assertNotIn('alert(', content)
+
+    def test_team_create_requires_game(self):
+        """Teamerstellung erfordert zwingend die Angabe eines gültigen Spiels."""
+        self.client.login(username="cap_val", password="password")
+        # Ohne game_id
+        resp = self.client.post(reverse('team_create'), {'name': 'No Game Team', 'tag': 'NGT'})
+        self.assertRedirects(resp, reverse('team_list'))
+        self.assertFalse(Team.objects.filter(name='No Game Team').exists())
+
+        # Mit ungültiger game_id
+        resp = self.client.post(reverse('team_create'), {'name': 'Bad Game Team', 'tag': 'BGT', 'game_id': '99999'})
+        self.assertRedirects(resp, reverse('team_list'))
+        self.assertFalse(Team.objects.filter(name='Bad Game Team').exists())
+
+    def test_team_capacity_limits_join_and_apply(self):
+        """Volle Teams (z.B. 5 von 5) lehnen Beitritt per Code, Bewerbung und Annahme weiterer Mitglieder ab."""
+        new_player = User.objects.create_user(username="extra_player", password="password")
+        self.client.login(username="extra_player", password="password")
+
+        # 1. Beitritt per Einladungscode bei vollem Team
+        resp = self.client.post(reverse('team_join_by_code'), {'invite_code': self.team.invite_code}, follow=True)
+        self.assertContains(resp, "ist bereits voll")
+        self.assertFalse(self.team.is_member(new_player))
+
+        # 2. Bewerbung bei vollem Team
+        resp = self.client.post(reverse('team_apply', kwargs={'slug': self.team.slug}), follow=True)
+        self.assertContains(resp, "ist bereits voll")
+        self.assertFalse(TeamMember.objects.filter(team=self.team, user=new_player).exists())
+
+        # 3. Annehmen einer zuvor gestellten Bewerbung wird verhindert, wenn Team voll ist
+        pending_membership = TeamMember.objects.create(
+            team=self.team,
+            user=new_player,
+            role=TeamMember.Role.MEMBER,
+            status=TeamMember.Status.PENDING
+        )
+        self.client.login(username="cap_val", password="password")
+        resp = self.client.post(
+            reverse('team_accept_membership', kwargs={'slug': self.team.slug, 'membership_id': pending_membership.id}),
+            follow=True
+        )
+        self.assertContains(resp, "maximale Mitgliederanzahl")
+        pending_membership.refresh_from_db()
+        self.assertEqual(pending_membership.status, TeamMember.Status.PENDING)
+
+    def test_tournament_detail_only_shows_matching_game_teams(self):
+        """In der Turnieranmeldung werden nur Teams zur Auswahl gestellt, deren Spiel mit dem Turnier übereinstimmt."""
+        # Anderes Team für anderes Spiel anlegen
+        other_team = Team.objects.create(
+            name="CS2 Crew",
+            captain=self.captain,
+            game=self.other_game,
+            event=self.event
+        )
+        TeamMember.objects.create(team=other_team, user=self.captain, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="cap_val", password="password")
+        response = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
+        self.assertEqual(response.status_code, 200)
+
+        my_user_teams = response.context['my_user_teams']
+        self.assertIn(self.team, my_user_teams)
+        self.assertNotIn(other_team, my_user_teams)
+
+    def test_team_detail_and_list_ui_features(self):
+        """Prüft das Rendering des hervorgehobenen Teamerstellungs-Modals und der Kaderanzeige im Team-Detail."""
+        # 1. team_list zeigt prominente Aktionsleiste und Teamerstellungs-Modal mit Pflichtspiel-Auswahl
+        self.client.login(username="cap_val", password="password")
+        response = self.client.get(reverse('team_list'))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertIn('id="createTeamModal"', content)
+        self.assertIn('name="game_id" required', content)
+        self.assertIn('Neues Team gründen', content)
+        self.assertIn('Einladungscode eingeben', content)
+
+        # 2. team_detail zeigt Kaderstatus bei vollem Team (5/5)
+        response_detail = self.client.get(reverse('team_detail', kwargs={'slug': self.team.slug}))
+        self.assertEqual(response_detail.status_code, 200)
+        content_detail = response_detail.content.decode('utf-8')
+        self.assertIn('Kader vollständig', content_detail)
+        self.assertIn('(5/5)', content_detail)
+
+    def test_tournament_preview_restricted_to_admin(self):
+        """Vorschau ist für reguläre Teilnehmer verborgen und ausschließlich für Admins sichtbar."""
+        # 1. Regulärer Teilnehmer sieht keine Vorschau
+        self.client.login(username="cap_val", password="password")
+        resp_user = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
+        self.assertEqual(resp_user.status_code, 200)
+        self.assertIsNone(resp_user.context['preview_data'])
+        content_user = resp_user.content.decode('utf-8')
+        self.assertNotIn('id="tab-preview"', content_user)
+        self.assertNotIn('Admin-Vorschau', content_user)
+
+        # 2. Admin sieht die Vorschau
+        admin = User.objects.create_user(username="tourn_admin_val", password="password", is_staff=True)
+        self.client.login(username="tourn_admin_val", password="password")
+        resp_admin = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
+        self.assertEqual(resp_admin.status_code, 200)
+        self.assertIsNotNone(resp_admin.context['preview_data'])
+        content_admin = resp_admin.content.decode('utf-8')
+        self.assertIn('id="tab-preview"', content_admin)
+        self.assertIn('Admin-Vorschau', content_admin)
+
+    def test_tournament_preview_double_elimination_rendering(self):
+        """Double-Elimination-Vorschau rendert Winner-, Loser-Bracket und Grand Final bei 3 Teams vollständig."""
+        # Double Elimination Turnier anlegen
+        de_tourn = Tournament.objects.create(
+            title="CS2 Double Elimination",
+            slug="cs2-de",
+            event=self.event,
+            game=self.game,
+            mode=Tournament.Mode.DOUBLE_ELIMINATION,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.REGISTRATION_OPEN,
+            max_teams=16,
+        )
+
+        # 3 Teams für Turnier anmelden
+        t1 = self.team
+        t2 = Team.objects.create(name="Team Beta", captain=self.player2, game=self.game, event=self.event)
+        TeamMember.objects.create(team=t2, user=self.player2, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        t3 = Team.objects.create(name="Team Gamma", captain=self.player3, game=self.game, event=self.event)
+        TeamMember.objects.create(team=t3, user=self.player3, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        TournamentRegistration.objects.create(tournament=de_tourn, team=t1)
+        TournamentRegistration.objects.create(tournament=de_tourn, team=t2)
+        TournamentRegistration.objects.create(tournament=de_tourn, team=t3)
+
+        # Als Admin aufrufen
+        admin = User.objects.create_user(username="de_admin", password="password", is_staff=True)
+        self.client.login(username="de_admin", password="password")
+        resp = self.client.get(reverse('tournament_detail', kwargs={'slug': de_tourn.slug}))
+        self.assertEqual(resp.status_code, 200)
+
+        preview = resp.context['preview_data']
+        self.assertIsNotNone(preview)
+        self.assertEqual(preview['mode'], 'DOUBLE_ELIMINATION')
+        self.assertEqual(preview['total_teams'], 3)
+        self.assertEqual(preview['byes'], 1)
+        self.assertTrue(len(preview['wb_rounds']) > 0)
+        self.assertTrue(len(preview['lb_rounds']) > 0)
+        self.assertTrue(len(preview['grand_final']) > 0)
+
+        # HTML prüfen
+        content = resp.content.decode('utf-8')
+        self.assertIn('Winner Bracket', content)
+        self.assertIn('Loser Bracket', content)
+        self.assertIn('Grand Final', content)
+        self.assertIn('FREILOS', content)
+        self.assertIn('Freilose (BYEs):', content)
+
+
+class TournamentResultReportingAndBracketSeparationTests(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="Lanparty Spring 2026",
+            slug="lanparty-spring-2026",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game = Game.objects.create(name="Counter-Strike 2", mode="5v5", team_size=5)
+
+        self.admin_user = User.objects.create_user(username="tourn_admin", password="password", is_staff=True)
+        self.u1 = User.objects.create_user(username="player_t1", password="password")
+        self.u2 = User.objects.create_user(username="player_t2", password="password")
+        self.u3 = User.objects.create_user(username="player_t3", password="password")
+        self.unrelated = User.objects.create_user(username="unrelated_user", password="password")
+
+        # Event Check-ins
+        for u in [self.admin_user, self.u1, self.u2, self.u3, self.unrelated]:
+            EventRegistration.objects.create(
+                user=u, event=self.event,
+                payment_status=EventRegistration.PaymentStatus.PAID,
+                is_checked_in=True
+            )
+
+        self.team1 = Team.objects.create(name="Team Alpha", captain=self.u1, game=self.game, event=self.event)
+        TeamMember.objects.create(team=self.team1, user=self.u1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.team2 = Team.objects.create(name="Team Bravo", captain=self.u2, game=self.game, event=self.event)
+        TeamMember.objects.create(team=self.team2, user=self.u2, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.team3 = Team.objects.create(name="Team Charlie", captain=self.u3, game=self.game, event=self.event)
+        TeamMember.objects.create(team=self.team3, user=self.u3, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.tournament = Tournament.objects.create(
+            title="CS2 Champions Cup",
+            slug="cs2-champions-cup",
+            event=self.event,
+            game=self.game,
+            mode=Tournament.Mode.DOUBLE_ELIMINATION,
+            registration_start=timezone.now() - timedelta(days=1),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.REGISTRATION_OPEN,
+            max_teams=8,
+            tournament_admin=self.admin_user,
+        )
+
+        TournamentRegistration.objects.create(tournament=self.tournament, team=self.team1)
+        TournamentRegistration.objects.create(tournament=self.tournament, team=self.team2)
+        TournamentRegistration.objects.create(tournament=self.tournament, team=self.team3)
+
+    def test_participant_can_report_own_defeat(self):
+        """Verlierer-Team kann das Match-Ergebnis selbst eintragen, wenn es den Gegner als Sieger bestätigt."""
+        from tournaments.services import TournamentBracketService
+        TournamentBracketService.generate_bracket(self.tournament.id, actor=self.admin_user)
+
+        # Erstes spielbares Match holen (team1 vs team2)
+        match = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            status=TournamentMatch.Status.READY
+        ).filter(team1__isnull=False, team2__isnull=False).first()
+        self.assertIsNotNone(match)
+
+        # Kapitän von match.team1 meldet Niederlage (match.team2 gewinnt)
+        user = match.team1.captain
+        self.client.login(username=user.username, password="password")
+        url = reverse('match_update_score', kwargs={'match_id': match.id})
+        resp = self.client.post(url, {
+            'score_team1': 0,
+            'score_team2': 1,
+            'winner_id': match.team2.id,
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['winner'], match.team2.name)
+
+        match.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(match.winner, match.team2)
+        self.assertEqual(match.loser, match.team1)
+        self.assertIn(user.username, match.decision_reason)
+
+    def test_participant_cannot_declare_themselves_winner(self):
+        """Teilnehmer darf sich nicht selbst als Sieger eintragen (Fairplay-Schutz)."""
+        from tournaments.services import TournamentBracketService
+        TournamentBracketService.generate_bracket(self.tournament.id, actor=self.admin_user)
+
+        match = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            status=TournamentMatch.Status.READY
+        ).filter(team1__isnull=False, team2__isnull=False).first()
+
+        # Kapitän von match.team1 versucht, match.team1 als Sieger einzutragen
+        user = match.team1.captain
+        self.client.login(username=user.username, password="password")
+        url = reverse('match_update_score', kwargs={'match_id': match.id})
+        resp = self.client.post(url, {
+            'score_team1': 2,
+            'score_team2': 0,
+            'winner_id': match.team1.id,
+        })
+        self.assertEqual(resp.status_code, 400)
+        data = resp.json()
+        self.assertFalse(data['success'])
+        self.assertIn("nur die eigene Niederlage bestätigen", data['error'])
+
+        match.refresh_from_db()
+        self.assertNotEqual(match.status, TournamentMatch.Status.COMPLETED)
+
+    def test_unrelated_user_forbidden(self):
+        """Ein unbeteiligter Benutzer ohne Admin-Rechte erhält 403 Forbidden."""
+        from tournaments.services import TournamentBracketService
+        TournamentBracketService.generate_bracket(self.tournament.id, actor=self.admin_user)
+
+        match = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            status=TournamentMatch.Status.READY
+        ).filter(team1__isnull=False, team2__isnull=False).first()
+
+        self.client.login(username="unrelated_user", password="password")
+        url = reverse('match_update_score', kwargs={'match_id': match.id})
+        resp = self.client.post(url, {
+            'score_team1': 0,
+            'score_team2': 1,
+            'winner_id': match.team2.id,
+        })
+        self.assertEqual(resp.status_code, 403)
+        data = resp.json()
+        self.assertFalse(data['success'])
+
+    def test_participant_cannot_edit_completed_match(self):
+        """Teilnehmer dürfen bereits gewertete Matches nicht nachträglich überschreiben."""
+        from tournaments.services import TournamentBracketService
+        TournamentBracketService.generate_bracket(self.tournament.id, actor=self.admin_user)
+
+        match = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            status=TournamentMatch.Status.READY
+        ).filter(team1__isnull=False, team2__isnull=False).first()
+
+        # Admin trägt Ergebnis ein
+        self.client.login(username="tourn_admin", password="password")
+        url = reverse('match_update_score', kwargs={'match_id': match.id})
+        self.client.post(url, {
+            'score_team1': 1,
+            'score_team2': 0,
+            'winner_id': match.team1.id,
+        })
+        match.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+
+        # Teilnehmer versucht zu bearbeiten -> 403
+        user = match.team2.captain
+        self.client.login(username=user.username, password="password")
+        resp = self.client.post(url, {
+            'score_team1': 0,
+            'score_team2': 1,
+            'winner_id': match.team1.id,
+        })
+        self.assertEqual(resp.status_code, 403)
+
+    def test_double_elimination_separation_status_and_podium(self):
+        """Turnier schließt nach Grand Final ab, schaltet auf FINISHED und zeigt Podium & getrennte Brackets."""
+        from tournaments.services import TournamentBracketService, TournamentMatchService
+        TournamentBracketService.generate_bracket(self.tournament.id, actor=self.admin_user)
+
+        # Alle Matches abarbeiten
+        # 1. WB R1 (Team 2 vs Team 3)
+        wb_r1 = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            status=TournamentMatch.Status.READY
+        ).first()
+        TournamentMatchService.update_match_score(
+            match_id=wb_r1.id, score1=16, score2=5,
+            winner_id=wb_r1.team1.id, actor=self.admin_user
+        )
+
+        # 2. WB Finale (Team 1 vs Team 2)
+        wb_final = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            status=TournamentMatch.Status.READY
+        ).first()
+        TournamentMatchService.update_match_score(
+            match_id=wb_final.id, score1=16, score2=8,
+            winner_id=wb_final.team1.id, actor=self.admin_user
+        )
+
+        # 3. LB Finale (Team 3 vs Team 2)
+        lb_final = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.LOSERS,
+            status=TournamentMatch.Status.READY
+        ).first()
+        self.assertIsNotNone(lb_final)
+        TournamentMatchService.update_match_score(
+            match_id=lb_final.id, score1=10, score2=16,
+            winner_id=lb_final.team2.id, actor=self.admin_user
+        )
+
+        # 4. Grand Final (Team 1 vs Team 2)
+        gf_match = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.GRAND_FINAL,
+            status=TournamentMatch.Status.READY
+        ).first()
+        self.assertIsNotNone(gf_match)
+        TournamentMatchService.update_match_score(
+            match_id=gf_match.id, score1=16, score2=12,
+            winner_id=gf_match.team1.id, actor=self.admin_user
+        )
+
+        # Turnier muss automatisch FINISHED sein
+        self.tournament.refresh_from_db()
+        self.assertEqual(self.tournament.status, Tournament.Status.FINISHED)
+
+        # Detailseite aufrufen
+        resp = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
+        self.assertEqual(resp.status_code, 200)
+
+        # Brackets im Kontext getrennt
+        self.assertTrue(len(resp.context['wb_matches']) > 0)
+        self.assertTrue(len(resp.context['lb_matches']) > 0)
+        self.assertTrue(len(resp.context['grand_final_matches']) > 0)
+
+        # Podium ermittelt
+        podium = resp.context['podium']
+        self.assertEqual(podium['first'], gf_match.team1)
+        self.assertEqual(podium['second'], gf_match.team2)
+        self.assertIsNotNone(podium['third'])
+
+        # HTML-Überprüfung
+        html = resp.content.decode('utf-8')
+        self.assertIn("🏁 Turnier beendet", html)
+        self.assertNotIn("⚔️ Turnier läuft", html)
+        self.assertIn("Siegerehrung &amp; Endstand", html)
+        self.assertIn("Turniersieger", html)
+        self.assertIn("Winner Bracket (Hauptfeld)", html)
+        self.assertIn("Loser Bracket (Hoffnungsrunde)", html)
+        self.assertIn("Grand Final (Entscheidungsspiel)", html)
+
+
+class TournamentTranslationMaintenanceTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+        self.event = Event.objects.create(
+            title="LAN Party 2026",
+            slug="lan-party-2026",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game = Game.objects.create(name="Rocket League", team_size=3)
+        self.user = User.objects.create_user(username="gamer1", email="gamer1@example.com", password="password123")
+        self.tournament = Tournament.objects.create(
+            title="RL Cup",
+            event=self.event,
+            game=self.game,
+            mode=Tournament.Mode.DOUBLE_ELIMINATION,
+            status=Tournament.Status.REGISTRATION_OPEN,
+            registration_start=timezone.now() - timedelta(days=1),
+            registration_end=timezone.now() + timedelta(days=1),
+        )
+
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_tournament_mode_display_dynamic_override(self):
+        from django.core.cache import cache
+        from configuration.models import SystemTranslation
+
+        # 1. Default display
+        self.assertEqual(self.tournament.get_mode_display(), "Double Elimination (Winner + Loser Bracket)")
+
+        # 2. Detail view shows default
+        resp = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Double Elimination (Winner + Loser Bracket)", resp.content.decode('utf-8'))
+
+        # 3. Override mode translation via SystemTranslation
+        SystemTranslation.objects.update_or_create(
+            key="tournament_mode_double_elimination",
+            defaults={'text': "Doppel-KO (Haupt- & Hoffnungsrunde)"}
+        )
+        cache.clear()
+
+        # 4. Model get_mode_display() returns custom text
+        self.assertEqual(self.tournament.get_mode_display(), "Doppel-KO (Haupt- & Hoffnungsrunde)")
+
+        # 5. Detail view shows customized mode text
+        resp2 = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
+        self.assertIn("Doppel-KO (Haupt- &amp; Hoffnungsrunde)", resp2.content.decode('utf-8'))
+
+    def test_tournament_admin_choices_dynamic(self):
+        from django.core.cache import cache
+        from configuration.models import SystemTranslation
+        from django.contrib.admin.sites import AdminSite
+        from tournaments.admin import TournamentAdmin
+        from unittest.mock import MagicMock
+
+        SystemTranslation.objects.update_or_create(
+            key="tournament_mode_single_elimination",
+            defaults={'text': "Einfaches KO-System (Klassisch)"}
+        )
+        cache.clear()
+
+        site = AdminSite()
+        admin_obj = TournamentAdmin(Tournament, site)
+        mode_field = Tournament._meta.get_field('mode')
+        req = MagicMock()
+        form_field = admin_obj.formfield_for_choice_field(mode_field, req)
+        choices_dict = dict(form_field.choices)
+
+        self.assertEqual(choices_dict[Tournament.Mode.SINGLE_ELIMINATION], "Einfaches KO-System (Klassisch)")
+
+    def test_tournament_match_and_team_translations(self):
+        from django.core.cache import cache
+        from configuration.models import SystemTranslation
+
+        team = Team.objects.create(name="Team A", captain=self.user, game=self.game)
+        member = TeamMember.objects.create(
+            team=team, user=self.user, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED
+        )
+        self.assertEqual(member.get_role_display(), "👑 Kapitän")
+
+        match = TournamentMatch.objects.create(
+            tournament=self.tournament,
+            match_number=1,
+            round_number=1,
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            status=TournamentMatch.Status.READY
+        )
+        self.assertEqual(match.get_bracket_type_display(), "Winner Bracket")
+        self.assertEqual(match.get_status_display(), "Bereit")
+
+        # Customization
+        SystemTranslation.objects.update_or_create(
+            key="tournament_bracket_winners",
+            defaults={'text': "Gewinner-Feld"}
+        )
+        cache.clear()
+        self.assertEqual(match.get_bracket_type_display(), "Gewinner-Feld")
+
+    def test_team_create_flash_message_translated(self):
+        from django.core.cache import cache
+        from configuration.models import SystemTranslation
+        from django.contrib.messages import get_messages
+
+        SystemTranslation.objects.update_or_create(
+            key="msg_team_name_required",
+            defaults={'text': "Fehler: Bitte einen Teamnamen eingeben!"}
+        )
+        cache.clear()
+
+        self.client.force_login(self.user)
+        resp = self.client.post(reverse('team_create'), {'name': '', 'game_id': self.game.id})
+        self.assertEqual(resp.status_code, 302)
+
+        messages = list(get_messages(resp.wsgi_request))
+        self.assertTrue(any("Fehler: Bitte einen Teamnamen eingeben!" in str(m) for m in messages))
+
+
+
+
+
 
 
 

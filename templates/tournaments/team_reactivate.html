@@ -9,7 +9,7 @@
   <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
     <p class="eyebrow" style="margin-bottom: 4px; color: #22c55e;">{% t "team_reactivate_wizard_eyebrow" "Reaktivierungs-Assistent" %}</p>
     <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 32px; color: var(--ink);">
-      🔄 Team '{{ team.name }}' für {{ active_event.title }} reaktivieren
+      {% t "team_reactivate_heading" "🔄 Team '{team_name}' für {event_title} reaktivieren" team_name=team.name event_title=active_event.title %}
     </h1>
     <p style="margin: 8px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.5;">
       {% t "team_reactivate_wizard_desc" "Übernimm dein eingespieltes Team direkt in die neue LAN-Party. Prüfe hier den Roster-Status deiner Mitspieler und wähle aus, wer im Team bleiben soll." %}
@@ -68,11 +68,11 @@
                   <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); margin-top: 2px;">
                     {% if item.is_registered %}
                       <span style="color: #22c55e;">
-                        ✅ Angemeldet für {{ active_event.title }} {% if item.ticket_name %}({{ item.ticket_name }}){% endif %}
+                        {% t "team_reactivate_registered_hint" "✅ Angemeldet für {event_title}" event_title=active_event.title %} {% if item.ticket_name %}({{ item.ticket_name }}){% endif %}
                       </span>
                     {% else %}
                       <span style="color: #eab308;">
-                        ⚠️ Noch kein Ticket / nicht für {{ active_event.title }} registriert
+                        {% t "team_reactivate_unregistered_hint" "⚠️ Noch kein Ticket / nicht für {event_title} registriert" event_title=active_event.title %}
                       </span>
                     {% endif %}
                   </div>

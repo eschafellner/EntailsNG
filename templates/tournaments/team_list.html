@@ -19,25 +19,60 @@
       </div>
 
       <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-        <button type="button" onclick="document.getElementById('createTeamModal').style.display='flex';" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-decoration: none; border: none; cursor: pointer;">
+        <button type="button" onclick="openCreateTeamModal()" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-decoration: none; border: none; cursor: pointer;">
           ➕ {% t "team_create_btn" "Neues Team gründen" %}
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Formular: Beitritt per Einladungscode -->
-  <div class="card" style="padding: 20px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);">
-    <h3 style="margin: 0 0 12px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; color: var(--ink);">
-      🔑 {% t "team_join_by_code_title" "Einladungscode eingeben" %}
-    </h3>
-    <form method="post" action="{% url 'team_join_by_code' %}" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-      {% csrf_token %}
-      <input type="text" name="invite_code" placeholder="z. B. 4A8B9C12" required uppercase style="padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 14px; text-transform: uppercase; width: 220px;">
-      <button type="submit" style="background: var(--navy); color: var(--signal); border: none; padding: 10px 20px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; cursor: pointer;">
-        {% t "team_join_btn" "Team beitreten" %}
-      </button>
-    </form>
+  <!-- Prominente Aktionsleiste: Team gründen & Code eingeben -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+    <!-- Karte 1: Neues Team gründen (hervorgehoben) -->
+    <div class="card" style="padding: 22px; border-radius: 12px; background: linear-gradient(135deg, var(--paper) 0%, var(--panel) 100%); border: 2px solid var(--signal); box-shadow: 0 4px 15px rgba(248, 171, 45, 0.15); display: flex; flex-direction: column; justify-content: space-between; gap: 14px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="background: var(--signal); color: var(--navy); font-size: 10px; font-weight: bold; font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">
+            {% t "team_list_esports_badge" "Turniere & Esports" %}
+          </span>
+        </div>
+        <h3 style="margin: 0 0 6px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+          ➕ {% t "team_create_btn" "Neues Team gründen" %}
+        </h3>
+        <p style="margin: 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.4;">
+          {% t "team_create_card_desc" "Wähle dein Spiel, lege deinen Teamnamen fest und lade deine Mitspieler per individuellem Einladungscode ein." %}
+        </p>
+      </div>
+      <div>
+        <button type="button" onclick="openCreateTeamModal()" class="btn-login" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 20px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; text-decoration: none; border: none; cursor: pointer; background: var(--signal); color: var(--navy);">
+          {% t "team_create_card_btn" "➕ Jetzt Team für ein Spiel gründen" %}
+        </button>
+      </div>
+    </div>
+
+    <!-- Karte 2: Beitritt per Einladungscode -->
+    <div class="card" style="padding: 22px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; gap: 14px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="background: var(--line); color: var(--ink); font-size: 10px; font-weight: bold; font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">
+            {% t "team_join_card_badge" "Direkt-Beitritt" %}
+          </span>
+        </div>
+        <h3 style="margin: 0 0 6px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+          🔑 {% t "team_join_by_code_title" "Einladungscode eingeben" %}
+        </h3>
+        <p style="margin: 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.4;">
+          {% t "team_join_card_desc" "Du hast einen Code von deinem Kapitän erhalten? Gib ihn hier ein, um dem Kader sofort beizutreten." %}
+        </p>
+      </div>
+      <form method="post" action="{% url 'team_join_by_code' %}" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        {% csrf_token %}
+        <input type="text" name="invite_code" placeholder="z. B. 4A8B9C12" required uppercase style="flex: 1; min-width: 140px; padding: 11px 14px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 13px; text-transform: uppercase;">
+        <button type="submit" style="background: var(--navy); color: var(--signal); border: none; padding: 11px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap;">
+          {% t "team_join_btn" "Beitreten →" %}
+        </button>
+      </form>
+    </div>
   </div>
 
   <!-- Meine Teams -->
@@ -137,22 +172,22 @@
                 {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
               </h3>
               <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 10px;">
-                Spiel: {{ team.game.name|default:"Allgemein" }} | Kapitän: {{ team.captain.username }}
+                {% t "team_game_label" "Spiel:" %} {{ team.game.name|default:"Allgemein" }} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.username }}
               </div>
               <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 14px;">
-                👥 {{ team.get_accepted_members.count }} Mitglieder
+                👥 {{ team.get_accepted_members.count }} {% t "team_members_unit" "Mitglieder" %}
               </div>
             </div>
 
             <div style="padding-top: 10px; border-top: 1px solid var(--line); text-align: right;">
               <a href="{% url 'team_detail' slug=team.slug %}" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; color: #0284c7; text-decoration: none;">
-                Profil ansehen →
+                {% t "team_view_profile_btn" "Profil ansehen →" %}
               </a>
             </div>
           </div>
         {% empty %}
           <div class="card" style="grid-column: 1 / -1; padding: 32px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
-            Für die aktuelle Veranstaltung wurden noch keine neuen Teams gegründet. Gründe jetzt dein Team oder reaktiviere ein bestehendes!
+            {% t "team_list_active_empty" "Für die aktuelle Veranstaltung wurden noch keine neuen Teams gegründet. Gründe jetzt dein Team oder reaktiviere ein bestehendes!" %}
           </div>
         {% endfor %}
       </div>
@@ -166,20 +201,20 @@
                   {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
                 </h3>
                 <span style="background: var(--line); color: var(--muted); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">
-                  Archiv
+                  {% t "team_archived_badge" "ARCHIV" %}
                 </span>
               </div>
               <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 6px;">
-                Spiel: {{ team.game.name|default:"Allgemein" }} | Event: {{ team.event.title|default:"Vergangenes Event" }}
+                {% t "team_game_label" "Spiel:" %} {{ team.game.name|default:"Allgemein" }} | {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ team.event.title|default:"Vergangenes Event" }}
               </div>
               <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 14px;">
-                👥 {{ team.get_accepted_members.count }} Mitglieder | Kapitän: {{ team.captain.username }}
+                👥 {{ team.get_accepted_members.count }} {% t "team_members_unit" "Mitglieder" %} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.username }}
               </div>
             </div>
 
             <div style="padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
               <a href="{% url 'team_detail' slug=team.slug %}" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); text-decoration: none;">
-                Details ansehen →
+                {% t "team_view_details_btn" "Details ansehen →" %}
               </a>
               {% if active_event and team.captain_id == user.id %}
                 <a href="{% url 'team_reactivate' slug=team.slug %}" style="background: #22c55e; color: white; padding: 4px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; text-decoration: none;">
@@ -190,7 +225,7 @@
           </div>
         {% empty %}
           <div class="card" style="grid-column: 1 / -1; padding: 32px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
-            Keine archivierten Teams vorhanden.
+            {% t "team_list_archived_empty" "Keine archivierten Teams vorhanden." %}
           </div>
         {% endfor %}
       </div>
@@ -201,38 +236,45 @@
 </div>
 
 <!-- Modal: Neues Team gründen -->
-<div id="createTeamModal" class="modal-overlay" style="display: none;">
+<div id="createTeamModal" class="modal-overlay" style="display: none;" onclick="if (event.target === this) closeCreateTeamModal();">
   <div class="modal-box">
-    <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
-      ➕ {% t "team_create_btn" "Neues Team gründen" %}
-    </h3>
+    <div class="modal-header">
+      <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
+        ➕ {% t "team_create_btn" "Neues Team gründen" %}
+      </h3>
+      <button type="button" class="modal-close-btn" onclick="closeCreateTeamModal()" aria-label="Schließen">&times;</button>
+    </div>
+
     <form method="post" action="{% url 'team_create' %}">
       {% csrf_token %}
 
       <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
         <div>
-          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Teamname *</label>
-          <input type="text" name="name" required placeholder="z. B. Phoenix Esports" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace;">
+          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">{% t "team_create_modal_name_label" "Teamname *" %}</label>
+          <input type="text" name="name" required placeholder="z. B. Phoenix Esports" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; box-sizing: border-box;">
         </div>
 
         <div>
-          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Team-Tag (optional)</label>
-          <input type="text" name="tag" maxlength="10" placeholder="z. B. PHX" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace;">
+          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">{% t "team_create_modal_tag_label" "Team-Tag (optional)" %}</label>
+          <input type="text" name="tag" maxlength="10" placeholder="z. B. PHX" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; box-sizing: border-box;">
         </div>
 
         <div>
-          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Zugeordnetes Spiel (optional)</label>
-          <select name="game_id" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace;">
-            <option value="">-- Überall nutzbar --</option>
+          <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">{% t "team_create_modal_game_label" "Zugeordnetes Spiel *" %}</label>
+          <select name="game_id" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 13px; box-sizing: border-box;">
+            <option value="">{% t "team_create_modal_game_placeholder" "-- Spiel auswählen (Pflichtfeld) --" %}</option>
             {% for g in games %}
-              <option value="{{ g.id }}">{{ g.name }} ({{ g.team_size }}v{{ g.team_size }})</option>
+              <option value="{{ g.id }}">{{ g.name }} ({{ g.team_size }} {% t "team_create_modal_players_unit" "Spieler pro Team" %})</option>
             {% endfor %}
           </select>
+          <small style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 4px;">
+            {% t "team_create_modal_game_hint" "ℹ️ Jedes Team gehört genau zu einem Spiel. Die Teamgröße bestimmt die exakte Kadergröße bei Turnieren." %}
+          </small>
         </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
-        <button type="button" onclick="document.getElementById('createTeamModal').style.display='none';" style="background: var(--line); color: var(--ink); border: none; padding: 10px 18px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
+        <button type="button" onclick="closeCreateTeamModal()" style="background: var(--line); color: var(--ink); border: none; padding: 10px 18px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
           {% t "btn_cancel" "Abbrechen" %}
         </button>
         <button type="submit" style="background: var(--signal); color: var(--navy); border: none; padding: 10px 18px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
@@ -242,4 +284,18 @@
     </form>
   </div>
 </div>
+
+<script>
+function openCreateTeamModal() {
+  var modal = document.getElementById('createTeamModal');
+  if (modal) modal.style.display = 'flex';
+}
+function closeCreateTeamModal() {
+  var modal = document.getElementById('createTeamModal');
+  if (modal) modal.style.display = 'none';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeCreateTeamModal();
+});
+</script>
 {% endblock %}

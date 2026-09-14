@@ -137,6 +137,35 @@ class Tournament(models.Model):
         verbose_name_plural = "Turniere"
         ordering = ["-registration_start", "title"]
 
+    def get_mode_display(self):
+        from configuration.translations import get_translation
+        key_map = {
+            self.Mode.SINGLE_ELIMINATION: ('tournament_mode_single_elimination', 'Single Elimination (KO-System)'),
+            self.Mode.DOUBLE_ELIMINATION: ('tournament_mode_double_elimination', 'Double Elimination (Winner + Loser Bracket)'),
+            self.Mode.LEAGUE: ('tournament_mode_league', 'Liga (Jeder gegen Jeden)'),
+            self.Mode.GROUP_STAGE: ('tournament_mode_group_stage', 'Gruppenspiele mit anschließendem KO-System'),
+            self.Mode.FFA: ('tournament_mode_ffa', 'Alle in einem (Free-For-All / Deathmatch)'),
+        }
+        if self.mode in key_map:
+            key, default = key_map[self.mode]
+            return get_translation(key, default)
+        return super().get_mode_display()
+
+    def get_status_display(self):
+        from configuration.translations import get_translation
+        key_map = {
+            self.Status.DRAFT: ('tournament_status_draft', 'Entwurf'),
+            self.Status.REGISTRATION_OPEN: ('tournament_status_open', 'Anmeldung geöffnet'),
+            self.Status.REGISTRATION_CLOSED: ('tournament_status_closed', 'Anmeldung geschlossen'),
+            self.Status.IN_PROGRESS: ('tournament_status_running', 'Turnier läuft'),
+            self.Status.FINISHED: ('tournament_status_finished', 'Beendet'),
+            self.Status.CANCELLED: ('tournament_status_cancelled', 'Abgesagt'),
+        }
+        if self.status in key_map:
+            key, default = key_map[self.status]
+            return get_translation(key, default)
+        return super().get_status_display()
+
     def __str__(self):
         return f"{self.title} ({self.get_mode_display()})"
 
@@ -198,8 +227,17 @@ class Tournament(models.Model):
         if self.max_teams and self.registrations.count() >= self.max_teams:
             return False, f"Die maximale Teilnehmeranzahl ({self.max_teams}) für '{self.title}' ist bereits erreicht."
 
-        if team and self.registrations.filter(team=team).exists():
-            return False, f"Das Team '{team.name}' ist bereits für dieses Turnier angemeldet."
+        if team:
+            if self.registrations.filter(team=team).exists():
+                return False, f"Das Team '{team.name}' ist bereits für dieses Turnier angemeldet."
+            if not team.game or (self.game and team.game != self.game):
+                return False, f"Das Team '{team.name}' ist nicht für das Spiel '{self.game.name if self.game else ''}' registriert."
+            if self.game:
+                accepted_count = team.get_accepted_members().count()
+                if accepted_count < self.game.team_size:
+                    return False, f"Das Team '{team.name}' hat nur {accepted_count} von {self.game.team_size} erforderlichen Mitgliedern."
+                if accepted_count > self.game.team_size:
+                    return False, f"Das Team '{team.name}' hat {accepted_count} Mitglieder (erlaubt sind maximal {self.game.team_size})."
 
         return True, ""
 
@@ -398,6 +436,28 @@ class TeamMember(models.Model):
         unique_together = ('team', 'user')
         ordering = ['role', 'joined_at']
 
+    def get_role_display(self):
+        from configuration.translations import get_translation
+        key_map = {
+            self.Role.CAPTAIN: ('team_role_captain', 'Kapitän'),
+            self.Role.MEMBER: ('team_role_member', 'Mitglied'),
+        }
+        if self.role in key_map:
+            key, default = key_map[self.role]
+            return get_translation(key, default)
+        return super().get_role_display()
+
+    def get_status_display(self):
+        from configuration.translations import get_translation
+        key_map = {
+            self.Status.ACCEPTED: ('team_member_status_accepted', 'Mitglied'),
+            self.Status.PENDING: ('team_member_status_pending', 'Anfrage ausstehend'),
+        }
+        if self.status in key_map:
+            key, default = key_map[self.status]
+            return get_translation(key, default)
+        return super().get_status_display()
+
     def __str__(self):
         return f"{self.user.username} @ {self.team.name} ({self.get_role_display()})"
 
@@ -564,6 +624,35 @@ class TournamentMatch(models.Model):
         if self.next_match_loser:
             return (self.next_match_loser, self.next_match_loser_slot)
         return None
+
+    def get_status_display(self):
+        from configuration.translations import get_translation
+        key_map = {
+            self.Status.PENDING: ('tournament_match_status_pending', 'Ausstehend'),
+            self.Status.READY: ('tournament_match_status_ready', 'Bereit'),
+            self.Status.IN_PROGRESS: ('tournament_match_status_in_progress', 'Läuft'),
+            self.Status.COMPLETED: ('tournament_match_status_completed', 'Beendet'),
+        }
+        if self.status in key_map:
+            key, default = key_map[self.status]
+            return get_translation(key, default)
+        return super().get_status_display()
+
+    def get_bracket_type_display(self):
+        from configuration.translations import get_translation
+        key_map = {
+            self.BracketType.WINNERS: ('tournament_bracket_winners', 'Winner Bracket'),
+            self.BracketType.LOSERS: ('tournament_bracket_losers', 'Loser Bracket'),
+            self.BracketType.GRAND_FINAL: ('tournament_bracket_grand_final', 'Grand Final'),
+            self.BracketType.GRAND_FINAL_RESET: ('tournament_bracket_grand_final_reset', 'Grand Final Reset'),
+            self.BracketType.FINAL: ('tournament_bracket_final', 'Finale'),
+            self.BracketType.GROUP: ('tournament_bracket_group', 'Gruppenspiel'),
+            self.BracketType.FFA: ('tournament_bracket_ffa', 'Free For All'),
+        }
+        if self.bracket_type in key_map:
+            key, default = key_map[self.bracket_type]
+            return get_translation(key, default)
+        return super().get_bracket_type_display()
 
     @property
     def round_name(self):
