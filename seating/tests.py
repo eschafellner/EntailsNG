@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from events.models import Event, EventRegistration
 from seating.models import SeatingCell, SeatingPlan
+from seating.services import SeatingPlanService, SeatingPlanValidationError
 
 User = get_user_model()
 
@@ -596,6 +597,105 @@ class SeatingConsistencyAndSignalTests(TestCase):
             self.assertNotIn("auth_user_passwords", res.content.decode())
             self.assertNotIn("SQL", res.content.decode())
 
+    def test_failed_seat_change_on_exception_preserves_original_seat(self):
+        """
+        Kritischer Bugfix: Tritt beim Sitzplatzwechsel eine Exception während cell.reserve_for_user
+        oder beim Commit auf, MUSS die Freigabe des bisherigen Platzes per Rollback rückgängig gemacht werden.
+        """
+        from unittest.mock import patch
+
+        # 1. User sitzt sicher auf Platz (1,1)
+        self.seat_cell.registration = self.registration
+        self.seat_cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat_cell.save()
+
+        # 2. Zweiter Platz (2,2) ist frei
+        target_cell = SeatingCell.objects.create(
+            plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.SEAT,
+            reservation_status=SeatingCell.ReservationStatus.FREE
+        )
+
+        self.client.force_login(self.user)
+
+        # 3. Wechselversuch auf Platz (2,2) mit simulierter Exception in reserve_for_user
+        with patch.object(SeatingCell, 'reserve_for_user', side_effect=RuntimeError("Simulierte DB-Exception")):
+            response = self.client.post(
+                reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+                data=json.dumps({'x': 2, 'y': 2}),
+                content_type='application/json',
+            )
+            self.assertEqual(response.status_code, 500)
+
+        # 4. Prüfen: Ursprünglicher Platz (1,1) MUSS per Rollback erhalten geblieben sein!
+        self.seat_cell.refresh_from_db()
+        self.assertEqual(self.seat_cell.registration, self.registration)
+        self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
+        # Zielplatz bleibt frei
+        target_cell.refresh_from_db()
+        self.assertIsNone(target_cell.registration)
+        self.assertEqual(target_cell.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+    def test_admin_assign_seat_exception_preserves_original_seat(self):
+        """
+        Admin-Zuweisung: Tritt beim Speichern des neuen Platzes eine Exception auf,
+        wird der bisherige Platz des Benutzers per Rollback nicht gelöscht.
+        """
+        from unittest.mock import patch
+
+        admin_user = User.objects.create_superuser(username='admin_rb_test', password='password')
+
+        # 1. User sitzt auf Platz (1,1)
+        self.seat_cell.registration = self.registration
+        self.seat_cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat_cell.save()
+
+        # 2. Zielplatz (2,2) ist frei
+        target_cell = SeatingCell.objects.create(
+            plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.SEAT,
+            reservation_status=SeatingCell.ReservationStatus.FREE
+        )
+
+        self.client.force_login(admin_user)
+
+        # 3. Zuweisung mit simulierter Exception beim Speichern des Zielplatzes
+        with patch.object(SeatingCell, 'save', side_effect=RuntimeError("Simulierter Speicherfehler")):
+            response = self.client.post(
+                reverse('admin_assign_seat'),
+                data=json.dumps({'registration_id': self.registration.id, 'x': 2, 'y': 2}),
+                content_type='application/json',
+            )
+            self.assertEqual(response.status_code, 500)
+
+        # 4. Prüfen: Bisheriger Platz (1,1) ist erhalten
+        self.seat_cell.refresh_from_db()
+        self.assertEqual(self.seat_cell.registration, self.registration)
+        self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
+    def test_release_seat_api_exception_rolls_back(self):
+        """
+        Freigabe-API: Tritt bei der Freigabe eine Exception auf,
+        bleibt der Sitzplatz per Rollback erhalten.
+        """
+        from unittest.mock import patch
+
+        self.seat_cell.registration = self.registration
+        self.seat_cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat_cell.save()
+
+        self.client.force_login(self.user)
+
+        with patch.object(SeatingCell, 'release_seat', side_effect=RuntimeError("Fehler bei Freigabe")):
+            response = self.client.post(
+                reverse('api_release_seat', kwargs={'event_id': self.event.id}),
+                content_type='application/json',
+            )
+            self.assertEqual(response.status_code, 500)
+
+        self.seat_cell.refresh_from_db()
+        self.assertEqual(self.seat_cell.registration, self.registration)
+        self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
 
 class SeatingServiceAndSignalTests(TestCase):
 
@@ -924,6 +1024,438 @@ class SeatingServiceAndSignalTests(TestCase):
         self.assertTrue(any('unpaid2@example.com' in m.to for m in mail.outbox))
         email = [m for m in mail.outbox if 'unpaid2@example.com' in m.to][0]
         self.assertIn(self.seat1.seat_label, email.subject)
+
+
+class SeatingConcurrencyAndConstraintTests(TestCase):
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+        self.user = User.objects.create_user(
+            username='constraint_user', email='constraint@example.com', password='password123'
+        )
+        self.event = Event.objects.create(
+            title='Constraint LAN',
+            slug='constraint-lan',
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() + timedelta(days=1),
+            end_date=timezone.now() + timedelta(days=3),
+        )
+        self.plan = SeatingPlan.objects.create(
+            event=self.event, name='Hall 1', columns=10, rows=10
+        )
+        self.seat1 = SeatingCell.objects.create(
+            plan=self.plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT, seat_label='A1'
+        )
+        self.seat2 = SeatingCell.objects.create(
+            plan=self.plan, x=2, y=1, cell_type=SeatingCell.CellType.SEAT, seat_label='A2'
+        )
+        self.registration = EventRegistration.objects.create(
+            user=self.user, event=self.event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+    def test_unique_constraint_prevents_multiple_seats_per_registration(self):
+        """Prüft, dass die Datenbank strikt verhindert, dass eine Registrierung zwei Plätze belegt."""
+        from django.db import IntegrityError, transaction
+
+        self.seat1.registration = self.registration
+        self.seat1.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat1.save()
+
+        self.seat2.registration = self.registration
+        self.seat2.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.seat2.save()
+
+    def test_unique_constraint_allows_multiple_unoccupied_seats(self):
+        """Prüft, dass beliebig viele Plätze registration=None haben dürfen."""
+        self.seat1.registration = None
+        self.seat1.reservation_status = SeatingCell.ReservationStatus.FREE
+        self.seat1.save()
+
+        self.seat2.registration = None
+        self.seat2.reservation_status = SeatingCell.ReservationStatus.FREE
+        self.seat2.save()
+
+        self.assertIsNone(self.seat1.registration)
+        self.assertIsNone(self.seat2.registration)
+
+    def test_seat_change_preserves_unique_constraint_and_updates_cleanly(self):
+        """Prüft, dass der reguläre Platzwechsel über die API die UniqueConstraint nicht verletzt."""
+        self.client.login(username='constraint_user', password='password123')
+
+        # 1. Platz A1 reservieren
+        resp1 = self.client.post(
+            reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+            data=json.dumps({'x': 1, 'y': 1}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp1.status_code, 200)
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.registration, self.registration)
+        self.assertEqual(self.registration.seats.count(), 1)
+
+        # 2. Platzwechsel auf A2
+        resp2 = self.client.post(
+            reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+            data=json.dumps({'x': 2, 'y': 1}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp2.status_code, 200)
+
+        self.seat1.refresh_from_db()
+        self.seat2.refresh_from_db()
+
+        self.assertIsNone(self.seat1.registration)
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.FREE)
+        self.assertEqual(self.seat2.registration, self.registration)
+        self.assertEqual(self.seat2.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+        self.assertEqual(self.registration.seats.count(), 1)
+
+    def test_reserve_seat_api_handles_integrity_error_with_clean_response(self):
+        """Prüft, dass ein IntegrityError mit HTTP 400 und Rollback behandelt wird."""
+        from unittest.mock import patch
+        from django.db import IntegrityError
+
+        self.client.login(username='constraint_user', password='password123')
+
+        with patch.object(SeatingCell, 'reserve_for_user', side_effect=IntegrityError("Duplicate registration")):
+            resp = self.client.post(
+                reverse('api_reserve_seat', kwargs={'event_id': self.event.id}),
+                data=json.dumps({'x': 1, 'y': 1}),
+                content_type='application/json',
+            )
+            self.assertEqual(resp.status_code, 400)
+            data = resp.json()
+            self.assertEqual(data['status'], 'error')
+            self.assertIn('nur einen Sitzplatz', data['message'])
+
+        # Platz bleibt unberührt
+        self.seat1.refresh_from_db()
+        self.assertIsNone(self.seat1.registration)
+
+    def test_payment_service_mark_paid_and_cancelled_with_seating(self):
+        """Prüft die abgestimmte Sperrhierarchie und Konsistenz bei Zahlung und Stornierung."""
+        from events.services import PaymentService
+
+        self.registration.payment_status = EventRegistration.PaymentStatus.UNPAID
+        self.registration.save()
+
+        # Platz vorreservieren
+        self.seat1.registration = self.registration
+        self.seat1.reservation_status = SeatingCell.ReservationStatus.PRE_RESERVED
+        self.seat1.save()
+
+        # Zahlung markieren
+        PaymentService.mark_paid(self.registration, send_email=False)
+        self.registration.refresh_from_db()
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.registration.payment_status, EventRegistration.PaymentStatus.PAID)
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
+        # Stornierung markieren
+        PaymentService.mark_cancelled(self.registration)
+        self.registration.refresh_from_db()
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.registration.payment_status, EventRegistration.PaymentStatus.CANCELLED)
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.FREE)
+        self.assertIsNone(self.seat1.registration)
+
+    def test_admin_assign_seat_reassigns_cleanly_with_unique_constraint(self):
+        """Prüft, dass der Admin-Platzwechsel sauber funktioniert und die Ein-Platz-Regel gewahrt bleibt."""
+        admin_user = User.objects.create_superuser(
+            username='adminuser', email='admin@example.com', password='adminpassword'
+        )
+        self.client.login(username='adminuser', password='adminpassword')
+
+        # Erste Zuweisung auf A1
+        resp1 = self.client.post(
+            reverse('admin_assign_seat'),
+            data=json.dumps({'registration_id': self.registration.id, 'x': 1, 'y': 1}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp1.status_code, 200)
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.registration, self.registration)
+        self.assertEqual(self.registration.seats.count(), 1)
+
+        # Zweite Zuweisung auf A2
+        resp2 = self.client.post(
+            reverse('admin_assign_seat'),
+            data=json.dumps({'registration_id': self.registration.id, 'x': 2, 'y': 1}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp2.status_code, 200)
+        self.seat1.refresh_from_db()
+        self.seat2.refresh_from_db()
+        self.assertIsNone(self.seat1.registration)
+        self.assertEqual(self.seat2.registration, self.registration)
+        self.assertEqual(self.registration.seats.count(), 1)
+
+
+class SeatingEditorConcurrencyAndLockingTests(TestCase):
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+        self.staff_user = User.objects.create_superuser(
+            username='staff_editor', email='staff@example.com', password='adminpassword'
+        )
+        self.guest_user = User.objects.create_user(
+            username='guest_booker', email='guest@example.com', password='password123'
+        )
+        self.event = Event.objects.create(
+            title='Editor Test LAN',
+            slug='editor-test-lan',
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() + timedelta(days=2),
+            end_date=timezone.now() + timedelta(days=4),
+        )
+        self.plan = SeatingPlan.objects.create(
+            event=self.event, name='Main Hall', columns=10, rows=10, version=1
+        )
+        self.seat1 = SeatingCell.objects.create(
+            plan=self.plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT, seat_label='A1'
+        )
+        self.seat2 = SeatingCell.objects.create(
+            plan=self.plan, x=2, y=1, cell_type=SeatingCell.CellType.SEAT, seat_label='A2'
+        )
+        self.registration = EventRegistration.objects.create(
+            user=self.guest_user, event=self.event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+    def test_save_grid_increments_version(self):
+        """Prüft, dass jede erfolgreiche Ausführung von save_grid die Planversion inkrementiert."""
+        self.assertEqual(self.plan.version, 1)
+
+        cells_data = [
+            {'x': 1, 'y': 1, 'cell_type': 'SEAT', 'seat_label': 'A1'},
+            {'x': 2, 'y': 1, 'cell_type': 'SEAT', 'seat_label': 'A2'},
+        ]
+        success, msg = SeatingPlanService.save_grid(self.plan, cells_data)
+        self.assertTrue(success)
+        self.assertEqual(self.plan.version, 2)
+
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.version, 2)
+
+    def test_save_grid_optimistic_locking_rejects_stale_version(self):
+        """Prüft, dass ein veralteter Versionsstand im Editor (konkurrierende Bearbeitung) abgewiesen wird."""
+        cells_data = [
+            {'x': 1, 'y': 1, 'cell_type': 'SEAT', 'seat_label': 'A1'},
+            {'x': 2, 'y': 1, 'cell_type': 'SEAT', 'seat_label': 'A2'},
+        ]
+
+        # Admin 1 speichert erfolgreich mit Version 1 -> Version wird 2
+        success, msg = SeatingPlanService.save_grid(self.plan, cells_data, expected_version=1)
+        self.assertTrue(success)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.version, 2)
+
+        # Admin 2 versucht zeitgleich mit alter Version 1 zu speichern -> Konflikt
+        with self.assertRaises(SeatingPlanValidationError) as cm:
+            SeatingPlanService.save_grid(self.plan, cells_data, expected_version=1)
+
+        self.assertIn("zwischenzeitlich von einem anderen Administrator geändert", str(cm.exception))
+        self.assertIn("aktuelle Version 2 vs. gesendete Version 1", str(cm.exception))
+
+        # Admin 2 aktualisiert auf Version 2 und speichert erneut -> Erfolg
+        success, msg = SeatingPlanService.save_grid(self.plan, cells_data, expected_version=2)
+        self.assertTrue(success)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.version, 3)
+
+    def test_save_seating_plan_api_version_conflict_and_recovery(self):
+        """Testet die HTTP-API save_seating_plan auf Versionsüberprüfung und Rückgabe der neuen Version."""
+        self.client.login(username='staff_editor', password='adminpassword')
+
+        payload = {
+            'cells': [
+                {'x': 1, 'y': 1, 'cell_type': 'SEAT', 'seat_label': 'A1'},
+            ],
+            'version': 1,
+        }
+
+        # 1. Erfolgreicher Save mit Version 1
+        resp = self.client.post(
+            reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['version'], 2)
+
+        # 2. Zweiter Aufruf mit veralteter Version 1 -> HTTP 400
+        resp_conflict = self.client.post(
+            reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+        self.assertEqual(resp_conflict.status_code, 400)
+        conflict_data = resp_conflict.json()
+        self.assertEqual(conflict_data['status'], 'error')
+        self.assertIn("zwischenzeitlich", conflict_data['message'])
+
+        # 3. Aufruf mit aktueller Version 2 -> HTTP 200 mit Version 3
+        payload['version'] = 2
+        resp_recovered = self.client.post(
+            reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+        self.assertEqual(resp_recovered.status_code, 200)
+        self.assertEqual(resp_recovered.json()['version'], 3)
+
+    def test_save_grid_protects_concurrently_occupied_cell_from_deletion(self):
+        """Prüft, dass eine Kachel, die während des Editor-Vorgangs belegt wird, nicht gelöscht werden kann."""
+        # Gast bucht Sitzplatz A1
+        self.seat1.registration = self.registration
+        self.seat1.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat1.save()
+
+        # Editor sendet Layout ohne Kachel A1 (Löschung beabsichtigt)
+        cells_data = [
+            {'x': 2, 'y': 1, 'cell_type': 'SEAT', 'seat_label': 'A2'},
+        ]
+
+        with self.assertRaises(SeatingPlanValidationError) as cm:
+            SeatingPlanService.save_grid(self.plan, cells_data)
+
+        self.assertIn("kann nicht gelöscht werden", str(cm.exception))
+        self.assertIn(self.guest_user.username, str(cm.exception))
+
+        # Sitzplatz A1 in DB muss unversehrt bleiben
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.registration, self.registration)
+        self.assertEqual(self.seat1.reservation_status, SeatingCell.ReservationStatus.RESERVED)
+
+    def test_clone_for_event_sets_version_one(self):
+        """Prüft, dass ein geklonter Sitzplan initial mit Version 1 startet."""
+        self.plan.version = 5
+        self.plan.save()
+
+        cloned_plan = self.plan.clone_for_event(new_name="Cloned Plan")
+        self.assertEqual(cloned_plan.version, 1)
+
+
+class SeatingViewerFrontendTests(TestCase):
+    """
+    Tests für die Frontend-Logik des Sitzplan-Viewers (static/js/seating.js).
+    Stellt sicher, dass Listener nicht bei wiederholtem Laden multipliziert werden.
+    """
+
+    def test_seating_js_has_initialization_guard_and_abort_controller(self):
+        import os
+        from django.conf import settings
+
+        js_path = os.path.join(settings.BASE_DIR, 'static', 'js', 'seating.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Guard gegen mehrfaches Initialisieren
+        self.assertIn('let isPanZoomInitialized = false;', content)
+        self.assertIn('if (!isPanZoomInitialized)', content)
+        # AbortController für Teardown
+        self.assertIn('AbortController', content)
+        self.assertIn('panZoomAbortController', content)
+        self.assertIn('viewerAbortController', content)
+
+    def test_seating_js_listeners_not_duplicated_on_multiple_reloads(self):
+        """Führt einen Node.js-Test durch, um zu prüfen, dass nach 3 Reloads genau 1 Wheel-Listener registriert ist."""
+        import subprocess
+        import shutil
+
+        node_bin = shutil.which('node')
+        if not node_bin:
+            self.skipTest("Node.js ist nicht installiert.")
+
+        script = """
+        const fs = require('fs');
+        const content = fs.readFileSync('static/js/seating.js', 'utf8');
+        const listeners = { window: {}, document: {}, viewport: {} };
+
+        function makeEmitter(name) {
+          return {
+            addEventListener: (type, fn, opts) => {
+              listeners[name][type] = (listeners[name][type] || 0) + 1;
+              if (opts && opts.signal) {
+                opts.signal.addEventListener('abort', () => {
+                  listeners[name][type]--;
+                });
+              }
+            },
+            removeEventListener: (type, fn) => {
+              listeners[name][type] = (listeners[name][type] || 1) - 1;
+            },
+            clientWidth: 1000,
+            clientHeight: 800,
+            style: {}
+          };
+        }
+
+        const windowMock = makeEmitter('window');
+        windowMock.innerWidth = 1200;
+        windowMock.innerHeight = 800;
+
+        const documentMock = makeEmitter('document');
+        const elements = {
+          'viewport': makeEmitter('viewport'),
+          'pan-canvas': { style: {} },
+          'zoom-level-badge': { textContent: '' },
+          'seating-grid': { style: {}, appendChild: () => {}, innerHTML: '' },
+          'seating-status': { style: {} },
+          'btn-confirm-reserve': {},
+          'btn-zoom-in': {},
+          'btn-zoom-out': {},
+          'btn-zoom-reset': {}
+        };
+
+        documentMock.getElementById = (id) => elements[id] || null;
+        documentMock.createDocumentFragment = () => ({ appendChild: () => {} });
+        documentMock.createElement = () => ({ style: {} });
+
+        const mockFetch = () => Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ columns: 20, rows: 15, cells: [] })
+        });
+
+        const fn = new Function('window', 'document', 'fetch', 'AbortController', content);
+        fn(windowMock, documentMock, mockFetch, global.AbortController);
+
+        windowMock.initSeatingViewer({ eventId: '1', csrfToken: 'abc' });
+
+        setTimeout(() => {
+          Promise.all([
+            windowMock.loadSeatingData(),
+            windowMock.loadSeatingData(),
+            windowMock.loadSeatingData()
+          ]).then(() => {
+            setTimeout(() => {
+              const wheelCount = listeners.viewport['wheel'] || 0;
+              const resizeCount = listeners.window['resize'] || 0;
+              if (wheelCount === 1 && resizeCount === 1) {
+                process.exit(0);
+              } else {
+                console.error(`Fehler: wheelCount=${wheelCount}, resizeCount=${resizeCount}`);
+                process.exit(1);
+              }
+            }, 50);
+          });
+        }, 50);
+        """
+
+        result = subprocess.run([node_bin, '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, f"Node test fehlgeschlagen: {result.stderr or result.stdout}")
+
+
+
 
 
 

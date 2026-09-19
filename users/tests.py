@@ -209,6 +209,35 @@ class ProfileViewTests(TestCase):
         self.assertTemplateUsed(response, 'users/profile.html')
         self.assertContains(response, 'profuser')
 
+    def test_profile_role_display_suppressed_for_normal_user(self):
+        """Für normale User (role='USER') wird die Rolle ausgeblendet."""
+        self.client.login(username='profuser', password='OldPassword123!')
+        response = self.client.get(reverse('profile'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Normaler User')
+        self.assertContains(response, 'Du bist aktuell in keinem Clan.')
+
+    def test_profile_role_and_clan_displayed_for_admin_in_clan(self):
+        """Für Admins/Staff wird die Rolle angezeigt, und aktive Clan-Mitgliedschaften werden verlinkt."""
+        from clans.models import Clan, ClanMembership
+        self.user.role = User.Roles.ADMIN
+        self.user.save()
+
+        clan = Clan.objects.create(name='Pro Gamers', password='pw')
+        ClanMembership.objects.create(
+            user=self.user,
+            clan=clan,
+            role=ClanMembership.Role.ADMIN,
+            status=ClanMembership.Status.ACCEPTED,
+        )
+
+        self.client.login(username='profuser', password='OldPassword123!')
+        response = self.client.get(reverse('profile'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Admin')
+        self.assertContains(response, 'Pro Gamers')
+        self.assertContains(response, reverse('clan_detail', kwargs={'slug': clan.slug}))
+
     def test_update_profile_birthday_only(self):
         """Reine Stammdatenänderung (ohne E-Mail) wird sofort gespeichert ohne Code-Generierung."""
         self.client.login(username='profuser', password='OldPassword123!')
@@ -555,6 +584,317 @@ class ClientIPDetectionTests(TestCase):
         request = rf.get('/', REMOTE_ADDR='127.0.0.1')
         ip = get_client_ip(request)
         self.assertEqual(ip, '127.0.0.1')
+
+
+class VerificationCodeCooldownAndLimitTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='cooldown_tester',
+            email='tester@example.com',
+            password='Password123!',
+        )
+        settings = GeneralEmailSettings.load()
+        settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        settings.sender_email = 'noreply@example.com'
+        settings.is_enabled = True
+        settings.save()
+
+    def test_update_profile_cooldown_blocks_immediate_repeat(self):
+        """Mehrfache Profil-Updates dürfen innerhalb des Cooldowns keine neuen Codes erzeugen und alte nicht entwerten."""
+        from django.core import mail
+        from users.models import EmailVerificationCode
+        self.client.login(username='cooldown_tester', password='Password123!')
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp1 = self.client.post(
+                reverse('profile'),
+                {'update_profile': '1', 'email': 'attempt1@example.com'},
+                follow=True,
+            )
+        self.assertEqual(resp1.status_code, 200)
+        self.assertEqual(self.user.verification_codes.count(), 1)
+        first_code = self.user.verification_codes.first()
+        self.assertFalse(first_code.is_used)
+        self.assertEqual(len(mail.outbox), 1)
+
+        # 2. Versuch unmittelbar danach
+        with self.captureOnCommitCallbacks(execute=True):
+            resp2 = self.client.post(
+                reverse('profile'),
+                {'update_profile': '1', 'email': 'attempt2@example.com'},
+                follow=True,
+            )
+        self.assertEqual(resp2.status_code, 200)
+        # Immer noch nur 1 Code vorhanden, alter Code NICHT entwertet
+        self.assertEqual(self.user.verification_codes.count(), 1)
+        first_code.refresh_from_db()
+        self.assertFalse(first_code.is_used)
+        # Keine zweite Mail verschickt
+        self.assertEqual(len(mail.outbox), 1)
+
+        # Cooldown-Warnung in Messages vorhanden
+        messages_list = list(resp2.context['messages'])
+        self.assertTrue(any("Bitte warte noch" in m.message for m in messages_list))
+
+    def test_resend_email_change_cooldown_and_success(self):
+        """Resend-Code beachtet Cooldown und erzeugt nach Ablauf einen neuen Code."""
+        from django.core import mail
+        from django.utils import timezone
+        from datetime import timedelta
+        from users.models import EmailVerificationCode
+        self.client.login(username='cooldown_tester', password='Password123!')
+
+        # Initialen Code anfordern
+        code1 = EmailVerificationCode.generate_for_user(
+            self.user, valid_minutes=15, new_email='change@example.com'
+        )
+
+        # Sofortiges Resend schlägt wegen Cooldown fehl
+        resp = self.client.post(reverse('profile'), {'resend_email_change_code': '1'}, follow=True)
+        messages_list = list(resp.context['messages'])
+        self.assertTrue(any("Bitte warte noch" in m.message for m in messages_list))
+        self.assertEqual(self.user.verification_codes.count(), 1)
+        code1.refresh_from_db()
+        self.assertFalse(code1.is_used)
+
+        # Zeit vorspulen (Cooldown abgelaufen)
+        code1.created_at = timezone.now() - timedelta(seconds=65)
+        code1.save(update_fields=['created_at'])
+
+        # Resend nach Cooldown erfolgreich
+        with self.captureOnCommitCallbacks(execute=True):
+            resp2 = self.client.post(reverse('profile'), {'resend_email_change_code': '1'}, follow=True)
+        self.assertEqual(self.user.verification_codes.count(), 2)
+        code1.refresh_from_db()
+        self.assertTrue(code1.is_used)  # Alter Code jetzt entwertet
+        code2 = self.user.verification_codes.exclude(pk=code1.pk).first()
+        self.assertFalse(code2.is_used)
+
+    def test_hourly_limit_enforcement(self):
+        """Nach 5 Codes innerhalb einer Stunde verweigert das System weitere Codes."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from users.models import EmailVerificationCode
+        from users.exceptions import VerificationCodeLimitError
+
+        now = timezone.now()
+        # 5 Codes in der letzten Stunde anlegen (mit Abstand > 60s, damit Cooldown nicht triggert)
+        for i in range(5):
+            c = EmailVerificationCode.objects.create(
+                user=self.user,
+                code=f"10000{i}",
+                expires_at=now + timedelta(minutes=15),
+                new_email='change@example.com',
+            )
+            EmailVerificationCode.objects.filter(pk=c.pk).update(
+                created_at=now - timedelta(minutes=40 - i * 5)
+            )
+
+        with self.assertRaises(VerificationCodeLimitError):
+            EmailVerificationCode.generate_for_user(
+                self.user, valid_minutes=15, new_email='change@example.com'
+            )
+
+        # Auch im Profile-View wird der Limit-Fehler sauber abgefangen
+        self.client.login(username='cooldown_tester', password='Password123!')
+        resp = self.client.post(
+            reverse('profile'),
+            {'update_profile': '1', 'email': 'change6@example.com'},
+            follow=True,
+        )
+        messages_list = list(resp.context['messages'])
+        self.assertTrue(any("Limit" in m.message for m in messages_list))
+
+    def test_resend_registration_verification_code_cooldown(self):
+        """Auch bei der Registrierungs-Verifizierung greift der zentrale Cooldown."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from users.models import EmailVerificationCode
+
+        self.user.is_active = False
+        self.user.save()
+
+        code1 = EmailVerificationCode.generate_for_user(self.user, valid_minutes=15)
+        session = self.client.session
+        session['pending_verification_user_id'] = self.user.id
+        session.save()
+
+        # Unmittelbares Resend blockiert
+        resp = self.client.post(reverse('resend_verification_code'), follow=True)
+        messages_list = list(resp.context['messages'])
+        self.assertTrue(any("Bitte warte noch" in m.message for m in messages_list))
+        self.assertEqual(self.user.verification_codes.filter(new_email__isnull=True).count(), 1)
+
+        # Nach Ablauf des Cooldowns
+        code1.created_at = timezone.now() - timedelta(seconds=65)
+        code1.save(update_fields=['created_at'])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp2 = self.client.post(reverse('resend_verification_code'), follow=True)
+        self.assertEqual(self.user.verification_codes.filter(new_email__isnull=True).count(), 2)
+
+
+class ConcurrencyAndLockoutTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='concurrency_user',
+            email='concurrency@example.com',
+            password='Password123!',
+            is_active=False,
+        )
+        settings = GeneralEmailSettings.load()
+        settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        settings.sender_email = 'noreply@example.com'
+        settings.is_enabled = True
+        settings.save()
+
+    def test_atomic_failed_login_attempts_and_lockout(self):
+        """register_failed_login erhöht atomar und sperrt genau beim 5. Fehlversuch."""
+        for i in range(4):
+            is_locked = self.user.register_failed_login()
+            self.assertFalse(is_locked)
+            self.assertEqual(self.user.failed_login_attempts, i + 1)
+            self.assertIsNone(self.user.locked_until)
+
+        # 5. Versuch löst Sperre aus
+        is_locked_5 = self.user.register_failed_login()
+        self.assertTrue(is_locked_5)
+        self.assertEqual(self.user.failed_login_attempts, 5)
+        self.assertIsNotNone(self.user.locked_until)
+        first_lock_time = self.user.locked_until
+
+        # 6. Versuch während aktiver Sperre verändert die Sperrzeit nicht und bleibt gesperrt
+        is_locked_6 = self.user.register_failed_login()
+        self.assertTrue(is_locked_6)
+        self.assertEqual(self.user.locked_until, first_lock_time)
+
+    def test_atomic_reset_lockout(self):
+        """reset_lockout setzt Zähler und Sperre atomar zurück."""
+        self.user.register_failed_login()
+        self.user.reset_lockout()
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_login_attempts, 0)
+        self.assertIsNone(self.user.locked_until)
+
+    def test_auth_backend_checks_lockout_after_password_verify(self):
+        """Wenn ein Konto während der Passwortprüfung parallel gesperrt wurde, verweigert der Backend den Login."""
+        from datetime import timedelta
+        from django.utils import timezone
+        from unittest.mock import patch
+        from users.auth_backends import EmailOrUsernameBackend
+        from django.test import RequestFactory
+
+        self.user.is_active = True
+        self.user.save()
+
+        backend = EmailOrUsernameBackend()
+        rf = RequestFactory()
+        req = rf.post('/login/')
+
+        # Simuliere: Während check_password läuft, sperrt ein paralleler Request das Konto
+        original_check = self.user.check_password
+        def mock_check(password):
+            self.user.locked_until = timezone.now() + timedelta(minutes=15)
+            self.user.failed_login_attempts = 5
+            self.user.save(update_fields=['locked_until', 'failed_login_attempts'])
+            return original_check(password)
+
+        with patch.object(User, 'check_password', side_effect=mock_check):
+            authenticated = backend.authenticate(req, username='concurrency_user', password='Password123!')
+            self.assertIsNone(authenticated)
+            self.assertTrue(getattr(req, 'account_locked', False))
+
+    def test_verify_and_consume_registration_atomic_success_and_replay_prevention(self):
+        """verify_and_consume aktiviert den User atomar und verhindert Replay/Doppelverbrauch."""
+        from users.models import EmailVerificationCode
+        code = EmailVerificationCode.generate_for_user(self.user, valid_minutes=15)
+
+        # 1. Erfolgreicher Verbrauch
+        status, consumed_code, remaining = EmailVerificationCode.verify_and_consume(
+            user=self.user, code_input=code.code, is_email_change=False
+        )
+        self.assertEqual(status, 'success')
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        code.refresh_from_db()
+        self.assertTrue(code.is_used)
+
+        # 2. Replay-Versuch mit demselben Code schlägt fehl
+        status2, _, _ = EmailVerificationCode.verify_and_consume(
+            user=self.user, code_input=code.code, is_email_change=False
+        )
+        self.assertEqual(status2, 'invalid_or_expired')
+
+    def test_verify_and_consume_failed_attempts_and_locking(self):
+        """Fehlversuche werden atomar erfasst; beim 5. Versuch wird der Code gesperrt."""
+        from users.models import EmailVerificationCode
+        code = EmailVerificationCode.generate_for_user(self.user, valid_minutes=15)
+
+        for i in range(4):
+            status, _, remaining = EmailVerificationCode.verify_and_consume(
+                user=self.user, code_input='000000', is_email_change=False
+            )
+            self.assertEqual(status, 'wrong_code')
+            self.assertEqual(remaining, 4 - i)
+            code.refresh_from_db()
+            self.assertEqual(code.failed_attempts, i + 1)
+            self.assertFalse(code.is_used)
+
+        # 5. Fehlversuch sperrt den Code
+        status5, _, remaining5 = EmailVerificationCode.verify_and_consume(
+            user=self.user, code_input='000000', is_email_change=False
+        )
+        self.assertEqual(status5, 'locked')
+        self.assertEqual(remaining5, 0)
+        code.refresh_from_db()
+        self.assertEqual(code.failed_attempts, 5)
+        self.assertTrue(code.is_used)
+
+        # Ein 6. Versuch (selbst mit dem richtigen Code) wird nun als invalid_or_expired abgewiesen
+        status6, _, _ = EmailVerificationCode.verify_and_consume(
+            user=self.user, code_input=code.code, is_email_change=False
+        )
+        self.assertEqual(status6, 'invalid_or_expired')
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+
+    def test_verify_and_consume_email_change_success_and_conflict(self):
+        """E-Mail-Änderung prüft atomar auf Kollision und übernimmt die Adresse nur bei Verfügbarkeit."""
+        from users.models import EmailVerificationCode
+        self.user.is_active = True
+        self.user.save()
+
+        # Anderer User belegt spätere Zieladresse
+        other_user = User.objects.create_user(
+            username='conflict_other', email='taken@example.com', password='Password123!'
+        )
+
+        code_conflict = EmailVerificationCode.generate_for_user(
+            self.user, valid_minutes=15, new_email='taken@example.com'
+        )
+        status_conflict, _, _ = EmailVerificationCode.verify_and_consume(
+            user=self.user, code_input=code_conflict.code, is_email_change=True
+        )
+        self.assertEqual(status_conflict, 'email_taken')
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'concurrency@example.com')  # Unverändert!
+        code_conflict.refresh_from_db()
+        self.assertFalse(code_conflict.is_used)  # Code bleibt gültig
+
+        # Erfolgreiche E-Mail-Änderung auf freie Adresse
+        code_free = EmailVerificationCode.generate_for_user(
+            self.user, valid_minutes=15, new_email='free@example.com', enforce_cooldown=False
+        )
+        status_ok, _, _ = EmailVerificationCode.verify_and_consume(
+            user=self.user, code_input=code_free.code, is_email_change=True
+        )
+        self.assertEqual(status_ok, 'success')
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'free@example.com')
+        code_free.refresh_from_db()
+        self.assertTrue(code_free.is_used)
+
+
 
 
 

@@ -1043,7 +1043,7 @@
     "pk": 22,
     "fields": {
       "key": "clan_logo_help",
-      "text": "Maximal 300x300 Pixel. Erlaubte Formate: .jpg, .jpeg, .png"
+      "text": "Maximal 500x500 Pixel. Erlaubte Formate: .jpg, .jpeg, .png"
     }
   },
   {

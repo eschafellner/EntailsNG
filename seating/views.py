@@ -3,13 +3,14 @@ import logging
 
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
 from clans.models import ClanMembership
 from configuration.cache import invalidate_event_capacity_cache
+from configuration.translations import get_translation
 from events.models import Event, EventRegistration
 from .models import SeatingCell, SeatingPlan
 from .services import SeatingPlanService, SeatingPlanValidationError
@@ -56,12 +57,19 @@ def save_seating_plan(request, plan_id):
     try:
         data = json.loads(request.body)
         cells_to_save = data.get('cells', [])
+        expected_version = data.get('version')
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse({'status': 'error', 'message': 'Ungültiges JSON übermittelt.'}, status=400)
 
     try:
-        success, message = SeatingPlanService.save_grid(plan, cells_to_save)
-        return JsonResponse({'status': 'success', 'message': message})
+        success, message = SeatingPlanService.save_grid(
+            plan, cells_to_save, expected_version=expected_version
+        )
+        return JsonResponse({
+            'status': 'success',
+            'message': message,
+            'version': plan.version,
+        })
     except SeatingPlanValidationError as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     except Exception as e:
@@ -183,8 +191,8 @@ def reserve_seat_api(request, event_id):
         return JsonResponse({'status': 'error', 'message': 'Ungültige Koordinaten übermittelt.'}, status=400)
 
     try:
-        # 1. Prüfen, ob der User für das Event angemeldet ist
-        registration = EventRegistration.objects.get(
+        # 1. Prüfen, ob der User für das Event angemeldet ist (zentraler Sperrpunkt mit DB-Lock)
+        registration = EventRegistration.objects.select_for_update().get(
             event_id=event_id, user=request.user
         )
     except EventRegistration.DoesNotExist:
@@ -234,10 +242,30 @@ def reserve_seat_api(request, event_id):
             transaction.set_rollback(True)
             return JsonResponse({'status': 'error', 'message': message}, status=400)
 
+    except IntegrityError as ie:
+        transaction.set_rollback(True)
+        logger.warning("IntegrityError in reserve_seat_api: %s", ie)
+        return JsonResponse(
+            {
+                'status': 'error',
+                'message': get_translation(
+                    'msg_seat_one_per_user',
+                    'Platzreservierung fehlgeschlagen: Jeder Teilnehmer kann nur einen Sitzplatz belegen.',
+                ),
+            },
+            status=400,
+        )
     except Exception as e:
+        transaction.set_rollback(True)
         logger.exception("Fehler in reserve_seat_api: %s", e)
         return JsonResponse(
-            {'status': 'error', 'message': 'Die Aktion konnte nicht ausgeführt werden. Bitte versuche es erneut.'},
+            {
+                'status': 'error',
+                'message': get_translation(
+                    'msg_seat_action_failed',
+                    'Die Aktion konnte nicht ausgeführt werden. Bitte versuche es erneut.',
+                ),
+            },
             status=500,
         )
 
@@ -251,14 +279,17 @@ def release_seat_api(request, event_id):
     Ermöglicht einem angemeldeten User, seinen aktuell reservierten Platz wieder freizugeben.
     """
     try:
-        registration = EventRegistration.objects.get(
+        registration = EventRegistration.objects.select_for_update().get(
             event_id=event_id, user=request.user
         )
     except EventRegistration.DoesNotExist:
         return JsonResponse(
             {
                 'status': 'error',
-                'message': 'Du bist für diese Veranstaltung nicht angemeldet.',
+                'message': get_translation(
+                    'msg_seat_not_registered',
+                    'Du bist für diese Veranstaltung nicht angemeldet.',
+                ),
             },
             status=403,
         )
@@ -273,7 +304,10 @@ def release_seat_api(request, event_id):
             return JsonResponse(
                 {
                     'status': 'error',
-                    'message': 'Du hast aktuell keinen Sitzplatz reserviert.',
+                    'message': get_translation(
+                        'msg_seat_none_reserved',
+                        'Du hast aktuell keinen Sitzplatz reserviert.',
+                    ),
                 },
                 status=400,
             )
@@ -284,17 +318,28 @@ def release_seat_api(request, event_id):
             invalidate_event_capacity_cache(event_id)
             return JsonResponse({
                 'status': 'success',
-                'message': 'Sitzplatz erfolgreich freigegeben.',
+                'message': get_translation(
+                    'msg_seat_released_success',
+                    'Sitzplatz erfolgreich freigegeben.',
+                ),
             })
         else:
+            transaction.set_rollback(True)
             return JsonResponse(
                 {'status': 'error', 'message': message}, status=400
             )
 
     except Exception as e:
+        transaction.set_rollback(True)
         logger.exception("Fehler in release_seat_api: %s", e)
         return JsonResponse(
-            {'status': 'error', 'message': 'Die Freigabe konnte nicht durchgeführt werden. Bitte versuche es erneut.'},
+            {
+                'status': 'error',
+                'message': get_translation(
+                    'msg_seat_release_error',
+                    'Die Freigabe konnte nicht durchgeführt werden. Bitte versuche es erneut.',
+                ),
+            },
             status=500,
         )
 
@@ -326,7 +371,7 @@ def admin_assign_seat(request):
         )
 
     try:
-        registration = EventRegistration.objects.select_related('event', 'user').get(pk=registration_id)
+        registration = EventRegistration.objects.select_for_update().get(pk=registration_id)
     except EventRegistration.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Anmeldung nicht gefunden.'}, status=404)
 
@@ -403,7 +448,12 @@ def admin_assign_seat(request):
             {'status': 'success', 'message': f"Platz '{target_cell.seat_label or f'Pos ({x},{y})'}' erfolgreich an {registration.user.username} zugewiesen!"}
         )
 
+    except IntegrityError as ie:
+        transaction.set_rollback(True)
+        logger.warning("IntegrityError in admin_assign_seat: %s", ie)
+        return JsonResponse({'status': 'error', 'message': 'Zuweisung fehlgeschlagen: Der Teilnehmer belegt bereits einen Sitzplatz.'}, status=400)
     except Exception as e:
+        transaction.set_rollback(True)
         logger.exception("Fehler in admin_assign_seat: %s", e)
         return JsonResponse({'status': 'error', 'message': 'Die Zuweisung konnte nicht gespeichert werden. Bitte versuche es erneut.'}, status=500)
 
@@ -464,6 +514,7 @@ def admin_toggle_block_seat(request):
         })
 
     except Exception as e:
+        transaction.set_rollback(True)
         logger.exception("Fehler in admin_toggle_block_seat: %s", e)
         return JsonResponse({'status': 'error', 'message': 'Der Sperrstatus konnte nicht geändert werden. Bitte versuche es erneut.'}, status=500)
 
@@ -490,7 +541,7 @@ def admin_release_seat(request):
         # Fall 1: Freigabe über Registration-ID
         if registration_id:
             try:
-                registration = EventRegistration.objects.select_related('event').get(pk=registration_id)
+                registration = EventRegistration.objects.select_for_update().get(pk=registration_id)
             except EventRegistration.DoesNotExist:
                 return JsonResponse({'status': 'error', 'message': 'Anmeldung nicht gefunden.'}, status=404)
 
@@ -538,6 +589,7 @@ def admin_release_seat(request):
         )
 
     except Exception as e:
+        transaction.set_rollback(True)
         logger.exception("Fehler in admin_release_seat: %s", e)
         return JsonResponse({'status': 'error', 'message': 'Die Freigabe konnte nicht durchgeführt werden. Bitte versuche es erneut.'}, status=500)
 

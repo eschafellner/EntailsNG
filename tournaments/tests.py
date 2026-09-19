@@ -840,6 +840,185 @@ class DoubleEliminationTests(TestCase):
         lb_final.refresh_from_db()
         self.assertEqual(lb_final.team1, t3)
 
+    def test_double_elimination_wb_played_before_lb_does_not_grant_premature_bye(self):
+        """
+        Kritischer Bugfix: Wenn alle WB-Matches vor den LB-Matches gespielt werden,
+        darf das LB-Finale NICHT vorzeitig als Freilos gewertet werden, während
+        das LB-Vorgängermatch noch offen ist.
+        """
+        from tournaments.services import TournamentBracketService, TournamentMatchService
+
+        tournament, teams = self._create_teams_and_tournament(4)
+        t1, t2, t3, t4 = teams[0], teams[1], teams[2], teams[3]
+
+        TournamentBracketService.generate_bracket(tournament.id)
+
+        wb_r1_m1 = tournament.matches.get(bracket_type=TournamentMatch.BracketType.WINNERS, round_number=1, match_number=1)
+        wb_r1_m2 = tournament.matches.get(bracket_type=TournamentMatch.BracketType.WINNERS, round_number=1, match_number=2)
+        wb_final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.WINNERS, round_number=2, match_number=1)
+        lb_r1 = tournament.matches.get(bracket_type=TournamentMatch.BracketType.LOSERS, round_number=1, match_number=1)
+        lb_final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.LOSERS, round_number=2, match_number=1)
+        grand_final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.GRAND_FINAL, round_number=1, match_number=1)
+
+        # 1. WB R1: T1 schlägt T4, T2 schlägt T3
+        TournamentMatchService.update_match_score(wb_r1_m1.id, score1=16, score2=5)
+        TournamentMatchService.update_match_score(wb_r1_m2.id, score1=16, score2=8)
+
+        # 2. WB Final wird VOR LB R1 gespielt: T1 schlägt T2
+        TournamentMatchService.update_match_score(wb_final.id, score1=16, score2=12)
+
+        lb_final.refresh_from_db()
+        grand_final.refresh_from_db()
+        lb_r1.refresh_from_db()
+
+        # LB R1 muss nach wie vor READY sein (T4 vs T3)
+        self.assertEqual(lb_r1.status, TournamentMatch.Status.READY)
+        self.assertEqual(lb_r1.team1, t4)
+        self.assertEqual(lb_r1.team2, t3)
+        self.assertFalse(lb_r1.is_bye)
+
+        # LB Finale darf KEIN Freilos sein und muss auf Sieger aus LB R1 warten!
+        self.assertEqual(lb_final.status, TournamentMatch.Status.PENDING)
+        self.assertFalse(lb_final.is_bye)
+        self.assertIsNone(lb_final.team1)
+        self.assertEqual(lb_final.team2, t2)
+        self.assertIsNone(lb_final.winner)
+
+        # Grand Final darf T2 NICHT als Gegner enthalten
+        self.assertEqual(grand_final.team1, t1)
+        self.assertIsNone(grand_final.team2)
+        self.assertEqual(grand_final.status, TournamentMatch.Status.PENDING)
+
+        # 3. Nun wird LB R1 gespielt: T3 schlägt T4
+        TournamentMatchService.update_match_score(lb_r1.id, score1=10, score2=16)
+
+        lb_final.refresh_from_db()
+        self.assertEqual(lb_final.team1, t3)
+        self.assertEqual(lb_final.team2, t2)
+        self.assertEqual(lb_final.status, TournamentMatch.Status.READY)
+
+        # 4. Nun wird LB Final gespielt: T3 schlägt T2
+        TournamentMatchService.update_match_score(lb_final.id, score1=16, score2=14)
+
+        grand_final.refresh_from_db()
+        self.assertEqual(grand_final.team1, t1)
+        self.assertEqual(grand_final.team2, t3)
+        self.assertEqual(grand_final.status, TournamentMatch.Status.READY)
+
+        # 5. Grand Final: T1 schlägt T3
+        TournamentMatchService.update_match_score(grand_final.id, score1=16, score2=11)
+        tournament.refresh_from_db()
+        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
+
+    def test_double_elimination_bye_handling_three_teams_wb_final_early(self):
+        """
+        BYE-Handling mit 3 Teams: WB Final wird vor dem LB-Match gespielt.
+        Es darf zu keiner vorzeitigen Freilos-Vergabe im LB Final kommen.
+        """
+        from tournaments.services import TournamentBracketService, TournamentMatchService
+
+        tournament, teams = self._create_teams_and_tournament(3)
+        t1, t2, t3 = teams[0], teams[1], teams[2]
+
+        TournamentBracketService.generate_bracket(tournament.id)
+
+        wb_r1_m1 = tournament.matches.get(bracket_type=TournamentMatch.BracketType.WINNERS, round_number=1, match_number=1)
+        wb_r1_m2 = tournament.matches.get(bracket_type=TournamentMatch.BracketType.WINNERS, round_number=1, match_number=2)
+        wb_final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.WINNERS, round_number=2, match_number=1)
+        lb_r1 = tournament.matches.get(bracket_type=TournamentMatch.BracketType.LOSERS, round_number=1, match_number=1)
+        lb_final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.LOSERS, round_number=2, match_number=1)
+        grand_final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.GRAND_FINAL, round_number=1, match_number=1)
+
+        # WB R1 M1 ist Freilos für T1
+        self.assertTrue(wb_r1_m1.is_bye)
+        self.assertEqual(wb_r1_m1.winner, t1)
+
+        # T1 steht im WB Final
+        wb_final.refresh_from_db()
+        self.assertEqual(wb_final.team1, t1)
+
+        # WB R1 M2 spielen: T2 schlägt T3
+        TournamentMatchService.update_match_score(wb_r1_m2.id, score1=16, score2=11)
+
+        # T3 rückt per BYE in LB Final vor (Slot 1)
+        lb_r1.refresh_from_db()
+        self.assertTrue(lb_r1.is_bye)
+        self.assertEqual(lb_r1.winner, t3)
+
+        lb_final.refresh_from_db()
+        self.assertEqual(lb_final.team1, t3)
+        self.assertIsNone(lb_final.team2)
+        self.assertEqual(lb_final.status, TournamentMatch.Status.PENDING)
+
+        # WB Final spielen: T1 schlägt T2 (T2 fällt in LB Final Slot 2)
+        TournamentMatchService.update_match_score(wb_final.id, score1=16, score2=12)
+
+        lb_final.refresh_from_db()
+        self.assertEqual(lb_final.team1, t3)
+        self.assertEqual(lb_final.team2, t2)
+        self.assertEqual(lb_final.status, TournamentMatch.Status.READY)
+
+        # LB Final spielen: T2 schlägt T3 (T2 -> Grand Final)
+        TournamentMatchService.update_match_score(lb_final.id, score1=10, score2=16)
+
+        grand_final.refresh_from_db()
+        self.assertEqual(grand_final.team1, t1)
+        self.assertEqual(grand_final.team2, t2)
+        self.assertEqual(grand_final.status, TournamentMatch.Status.READY)
+
+    def test_double_elimination_multi_bye_cascade_eight_teams(self):
+        """
+        Double Elimination mit 5 Teams auf 8er-Bracket (3 BYEs).
+        Prüft deterministische Kaskadierung von Freilosen im Loser Bracket
+        auch bei variierenden Spielreihenfolgen.
+        """
+        from tournaments.services import TournamentBracketService, TournamentMatchService
+
+        tournament, teams = self._create_teams_and_tournament(5)
+        TournamentBracketService.generate_bracket(tournament.id)
+
+        # Alle WB R1 Matches prüfen
+        wb_r1_matches = tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            round_number=1
+        ).order_by('match_number')
+
+        bye_matches = wb_r1_matches.filter(is_bye=True)
+        self.assertEqual(bye_matches.count(), 3)
+        real_matches = wb_r1_matches.filter(is_bye=False)
+        self.assertEqual(real_matches.count(), 1)
+
+        # Das reguläre Match spielen
+        real_match = real_matches.first()
+        self.assertEqual(real_match.status, TournamentMatch.Status.READY)
+        TournamentMatchService.update_match_score(real_match.id, score1=16, score2=8)
+
+        # Jetzt alle weiteren WB Matches nacheinander abwickeln
+        wb_r2_matches = tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            round_number=2
+        ).order_by('match_number')
+
+        for m in wb_r2_matches:
+            m.refresh_from_db()
+            self.assertEqual(m.status, TournamentMatch.Status.READY)
+            TournamentMatchService.update_match_score(m.id, score1=16, score2=10)
+
+        # WB Final spielen
+        wb_final = tournament.matches.get(
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            round_number=3,
+            match_number=1
+        )
+        TournamentMatchService.update_match_score(wb_final.id, score1=16, score2=12)
+
+        # Zu diesem Zeitpunkt darf das Grand Final NOCH NICHT voll besetzt sein
+        grand_final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.GRAND_FINAL, round_number=1, match_number=1)
+        grand_final.refresh_from_db()
+        self.assertIsNotNone(grand_final.team1)
+        self.assertIsNone(grand_final.team2)
+        self.assertEqual(grand_final.status, TournamentMatch.Status.PENDING)
+
 
 class TournamentFrontendRegistrationFlowTests(TestCase):
     def setUp(self):

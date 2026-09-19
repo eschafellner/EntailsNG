@@ -720,6 +720,222 @@ class SystemErrorLogTests(TestCase):
         self.assertContains(resp_detail, "foo.py")
 
 
+class CacheResilienceAndFallbackTests(TestCase):
+    """
+    Tests zur Verifikation der Resilienz bei Redis- und Cache-Ausfällen.
+    Stellt sicher, dass bei Cache-Exceptions kontrollierte Fallbacks auf PostgreSQL greifen
+    und Seiten nicht mit HTTP 500 abstürzen.
+    """
+
+    def test_safe_cache_get_or_set_fallback_on_cache_error(self):
+        from unittest.mock import patch
+        from configuration.cache import safe_cache_get_or_set
+
+        called = {'count': 0}
+        def db_callback():
+            called['count'] += 1
+            return {'data': 'from_database'}
+
+        with patch('django.core.cache.cache.get', side_effect=Exception("Redis connection refused")), \
+             patch('django.core.cache.cache.set', side_effect=Exception("Redis connection refused")):
+            res = safe_cache_get_or_set('resilient_key', db_callback, 300)
+
+        self.assertEqual(res, {'data': 'from_database'})
+        self.assertEqual(called['count'], 1)
+
+    def test_safe_cache_delete_and_delete_many_survives_cache_error(self):
+        from unittest.mock import patch
+        from configuration.cache import safe_cache_delete, safe_cache_delete_many
+
+        with patch('django.core.cache.cache.delete', side_effect=Exception("Redis connection refused")), \
+             patch('django.core.cache.cache.delete_many', side_effect=Exception("Redis connection refused")):
+            # Dürfen keine Exceptions werfen
+            safe_cache_delete('any_key')
+            safe_cache_delete_many(['key1', 'key2'])
+
+    def test_context_processor_feature_flags_resilient_to_redis_down(self):
+        from unittest.mock import patch
+        from django.test import RequestFactory
+        from configuration.context_processors import feature_flags
+        from configuration.models import NavigationItem
+
+        NavigationItem.objects.create(title="Turniere", url_name="/tournaments/", order=1, is_active=True)
+        rf = RequestFactory()
+        req = rf.get('/')
+
+        with patch('django.core.cache.cache.get', side_effect=Exception("Redis connection refused")), \
+             patch('django.core.cache.cache.set', side_effect=Exception("Redis connection refused")):
+            ctx = feature_flags(req)
+
+        self.assertIn('nav_items', ctx)
+        self.assertTrue(any(item.title == "Turniere" for item in ctx['nav_items']))
+        self.assertIsNotNone(ctx['site_customization'])
+
+    def test_general_configuration_and_site_customization_load_fallback(self):
+        from unittest.mock import patch
+        from configuration.models import GeneralConfiguration, SiteCustomization
+
+        with patch('django.core.cache.cache.get', side_effect=Exception("Redis connection refused")), \
+             patch('django.core.cache.cache.set', side_effect=Exception("Redis connection refused")):
+            conf = GeneralConfiguration.load()
+            custom = SiteCustomization.load()
+
+        self.assertEqual(conf.pk, 1)
+        self.assertEqual(custom.pk, 1)
+
+    def test_translations_load_fallback_with_redis_down(self):
+        from unittest.mock import patch
+        from configuration.translations import get_translation, SystemTranslation
+
+        SystemTranslation.objects.create(key='test_resilient_trans', text='Ausfallsicherer Text')
+
+        with patch('django.core.cache.cache.get', side_effect=Exception("Redis connection refused")), \
+             patch('django.core.cache.cache.set', side_effect=Exception("Redis connection refused")):
+            trans = get_translation('test_resilient_trans')
+
+        self.assertEqual(trans, 'Ausfallsicherer Text')
+
+    def test_seating_capacity_stats_fallback_with_redis_down(self):
+        from unittest.mock import patch
+        from datetime import timedelta
+        from django.utils import timezone
+        from events.models import Event
+        from seating.models import SeatingPlan, SeatingCell
+        from seating.services import get_event_capacity_stats
+
+        event = Event.objects.create(
+            title="Resilience LAN",
+            slug="resilience-lan",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        plan = SeatingPlan.objects.create(event=event, name="Haupthalle", columns=10, rows=10)
+        SeatingCell.objects.create(
+            plan=plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT,
+            reservation_status=SeatingCell.ReservationStatus.RESERVED
+        )
+
+        with patch('django.core.cache.cache.get', side_effect=Exception("Redis connection refused")), \
+             patch('django.core.cache.cache.set', side_effect=Exception("Redis connection refused")):
+            stats = get_event_capacity_stats(event)
+
+        self.assertEqual(stats['total_seats'], 1)
+        self.assertEqual(stats['reserved_seats'], 1)
+        self.assertEqual(stats['capacity_percent'], 100)
+
+    def test_auth_backend_ip_rate_limiting_fails_open(self):
+        from unittest.mock import patch
+        from users.auth_backends import _is_ip_rate_limited, _record_ip_failed_attempt
+
+        with patch('django.core.cache.cache.get', side_effect=Exception("Redis connection refused")):
+            # Bei Ausfall Fail-Open -> False
+            self.assertFalse(_is_ip_rate_limited('192.168.1.1'))
+
+        with patch('django.core.cache.cache.add', side_effect=Exception("Redis connection refused")), \
+             patch('django.core.cache.cache.incr', side_effect=Exception("Redis connection refused")), \
+             patch('django.core.cache.cache.set', side_effect=Exception("Redis connection refused")):
+            # Bei Ausfall Fail-Open -> kein Crash, Rückgabe 1
+            attempts = _record_ip_failed_attempt('192.168.1.1')
+            self.assertEqual(attempts, 1)
+
+
+class RequestLevelTranslationCacheTests(TestCase):
+    """
+    Tests für das Request-Level Caching von Übersetzungen (Punkt 1 der Performance-Optimierung).
+    Stellt sicher, dass viele {% t %}-Aufrufe innerhalb desselben Requests nur EINEN einzigen
+    Cache-Zugriff (Redis) auslösen und Folgeaufrufe aus dem lokalen Request-Speicher bedient werden.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        SystemTranslation.objects.create(key='test_key_1', text='Text 1')
+        SystemTranslation.objects.create(key='test_key_2', text='Text 2')
+
+    def test_20_template_translation_tags_only_read_cache_once_per_request(self):
+        from django.template import Template, Context
+        from django.test import RequestFactory
+        from unittest.mock import patch
+        from django.core.cache import cache
+
+        factory = RequestFactory()
+        request = factory.get('/')
+
+        # Erstelle ein Template mit 20 {% t %}-Aufrufen
+        template_str = "".join([f'{{% t "test_key_{i % 2 + 1}" %}} ' for i in range(20)])
+        template = Template(template_str)
+
+        # Zähle Aufrufe von cache.get für den Schlüssel 'system_translations'
+        original_get = cache.get
+        cache_get_count = 0
+
+        def counting_get(key, *args, **kwargs):
+            nonlocal cache_get_count
+            if key == 'system_translations':
+                cache_get_count += 1
+            return original_get(key, *args, **kwargs)
+
+        with patch('django.core.cache.cache.get', side_effect=counting_get):
+            context = Context({'request': request})
+            rendered = template.render(context)
+
+        # Alle 20 Aufrufe müssen korrekt gerendert worden sein
+        self.assertIn('Text 1', rendered)
+        self.assertIn('Text 2', rendered)
+        # Exakt 1 Cache-Get (für das Wörterbuch), die restlichen 19 Aufrufe kamen aus dem Request-Cache
+        self.assertEqual(cache_get_count, 1)
+
+    def test_middleware_request_cache_cleans_up_after_request(self):
+        from django.test import RequestFactory
+        from configuration.middleware import RequestCacheMiddleware
+        from configuration.translations import get_request_cache, get_translation
+        from django.http import HttpResponse
+
+        factory = RequestFactory()
+        request = factory.get('/')
+
+        middleware = RequestCacheMiddleware(get_response=lambda req: HttpResponse(get_translation('test_key_1')))
+
+        self.assertIsNone(get_request_cache())
+        response = middleware(request)
+        self.assertEqual(response.status_code, 200)
+        # Nach Abschluss des Requests muss der Thread-Local Cache bereinigt sein
+        self.assertIsNone(get_request_cache())
+
+    def test_python_calls_in_same_request_share_cache(self):
+        from configuration.translations import init_request_cache, clear_request_cache, get_translation
+        from unittest.mock import patch
+        from django.core.cache import cache
+
+        init_request_cache()
+        try:
+            original_get = cache.get
+            cache_get_count = 0
+
+            def counting_get(key, *args, **kwargs):
+                nonlocal cache_get_count
+                if key == 'system_translations':
+                    cache_get_count += 1
+                return original_get(key, *args, **kwargs)
+
+            with patch('django.core.cache.cache.get', side_effect=counting_get):
+                # 5 Aufrufe hintereinander
+                res1 = get_translation('test_key_1')
+                res2 = get_translation('test_key_2')
+                res3 = get_translation('test_key_1')
+                res4 = get_translation('test_key_2')
+                res5 = get_translation('test_key_1')
+
+            self.assertEqual(res1, 'Text 1')
+            self.assertEqual(res2, 'Text 2')
+            self.assertEqual(cache_get_count, 1)
+        finally:
+            clear_request_cache()
+
+
+
+
 
 
 

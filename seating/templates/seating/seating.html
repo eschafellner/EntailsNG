@@ -142,13 +142,19 @@
 
 {% if event %}
 {% t "seat_confirm_question" "Möchtest du den Sitzplatz {seat} verbindlich reservieren?" as seat_confirm_q %}
+{% t "seat_reserved_success" "Sitzplatz erfolgreich reserviert!" as seat_reserved_success %}
+{% t "seat_reserved_error" "Fehler bei der Reservierung." as seat_reserved_error %}
+{% t "seat_network_error" "Netzwerkfehler bei der Reservierung." as seat_network_error %}
 <script id="seating-config" type="application/json">
 {
   "eventId": "{{ event.id }}",
   "isUserLoggedIn": {{ request.user.is_authenticated|yesno:"true,false" }},
   "username": "{{ request.user.username|escapejs }}",
   "csrfToken": "{{ csrf_token }}",
-  "rawConfirmText": "{{ seat_confirm_q|escapejs }}"
+  "rawConfirmText": "{{ seat_confirm_q|escapejs }}",
+  "msgSuccess": "{{ seat_reserved_success|escapejs }}",
+  "msgError": "{{ seat_reserved_error|escapejs }}",
+  "msgNetworkError": "{{ seat_network_error|escapejs }}"
 }
 </script>
 <script src="{% static 'js/seating.js' %}"></script>

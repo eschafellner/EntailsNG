@@ -21,8 +21,14 @@ from emails.crypto import (
     encrypt_secret,
     is_readable,
 )
-from emails.models import EmailTemplate, GeneralEmailSettings
-from emails.services import safe_format, send_system_email, send_test_email
+from emails.models import EmailTemplate, GeneralEmailSettings, OutgoingEmail
+from emails.services import (
+    process_email_queue,
+    queue_system_email,
+    safe_format,
+    send_system_email,
+    send_test_email,
+)
 from events.models import Event, EventRegistration
 
 User = get_user_model()
@@ -525,3 +531,162 @@ class AdminAndContextProcessorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Anmeldung vorübergehend pausiert")
         self.assertContains(response, "E-Mail-Versand")
+
+
+class OutgoingEmailQueueTests(TestCase):
+    """Testet die persistente E-Mail-Versandwarteschlange (Transactional Outbox)."""
+
+    def setUp(self):
+        self.settings = GeneralEmailSettings.load()
+        self.settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        self.settings.sender_email = "noreply@example.com"
+        self.settings.is_enabled = True
+        self.settings.save()
+
+        self.template = EmailTemplate.objects.create(
+            key='queue_test_tpl',
+            name='Queue Test Template',
+            subject='Hallo {username}',
+            content='<p>Hallo {username}, Willkommen!</p>',
+            is_active=True,
+        )
+
+    def test_queue_system_email_creates_pending_record(self):
+        """queue_system_email legt einen Datensatz mit Status PENDING und gerendertem Inhalt an."""
+        outgoing = queue_system_email(
+            'queue_test_tpl',
+            'player@example.com',
+            {'username': 'PixelHero'},
+            trigger_worker=False,
+        )
+        self.assertIsNotNone(outgoing)
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.PENDING)
+        self.assertEqual(outgoing.recipient_email, 'player@example.com')
+        self.assertEqual(outgoing.subject, 'Hallo PixelHero')
+        self.assertIn('Hallo PixelHero, Willkommen!', outgoing.body_html)
+        self.assertIn('Hallo PixelHero, Willkommen!', outgoing.body_text)
+        self.assertEqual(outgoing.attempts, 0)
+        self.assertEqual(outgoing.max_attempts, 5)
+
+    def test_send_system_email_immediate_false_queues_email(self):
+        """send_system_email mit immediate=False legt die Mail in die Warteschlange."""
+        success = send_system_email(
+            'queue_test_tpl',
+            'player2@example.com',
+            {'username': 'Player2'},
+            immediate=False,
+        )
+        self.assertTrue(success)
+        self.assertTrue(OutgoingEmail.objects.filter(recipient_email='player2@example.com').exists())
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_process_email_queue_success(self):
+        """Fällige E-Mails werden versendet und als SENT markiert."""
+        outgoing = queue_system_email(
+            'queue_test_tpl',
+            'sent@example.com',
+            {'username': 'SentUser'},
+            trigger_worker=False,
+        )
+        sent, failed = process_email_queue(limit=10)
+        self.assertEqual(sent, 1)
+        self.assertEqual(failed, 0)
+
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.SENT)
+        self.assertIsNotNone(outgoing.sent_at)
+        self.assertEqual(outgoing.last_error, '')
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('emails.services.EmailMultiAlternatives.send')
+    def test_process_email_queue_temporary_failure_backoff(self, mock_send):
+        """Temporäre Fehler erhöhen den Zähler und setzen scheduled_at per exponentiellem Backoff."""
+        mock_send.side_effect = Exception("SMTP-Timeout beim Verbindungsaufbau")
+
+        outgoing = queue_system_email(
+            'queue_test_tpl',
+            'retry@example.com',
+            {'username': 'RetryUser'},
+            trigger_worker=False,
+        )
+        sent, failed = process_email_queue(limit=10)
+        self.assertEqual(sent, 0)
+        self.assertEqual(failed, 1)
+
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.PENDING)
+        self.assertEqual(outgoing.attempts, 1)
+        self.assertIn("SMTP-Timeout", outgoing.last_error)
+        self.assertGreater(outgoing.scheduled_at, timezone.now())
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @patch('emails.services.EmailMultiAlternatives.send')
+    def test_process_email_queue_max_attempts_fails(self, mock_send):
+        """Nach Erreichen von max_attempts wird der Status auf FAILED gesetzt."""
+        mock_send.side_effect = Exception("Permanent gesperrter Server")
+
+        outgoing = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='fail@example.com',
+            subject='Fail Test',
+            body_text='Fail',
+            body_html='<p>Fail</p>',
+            status=OutgoingEmail.Status.PENDING,
+            attempts=4,
+            max_attempts=5,
+            scheduled_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        sent, failed = process_email_queue(limit=10)
+        self.assertEqual(sent, 0)
+        self.assertEqual(failed, 1)
+
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.FAILED)
+        self.assertEqual(outgoing.attempts, 5)
+
+    def test_management_command_process_email_queue(self):
+        """Management-Command 'process_email_queue' läuft ohne Fehler durch."""
+        from django.core.management import call_command
+        queue_system_email(
+            'queue_test_tpl',
+            'cmd@example.com',
+            {'username': 'CmdUser'},
+            trigger_worker=False,
+        )
+        call_command('process_email_queue', limit=5)
+        outgoing = OutgoingEmail.objects.get(recipient_email='cmd@example.com')
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.SENT)
+
+    def test_admin_badge_and_retry_action(self):
+        """Admin-Badges und Retry-Action funktionieren wie erwartet."""
+        from django.contrib.admin.sites import AdminSite
+        from emails.admin import OutgoingEmailAdmin, retry_outgoing_emails
+
+        admin_instance = OutgoingEmailAdmin(OutgoingEmail, AdminSite())
+        outgoing = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='admin_test@example.com',
+            subject='Admin Test',
+            body_text='Admin',
+            body_html='<p>Admin</p>',
+            status=OutgoingEmail.Status.FAILED,
+            attempts=5,
+            max_attempts=5,
+        )
+
+        badge_html = admin_instance.status_badge(outgoing)
+        self.assertIn("Fehlgeschlagen", badge_html)
+        self.assertEqual(admin_instance.attempts_display(outgoing), "5 / 5")
+
+        # Retry Action
+        rf = RequestFactory()
+        req = rf.post('/admin/emails/outgoingemail/')
+        from django.contrib.messages.middleware import MessageMiddleware
+        from django.contrib.sessions.middleware import SessionMiddleware
+        SessionMiddleware(lambda r: None).process_request(req)
+        MessageMiddleware(lambda r: None).process_request(req)
+
+        retry_outgoing_emails(admin_instance, req, OutgoingEmail.objects.filter(pk=outgoing.pk))
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.PENDING)

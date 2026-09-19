@@ -1,7 +1,9 @@
 import logging
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from tinymce.models import HTMLField
+
 
 logger = logging.getLogger(__name__)
 
@@ -293,3 +295,116 @@ class EmailTemplate(models.Model):
     def __str__(self):
         status = "Aktiv" if self.is_active else "Inaktiv"
         return f"{self.name} ({self.key}) - {status}"
+
+
+class OutgoingEmail(models.Model):
+    """
+    Persistente Versandwarteschlange (Transactional Outbox) für ausgehende System-E-Mails.
+    Garantiert Transaktionssicherheit, Entkopplung vom Web-Request und automatische
+    Wiederholungen bei temporären SMTP-Ausfällen.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Ausstehend'
+        PROCESSING = 'PROCESSING', 'Wird gesendet'
+        SENT = 'SENT', 'Erfolgreich gesendet'
+        FAILED = 'FAILED', 'Fehlgeschlagen'
+
+    template_key = models.CharField(
+        max_length=50,
+        verbose_name="Template Schlüssel",
+        help_text="Zugehöriger E-Mail-Template-Key (z. B. email_verification)",
+    )
+    recipient_email = models.EmailField(
+        verbose_name="Empfängeradresse",
+        help_text="Zieladresse der Nachricht",
+    )
+    subject = models.CharField(
+        max_length=255,
+        verbose_name="Betreffzeile",
+    )
+    body_text = models.TextField(
+        verbose_name="Textinhalt",
+        help_text="Reiner Textinhalt der Nachricht",
+    )
+    body_html = models.TextField(
+        verbose_name="HTML-Inhalt",
+        help_text="HTML-formatierter Inhalt der Nachricht",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        verbose_name="Versandstatus",
+    )
+    attempts = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Bisherige Sendeversuche",
+    )
+    max_attempts = models.PositiveIntegerField(
+        default=5,
+        verbose_name="Max. Sendeversuche",
+    )
+    last_error = models.TextField(
+        blank=True,
+        default='',
+        verbose_name="Letzte Fehlermeldung",
+    )
+    scheduled_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        verbose_name="Geplanter Versandzeitpunkt",
+        help_text="Zeitpunkt, ab dem die E-Mail zur Verarbeitung ansteht (für Backoff-Wiederholungen).",
+    )
+    sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Erfolgreich gesendet am",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Erstellt am",
+    )
+
+    class Meta:
+        ordering = ['scheduled_at', 'created_at']
+        verbose_name = "Ausgehende E-Mail"
+        verbose_name_plural = "Ausgehende E-Mails"
+        indexes = [
+            models.Index(fields=['status', 'scheduled_at'], name='email_queue_status_sched_idx'),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_status_display()}] {self.template_key} an {self.recipient_email} (#{self.pk})"
+
+    def mark_processing(self):
+        self.status = self.Status.PROCESSING
+        self.save(update_fields=['status'])
+
+    def mark_sent(self):
+        self.status = self.Status.SENT
+        self.sent_at = timezone.now()
+        self.last_error = ''
+        self.save(update_fields=['status', 'sent_at', 'last_error'])
+
+    def mark_failed_attempt(self, error_message: str):
+        from datetime import timedelta
+        self.attempts += 1
+        self.last_error = error_message[:2000]
+        if self.attempts >= self.max_attempts:
+            self.status = self.Status.FAILED
+        else:
+            self.status = self.Status.PENDING
+            # Exponential backoff: 1 min, 2 min, 4 min, 8 min, ...
+            backoff_seconds = 60 * (2 ** (self.attempts - 1))
+            self.scheduled_at = timezone.now() + timedelta(seconds=backoff_seconds)
+        self.save(update_fields=['attempts', 'last_error', 'status', 'scheduled_at'])
+
+    def reset_for_retry(self):
+        """Setzt die E-Mail für einen sofortigen erneuten Sendeversuch zurück."""
+        self.status = self.Status.PENDING
+        self.scheduled_at = timezone.now()
+        self.save(update_fields=['status', 'scheduled_at'])
+

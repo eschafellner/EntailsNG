@@ -318,39 +318,133 @@ def generate_standard_seed_order(n):
     return seeds
 
 
-def check_and_advance_bye_in_loser_bracket(lb_match):
+def check_and_advance_match(match, visited=None):
     """
-    Prüft, ob ein Loser-Bracket-Match ein Freilos ist, weil ein oder beide Zubringer-Matches
-    aus dem Winner Bracket Freilose waren und keinen realen Verlierer senden.
+    Universelle Prüfung und Weiterschaltung für ein Match im Turnierbaum.
+
+    Berücksichtigt alle Zuflüsse (sowohl aus prev_matches_winner als auch prev_matches_loser)
+    und unterscheidet präzise zwischen:
+    - 'FILLED': Ein Team ist für diesen Slot bereits gesetzt oder verfügbar.
+    - 'PENDING': Der Zubringer für diesen Slot ist noch nicht COMPLETED (Teilnehmer steht noch aus).
+    - 'EMPTY': Der Slot bleibt endgültig leer (kein Zubringer vorhanden oder Zubringer COMPLETED ohne Teilnehmer).
     """
-    if lb_match.status == TournamentMatch.Status.COMPLETED or lb_match.is_bye:
+    from tournaments.models import TournamentMatch
+
+    if visited is None:
+        visited = set()
+    if not match or match.id in visited:
+        return
+    visited.add(match.id)
+
+    # Wenn Match bereits beendet ist, nichts tun
+    if match.status == TournamentMatch.Status.COMPLETED or match.is_bye:
         return
 
-    # Finde alle direkten Zubringer-Matches, die Verlierer in dieses LB-Match schicken
-    prev_wb_loser_matches = list(TournamentMatch.objects.filter(
-        tournament=lb_match.tournament,
-        next_match_loser=lb_match
-    ))
+    def evaluate_slot(slot_num):
+        team = match.team1 if slot_num == 1 else match.team2
+        if team is not None:
+            return 'FILLED', team
 
-    # Wenn alle Vorgänger-Matches aus dem WB bereits COMPLETED sind:
-    if prev_wb_loser_matches and all(m.status == TournamentMatch.Status.COMPLETED for m in prev_wb_loser_matches):
-        if (lb_match.team1 and not lb_match.team2) or (lb_match.team2 and not lb_match.team1):
-            active_team = lb_match.team1 or lb_match.team2
-            lb_match.is_bye = True
-            lb_match.winner = active_team
-            lb_match.status = TournamentMatch.Status.COMPLETED
-            lb_match.save(update_fields=['is_bye', 'winner', 'status'])
+        prev_w = list(match.prev_matches_winner.filter(next_match_winner_slot=slot_num))
+        prev_l = list(match.prev_matches_loser.filter(next_match_loser_slot=slot_num))
+        feeders = prev_w + prev_l
 
-            # Weiterreichen in nächste LB-Runde
-            if lb_match.next_match_winner:
-                next_w = TournamentMatch.objects.select_for_update().get(pk=lb_match.next_match_winner_id)
-                if lb_match.next_match_winner_slot == 1:
+        if not feeders:
+            return 'EMPTY', None
+
+        # Wenn mindestens ein Zubringer noch nicht beendet ist -> PENDING
+        if any(f.status != TournamentMatch.Status.COMPLETED for f in feeders):
+            return 'PENDING', None
+
+        # Alle Zubringer sind COMPLETED. Prüfen, ob ein Teilnehmer bereitsteht
+        for f in prev_w:
+            if f.winner:
+                return 'FILLED', f.winner
+        for f in prev_l:
+            if f.loser:
+                return 'FILLED', f.loser
+
+        return 'EMPTY', None
+
+    state1, team1 = evaluate_slot(1)
+    state2, team2 = evaluate_slot(2)
+
+    updated_teams = False
+    if state1 == 'FILLED' and match.team1 != team1:
+        match.team1 = team1
+        updated_teams = True
+    if state2 == 'FILLED' and match.team2 != team2:
+        match.team2 = team2
+        updated_teams = True
+
+    # Fall 1: Beide Slots besetzt -> Match ist spielbereit
+    if state1 == 'FILLED' and state2 == 'FILLED':
+        if match.status == TournamentMatch.Status.PENDING or updated_teams:
+            match.status = TournamentMatch.Status.READY
+            match.save(update_fields=['team1', 'team2', 'status'])
+        return
+
+    # Fall 2: Mindestens ein Slot steht noch aus -> Match muss warten
+    if state1 == 'PENDING' or state2 == 'PENDING':
+        if updated_teams:
+            match.save(update_fields=['team1', 'team2'])
+        return
+
+    # Fall 3: Genau ein Slot besetzt, der andere endgültig leer -> FREILOS (BYE)
+    if (state1 == 'FILLED' and state2 == 'EMPTY') or (state1 == 'EMPTY' and state2 == 'FILLED'):
+        active_team = team1 if state1 == 'FILLED' else team2
+        match.is_bye = True
+        match.winner = active_team
+        match.loser = None
+        match.score_team1 = 0
+        match.score_team2 = 0
+        match.status = TournamentMatch.Status.COMPLETED
+        if not match.decision_reason:
+            match.decision_reason = "Freilos (BYE)"
+        match.save(update_fields=['team1', 'team2', 'is_bye', 'winner', 'loser', 'score_team1', 'score_team2', 'status', 'decision_reason'])
+
+        # Sieger ins Folgematch weiterreichen
+        if match.next_match_winner:
+            next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
+            if match.next_match_winner_slot == 1:
+                next_w.team1 = active_team
+            elif match.next_match_winner_slot == 2:
+                next_w.team2 = active_team
+            else:
+                if not next_w.team1:
                     next_w.team1 = active_team
-                elif lb_match.next_match_winner_slot == 2:
+                elif not next_w.team2:
                     next_w.team2 = active_team
-                if next_w.team1 and next_w.team2 and next_w.status == TournamentMatch.Status.PENDING:
-                    next_w.status = TournamentMatch.Status.READY
-                next_w.save()
+            next_w.save()
+            check_and_advance_match(next_w, visited)
+
+        # Falls ein Verlierer-Folgematch existiert (wobei Loser=None ist)
+        if match.next_match_loser:
+            next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
+            check_and_advance_match(next_l, visited)
+
+        return
+
+    # Fall 4: Beide Slots endgültig leer -> leeres Match abschließen
+    if state1 == 'EMPTY' and state2 == 'EMPTY':
+        match.is_bye = True
+        match.winner = None
+        match.loser = None
+        match.status = TournamentMatch.Status.COMPLETED
+        match.save(update_fields=['is_bye', 'winner', 'loser', 'status'])
+
+        if match.next_match_winner:
+            next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
+            check_and_advance_match(next_w, visited)
+        if match.next_match_loser:
+            next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
+            check_and_advance_match(next_l, visited)
+        return
+
+
+def check_and_advance_bye_in_loser_bracket(lb_match):
+    """Abwärtskompatibler Wrapper zur Prüfung und Weiterleitung im Loser Bracket."""
+    return check_and_advance_match(lb_match)
 
 
 class TournamentMatchService:
@@ -453,28 +547,29 @@ class TournamentMatchService:
                 if next_w.team1 and next_w.team2 and not next_w.is_bye and next_w.status == TournamentMatch.Status.PENDING:
                     next_w.status = TournamentMatch.Status.READY
                 next_w.save()
+                check_and_advance_match(next_w)
 
             # 5. Verlierer ins Folgematch (unter Lock)
-            if match.next_match_loser and match.loser:
+            if match.next_match_loser:
                 next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
-                if match.next_match_loser_slot == 1:
-                    next_l.team1 = match.loser
-                elif match.next_match_loser_slot == 2:
-                    next_l.team2 = match.loser
-                else:
-                    if not next_l.team1:
+                if match.loser:
+                    if match.next_match_loser_slot == 1:
                         next_l.team1 = match.loser
-                    elif not next_l.team2 and next_l.team1 != match.loser:
+                    elif match.next_match_loser_slot == 2:
                         next_l.team2 = match.loser
-                    elif next_l.team1 != match.loser and next_l.team2 != match.loser:
-                        next_l.team1 = match.loser
+                    else:
+                        if not next_l.team1:
+                            next_l.team1 = match.loser
+                        elif not next_l.team2 and next_l.team1 != match.loser:
+                            next_l.team2 = match.loser
+                        elif next_l.team1 != match.loser and next_l.team2 != match.loser:
+                            next_l.team1 = match.loser
 
-                if next_l.team1 and next_l.team2 and not next_l.is_bye and next_l.status == TournamentMatch.Status.PENDING:
-                    next_l.status = TournamentMatch.Status.READY
-                next_l.save()
+                    if next_l.team1 and next_l.team2 and not next_l.is_bye and next_l.status == TournamentMatch.Status.PENDING:
+                        next_l.status = TournamentMatch.Status.READY
+                    next_l.save()
 
-                # Prüfen, ob durch BYEs im WB der andere Slot des LB-Matches frei bleibt
-                check_and_advance_bye_in_loser_bracket(next_l)
+                check_and_advance_match(next_l)
 
             # 6. Grand Final, Final & Modus-spezifische Abschlusslogik
             tournament = match.tournament
@@ -517,45 +612,10 @@ class TournamentMatchService:
 
 def check_and_advance_bye_or_walkover(match):
     """
-    Prüft, ob ein Match durch ein Freilos oder den Rückzug eines Teams
-    nur noch einen einzigen Teilnehmer hat, und rückt diesen automatisch vor.
+    Abwärtskompatibler Wrapper zur Prüfung und Weiterleitung von Freilosen/Walkovers.
+    Delegiert an die universelle check_and_advance_match Funktion.
     """
-    from tournaments.models import TournamentMatch
-
-    if match.status == TournamentMatch.Status.COMPLETED or match.is_bye:
-        return
-
-    # Prüfen, ob genau ein Team gesetzt ist und der andere Slot leer ist
-    if (match.team1 and not match.team2) or (match.team2 and not match.team1):
-        prev_matches = list(TournamentMatch.objects.filter(
-            tournament=match.tournament,
-            next_match_winner=match
-        ))
-        # Wenn alle Vorgänger-Matches bereits fertig sind (oder keine existieren):
-        if not prev_matches or all(m.status == TournamentMatch.Status.COMPLETED for m in prev_matches):
-            active_team = match.team1 or match.team2
-            match.is_bye = True
-            match.winner = active_team
-            match.status = TournamentMatch.Status.COMPLETED
-            match.decision_reason = match.decision_reason or "Freilos / Walkover"
-            match.save(update_fields=['is_bye', 'winner', 'status', 'decision_reason'])
-
-            if match.next_match_winner:
-                next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
-                if match.next_match_winner_slot == 1:
-                    next_w.team1 = active_team
-                elif match.next_match_winner_slot == 2:
-                    next_w.team2 = active_team
-                else:
-                    if not next_w.team1:
-                        next_w.team1 = active_team
-                    elif not next_w.team2:
-                        next_w.team2 = active_team
-
-                if next_w.team1 and next_w.team2 and not next_w.is_bye and next_w.status == TournamentMatch.Status.PENDING:
-                    next_w.status = TournamentMatch.Status.READY
-                next_w.save()
-                check_and_advance_bye_or_walkover(next_w)
+    return check_and_advance_match(match)
 
 
 def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
@@ -1379,11 +1439,17 @@ def _generate_double_elimination(tournament, registered_teams, preview=False):
 
                 # Prüfen, ob das Ziel-LB-Match von diesem BYE betroffen ist
                 if match_obj.next_match_loser:
-                    check_and_advance_bye_in_loser_bracket(match_obj.next_match_loser)
+                    check_and_advance_match(match_obj.next_match_loser)
             elif not t1 and not t2:
                 match_obj.is_bye = True
                 match_obj.status = TournamentMatch.Status.COMPLETED
                 match_obj.save(update_fields=['team1', 'team2', 'is_bye', 'status'])
+                if match_obj.next_match_loser:
+                    check_and_advance_match(match_obj.next_match_loser)
+
+        # Initialer Durchlauf für alle LB-Matches der 1. Runde
+        for m_obj in lb_matches[1].values():
+            check_and_advance_match(m_obj)
 
         tournament.is_generated = True
         tournament.status = Tournament.Status.IN_PROGRESS

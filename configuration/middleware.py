@@ -11,6 +11,27 @@ from .models import GeneralConfiguration
 logger = logging.getLogger(__name__)
 
 
+class RequestCacheMiddleware:
+    """
+    Verwaltet einen leichtgewichtigen Request-Scoped Cache pro Thread/Request.
+    Verhindert mehrfache redundante Cache- und Datenbankabfragen (z. B. Übersetzungen, aktives Event)
+    innerhalb desselben HTTP-Requests und bereinigt den Cache im finally-Block.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from .cache import init_request_cache, clear_request_cache
+        init_request_cache()
+        request._cached_translations = None
+        try:
+            response = self.get_response(request)
+            return response
+        finally:
+            clear_request_cache()
+
+
 class DynamicDebugMiddleware:
     """
     Ermöglicht das dynamische Auslösen der Django-Debug-Fehlerseite bei Exceptions in Entwicklung/Staging

@@ -9,20 +9,11 @@ from django.urls import NoReverseMatch, reverse
 from .validators import validate_bic, validate_iban
 
 
-def safe_cache_delete(key):
-    """Löscht einen Cache-Schlüssel und fängt Redis-Verbindungsfehler ab."""
-    try:
-        cache.delete(key)
-    except Exception:
-        pass
-
-
-def safe_cache_delete_many(keys):
-    """Löscht mehrere Cache-Schlüssel und fängt Redis-Verbindungsfehler ab."""
-    try:
-        cache.delete_many(keys)
-    except Exception:
-        pass
+from configuration.cache import (
+    safe_cache_delete,
+    safe_cache_delete_many,
+    safe_cache_get_or_set,
+)
 
 ALLOWED_SVG_TAGS = {
     'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
@@ -486,18 +477,18 @@ class GeneralConfiguration(models.Model):
         if self.kontoinhaber:
             self.kontoinhaber = self.kontoinhaber.strip()
         super().save(*args, **kwargs)
-        cache.delete('general_configuration')
+        safe_cache_delete('general_configuration')
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Die Systemeinstellungen können nicht gelöscht werden.")
 
     @classmethod
     def load(cls):
-        conf = cache.get('general_configuration')
-        if conf is None:
-            conf, _ = cls.objects.get_or_create(pk=1)
-            cache.set('general_configuration', conf, 300)
-        return conf
+        return safe_cache_get_or_set(
+            'general_configuration',
+            lambda: cls.objects.get_or_create(pk=1)[0],
+            300,
+        )
 
 
 
@@ -644,11 +635,11 @@ class SiteCustomization(models.Model):
 
     @classmethod
     def load(cls):
-        custom = cache.get('site_customization')
-        if custom is None:
-            custom, _ = cls.objects.get_or_create(pk=1)
-            cache.set('site_customization', custom, 300)
-        return custom
+        return safe_cache_get_or_set(
+            'site_customization',
+            lambda: cls.objects.get_or_create(pk=1)[0],
+            300,
+        )
 
     def get_css_variables(self):
         """Liefert ein Dictionary mit CSS-Variablen basierend auf Preset, Farben & UI-Skalierung."""

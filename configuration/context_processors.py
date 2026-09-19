@@ -1,6 +1,7 @@
 from django.core.cache import cache
 from django.utils.functional import SimpleLazyObject
 
+from configuration.cache import safe_cache_get_or_set
 from configuration.models import NavigationItem, SiteCustomization
 from events.models import Event, EventRegistration
 from seating.services import (
@@ -44,7 +45,7 @@ def feature_flags(request):
     Stellt Navigations-Items und Site-Customization bereit.
     upcoming_event und user_registration werden lazy über SimpleLazyObject aufgelöst (0 DB-Queries bei Seiten ohne Event-Bezug).
     """
-    nav_items = cache.get_or_set(
+    nav_items = safe_cache_get_or_set(
         NAV_CACHE_KEY,
         lambda: list(
             NavigationItem.objects.filter(is_active=True).order_by(

@@ -102,29 +102,37 @@ class PaymentService:
         from seating.models import SeatingCell
         from configuration.cache import invalidate_event_capacity_cache
 
-        registration.payment_status = EventRegistration.PaymentStatus.PAID
-        if not registration.paid_at:
-            registration.paid_at = timezone.now()
+        # Lock registration first to establish lock hierarchy: EventRegistration -> SeatingCell
+        reg = EventRegistration.objects.select_for_update().get(pk=registration.pk)
+        reg.payment_status = EventRegistration.PaymentStatus.PAID
+        if not reg.paid_at:
+            reg.paid_at = timezone.now()
         if amount is not None:
-            registration.paid_amount = amount
-        elif (not registration.paid_amount or registration.paid_amount == 0) and registration.ticket_type:
-            registration.paid_amount = registration.ticket_type.price
-        registration.cancelled_at = None
-        registration.save()
+            reg.paid_amount = amount
+        elif (not reg.paid_amount or reg.paid_amount == 0) and reg.ticket_type:
+            reg.paid_amount = reg.ticket_type.price
+        reg.cancelled_at = None
+        reg.save()
+
+        # In-Memory-Objekt synchronisieren
+        registration.payment_status = reg.payment_status
+        registration.paid_at = reg.paid_at
+        registration.paid_amount = reg.paid_amount
+        registration.cancelled_at = reg.cancelled_at
 
         # Sitzplätze synchronisieren (Bulk Update ohne N+1 mit Enum)
-        registration.seats.filter(
+        reg.seats.filter(
             reservation_status=SeatingCell.ReservationStatus.PRE_RESERVED
         ).update(reservation_status=SeatingCell.ReservationStatus.RESERVED)
 
-        if registration.event_id:
-            invalidate_event_capacity_cache(registration.event_id)
+        if reg.event_id:
+            invalidate_event_capacity_cache(reg.event_id)
 
         # E-Mail erst NACH erfolgreichem DB-Commit versenden
         if send_email:
-            transaction.on_commit(registration.send_payment_confirmation_email)
+            transaction.on_commit(reg.send_payment_confirmation_email)
 
-        return registration
+        return reg
 
     @staticmethod
     @transaction.atomic
@@ -132,19 +140,27 @@ class PaymentService:
         from seating.models import SeatingCell
         from configuration.cache import invalidate_event_capacity_cache
 
-        registration.payment_status = EventRegistration.PaymentStatus.CANCELLED
-        registration.is_checked_in = False
-        registration.checked_in_at = None
-        registration.cancelled_at = timezone.now()
-        registration.save()
+        # Lock registration first to establish lock hierarchy: EventRegistration -> SeatingCell
+        reg = EventRegistration.objects.select_for_update().get(pk=registration.pk)
+        reg.payment_status = EventRegistration.PaymentStatus.CANCELLED
+        reg.is_checked_in = False
+        reg.checked_in_at = None
+        reg.cancelled_at = timezone.now()
+        reg.save()
+
+        # In-Memory-Objekt synchronisieren
+        registration.payment_status = reg.payment_status
+        registration.is_checked_in = reg.is_checked_in
+        registration.checked_in_at = reg.checked_in_at
+        registration.cancelled_at = reg.cancelled_at
 
         # Sitzplätze atomar freigeben (Bulk Update mit Enum)
-        registration.seats.update(
+        reg.seats.update(
             registration=None,
             reservation_status=SeatingCell.ReservationStatus.FREE
         )
-        if registration.event_id:
-            invalidate_event_capacity_cache(registration.event_id)
+        if reg.event_id:
+            invalidate_event_capacity_cache(reg.event_id)
 
-        return registration
+        return reg
 

@@ -1,4 +1,5 @@
 from django.core.cache import cache
+from configuration.cache import safe_cache_get_or_set
 from configuration.models import SystemTranslation
 
 TRANSLATION_CACHE_KEY = 'system_translations'
@@ -18,6 +19,10 @@ DEFAULT_TEXTS = {
     'btn_reject': '✕ Ablehnen',
     'btn_confirm_yes': '✓ Ja',
     'btn_confirm_no': '✕ Nein',
+    'btn_login': 'Login',
+    'pagination_previous': 'Zurück',
+    'pagination_page': 'Seite',
+    'pagination_next': 'Weiter',
     'form_fix_errors': 'Bitte korrigiere folgende Fehler:',
     'nav_more': 'Mehr',
     'nav_more_modal_title': 'Weitere Menüpunkte',
@@ -121,8 +126,12 @@ DEFAULT_TEXTS = {
     'status_ticket_category_select': 'Ticketkategorie wählen:',
 
     # Sitzplatz Modul
+    'seat_page_title': 'Sitzplan',
     'seat_card_title': 'SITZPLATZBUCHUNG',
     'seating_plan_title': 'Sitzplan',
+    'seat_reserved_success': 'Sitzplatz erfolgreich reserviert!',
+    'seat_reserved_error': 'Fehler bei der Reservierung.',
+    'seat_network_error': 'Netzwerkfehler bei der Reservierung.',
     'seat_btn_open': 'Sitzplan öffnen',
     'seat_btn_reserve': 'Sitzplatz reservieren',
     'seat_no_event_text': 'Es gibt derzeit keine aktive Veranstaltung.',
@@ -184,6 +193,16 @@ DEFAULT_TEXTS = {
     'profile_save_btn': 'Profil speichern',
     'profile_clan_header': 'Clan Zugehörigkeit',
     'profile_no_clan': 'Du bist aktuell in keinem Clan.',
+    'profile_clan_find': '(Clan suchen / beitreten →)',
+    'profile_email_change_pending_title': 'E-Mail-Änderung ausstehend',
+    'profile_code_valid_until': 'Gültig bis:',
+    'profile_email_change_hint': 'Wir haben einen 6-stelligen Bestätigungscode an',
+    'profile_email_change_hint_2': 'gesendet. Bitte gib den Code hier ein, um die neue Adresse zu aktivieren:',
+    'profile_confirm_email_btn': 'Bestätigen',
+    'profile_resend_code_btn': 'Neuen Code anfordern',
+    'profile_cancel_change_btn': 'Änderung abbrechen',
+    'profile_email_change_pending_note': 'Eine Änderung auf',
+    'profile_email_change_pending_note_2': 'steht noch aus.',
     'profile_account_eyebrow': 'Benutzerkonto',
     'profile_hello': 'Hallo',
     'profile_role_label': 'Rolle',
@@ -229,7 +248,7 @@ DEFAULT_TEXTS = {
     'pw_reset_request_new_link': 'Neuen Link anfordern',
 
     # Clan-Modul
-    'clan_logo_help': 'Maximal 300x300 Pixel. Erlaubte Formate: .jpg, .jpeg, .png',
+    'clan_logo_help': 'Maximal 500x500 Pixel. Erlaubte Formate: .jpg, .jpeg, .png',
     'clan_list_title': 'Clans & Teams',
     'clan_list_subtitle': 'Alle registrierten Gaming-Clans & Teams im Überblick',
     'clan_create_btn': '+ Clan gründen',
@@ -639,29 +658,93 @@ DEFAULT_TEXTS = {
     'msg_email_change_success': 'Deine E-Mail-Adresse wurde erfolgreich auf "{new_email}" geändert.',
     'msg_email_change_cancelled': 'Die E-Mail-Änderung wurde abgebrochen.',
     'msg_email_change_resend': 'Ein neuer Bestätigungscode wurde an "{new_email}" gesendet.',
+    'msg_profile_saved': 'Deine Profil-Stammdaten wurden aktualisiert.',
+    'msg_profile_form_errors': 'Bitte korrigiere die Fehler im Formular.',
+    'msg_email_change_unavailable': 'E-Mail-Änderung ist derzeit vorübergehend nicht möglich, da der E-Mail-Versand nicht eingerichtet oder deaktiviert ist.',
+    'msg_email_taken': 'Diese E-Mail-Adresse wird inzwischen bereits von einem anderen Konto verwendet.',
+    'msg_email_change_invalid_code': 'Der Bestätigungscode ist ungültig oder abgelaufen.',
+    'msg_password_changed': 'Dein Passwort wurde erfolgreich geändert.',
+    'msg_password_change_error': 'Fehler beim Ändern des Passworts. Bitte überprüfe deine Eingaben.',
+    'msg_verification_code_sent': 'Ein neuer Bestätigungscode wurde an {email} gesendet.',
+    'msg_verification_code_wrong': 'Ungültiger Verifizierungscode. Noch {remaining} Versuch(e) verbleibend.',
+    'msg_verification_rate_limit': 'Zu viele Verifizierungsversuche von deiner IP-Adresse. Bitte warte eine Minute.',
+
+    # Clan Flash-Meldungen
+    'msg_clan_admin_only_edit': 'Nur Clan-Admins können den Clan bearbeiten.',
+    'msg_clan_updated': 'Clan-Daten wurden erfolgreich aktualisiert.',
+    'msg_clan_already_member': 'Du bist bereits Mitglied im Clan "{clan_name}".',
+    'msg_clan_joined': 'Du bist dem Clan "{clan_name}" beigetreten!',
+    'msg_clan_password_incorrect': 'Das eingegebene Clan-Passwort ist falsch.',
+    'msg_clan_no_permission': 'Keine Berechtigung.',
+    'msg_clan_request_rejected': 'Beitrittsanfrage von {username} abgelehnt.',
+    'msg_clan_member_removed': '{username} wurde aus dem Clan entfernt.',
+    'msg_clan_not_member': 'Du bist kein aktives Mitglied dieses Clans.',
+    'msg_clan_left': 'Du hast den Clan "{clan_name}" erfolgreich verlassen.',
+
+    # Sitzplatz API Rückmeldungen
+    'msg_seat_reserved_success': 'Sitzplatz erfolgreich reserviert!',
+    'msg_seat_reserved_error': 'Fehler bei der Reservierung.',
+    'msg_seat_network_error': 'Netzwerkfehler bei der Reservierung.',
+    'msg_seat_released_success': 'Sitzplatz erfolgreich freigegeben.',
+    'msg_seat_release_error': 'Die Freigabe konnte nicht durchgeführt werden. Bitte versuche es erneut.',
+    'msg_seat_one_per_user': 'Platzreservierung fehlgeschlagen: Jeder Teilnehmer kann nur einen Sitzplatz belegen.',
+    'msg_seat_not_registered': 'Du bist für diese Veranstaltung nicht angemeldet.',
+    'msg_seat_none_reserved': 'Du hast aktuell keinen Sitzplatz reserviert.',
+    'msg_seat_action_failed': 'Die Aktion konnte nicht ausgeführt werden. Bitte versuche es erneut.',
 }
 
 
-def _load_translations():
-    """Lädt alle Übersetzungen in EINER Query und cached sie."""
-    texts = cache.get(TRANSLATION_CACHE_KEY)
-    if texts is None:
-        texts = dict(SystemTranslation.objects.values_list('key', 'text'))
-        cache.set(TRANSLATION_CACHE_KEY, texts, CACHE_SECONDS)
+
+from configuration.cache import (
+    get_request_cache,
+    init_request_cache,
+    clear_request_cache,
+)
+
+
+
+def _load_translations(request=None):
+    """
+    Lädt alle Übersetzungen in EINER Query und cached sie (mit Graceful DB-Fallback).
+    Nutzt Request-Level Caching (Thread-Local oder request-Objekt), um wiederholte
+    Redis-Roundtrips und Deserialisierungen innerhalb desselben Requests zu vermeiden.
+    """
+    # 1. Prüfe Request-Objekt
+    if request is not None and hasattr(request, '_cached_translations') and request._cached_translations is not None:
+        return request._cached_translations
+
+    # 2. Prüfe Thread-Local Request-Cache
+    req_cache = get_request_cache()
+    if req_cache is not None and 'translations' in req_cache:
+        return req_cache['translations']
+
+    # 3. Cache / DB-Fallback via Redis
+    texts = safe_cache_get_or_set(
+        TRANSLATION_CACHE_KEY,
+        lambda: dict(SystemTranslation.objects.values_list('key', 'text')),
+        CACHE_SECONDS,
+    )
+
+    # 4. Speichere im Request-Cache für Folgeaufrufe desselben Requests
+    if request is not None:
+        request._cached_translations = texts
+    if req_cache is not None:
+        req_cache['translations'] = texts
+
     return texts
 
 
-def get_translation(key: str, default: str = None, **kwargs) -> str:
+def get_translation(key: str, default: str = None, request=None, **kwargs) -> str:
     """
     Gibt die Übersetzung für den angegebenen Schlüssel zurück.
-    Unterstützt optionale String-Formatierungs-Keywords (**kwargs).
+    Unterstützt optionale String-Formatierungs-Keywords (**kwargs) und Request-Caching.
     """
     if not key:
         return ""
 
     text = None
     try:
-        texts = _load_translations()
+        texts = _load_translations(request=request)
         if key in texts and texts[key]:
             text = texts[key]
     except Exception:
@@ -677,3 +760,4 @@ def get_translation(key: str, default: str = None, **kwargs) -> str:
             return text
 
     return text
+

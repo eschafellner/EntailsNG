@@ -34,6 +34,11 @@ class SeatingPlan(models.Model):
         verbose_name="Ist Vorlage",
         help_text="Kennzeichnet diesen Plan als wiederverwendbare Vorlage ohne feste Event-Zuweisung.",
     )
+    version = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Layout-Version",
+        help_text="Inkrementeller Versionszähler für Optimistic Concurrency Control im Editor.",
+    )
 
     class Meta:
         verbose_name = "Sitzplan / Halle"
@@ -175,6 +180,12 @@ class SeatingCell(models.Model):
                 condition=models.Q(x__gte=1) & models.Q(y__gte=1),
                 name='seating_cell_coords_positive',
                 violation_error_message="Sitzplatz-Koordinaten müssen positiv (>= 1) sein."
+            ),
+            models.UniqueConstraint(
+                fields=['registration'],
+                condition=models.Q(registration__isnull=False),
+                name='unique_seat_per_registration',
+                violation_error_message="Ein Teilnehmer kann maximal einen Sitzplatz gleichzeitig reservieren."
             ),
         ]
 

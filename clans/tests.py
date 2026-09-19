@@ -81,7 +81,7 @@ class ClanModuleTests(TestCase):
         from PIL import Image
         import io
         img_io = io.BytesIO()
-        img = Image.new('RGB', (200, 200), color='green')
+        img = Image.new('RGB', (500, 500), color='green')
         img.save(img_io, format='PNG')
         img_io.seek(0)
         valid_file = SimpleUploadedFile("valid_logo.png", img_io.getvalue(), content_type="image/png")
@@ -104,7 +104,7 @@ class ClanModuleTests(TestCase):
         from PIL import Image
         import io
         img_io = io.BytesIO()
-        img = Image.new('RGB', (500, 500), color='red')
+        img = Image.new('RGB', (600, 600), color='red')
         img.save(img_io, format='PNG')
         img_io.seek(0)
         oversized_file = SimpleUploadedFile("huge_logo.png", img_io.getvalue(), content_type="image/png")
@@ -340,6 +340,156 @@ class ClanModuleTests(TestCase):
         # Keine störenden Browserdialoge
         self.assertNotIn('confirm(', content)
         self.assertNotIn('alert(', content)
+
+    def test_clan_list_aggregation_counts(self):
+        """Testet, dass total_members und event_registered_members via ORM korrekt aggregiert werden."""
+        from datetime import timedelta
+        from django.utils import timezone
+        from events.models import Event, EventRegistration
+
+        active_event = Event.objects.create(
+            title="Active LAN 2026",
+            slug="active-lan-2026",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=10),
+            end_date=timezone.now() + timedelta(days=12),
+        )
+        past_event = Event.objects.create(
+            title="Past LAN 2025",
+            slug="past-lan-2025",
+            is_active=False,
+            start_date=timezone.now() - timedelta(days=365),
+            end_date=timezone.now() - timedelta(days=363),
+        )
+
+        user_d = User.objects.create_user(username='user_d', email='d@example.com', password='pw')
+        user_e = User.objects.create_user(username='user_e', email='e@example.com', password='pw')
+
+        clan1 = Clan.objects.create(name='Alpha Clan', password='pass')
+        ClanMembership.objects.create(user=self.user_a, clan=clan1, status=ClanMembership.Status.ACCEPTED)
+        ClanMembership.objects.create(user=self.user_b, clan=clan1, status=ClanMembership.Status.ACCEPTED)
+        ClanMembership.objects.create(user=self.user_c, clan=clan1, status=ClanMembership.Status.ACCEPTED)
+        # Pending membership darf NICHT gezählt werden
+        ClanMembership.objects.create(user=user_d, clan=clan1, status=ClanMembership.Status.PENDING)
+
+        clan2 = Clan.objects.create(name='Beta Clan', password='pass')
+        ClanMembership.objects.create(user=user_e, clan=clan2, status=ClanMembership.Status.ACCEPTED)
+
+        # Anmeldungen
+        # user_a (Clan 1): Bezahlt beim aktiven Event
+        EventRegistration.objects.create(
+            user=self.user_a, event=active_event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+        # user_b (Clan 1): Unbezahlt beim aktiven Event
+        EventRegistration.objects.create(
+            user=self.user_b, event=active_event, payment_status=EventRegistration.PaymentStatus.UNPAID
+        )
+        # user_c (Clan 1): Nur beim vergangenen Event angemeldet
+        EventRegistration.objects.create(
+            user=self.user_c, event=past_event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+        response = self.client.get(reverse('clan_list'))
+        self.assertEqual(response.status_code, 200)
+
+        clan_data = response.context['clan_data']
+        alpha_data = next(d for d in clan_data if d['clan'].id == clan1.id)
+        beta_data = next(d for d in clan_data if d['clan'].id == clan2.id)
+
+        # Alpha Clan: 3 angenommene Mitglieder (ohne den PENDING-User), 2 für aktives Event angemeldet
+        self.assertEqual(alpha_data['total_members'], 3)
+        self.assertEqual(alpha_data['event_registered_members'], 2)
+
+        # Beta Clan: 1 Mitglied, 0 für aktives Event
+        self.assertEqual(beta_data['total_members'], 1)
+        self.assertEqual(beta_data['event_registered_members'], 0)
+
+    def test_clan_list_excludes_cancelled_registrations(self):
+        """Stornierte Anmeldungen (CANCELLED) dürfen nicht als aktive Eventteilnehmer gezählt werden."""
+        from datetime import timedelta
+        from django.utils import timezone
+        from events.models import Event, EventRegistration
+
+        active_event = Event.objects.create(
+            title="Summer LAN 2026",
+            slug="summer-lan-2026",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=20),
+            end_date=timezone.now() + timedelta(days=22),
+        )
+
+        clan = Clan.objects.create(name='Delta Clan', password='pass')
+        ClanMembership.objects.create(user=self.user_a, clan=clan, status=ClanMembership.Status.ACCEPTED)
+        ClanMembership.objects.create(user=self.user_b, clan=clan, status=ClanMembership.Status.ACCEPTED)
+
+        # user_a ist aktiv angemeldet
+        EventRegistration.objects.create(
+            user=self.user_a, event=active_event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+        # user_b hat storniert
+        EventRegistration.objects.create(
+            user=self.user_b,
+            event=active_event,
+            payment_status=EventRegistration.PaymentStatus.CANCELLED,
+            cancelled_at=timezone.now(),
+        )
+
+        response = self.client.get(reverse('clan_list'))
+        self.assertEqual(response.status_code, 200)
+
+        clan_data = response.context['clan_data']
+        delta_data = next(d for d in clan_data if d['clan'].id == clan.id)
+
+        self.assertEqual(delta_data['total_members'], 2)
+        # Nur 1 aktives Mitglied für das Event (user_b ist storniert und darf nicht zählen)
+        self.assertEqual(delta_data['event_registered_members'], 1)
+
+    def test_clan_list_pagination(self):
+        """Paginierung teilt Clans sauber in Seiten auf (24 pro Seite) und fängt ungültige Parameter ab."""
+        for i in range(1, 31):
+            Clan.objects.create(name=f"Numbered Clan {i:02d}", password="pass")
+
+        # Seite 1 (24 Elemente)
+        res1 = self.client.get(reverse('clan_list'))
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(len(res1.context['clan_data']), 24)
+        page_obj = res1.context['page_obj']
+        self.assertTrue(page_obj.has_next())
+        self.assertEqual(page_obj.paginator.num_pages, 2)
+
+        # Seite 2 (restliche 6 Elemente)
+        res2 = self.client.get(reverse('clan_list'), {'page': 2})
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(len(res2.context['clan_data']), 6)
+        page_obj2 = res2.context['page_obj']
+        self.assertTrue(page_obj2.has_previous())
+        self.assertFalse(page_obj2.has_next())
+
+        # Ungültige Seite -> Fallback auf letzte Seite
+        res_invalid = self.client.get(reverse('clan_list'), {'page': 999})
+        self.assertEqual(res_invalid.status_code, 200)
+        self.assertEqual(res_invalid.context['page_obj'].number, 2)
+
+    def test_clan_list_query_efficiency_constant_queries(self):
+        """
+        Verifiziert, dass die Anzahl der Queries bei vielen Clans und Mitgliedern
+        konstant bleibt (keine N+1 Schleifen über Mitglieder oder historische Registrierungen).
+        """
+        for i in range(1, 25):
+            c = Clan.objects.create(name=f"Clan QueryTest {i:02d}", password="pass")
+            u = User.objects.create_user(username=f"query_user_{i}", email=f"q{i}@example.com", password="pw")
+            ClanMembership.objects.create(user=u, clan=c, status=ClanMembership.Status.ACCEPTED)
+
+        # Abruf messen: Die Anzahl der Queries muss unabhängig von der Clananzahl auf der Seite minimal sein
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(reverse('clan_list'))
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.context['clan_data']), 24)
+
+        self.assertLessEqual(len(ctx), 8)
 
 
 

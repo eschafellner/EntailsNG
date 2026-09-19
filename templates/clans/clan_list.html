@@ -80,6 +80,25 @@
     {% endfor %}
   </div>
 
+  {% if page_obj.has_other_pages %}
+    <div style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}" style="padding: 8px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; color: var(--ink); font-weight: bold;">
+          ← {% t "pagination_previous" "Zurück" %}
+        </a>
+      {% endif %}
+
+      <span style="color: var(--muted); padding: 8px 12px;">
+        {% t "pagination_page" "Seite" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+      </span>
+
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" style="padding: 8px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; color: var(--ink); font-weight: bold;">
+          {% t "pagination_next" "Weiter" %} →
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
 
 </div>
 {% endblock %}

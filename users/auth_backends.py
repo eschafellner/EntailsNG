@@ -1,9 +1,12 @@
 import ipaddress
+import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.core.cache import cache
 from django.db.models import Q
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -60,8 +63,15 @@ _get_client_ip = get_client_ip
 
 def _is_ip_rate_limited(ip_address):
     cache_key = f"ip_failed_logins_{ip_address}"
-    attempts = cache.get(cache_key, 0)
-    return attempts >= 25
+    try:
+        attempts = cache.get(cache_key, 0)
+        return (attempts or 0) >= 25
+    except Exception as e:
+        logger.warning(
+            "IP-Rate-Limit Cache-Prüfung fehlgeschlagen für IP '%s': %s. Fail-Open aktiv.",
+            ip_address, e
+        )
+        return False
 
 
 def _record_ip_failed_attempt(ip_address):
@@ -72,7 +82,16 @@ def _record_ip_failed_attempt(ip_address):
             return 1
         return cache.incr(cache_key)
     except (ValueError, TypeError):
-        cache.set(cache_key, 1, timeout=300)
+        try:
+            cache.set(cache_key, 1, timeout=300)
+            return 1
+        except Exception:
+            return 1
+    except Exception as e:
+        logger.warning(
+            "IP-Rate-Limit Inkrementierung fehlgeschlagen für IP '%s': %s",
+            ip_address, e
+        )
         return 1
 
 
@@ -119,6 +138,13 @@ class EmailOrUsernameBackend(ModelBackend):
 
         # 5. Passwort verifizieren
         if user.check_password(password):
+            # Vor erfolgreichem Login prüfen, ob zwischenzeitlich durch parallele Requests gesperrt wurde
+            user.refresh_from_db(fields=['locked_until', 'failed_login_attempts'])
+            if user.is_locked():
+                if request:
+                    setattr(request, 'account_locked', True)
+                    setattr(request, 'locked_user', user)
+                return None
             user.reset_lockout()
             return user
         else:

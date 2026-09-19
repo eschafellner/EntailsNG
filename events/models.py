@@ -8,7 +8,14 @@ from django.db import models, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
-from configuration.cache import invalidate_event_capacity_cache
+from configuration.cache import (
+    invalidate_event_capacity_cache,
+    invalidate_active_event_cache,
+    get_request_cache,
+    safe_cache_get,
+    safe_cache_set,
+    safe_cache_delete,
+)
 from emails.services import send_system_email
 
 logger = logging.getLogger(__name__)
@@ -25,8 +32,42 @@ def generate_short_code(length=8):
 
 class EventManager(models.Manager):
     def get_active(self):
-        """Liefert die aktuell aktive Hauptveranstaltung oder None."""
-        return self.filter(is_active=True).first()
+        """
+        Liefert die aktuell aktive Hauptveranstaltung oder None.
+        Nutzt zweistufiges Caching:
+        1. Request-Level: Wiederverwendung im selben HTTP-Request (0 redundante SQL-Queries).
+        2. Shared Cache: Redis-Zwischenspeicherung mit Graceful Database Fallback und
+           automatischer Invalidierung bei Event-Änderungen.
+        """
+        # 1. Request-Level Cache prüfen
+        req_cache = get_request_cache()
+        if req_cache is not None and 'active_event' in req_cache:
+            return req_cache['active_event']
+
+        # 2. Shared Cache (Redis) prüfen
+        cached_id = safe_cache_get('active_main_event_id')
+        event = None
+
+        if cached_id is not None:
+            if cached_id == 0:
+                event = None
+            else:
+                event = self.filter(id=cached_id, is_active=True).first()
+                if not event:
+                    safe_cache_delete('active_main_event_id')
+                    cached_id = None
+
+        if cached_id is None:
+            event = self.filter(is_active=True).first()
+            new_cached_id = event.id if event else 0
+            safe_cache_set('active_main_event_id', new_cached_id, timeout=300)
+
+        # 3. Im Request-Cache für Folgeaufrufe desselben Requests ablegen
+        if req_cache is not None:
+            req_cache['active_event'] = event
+
+        return event
+
 
 
 # 1. ZUERST DAS EVENT-MODELL DEFINIEREN:
@@ -205,6 +246,13 @@ class Event(models.Model):
                     active_events = active_events.exclude(pk=self.pk)
                 active_events.update(is_active=False)
             super().save(*args, **kwargs)
+            invalidate_active_event_cache()
+
+    def delete(self, *args, **kwargs):
+        res = super().delete(*args, **kwargs)
+        invalidate_active_event_cache()
+        return res
+
 
 
 

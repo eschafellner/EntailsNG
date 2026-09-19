@@ -70,6 +70,7 @@
     const rows = {{ plan.rows }};
     const initialCells = {{ cells_json|safe }};
     const csrfToken = "{{ csrf_token }}";
+    let planVersion = {{ plan.version|default:1 }};
 
     let currentTool = 'SEAT';
     let isMouseDown = false;
@@ -249,11 +250,14 @@
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({ cells: cellsArray })
+            body: JSON.stringify({ cells: cellsArray, version: planVersion })
         })
         .then(res => res.json())
         .then(data => {
             if (data.status === 'success') {
+                if (data.version) {
+                    planVersion = data.version;
+                }
                 showToast(data.message, 'success');
             } else {
                 showToast(data.message || 'Fehler beim Speichern', 'error');

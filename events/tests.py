@@ -1553,6 +1553,79 @@ class EventRegistrationAdminPaymentEmailTests(TestCase):
         self.assertIsNotNone(self.reg.cancelled_at)
 
 
+class ActiveEventCachingTests(TestCase):
+    """
+    Tests für das Caching von Event.objects.get_active() (Punkt 2 der Performance-Optimierung).
+    Stellt sicher, dass mehrfache get_active()-Aufrufe im selben Request keine redundanten
+    SQL-Abfragen ausführen und Änderungen am Event den Cache sauber invalidieren.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        from configuration.cache import clear_request_cache
+        cache.clear()
+        clear_request_cache()
+
+        self.event = Event.objects.create(
+            title="Aktives Sommer-Event",
+            slug="aktives-sommer-event",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+
+    def tearDown(self):
+        from configuration.cache import clear_request_cache
+        clear_request_cache()
+
+    def test_repeated_get_active_in_same_request_executes_only_one_query(self):
+        from configuration.cache import init_request_cache
+        init_request_cache()
+
+        # Beim ersten Aufruf: 1 SQL-Query (bzw. Cache-Fill)
+        # Bei den Folgeaufrufen im selben Request: 0 weitere SQL-Queries!
+        with self.assertNumQueries(1):
+            event1 = Event.objects.get_active()
+            event2 = Event.objects.get_active()
+            event3 = Event.objects.get_active()
+
+        self.assertEqual(event1.id, self.event.id)
+        self.assertEqual(event2.id, self.event.id)
+        self.assertEqual(event3.id, self.event.id)
+
+    def test_save_event_invalidates_active_event_cache(self):
+        from configuration.cache import init_request_cache
+        init_request_cache()
+
+        # 1. Cache befüllen
+        active = Event.objects.get_active()
+        self.assertEqual(active.id, self.event.id)
+
+        # 2. Event deaktivieren
+        self.event.is_active = False
+        self.event.save()
+
+        # 3. get_active() muss nun None liefern (Cache wurde invalidiert)
+        active_after = Event.objects.get_active()
+        self.assertIsNone(active_after)
+
+    def test_delete_event_invalidates_active_event_cache(self):
+        from configuration.cache import init_request_cache
+        init_request_cache()
+
+        # 1. Cache befüllen
+        active = Event.objects.get_active()
+        self.assertEqual(active.id, self.event.id)
+
+        # 2. Event löschen
+        self.event.delete()
+
+        # 3. get_active() muss nun None liefern
+        active_after = Event.objects.get_active()
+        self.assertIsNone(active_after)
+
+
+
 
 
 

@@ -423,14 +423,21 @@ def scan_qr_api(request):
     """
     # Rate-Limiting gegen automatisiertes Durchprobieren / Flooding
     rate_key = f"rate_limit_scan_qr_{request.user.id}"
+    attempts = 1
     try:
         if cache.add(rate_key, 1, 60):
             attempts = 1
         else:
             attempts = cache.incr(rate_key)
-    except Exception:
-        attempts = cache.get(rate_key, 0) + 1
-        cache.set(rate_key, attempts, 60)
+    except (ValueError, TypeError):
+        try:
+            cache.set(rate_key, 1, 60)
+        except Exception:
+            pass
+        attempts = 1
+    except Exception as e:
+        logger.warning("QR-Scan Rate-Limiting Cache-Fehler für User %s: %s. Fail-Open aktiv.", request.user.id, e)
+        attempts = 1
 
     if attempts > 60:
         return JsonResponse(

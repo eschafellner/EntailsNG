@@ -13,8 +13,34 @@
         <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 32px;">
           {% t "profile_hello" "Hallo" %}, {{ request.user.username }}!
         </h1>
-        <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
-          {% t "profile_role_label" "Rolle" %}: <strong style="color: var(--ink);">{{ request.user.get_role_display }}</strong> | {% t "profile_member_since_label" "Mitglied seit" %}: {{ request.user.date_joined|date:"d.m.Y" }}
+        <p style="margin: 6px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+          {% if request.user.role != 'USER' %}
+            <span style="background: rgba(248, 171, 45, 0.15); color: var(--signal-deep, #d97706); padding: 2px 8px; border-radius: 4px; font-weight: bold; border: 1px solid rgba(248, 171, 45, 0.3); font-size: 12px;">
+              🛡️ {{ request.user.get_role_display }}
+            </span>
+            <span style="color: var(--line);">|</span>
+          {% endif %}
+
+          {% if clan_membership %}
+            <span>
+              {% t "profile_clan_header" "Clan" %}:
+              <a href="{% url 'clan_detail' slug=clan_membership.clan.slug %}" style="color: #0284c7; font-weight: bold; text-decoration: none;">
+                🛡️ {{ clan_membership.clan.name }}
+              </a>
+              <span style="font-size: 11px; color: var(--muted);">({{ clan_membership.get_role_display }})</span>
+            </span>
+          {% else %}
+            <span>
+              {% t "profile_clan_header" "Clan" %}:
+              <span style="color: var(--muted);">{% t "profile_no_clan" "Kein Clan" %}</span>
+              <a href="{% url 'clan_list' %}" style="color: #0284c7; text-decoration: underline; font-size: 11px; margin-left: 2px;">
+                {% t "profile_clan_find" "(Clan suchen / beitreten →)" %}
+              </a>
+            </span>
+          {% endif %}
+
+          <span style="color: var(--line);">|</span>
+          <span>{% t "profile_member_since_label" "Mitglied seit" %}: {{ request.user.date_joined|date:"d.m.Y" }}</span>
         </p>
       </div>
       <div>

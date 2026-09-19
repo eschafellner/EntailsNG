@@ -1,10 +1,13 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import transaction
+from django.db.models import Count, IntegerField, Q, Value
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from events.models import Event
+from configuration.translations import get_translation
+from events.models import Event, EventRegistration
 from seating.services import get_user_seat_map
 from .forms import ClanForm, ClanJoinPasswordForm
 from .models import Clan, ClanMembership
@@ -22,30 +25,45 @@ def clan_list_view(request):
         else None
     )
 
-    clans = Clan.objects.prefetch_related('memberships__user__registrations').all()
+    annotations = {
+        'total_members': Count(
+            'memberships',
+            filter=Q(memberships__status=ClanMembership.Status.ACCEPTED),
+            distinct=True,
+        ),
+    }
 
-    clan_data = []
-    for clan in clans:
-        accepted_members = [
-            m for m in clan.memberships.all()
-            if m.status == ClanMembership.Status.ACCEPTED
-        ]
-        total_members = len(accepted_members)
+    if active_event:
+        annotations['event_registered_members'] = Count(
+            'memberships__user__registrations',
+            filter=Q(
+                memberships__status=ClanMembership.Status.ACCEPTED,
+                memberships__user__registrations__event=active_event,
+                memberships__user__registrations__cancelled_at__isnull=True,
+            ) & ~Q(memberships__user__registrations__payment_status=EventRegistration.PaymentStatus.CANCELLED),
+            distinct=True,
+        )
+    else:
+        annotations['event_registered_members'] = Value(0, output_field=IntegerField())
 
-        event_registered_members = 0
-        if active_event:
-            for m in accepted_members:
-                if any(r.event_id == active_event.id for r in m.user.registrations.all()):
-                    event_registered_members += 1
+    clans_qs = Clan.objects.annotate(**annotations).order_by('name')
 
-        clan_data.append({
+    paginator = Paginator(clans_qs, 24)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    clan_data = [
+        {
             'clan': clan,
-            'total_members': total_members,
-            'event_registered_members': event_registered_members,
-        })
+            'total_members': clan.total_members,
+            'event_registered_members': clan.event_registered_members,
+        }
+        for clan in page_obj
+    ]
 
     context = {
         'clan_data': clan_data,
+        'page_obj': page_obj,
         'active_event': active_event,
         'user_membership': user_membership,
     }
@@ -148,14 +166,26 @@ def clan_edit_view(request, slug):
     """Ermöglicht Clan-Admins das Bearbeiten von Clanname, Website, Logo und Passwort."""
     clan = get_object_or_404(Clan, slug=slug)
     if not clan.is_admin(request.user):
-        messages.error(request, 'Nur Clan-Admins können den Clan bearbeiten.')
+        messages.error(
+            request,
+            get_translation(
+                'msg_clan_admin_only_edit',
+                'Nur Clan-Admins können den Clan bearbeiten.',
+            ),
+        )
         return redirect('clan_detail', slug=clan.slug)
 
     if request.method == 'POST':
         form = ClanForm(request.POST, request.FILES, instance=clan)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Clan-Daten wurden erfolgreich aktualisiert.')
+            messages.success(
+                request,
+                get_translation(
+                    'msg_clan_updated',
+                    'Clan-Daten wurden erfolgreich aktualisiert.',
+                ),
+            )
             return redirect('clan_detail', slug=clan.slug)
     else:
         form = ClanForm(instance=clan)
@@ -177,7 +207,11 @@ def clan_join_password_view(request, slug):
     if existing_membership:
         messages.error(
             request,
-            f'Du bist bereits Mitglied im Clan "{existing_membership.clan.name}".',
+            get_translation(
+                'msg_clan_already_member',
+                'Du bist bereits Mitglied im Clan "{clan_name}".',
+                clan_name=existing_membership.clan.name,
+            ),
         )
         return redirect('clan_detail', slug=clan.slug)
 
@@ -194,9 +228,22 @@ def clan_join_password_view(request, slug):
                     role=ClanMembership.Role.MEMBER,
                     status=ClanMembership.Status.ACCEPTED,
                 )
-            messages.success(request, f'Du bist dem Clan "{clan.name}" beigetreten!')
+            messages.success(
+                request,
+                get_translation(
+                    'msg_clan_joined',
+                    'Du bist dem Clan "{clan_name}" beigetreten!',
+                    clan_name=clan.name,
+                ),
+            )
         else:
-            messages.error(request, 'Das eingegebene Clan-Passwort ist falsch.')
+            messages.error(
+                request,
+                get_translation(
+                    'msg_clan_password_incorrect',
+                    'Das eingegebene Clan-Passwort ist falsch.',
+                ),
+            )
 
     return redirect('clan_detail', slug=clan.slug)
 
@@ -244,7 +291,10 @@ def clan_manage_request_view(request, slug, membership_id):
     """Verarbeitet Beitrittsanfragen (Akzeptieren oder Ablehnen) durch einen Clan-Admin."""
     clan = get_object_or_404(Clan, slug=slug)
     if not clan.is_admin(request.user):
-        messages.error(request, 'Keine Berechtigung.')
+        messages.error(
+            request,
+            get_translation('msg_clan_no_permission', 'Keine Berechtigung.'),
+        )
         return redirect('clan_detail', slug=clan.slug)
 
     membership = get_object_or_404(ClanMembership, pk=membership_id, clan=clan)
@@ -270,7 +320,14 @@ def clan_manage_request_view(request, slug, membership_id):
     elif action == 'reject':
         username = membership.user.username
         membership.delete()
-        messages.info(request, f'Beitrittsanfrage von {username} abgelehnt.')
+        messages.info(
+            request,
+            get_translation(
+                'msg_clan_request_rejected',
+                'Beitrittsanfrage von {username} abgelehnt.',
+                username=username,
+            ),
+        )
 
     return redirect('clan_detail', slug=clan.slug)
 
@@ -281,7 +338,10 @@ def clan_manage_member_view(request, slug, membership_id):
     """Ermöglicht Clan-Admins das Befördern von Mitgliedern oder Entfernen (Kick)."""
     clan = get_object_or_404(Clan, slug=slug)
     if not clan.is_admin(request.user):
-        messages.error(request, 'Keine Berechtigung.')
+        messages.error(
+            request,
+            get_translation('msg_clan_no_permission', 'Keine Berechtigung.'),
+        )
         return redirect('clan_detail', slug=clan.slug)
 
     membership = get_object_or_404(ClanMembership, pk=membership_id, clan=clan)
@@ -317,7 +377,14 @@ def clan_manage_member_view(request, slug, membership_id):
                     )
                     return redirect('clan_list')
 
-            messages.info(request, f'{username} wurde aus dem Clan entfernt.')
+            messages.info(
+                request,
+                get_translation(
+                    'msg_clan_member_removed',
+                    '{username} wurde aus dem Clan entfernt.',
+                    username=username,
+                ),
+            )
 
     return redirect('clan_detail', slug=clan.slug)
 
@@ -337,7 +404,13 @@ def clan_leave_view(request, slug):
     ).first()
 
     if not membership:
-        messages.error(request, 'Du bist kein aktives Mitglied dieses Clans.')
+        messages.error(
+            request,
+            get_translation(
+                'msg_clan_not_member',
+                'Du bist kein aktives Mitglied dieses Clans.',
+            ),
+        )
         return redirect('clan_detail', slug=clan.slug)
 
     was_admin = (membership.role == ClanMembership.Role.ADMIN)
@@ -376,9 +449,23 @@ def clan_leave_view(request, slug):
                         f'Du hast den Clan verlassen. {next_member.user.username} wurde als neuer Clan-Admin bestimmt.',
                     )
             else:
-                messages.info(request, f'Du hast den Clan "{clan_name}" erfolgreich verlassen.')
+                messages.info(
+                    request,
+                    get_translation(
+                        'msg_clan_left',
+                        'Du hast den Clan "{clan_name}" erfolgreich verlassen.',
+                        clan_name=clan_name,
+                    ),
+                )
         else:
-            messages.info(request, f'Du hast den Clan "{clan_name}" erfolgreich verlassen.')
+            messages.info(
+                request,
+                get_translation(
+                    'msg_clan_left',
+                    'Du hast den Clan "{clan_name}" erfolgreich verlassen.',
+                    clan_name=clan_name,
+                ),
+            )
 
     return redirect('clan_list')
 

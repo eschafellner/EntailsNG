@@ -6,7 +6,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from .dns_checker import check_domain_dns_health
-from .models import EmailTemplate, GeneralEmailSettings
+from .models import EmailTemplate, GeneralEmailSettings, OutgoingEmail
 from .services import send_test_email
 
 
@@ -273,3 +273,74 @@ class EmailTemplateAdmin(admin.ModelAdmin):
         ),
     )
     readonly_fields = ('key', 'placeholder_info')
+
+
+@admin.action(description="Ausgewählte E-Mails erneut zur Warteschlange hinzufügen")
+def retry_outgoing_emails(modeladmin, request, queryset):
+    count = 0
+    for email_obj in queryset:
+        email_obj.reset_for_retry()
+        count += 1
+    messages.success(request, f"{count} E-Mail(s) wurden für erneuten Versand vorgemerkt.")
+
+
+@admin.action(description="Ausgewählte E-Mails jetzt sofort versenden")
+def process_outgoing_emails_now(modeladmin, request, queryset):
+    from .services import process_email_queue
+    for email_obj in queryset:
+        email_obj.reset_for_retry()
+    sent, failed = process_email_queue(limit=len(queryset))
+    messages.info(request, f"Verarbeitung abgeschlossen: {sent} gesendet, {failed} fehlgeschlagen.")
+
+
+@admin.register(OutgoingEmail)
+class OutgoingEmailAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'status_badge', 'template_key', 'recipient_email',
+        'subject', 'attempts_display', 'scheduled_at', 'sent_at', 'created_at'
+    )
+    list_filter = ('status', 'template_key', 'created_at')
+    search_fields = ('recipient_email', 'subject', 'last_error', 'template_key')
+    readonly_fields = (
+        'created_at', 'sent_at', 'status', 'attempts',
+        'last_error', 'body_text', 'body_html', 'scheduled_at'
+    )
+    actions = [retry_outgoing_emails, process_outgoing_emails_now]
+
+    fieldsets = (
+        ('Status & Metadaten', {
+            'fields': (
+                'status', 'template_key', 'recipient_email',
+                'attempts', 'max_attempts', 'scheduled_at', 'sent_at', 'created_at'
+            )
+        }),
+        ('Fehlerprotokoll', {
+            'fields': ('last_error',),
+            'classes': ('collapse',),
+        }),
+        ('Inhalt', {
+            'fields': ('subject', 'body_text', 'body_html'),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.display(description="Status")
+    def status_badge(self, obj):
+        colors = {
+            OutgoingEmail.Status.PENDING: ('#92400e', '#fef3c7'),      # amber
+            OutgoingEmail.Status.PROCESSING: ('#1e40af', '#dbeafe'),   # blue
+            OutgoingEmail.Status.SENT: ('#166534', '#dcfce7'),         # green
+            OutgoingEmail.Status.FAILED: ('#991b1b', '#fee2e2'),       # red
+        }
+        color, bg = colors.get(obj.status, ('#374151', '#f3f4f6'))
+        return format_html(
+            '<span style="display:inline-block;padding:3px 8px;border-radius:4px;'
+            'font-size:12px;font-weight:600;color:{};background:{};">{}</span>',
+            color, bg, obj.get_status_display()
+        )
+
+    @admin.display(description="Versuche")
+    def attempts_display(self, obj):
+        return f"{obj.attempts} / {obj.max_attempts}"

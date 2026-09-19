@@ -32,11 +32,21 @@
   let targetSeatY = null;
 
   let config = {};
+  let isPanZoomInitialized = false;
+  let panZoomAbortController = null;
+  let viewerAbortController = null;
 
   function initSeatingViewer(cfg) {
     config = cfg || {};
     const eventId = config.eventId;
     if (!eventId) return;
+
+    if (viewerAbortController) {
+      viewerAbortController.abort();
+    }
+    viewerAbortController = new AbortController();
+    const viewerSignal = viewerAbortController.signal;
+    isPanZoomInitialized = false;
 
     loadSeatingData();
 
@@ -45,14 +55,14 @@
       if (window.lastSeatingData && window.innerWidth < 768 && window.fitToViewport) {
         window.fitToViewport(window.lastSeatingData);
       }
-    });
+    }, { signal: viewerSignal });
 
     // Escape-Taste schließt Reservierungsmodal
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeReserveModal();
       }
-    });
+    }, { signal: viewerSignal });
 
     const btnConfirm = document.getElementById('btn-confirm-reserve');
     if (btnConfirm) {
@@ -72,7 +82,9 @@
         const statusEl = document.getElementById('seating-status');
         if (statusEl) statusEl.style.display = 'none';
         renderGrid(data);
-        initPanZoom(data);
+        if (!isPanZoomInitialized) {
+          initPanZoom(data);
+        }
       })
       .catch(err => {
         const statusEl = document.getElementById('seating-status');
@@ -250,6 +262,46 @@
   }
   window.closeReserveModal = closeReserveModal;
 
+  function showSeatingToast(message, isError = true) {
+    let toast = document.getElementById('seating-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'seating-toast';
+      toast.style.cssText = `
+        position: fixed;
+        z-index: 999999;
+        right: 24px;
+        bottom: 24px;
+        padding: 14px 20px;
+        border-radius: 10px;
+        color: white;
+        box-shadow: 0 16px 42px rgba(0,0,0,0.35);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        max-width: 400px;
+      `;
+      document.body.appendChild(toast);
+    }
+    toast.style.background = isError ? '#991b1b' : '#166534';
+    toast.style.border = isError ? '1px solid #ef4444' : '1px solid #22c55e';
+    toast.innerHTML = (isError ? '⚠️ ' : '✓ ') + message;
+    toast.style.display = 'flex';
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      setTimeout(() => { toast.style.display = 'none'; }, 300);
+    }, 4500);
+  }
+
   function confirmReservation() {
     if (targetSeatX === null || targetSeatY === null) return;
 
@@ -266,13 +318,14 @@
       closeReserveModal();
       if (data.status === 'success') {
         loadSeatingData();
+        showSeatingToast(config.msgSuccess || 'Sitzplatz erfolgreich reserviert!', false);
       } else {
-        alert(data.message || 'Fehler bei der Reservierung.');
+        showSeatingToast(data.message || config.msgError || 'Fehler bei der Reservierung.', true);
       }
     })
     .catch(err => {
       closeReserveModal();
-      alert('Netzwerkfehler bei der Reservierung.');
+      showSeatingToast(config.msgNetworkError || 'Netzwerkfehler bei der Reservierung.', true);
     });
   }
 
@@ -283,6 +336,12 @@
     const zoomBadge = document.getElementById('zoom-level-badge');
     if (!viewport || !canvas) return;
 
+    if (panZoomAbortController) {
+      panZoomAbortController.abort();
+    }
+    panZoomAbortController = new AbortController();
+    const signal = panZoomAbortController.signal;
+
     function updateTransform() {
       canvas.style.transform = `translate(${pointX}px, ${pointY}px) scale(${currentScale})`;
       if (zoomBadge) {
@@ -290,16 +349,18 @@
       }
     }
 
-    window.fitToViewport = function(planData = data) {
+    window.fitToViewport = function(planData) {
+      const currentData = planData || window.lastSeatingData || data;
+      if (!currentData) return;
       const viewportWidth = viewport.clientWidth;
       const viewportHeight = viewport.clientHeight;
 
-      let minX = 0, minY = 0, maxX = planData.columns - 1, maxY = planData.rows - 1;
-      if (planData.cells && planData.cells.length > 0) {
-        minX = Math.min(...planData.cells.map(c => c.x));
-        minY = Math.min(...planData.cells.map(c => c.y));
-        maxX = Math.max(...planData.cells.map(c => c.x), data.columns - 1);
-        maxY = Math.max(...planData.cells.map(c => c.y), data.rows - 1);
+      let minX = 0, minY = 0, maxX = currentData.columns - 1, maxY = currentData.rows - 1;
+      if (currentData.cells && currentData.cells.length > 0) {
+        minX = Math.min(...currentData.cells.map(c => c.x));
+        minY = Math.min(...currentData.cells.map(c => c.y));
+        maxX = Math.max(...currentData.cells.map(c => c.x), currentData.columns - 1);
+        maxY = Math.max(...currentData.cells.map(c => c.y), currentData.rows - 1);
       }
 
       const totalCols = (maxX - minX) + 1;
@@ -319,17 +380,19 @@
       updateTransform();
     };
 
-    function initialSetup(planData = data) {
+    function initialSetup(planData) {
+      const currentData = planData || window.lastSeatingData || data;
+      if (!currentData) return;
       const isDesktop = window.innerWidth >= 768;
       const viewportWidth = viewport.clientWidth;
       const viewportHeight = viewport.clientHeight;
 
-      let minX = 0, minY = 0, maxX = planData.columns - 1, maxY = planData.rows - 1;
-      if (planData.cells && planData.cells.length > 0) {
-        minX = Math.min(...planData.cells.map(c => c.x));
-        minY = Math.min(...planData.cells.map(c => c.y));
-        maxX = Math.max(...planData.cells.map(c => c.x), data.columns - 1);
-        maxY = Math.max(...planData.cells.map(c => c.y), data.rows - 1);
+      let minX = 0, minY = 0, maxX = currentData.columns - 1, maxY = currentData.rows - 1;
+      if (currentData.cells && currentData.cells.length > 0) {
+        minX = Math.min(...currentData.cells.map(c => c.x));
+        minY = Math.min(...currentData.cells.map(c => c.y));
+        maxX = Math.max(...currentData.cells.map(c => c.x), currentData.columns - 1);
+        maxY = Math.max(...currentData.cells.map(c => c.y), currentData.rows - 1);
       }
 
       const totalCols = (maxX - minX) + 1;
@@ -342,7 +405,7 @@
         currentScale = Math.max(1.0, Math.min(fitScale, 1.3));
 
         const currentUsername = config.username || '';
-        const ownCell = currentUsername && planData.cells ? planData.cells.find(c => c.occupied_by === currentUsername) : null;
+        const ownCell = currentUsername && currentData.cells ? currentData.cells.find(c => c.occupied_by === currentUsername) : null;
 
         if (ownCell) {
           const seatPosX = ((ownCell.x - minX) * 41) + 24 + 18;
@@ -355,11 +418,12 @@
         }
         updateTransform();
       } else {
-        window.fitToViewport(planData);
+        window.fitToViewport(currentData);
       }
     }
 
-    initialSetup();
+    initialSetup(data);
+    isPanZoomInitialized = true;
 
     // Tastatur-Shortcuts für Zoom (+/- und 0 für Reset)
     document.addEventListener('keydown', function(e) {
@@ -373,7 +437,7 @@
       } else if (e.key === '0' && window.fitToViewport) {
         window.fitToViewport();
       }
-    });
+    }, { signal });
 
     // --- MAUS EVENTS ---
     viewport.addEventListener('mousedown', function(e) {
@@ -381,12 +445,12 @@
       startY = e.clientY - pointY;
       isPanning = true;
       viewport.style.cursor = 'grabbing';
-    });
+    }, { signal });
 
     window.addEventListener('mouseup', function() {
       isPanning = false;
       viewport.style.cursor = 'grab';
-    });
+    }, { signal });
 
     window.addEventListener('mousemove', function(e) {
       if (!isPanning) return;
@@ -394,7 +458,7 @@
       pointX = e.clientX - startX;
       pointY = e.clientY - startY;
       updateTransform();
-    });
+    }, { signal });
 
     viewport.addEventListener('wheel', function(e) {
       e.preventDefault();
@@ -408,7 +472,7 @@
       currentScale = newScale;
 
       updateTransform();
-    }, { passive: false });
+    }, { passive: false, signal });
 
     // --- TOUCH EVENTS (FOR MOBILES) ---
     function getTouchDistance(touches) {
@@ -428,7 +492,7 @@
         initialTouchDistance = getTouchDistance(e.touches);
         initialScale = currentScale;
       }
-    }, { passive: true });
+    }, { passive: true, signal });
 
     viewport.addEventListener('touchmove', function(e) {
       if (isPanning && e.touches.length === 1) {
@@ -443,12 +507,12 @@
         currentScale = Math.min(Math.max(0.15, initialScale * scaleFactor), 3);
         updateTransform();
       }
-    }, { passive: false });
+    }, { passive: false, signal });
 
     viewport.addEventListener('touchend', function(e) {
       if (e.touches.length < 2) initialTouchDistance = null;
       if (e.touches.length === 0) isPanning = false;
-    });
+    }, { signal });
 
     // Controls
     const btnIn = document.getElementById('btn-zoom-in');
@@ -474,5 +538,7 @@
   });
 
   window.initSeatingViewer = initSeatingViewer;
+  window.initPanZoom = initPanZoom;
+  window.isPanZoomInitialized = function() { return isPanZoomInitialized; };
 
 })();

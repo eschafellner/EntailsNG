@@ -5,7 +5,7 @@ from PIL import Image
 from .models import Clan
 
 MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024  # Maximal 2 Megabyte
-MAX_DIMENSION = 300
+MAX_DIMENSION = 500
 
 
 def validate_clan_logo(file):
@@ -13,7 +13,7 @@ def validate_clan_logo(file):
     Validiert hochgeladene Clan-Logos sicher und robust:
     1. Dateiendung (.jpg, .jpeg, .png, .webp)
     2. Maximale Dateigröße (2 MB) zum Schutz vor DoS
-    3. Echte Bild-Header & Dimensionen (max. 300x300 px) via Pillow
+    3. Echte Bild-Header & Dimensionen (max. 500x500 px) via Pillow
     """
     ext = os.path.splitext(file.name)[1].lower()
     valid_extensions = ['.jpg', '.jpeg', '.png', '.webp']

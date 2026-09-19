@@ -1,6 +1,6 @@
 # seating/services.py
 from django.core.cache import cache
-from configuration.cache import invalidate_event_capacity_cache
+from configuration.cache import invalidate_event_capacity_cache, safe_cache_get_or_set
 from .models import SeatingCell, SeatingPlan
 
 CAPACITY_CACHE_KEY_PREFIX = 'event_capacity_stats_'
@@ -11,14 +11,15 @@ def get_event_capacity_stats(upcoming_event):
     """
     Ermittelt Sitzplatzstatistiken (total, reserved, percent) mit Smart Caching.
     Wird bei jeder Sitzplatz-Statusänderung automatisch invalidiert.
+    Fällt bei Redis-Ausfall transparent auf die Datenbank zurück.
     """
     if not upcoming_event:
         return {'total_seats': 0, 'reserved_seats': 0, 'capacity_percent': 0}
 
     event_id = getattr(upcoming_event, 'id', upcoming_event)
     cache_key = f"{CAPACITY_CACHE_KEY_PREFIX}{event_id}"
-    stats = cache.get(cache_key)
-    if stats is None:
+
+    def _calculate():
         seat_cells = SeatingCell.objects.filter(
             plan__event_id=event_id,
             cell_type=SeatingCell.CellType.SEAT,
@@ -33,13 +34,13 @@ def get_event_capacity_stats(upcoming_event):
         capacity_percent = (
             int((reserved_seats / total_seats) * 100) if total_seats > 0 else 0
         )
-        stats = {
+        return {
             'total_seats': total_seats,
             'reserved_seats': reserved_seats,
             'capacity_percent': capacity_percent,
         }
-        cache.set(cache_key, stats, CACHE_SECONDS)
-    return stats
+
+    return safe_cache_get_or_set(cache_key, _calculate, CACHE_SECONDS)
 
 
 def get_user_seat_map(event, user_ids):
@@ -105,10 +106,12 @@ class SeatingPlanService:
     """Zentraler Service für die Validierung und Persistenz von Sitzplan-Rasterdaten."""
 
     @staticmethod
-    def save_grid(plan, cells_data):
+    def save_grid(plan, cells_data, expected_version=None):
         """
         Validiert und speichert ein Zellraster atomar für den angegebenen Sitzplan.
         Schützt belegte Plätze vor Löschung und Typ-Änderung.
+        Nutzt Zeilensperren (select_for_update) auf Kacheln und Sitzplan sowie
+        optionale Plan-Versionierung gegen konkurrierende Layoutänderungen.
 
         Rückgabe: Tuple (success: bool, message: str) oder wirft SeatingPlanValidationError
         """
@@ -161,9 +164,26 @@ class SeatingPlanService:
             }
 
         with transaction.atomic():
+            # 1. Gemeinsame Plansperre für konkurrierende Layoutänderungen
+            locked_plan = SeatingPlan.objects.select_for_update().get(pk=plan.pk)
+
+            # 2. Optimistische Versionsprüfung
+            if expected_version is not None:
+                try:
+                    expected_ver_int = int(expected_version)
+                    if locked_plan.version != expected_ver_int:
+                        raise SeatingPlanValidationError(
+                            f'Der Sitzplan wurde zwischenzeitlich von einem anderen Administrator geändert '
+                            f'(aktuelle Version {locked_plan.version} vs. gesendete Version {expected_ver_int}). '
+                            f'Bitte lade die Seite neu, um die aktuellen Änderungen zu sehen.'
+                        )
+                except (ValueError, TypeError):
+                    raise SeatingPlanValidationError('Ungültige Planversion übermittelt.')
+
+            # 3. Bestehende Kacheln VOR der Belegungsprüfung mit DB-Zeilensperre laden
             existing_cells = {
                 (cell.x, cell.y): cell
-                for cell in SeatingCell.objects.filter(plan=plan).select_related('registration__user')
+                for cell in SeatingCell.objects.select_for_update().filter(plan=locked_plan).order_by('id')
             }
 
             # 4. Schutz belegter / reservierter Plätze vor Löschung
@@ -221,7 +241,7 @@ class SeatingPlanService:
                 else:
                     cells_to_create.append(
                         SeatingCell(
-                            plan=plan,
+                            plan=locked_plan,
                             x=x,
                             y=y,
                             cell_type=cell_type,
@@ -240,9 +260,14 @@ class SeatingPlanService:
                     batch_size=500
                 )
 
+            # 6. Plan-Version inkrementieren
+            locked_plan.version += 1
+            locked_plan.save(update_fields=['version'])
+            plan.version = locked_plan.version
+
             # Einmalige Cache-Invalidierung nach DB-Commit (über transaction.on_commit in invalidate_event_capacity_cache)
-            if plan.event_id:
-                invalidate_event_capacity_cache(plan.event_id)
+            if locked_plan.event_id:
+                invalidate_event_capacity_cache(locked_plan.event_id)
 
         return True, "Sitzplan erfolgreich gespeichert!"
 
