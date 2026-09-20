@@ -251,6 +251,9 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         elif not obj.is_checked_in:
             obj.checked_in_at = None
 
+        # Immer zuerst speichern, damit neue Objekte (change=False) eine Primärschlüssel-ID (pk) erhalten
+        super().save_model(request, obj, form, change)
+
         if became_paid:
             obj.mark_as_paid(amount=obj.paid_amount or None, send_email=True)
             self.message_user(
@@ -261,7 +264,6 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         elif became_cancelled:
             obj.mark_as_cancelled()
         else:
-            super().save_model(request, obj, form, change)
             from seating.services import sync_seat_status_with_payment
             sync_seat_status_with_payment(obj)
 

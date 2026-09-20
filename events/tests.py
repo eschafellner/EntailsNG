@@ -1552,6 +1552,111 @@ class EventRegistrationAdminPaymentEmailTests(TestCase):
         self.assertIsNone(self.reg.checked_in_at)
         self.assertIsNotNone(self.reg.cancelled_at)
 
+    def test_admin_save_model_creates_new_registration_with_paid_status(self):
+        """
+        Regressionstest: Ein im Backend neu angelegter Benutzer wird manuell
+        über das Admin-Formular (change=False) für ein Event mit Bezahlstatus 'PAID' registriert.
+        Darf nicht zu EventRegistration.DoesNotExist führen!
+        """
+        from events.admin import EventRegistrationAdmin
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+        from unittest.mock import patch
+
+        new_user = User.objects.create_user(username='manualuser', email='manual@example.com', password='password')
+        new_reg = EventRegistration(
+            event=self.event,
+            user=new_user,
+            ticket_type=self.ticket,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+        self.assertIsNone(new_reg.pk)
+
+        admin = EventRegistrationAdmin(EventRegistration, AdminSite())
+        rf = RequestFactory()
+        request = rf.post('/admin/events/eventregistration/add/')
+        request.user = self.staff_user
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.contrib.messages.middleware import MessageMiddleware
+        SessionMiddleware(lambda r: None).process_request(request)
+        MessageMiddleware(lambda r: None).process_request(request)
+
+        class DummyForm:
+            changed_data = []
+
+        with patch('events.models.send_system_email') as mock_send:
+            with self.captureOnCommitCallbacks(execute=True):
+                # change=False simuliert das Hinzufügen eines neuen Objekts im Django Admin
+                admin.save_model(request, new_reg, DummyForm(), change=False)
+
+            mock_send.assert_called_once()
+            self.assertEqual(mock_send.call_args[0][0], 'payment_confirmation')
+            self.assertEqual(mock_send.call_args[0][1], 'manual@example.com')
+
+        self.assertIsNotNone(new_reg.pk)
+        new_reg.refresh_from_db()
+        self.assertEqual(new_reg.payment_status, EventRegistration.PaymentStatus.PAID)
+        self.assertIsNotNone(new_reg.paid_at)
+        self.assertEqual(new_reg.paid_amount, 35.00)
+
+    def test_admin_save_model_creates_new_registration_with_unpaid_status(self):
+        """
+        Regressionstest: Ein im Backend neu angelegter Benutzer wird manuell
+        über das Admin-Formular (change=False) mit Status 'UNPAID' registriert.
+        """
+        from events.admin import EventRegistrationAdmin
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+
+        new_user = User.objects.create_user(username='unpaiduser', email='unpaid@example.com', password='password')
+        new_reg = EventRegistration(
+            event=self.event,
+            user=new_user,
+            ticket_type=self.ticket,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+        self.assertIsNone(new_reg.pk)
+
+        admin = EventRegistrationAdmin(EventRegistration, AdminSite())
+        rf = RequestFactory()
+        request = rf.post('/admin/events/eventregistration/add/')
+        request.user = self.staff_user
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.contrib.messages.middleware import MessageMiddleware
+        SessionMiddleware(lambda r: None).process_request(request)
+        MessageMiddleware(lambda r: None).process_request(request)
+
+        class DummyForm:
+            changed_data = []
+
+        admin.save_model(request, new_reg, DummyForm(), change=False)
+
+        self.assertIsNotNone(new_reg.pk)
+        new_reg.refresh_from_db()
+        self.assertEqual(new_reg.payment_status, EventRegistration.PaymentStatus.UNPAID)
+        self.assertIsNone(new_reg.paid_at)
+
+    def test_payment_service_mark_paid_on_unsaved_registration(self):
+        """
+        Defensiver Test: PaymentService.mark_paid speichert ein noch ungespeichertes
+        EventRegistration-Objekt atomar, bevor der DB-Row-Lock angefordert wird.
+        """
+        from events.services import PaymentService
+
+        new_user = User.objects.create_user(username='defensiveuser', email='defensive@example.com', password='password')
+        unsaved_reg = EventRegistration(
+            event=self.event,
+            user=new_user,
+            ticket_type=self.ticket,
+        )
+        self.assertIsNone(unsaved_reg.pk)
+
+        saved_reg = PaymentService.mark_paid(unsaved_reg, amount=25.00, send_email=False)
+        self.assertIsNotNone(saved_reg.pk)
+        self.assertEqual(saved_reg.payment_status, EventRegistration.PaymentStatus.PAID)
+        self.assertEqual(saved_reg.paid_amount, 25.00)
+        self.assertIsNotNone(saved_reg.paid_at)
+
 
 class ActiveEventCachingTests(TestCase):
     """

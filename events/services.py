@@ -102,6 +102,10 @@ class PaymentService:
         from seating.models import SeatingCell
         from configuration.cache import invalidate_event_capacity_cache
 
+        # Robustness: Ensure registration is persisted before locking
+        if not registration.pk:
+            registration.save()
+
         # Lock registration first to establish lock hierarchy: EventRegistration -> SeatingCell
         reg = EventRegistration.objects.select_for_update().get(pk=registration.pk)
         reg.payment_status = EventRegistration.PaymentStatus.PAID
@@ -139,6 +143,10 @@ class PaymentService:
     def mark_cancelled(registration):
         from seating.models import SeatingCell
         from configuration.cache import invalidate_event_capacity_cache
+
+        # Robustness: Ensure registration is persisted before locking
+        if not registration.pk:
+            registration.save()
 
         # Lock registration first to establish lock hierarchy: EventRegistration -> SeatingCell
         reg = EventRegistration.objects.select_for_update().get(pk=registration.pk)
