@@ -6,22 +6,28 @@
   padding: 10px;
 }
 
+/* HEADER BAR & STATS */
 .scanner-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   background: var(--paper);
   padding: 16px 20px;
   border-radius: 12px;
   border: 1px solid var(--line);
 }
 
+.scanner-header-title-box {
+  flex: 1;
+  min-width: 240px;
+}
+
 .scanner-stats-wrapper {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   font-family: 'JetBrains Mono', monospace;
   flex-wrap: wrap;
 }
@@ -46,6 +52,56 @@
   color: var(--ink);
 }
 
+/* PROGRESS BAR */
+.scanner-progress-wrapper {
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.scanner-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.scanner-progress-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.scanner-progress-stats {
+  color: var(--ink);
+}
+
+.scanner-progress-stats strong {
+  color: #22c55e;
+}
+
+.scanner-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 9999px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.scanner-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0284c7, #22c55e);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+/* INPUT CONTROLS */
 .scanner-input {
   background: var(--paper);
   color: var(--ink);
@@ -63,10 +119,10 @@
   box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
 }
 
-
+/* SCANNER GRID & CARDS */
 .scanner-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 20px;
   margin-bottom: 24px;
 }
@@ -116,18 +172,461 @@
   border-color: #dc2626 !important;
 }
 
-.scanner-badge-checked {
-  background: rgba(34, 197, 94, 0.2);
+/* GUEST LIST CARD & SEARCH HEADER */
+.scanner-guestlist-card {
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.scanner-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.scanner-table-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 24px;
+  margin: 0;
+}
+
+.scanner-table-hint {
+  margin: 3px 0 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.scanner-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 280px;
+  flex: 1;
+  max-width: 420px;
+}
+
+.scanner-search-icon {
+  position: absolute;
+  left: 12px;
+  pointer-events: none;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.scanner-search-field {
+  width: 100%;
+  padding: 9px 34px 9px 34px;
+  font-size: 12px;
+}
+
+.scanner-search-clear {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px;
+  line-height: 1;
+  border-radius: 50%;
+  transition: color 0.15s ease;
+}
+
+.scanner-search-clear:hover {
+  color: var(--ink);
+}
+
+/* FILTER TABS */
+.scanner-filter-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.scanner-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.scanner-tab-btn:hover {
+  border-color: var(--accent, #0284c7);
+}
+
+.scanner-tab-btn.active {
+  background: var(--accent, #0284c7);
+  color: #ffffff;
+  border-color: var(--accent, #0284c7);
+  font-weight: bold;
+}
+
+.scanner-tab-btn .tab-count {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.scanner-tab-btn.active .tab-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* TABLE STYLING (DESKTOP) */
+.scanner-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.scanner-guest-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.scanner-guest-table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.scanner-guest-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.guest-row {
+  transition: background 0.15s ease;
+}
+
+.guest-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* GUEST DETAILS & BADGES */
+.guest-user-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guest-username {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.guest-fullname {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.guest-clan-tag {
+  color: #a855f7;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.scanner-ticket-tag {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.scanner-badge-paid {
+  display: inline-flex;
+  align-items: center;
   color: #22c55e;
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-weight: bold;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.scanner-badge-unpaid {
+  display: inline-flex;
+  align-items: center;
+  color: #ef4444;
+  font-weight: bold;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.scanner-badge-seat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.scanner-badge-noseat {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.scanner-badge-checked {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  padding: 4px 10px;
+  border-radius: 6px;
   border: 1px solid #22c55e;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .scanner-badge-pending {
+  display: inline-flex;
+  align-items: center;
   background: rgba(156, 163, 175, 0.1);
   color: var(--muted);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   border: 1px solid var(--line);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* CHECK-IN ACTION BUTTON */
+.btn-checkin-action {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  min-width: 105px;
+  text-align: center;
+  border: 1px solid transparent;
+}
+
+.btn-action-checkin {
+  background: #16a34a;
+  color: #ffffff;
+  border-color: #22c55e;
+  font-weight: bold;
+}
+
+.btn-action-checkin:hover {
+  background: #15803d;
+  border-color: #16a34a;
+}
+
+.btn-action-checkout {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.btn-action-checkout:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+/* LOAD MORE & EMPTY STATE */
+.scanner-load-more-wrap {
+  text-align: center;
+  padding: 20px 0 10px 0;
+}
+
+.btn-load-more {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-load-more:hover {
+  border-color: var(--accent, #0284c7);
+  color: #38bdf8;
+}
+
+.scanner-no-results {
+  text-align: center;
+  padding: 36px 16px;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* =========================================================================
+   RESPONSIVE DESIGN & MOBILE CARD VIEW (< 768px)
+   ========================================================================= */
+
+@media (max-width: 768px) {
+  .scanner-header {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .scanner-stats-wrapper {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .scanner-stat-card {
+    padding: 8px 6px;
+  }
+
+  .scanner-stat-card strong {
+    font-size: 16px;
+  }
+
+  .scanner-table-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .scanner-search-box {
+    max-width: 100%;
+    min-width: auto;
+  }
+
+  .scanner-table-responsive {
+    overflow-x: visible;
+    border: none;
+  }
+
+  .scanner-guest-table {
+    display: block;
+    width: 100%;
+    border: none;
+  }
+
+  .scanner-guest-table thead {
+    display: none;
+  }
+
+  .scanner-guest-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  /* Transform table row into a mobile card */
+  .guest-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    gap: 8px 10px;
+    align-items: center;
+    padding: 14px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  .guest-row td {
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  .col-user {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  .guest-user-wrap {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 6px;
+  }
+
+  .guest-username {
+    font-size: 14px;
+  }
+
+  .col-seat {
+    grid-column: 2;
+    text-align: right;
+    justify-self: end;
+  }
+
+  .col-ticket {
+    grid-column: 1;
+    font-size: 11px;
+  }
+
+  .col-payment {
+    grid-column: 2;
+    text-align: right;
+    justify-self: end;
+  }
+
+  .col-status {
+    grid-column: 1 / -1;
+    padding-top: 4px !important;
+  }
+
+  .col-action {
+    grid-column: 1 / -1;
+    padding-top: 4px !important;
+  }
+
+  /* Full-width, high-contrast touch button for fingers */
+  .col-action .btn-checkin-action {
+    width: 100%;
+    min-height: 44px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  #empty-table-row {
+    display: block;
+    width: 100%;
+    text-align: center;
+  }
+
+  #empty-table-row td {
+    display: block;
+    width: 100%;
+  }
 }

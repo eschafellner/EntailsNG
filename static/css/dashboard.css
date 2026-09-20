@@ -8,6 +8,330 @@
   margin-bottom: 24px;
 }
 
+/* =============================================================================
+   ONBOARDING TICKET (DARK TECH PATTERN DESIGN)
+   ============================================================================= */
+
+.onboarding-ticket {
+  padding: 0;
+  overflow: hidden;
+  margin-bottom: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #111827;
+  color: #f9fafb;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.onboarding-ticket.ticket-expired {
+  border-color: #b91c1c;
+  opacity: 0.88;
+  filter: grayscale(0.2);
+}
+
+.ticket-main-section {
+  padding: 24px;
+  border-right: 2px dashed #374151;
+  position: relative;
+  background-color: #111827;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ticket-expired .ticket-main-section {
+  border-right-color: #991b1b;
+}
+
+/* Dekorative Ticket-Aussparungen (Kerben an der Perforationslinie) */
+.ticket-notch {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: var(--bg, #0b0f17);
+  border-radius: 50%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.ticket-notch-top {
+  top: -10px;
+  right: -10px;
+}
+
+.ticket-notch-bottom {
+  bottom: -10px;
+  right: -10px;
+}
+
+/* Obere Kopfzeile: Eyebrow links, Status-Badge / Button rechts */
+.ticket-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.ticket-eyebrow {
+  margin: 0;
+  color: #22c55e;
+  font-weight: bold;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ticket-expired .ticket-eyebrow {
+  color: #ef4444;
+}
+
+.ticket-status-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Status-Badges (Single-Line Pills) */
+.ticket-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: bold;
+  white-space: nowrap !important;
+  flex-shrink: 0;
+  line-height: 1.2;
+  letter-spacing: 0.5px;
+}
+
+.ticket-status-badge.badge-checked-in {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid #22c55e;
+  color: #86efac;
+}
+
+.ticket-status-badge.badge-payment-pending {
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid #eab308;
+  color: #eab308;
+}
+
+.ticket-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.ticket-status-dot.dot-checked-in {
+  background: #22c55e;
+}
+
+.ticket-status-dot.dot-payment-pending {
+  background: #eab308;
+}
+
+/* Action-Buttons */
+.ticket-btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap !important;
+  flex-shrink: 0;
+  text-decoration: none;
+  line-height: 1.2;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.ticket-btn-action:hover {
+  transform: translateY(-1px);
+}
+
+.ticket-btn-action.ticket-btn-paid {
+  background: #22c55e;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.ticket-btn-action.ticket-btn-paid:hover {
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
+}
+
+.ticket-btn-action.ticket-btn-pending {
+  background: #eab308;
+  color: #111827;
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.3);
+}
+
+.ticket-btn-action.ticket-btn-pending:hover {
+  box-shadow: 0 6px 16px rgba(234, 179, 8, 0.4);
+}
+
+/* Event-Titel */
+.ticket-title {
+  margin: 0 0 10px 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 28px;
+  line-height: 1.15;
+  text-transform: uppercase;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.ticket-expired-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  vertical-align: middle;
+  background: #991b1b;
+  color: #fee2e2;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+/* Meta-Bereich */
+.ticket-meta-row {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #9ca3af;
+  font-family: 'JetBrains Mono', monospace;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ticket-meta-items {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ticket-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.ticket-meta-item strong {
+  color: #e5e7eb;
+}
+
+.ticket-meta-item svg {
+  vertical-align: -2px;
+  flex-shrink: 0;
+}
+
+/* Rechter Bereich (Countdown / Event-Status) */
+.ticket-side-section {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #1f2937;
+  text-align: center;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 0);
+  background-size: 12px 12px;
+}
+
+.ticket-expired .ticket-side-section {
+  background: #1a1010;
+}
+
+/* Responsive Anpassungen (Tablet & Mobile) */
+@media (max-width: 900px) {
+  .ticket-main-section {
+    border-right: none !important;
+    border-bottom: 2px dashed #374151;
+  }
+
+  .ticket-expired .ticket-main-section {
+    border-bottom-color: #991b1b;
+  }
+
+  /* Auf mobilen Geräten schneiden die Aussparungen an der horizontalen Trennlinie links und rechts ein */
+  .ticket-notch-top {
+    top: auto;
+    bottom: -10px;
+    left: -10px;
+    right: auto;
+  }
+
+  .ticket-notch-bottom {
+    top: auto;
+    bottom: -10px;
+    right: -10px;
+    left: auto;
+  }
+
+  .ticket-title {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ticket-main-section {
+    padding: 16px;
+  }
+
+  .ticket-side-section {
+    padding: 16px;
+  }
+
+  .ticket-title {
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  .ticket-header-top {
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .ticket-meta-row {
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  .ticket-meta-items {
+    gap: 8px 12px;
+  }
+
+  #ticket-countdown {
+    font-size: 17px;
+    gap: 6px;
+  }
+}
+
+
 .countdown-expired {
   color: #ef4444;
   font-size: 14px;

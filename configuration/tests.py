@@ -14,6 +14,11 @@ User = get_user_model()
 
 class ConfigurationModelTests(TestCase):
 
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.clear()
+        super().tearDown()
+
     def test_navigation_item_url(self):
         item = NavigationItem.objects.create(
             title='Sitzplan', url_name='seating_plan', order=1
@@ -134,6 +139,8 @@ class ConfigurationModelTests(TestCase):
         config = GeneralConfiguration.load()
         config.ticket_enabled = False
         config.ticket_days_before_event = 0
+        config.ticket_requires_login = False
+        config.ticket_requires_payment = False
         config.save()
 
         self.assertFalse(should_show_onboarding_ticket(upcoming_event=event))
@@ -164,6 +171,92 @@ class ConfigurationModelTests(TestCase):
 
         # Ticket darf bei x=1 Tag NICHT angezeigt werden
         self.assertFalse(should_show_onboarding_ticket(upcoming_event=future_event))
+
+    def test_general_configuration_ticket_requires_login(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from configuration.models import GeneralConfiguration
+        from configuration.services import should_show_onboarding_ticket
+        from events.models import Event
+
+        event = Event.objects.create(
+            title="Login-Test LAN",
+            slug="login-test-lan",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=1),
+            end_date=timezone.now() + timedelta(days=3),
+        )
+
+        user = User.objects.create_user(username="ticket_tester", password="password")
+
+        config = GeneralConfiguration.load()
+        config.ticket_enabled = True
+        config.ticket_days_before_event = 0
+        config.ticket_requires_login = True
+        config.ticket_requires_payment = False
+        config.save()
+
+        # 1. Anonymer User darf das Ticket nicht sehen
+        self.assertFalse(should_show_onboarding_ticket(user=None, upcoming_event=event))
+
+        # 2. Eingeloggter User darf das Ticket sehen
+        self.assertTrue(should_show_onboarding_ticket(user=user, upcoming_event=event))
+
+        # 3. HTTP GET: Dashboard als anonymer Benutzer
+        resp_anon = self.client.get(reverse('dashboard'))
+        self.assertFalse(resp_anon.context['show_onboarding_ticket'])
+        self.assertNotContains(resp_anon, 'onboarding-ticket')
+
+        # 4. HTTP GET: Dashboard als angemeldeter Benutzer
+        self.client.login(username='ticket_tester', password='password')
+        resp_user = self.client.get(reverse('dashboard'))
+        self.assertTrue(resp_user.context['show_onboarding_ticket'])
+        self.assertContains(resp_user, 'onboarding-ticket')
+
+    def test_general_configuration_ticket_requires_payment(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from configuration.models import GeneralConfiguration
+        from configuration.services import should_show_onboarding_ticket
+        from events.models import Event, EventRegistration, TicketType
+
+        event = Event.objects.create(
+            title="Payment-Test LAN",
+            slug="payment-test-lan",
+            is_active=True,
+            start_date=timezone.now() + timedelta(days=1),
+            end_date=timezone.now() + timedelta(days=3),
+        )
+        ticket = TicketType.objects.create(event=event, name="Normal", price=25.0)
+        user = User.objects.create_user(username="pay_tester", password="password")
+
+        config = GeneralConfiguration.load()
+        config.ticket_enabled = True
+        config.ticket_days_before_event = 0
+        config.ticket_requires_login = False
+        config.ticket_requires_payment = True
+        config.save()
+
+        # 1. Anonym -> False
+        self.assertFalse(should_show_onboarding_ticket(user=None, upcoming_event=event))
+
+        # 2. Eingeloggt, aber keine Registrierung -> False
+        self.assertFalse(should_show_onboarding_ticket(user=user, upcoming_event=event, user_registration=None))
+
+        # 3. Eingeloggt, Registrierung unbezahlt -> False
+        reg = EventRegistration.objects.create(
+            user=user,
+            event=event,
+            ticket_type=ticket,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+        self.assertFalse(should_show_onboarding_ticket(user=user, upcoming_event=event, user_registration=reg))
+
+        # 4. Eingeloggt, Registrierung bezahlt -> True
+        reg.payment_status = EventRegistration.PaymentStatus.PAID
+        reg.save()
+        self.assertTrue(should_show_onboarding_ticket(user=user, upcoming_event=event, user_registration=reg))
+
 
     def test_site_customization_themes_and_css_variables(self):
         from configuration.models import SiteCustomization

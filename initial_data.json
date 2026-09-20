@@ -1668,6 +1668,7 @@
     "fields": {
       "ticket_enabled": true,
       "ticket_days_before_event": 1,
+      "ticket_requires_login": false,
       "ticket_requires_payment": false
     }
   },

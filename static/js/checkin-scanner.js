@@ -162,24 +162,139 @@ function toggleCheckIn(registrationId) {
   });
 }
 
+const PAGE_SIZE = 30;
+let currentFilter = 'all';
+let visibleLimit = PAGE_SIZE;
+
+function applyFilters() {
+  const searchInput = document.getElementById('guest-search-input');
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  const clearBtn = document.getElementById('guest-search-clear');
+  const noResults = document.getElementById('no-search-results');
+  const loadMoreWrap = document.getElementById('load-more-wrap');
+  const loadMoreCount = document.getElementById('load-more-count');
+
+  if (clearBtn) {
+    clearBtn.style.display = query ? 'block' : 'none';
+  }
+
+  const allRows = Array.from(document.querySelectorAll('.guest-row'));
+  if (allRows.length === 0) return;
+
+  // Filter matching rows
+  const matchingRows = allRows.filter(row => {
+    // 1. Tab Status Filter
+    const isCheckedIn = row.getAttribute('data-checked-in') === 'true';
+    const isPaid = row.getAttribute('data-paid') === 'paid';
+
+    if (currentFilter === 'pending' && isCheckedIn) return false;
+    if (currentFilter === 'checked-in' && !isCheckedIn) return false;
+    if (currentFilter === 'unpaid' && isPaid) return false;
+
+    // 2. Search Query Filter
+    if (query) {
+      const searchData = (row.getAttribute('data-search') || '').toLowerCase();
+      if (!searchData.includes(query)) return false;
+    }
+
+    return true;
+  });
+
+  // Display logic: Active search shows ALL matches without limit; browsing uses visibleLimit
+  const isSearching = query.length > 0;
+  const displayLimit = isSearching ? matchingRows.length : visibleLimit;
+
+  allRows.forEach(row => {
+    row.style.display = 'none';
+  });
+
+  matchingRows.slice(0, displayLimit).forEach(row => {
+    row.style.display = '';
+  });
+
+  // Empty state for search/filter
+  if (noResults) {
+    noResults.style.display = matchingRows.length === 0 ? 'block' : 'none';
+  }
+
+  // Load more button container
+  if (loadMoreWrap) {
+    if (!isSearching && matchingRows.length > visibleLimit) {
+      loadMoreWrap.style.display = 'block';
+      if (loadMoreCount) {
+        loadMoreCount.innerText = matchingRows.length - visibleLimit;
+      }
+    } else {
+      loadMoreWrap.style.display = 'none';
+    }
+  }
+}
+
 function updateLocalTableStatus(regId, isCheckedIn, timeStr) {
+  const row = document.getElementById(`guest-row-${regId}`);
   const statusCell = document.getElementById(`status-cell-${regId}`);
   const btn = document.getElementById(`btn-toggle-${regId}`);
-  const statCount = document.getElementById('stat-checked-in-count');
 
-  if (statusCell && btn) {
+  if (row) {
+    row.setAttribute('data-checked-in', isCheckedIn ? 'true' : 'false');
+  }
+
+  if (statusCell) {
     if (isCheckedIn) {
       statusCell.innerHTML = `<span class="badge-checked-in scanner-badge-checked">✓ Eingecheckt ${timeStr ? '(' + timeStr + ')' : ''}</span>`;
-      btn.innerText = 'Auschecken';
     } else {
-      statusCell.innerHTML = `<span class="badge-not-checked-in scanner-badge-pending">Noch nicht da</span>`;
-      btn.innerText = 'Einchecken';
+      statusCell.innerHTML = `<span class="badge-not-checked-in scanner-badge-pending">⏳ Noch nicht da</span>`;
     }
   }
 
-  // Rekalkuliere den Counter
-  const checkedInElements = document.querySelectorAll('.badge-checked-in');
-  if (statCount) statCount.innerText = checkedInElements.length;
+  if (btn) {
+    if (isCheckedIn) {
+      btn.innerText = 'Auschecken';
+      btn.className = 'btn-checkin-action btn-action-checkout';
+    } else {
+      btn.innerText = 'Einchecken';
+      btn.className = 'btn-checkin-action btn-action-checkin';
+    }
+  }
+
+  // Recalculate stats & counts
+  const allRows = document.querySelectorAll('.guest-row');
+  const totalCount = allRows.length;
+  const checkedInCount = document.querySelectorAll('.guest-row[data-checked-in="true"]').length;
+  const pendingCount = Math.max(0, totalCount - checkedInCount);
+  const unpaidCount = document.querySelectorAll('.guest-row[data-paid]:not([data-paid="paid"])').length;
+  const pct = totalCount > 0 ? Math.round((checkedInCount / totalCount) * 100) : 0;
+
+  // Update Header Counters & Progress Bar
+  const statTotal = document.getElementById('stat-total-count');
+  const statCheckedIn = document.getElementById('stat-checked-in-count');
+  const statPaid = document.getElementById('stat-paid-count');
+  const progressText = document.getElementById('stat-progress-text');
+  const progressFill = document.getElementById('stat-progress-fill');
+
+  if (statTotal) statTotal.innerText = totalCount;
+  if (statCheckedIn) statCheckedIn.innerText = checkedInCount;
+  if (statPaid) statPaid.innerText = totalCount - unpaidCount;
+  if (progressText) {
+    progressText.innerHTML = `<strong>${checkedInCount}</strong> / ${totalCount} (${pct}%)`;
+  }
+  if (progressFill) {
+    progressFill.style.width = `${pct}%`;
+  }
+
+  // Update Tab Badges
+  const tabAll = document.getElementById('tab-count-all');
+  const tabPending = document.getElementById('tab-count-pending');
+  const tabCheckedIn = document.getElementById('tab-count-checked-in');
+  const tabUnpaid = document.getElementById('tab-count-unpaid');
+
+  if (tabAll) tabAll.innerText = totalCount;
+  if (tabPending) tabPending.innerText = pendingCount;
+  if (tabCheckedIn) tabCheckedIn.innerText = checkedInCount;
+  if (tabUnpaid) tabUnpaid.innerText = unpaidCount;
+
+  // Re-apply filters so row position/visibility updates accurately
+  applyFilters();
 }
 
 function startCamera() {
@@ -245,15 +360,86 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Guest Search Input Filter
+  // Filter Tabs
+  const tabBtns = document.querySelectorAll('.scanner-tab-btn');
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', function() {
+      tabBtns.forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      currentFilter = this.getAttribute('data-filter') || 'all';
+      visibleLimit = PAGE_SIZE;
+      applyFilters();
+    });
+  });
+
+  // Guest Search Input Filter & Speed Check-in on Enter
   const searchInput = document.getElementById('guest-search-input');
+  const searchClearBtn = document.getElementById('guest-search-clear');
+
   if (searchInput) {
     searchInput.addEventListener('input', function() {
-      const q = this.value.toLowerCase().trim();
-      document.querySelectorAll('.guest-row').forEach(row => {
-        const text = row.getAttribute('data-search') || '';
-        row.style.display = text.includes(q) ? '' : 'none';
+      visibleLimit = PAGE_SIZE;
+      applyFilters();
+    });
+
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const visibleRows = Array.from(document.querySelectorAll('.guest-row')).filter(r => r.style.display !== 'none');
+        if (visibleRows.length === 1) {
+          const targetRow = visibleRows[0];
+          const regId = targetRow.getAttribute('data-id');
+          const isAlreadyCheckedIn = targetRow.getAttribute('data-checked-in') === 'true';
+
+          if (!isAlreadyCheckedIn) {
+            toggleCheckIn(regId);
+            targetRow.style.outline = '2px solid #22c55e';
+            setTimeout(() => { targetRow.style.outline = ''; }, 1200);
+          } else {
+            playTone('warning');
+            targetRow.style.outline = '2px solid #eab308';
+            setTimeout(() => { targetRow.style.outline = ''; }, 1200);
+          }
+        } else if (visibleRows.length === 0) {
+          playTone('error');
+        }
+      }
+    });
+  }
+
+  if (searchClearBtn && searchInput) {
+    searchClearBtn.addEventListener('click', function() {
+      searchInput.value = '';
+      visibleLimit = PAGE_SIZE;
+      applyFilters();
+      searchInput.focus();
+    });
+  }
+
+  // Load More Button
+  const loadMoreBtn = document.getElementById('btn-load-more');
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', function() {
+      visibleLimit += PAGE_SIZE;
+      applyFilters();
+    });
+  }
+
+  // Reset Filters Button (Empty State)
+  const resetFiltersBtn = document.getElementById('btn-reset-filters');
+  if (resetFiltersBtn) {
+    resetFiltersBtn.addEventListener('click', function() {
+      if (searchInput) searchInput.value = '';
+      currentFilter = 'all';
+      tabBtns.forEach(b => {
+        if (b.getAttribute('data-filter') === 'all') {
+          b.classList.add('active');
+        } else {
+          b.classList.remove('active');
+        }
       });
+      visibleLimit = PAGE_SIZE;
+      applyFilters();
     });
   }
 
@@ -268,4 +454,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
+  // Initial Filter / Display Run
+  applyFilters();
 });

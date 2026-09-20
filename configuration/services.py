@@ -40,7 +40,12 @@ def should_show_onboarding_ticket(user=None, upcoming_event=None, user_registrat
             if days_until_start > float(config.ticket_days_before_event):
                 return False
 
-    # 4. Prüfen, ob Ticket nur angezeigt wird, wenn der Gast bezahlt hat
+    # 4. Prüfen, ob Ticket nur angezeigt werden soll, wenn der Gast eingeloggt ist
+    if config.ticket_requires_login:
+        if not user or not user.is_authenticated:
+            return False
+
+    # 5. Prüfen, ob Ticket nur angezeigt wird, wenn der Gast bezahlt hat
     if config.ticket_requires_payment:
         if not user or not user.is_authenticated:
             return False

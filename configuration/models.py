@@ -397,6 +397,11 @@ class GeneralConfiguration(models.Model):
         verbose_name="Ticket nur anzeigen X Tage vor Event-Start",
         help_text="Anzahl der Tage vor dem Event. Bei > 0 wird das Ticket erst in diesem Zeitraum vor Event-Start angezeigt (0 = immer anzeigen).",
     )
+    ticket_requires_login = models.BooleanField(
+        default=False,
+        verbose_name="Ticket nur anzeigen, wenn der Gast eingeloggt ist",
+        help_text="Wenn aktiviert, sieht der Gast die Ticket-Karte auf dem Dashboard erst, nachdem er sich angemeldet hat (für nicht eingeloggte Besucher wird sie verborgen).",
+    )
     ticket_requires_payment = models.BooleanField(
         default=False,
         verbose_name="Ticket nur anzeigen, wenn der Gast eingezahlt hat",

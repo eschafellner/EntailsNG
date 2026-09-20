@@ -389,7 +389,10 @@ def checkin_scanner_view(request):
     registrations = []
     total_count = 0
     paid_count = 0
+    unpaid_count = 0
     checked_in_count = 0
+    pending_count = 0
+    checkin_percent = 0
 
     if event:
         regs_qs = EventRegistration.objects.filter(event=event).select_related(
@@ -399,15 +402,24 @@ def checkin_scanner_view(request):
         paid_count = regs_qs.filter(
             payment_status=EventRegistration.PaymentStatus.PAID
         ).count()
+        unpaid_count = regs_qs.exclude(
+            payment_status=EventRegistration.PaymentStatus.PAID
+        ).count()
         checked_in_count = regs_qs.filter(is_checked_in=True).count()
-        registrations = regs_qs.order_by('-is_checked_in', 'user__username')
+        pending_count = max(0, total_count - checked_in_count)
+        checkin_percent = round((checked_in_count / total_count * 100)) if total_count > 0 else 0
+        # Noch nicht eingecheckte Gäste zuerst anzeigen (Priorität am Einlass)
+        registrations = regs_qs.order_by('is_checked_in', 'user__username')
 
     context = {
         'event': event,
         'registrations': registrations,
         'total_count': total_count,
         'paid_count': paid_count,
+        'unpaid_count': unpaid_count,
         'checked_in_count': checked_in_count,
+        'pending_count': pending_count,
+        'checkin_percent': checkin_percent,
     }
     return render(request, 'events/checkin_scanner.html', context)
 

@@ -45,12 +45,13 @@ class GeneralConfigurationAdmin(admin.ModelAdmin):
                 'fields': (
                     'ticket_enabled',
                     'ticket_days_before_event',
+                    'ticket_requires_login',
                     'ticket_requires_payment',
                     'expired_ticket_mode',
                 ),
                 'description': (
                     'Steuerung der Ticket-Karte auf dem Dashboard (Anzeige, '
-                    'Zeitraum vor Event, Zahlungs-Bedingungen und Verhalten bei Event-Ende).'
+                    'Zeitraum vor Event, Login- und Zahlungs-Bedingungen und Verhalten bei Event-Ende).'
                 ),
             },
         ),
