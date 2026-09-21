@@ -2842,6 +2842,255 @@ class TournamentRefactoringIntegrityTests(TestCase):
         self.assertEqual(self.tournament.status, Tournament.Status.IN_PROGRESS)
 
 
+class FeedbackFeaturesTests(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="Summer LAN 2026",
+            slug="summer-lan-2026",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game1 = Game.objects.create(name="StarCraft II", team_size=1)
+        self.game2 = Game.objects.create(name="Counter-Strike 2", team_size=5)
+        self.user1 = User.objects.create_user(username="alice", email="alice@example.com", password="password")
+        self.user2 = User.objects.create_user(username="bob", email="bob@example.com", password="password")
+        self.user3 = User.objects.create_user(username="charlie", email="charlie@example.com", password="password")
+
+    def test_tournament_start_field_and_effective_property(self):
+        now = timezone.now()
+        end = now + timedelta(days=1)
+        start = now + timedelta(days=2)
+
+        # 1. Without explicit tournament_start -> fallback to registration_end
+        t1 = Tournament.objects.create(
+            title="SC2 Tournament",
+            event=self.event,
+            game=self.game1,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            registration_start=now,
+            registration_end=end,
+        )
+        self.assertEqual(t1.effective_tournament_start, end)
+
+        # 2. With explicit tournament_start
+        t2 = Tournament.objects.create(
+            title="CS2 Tournament",
+            event=self.event,
+            game=self.game2,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            registration_start=now,
+            registration_end=end,
+            tournament_start=start,
+        )
+        self.assertEqual(t2.effective_tournament_start, start)
+
+    def test_team_pending_members_count_property(self):
+        team = Team.objects.create(name="Protoss Warriors", captain=self.user1, game=self.game1, event=self.event)
+        TeamMember.objects.create(team=team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        self.assertEqual(team.pending_members_count, 0)
+
+        # Bob applies (status=PENDING)
+        TeamMember.objects.create(team=team, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.PENDING)
+        self.assertEqual(team.pending_members_count, 1)
+
+        # Charlie applies (status=PENDING)
+        TeamMember.objects.create(team=team, user=self.user3, role=TeamMember.Role.MEMBER, status=TeamMember.Status.PENDING)
+        self.assertEqual(team.pending_members_count, 2)
+
+    def test_single_team_per_game_rule_team_create(self):
+        self.client.login(username="alice", password="password")
+        # Alice creates first team for game1
+        resp = self.client.post(reverse('team_create'), {'name': 'Team Alpha', 'game_id': self.game1.id})
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(Team.objects.filter(name='Team Alpha').exists())
+
+        # Alice tries to create second team for the same game1 -> rejected
+        resp2 = self.client.post(reverse('team_create'), {'name': 'Team Beta', 'game_id': self.game1.id})
+        self.assertEqual(resp2.status_code, 302)
+        self.assertFalse(Team.objects.filter(name='Team Beta').exists())
+
+        # Alice can create a team for game2
+        resp3 = self.client.post(reverse('team_create'), {'name': 'Team Gamma', 'game_id': self.game2.id})
+        self.assertEqual(resp3.status_code, 302)
+        self.assertTrue(Team.objects.filter(name='Team Gamma').exists())
+
+    def test_single_team_per_game_rule_join_by_code(self):
+        # Alice has Team A in game2
+        team_a = Team.objects.create(name="Team A", captain=self.user1, game=self.game2, event=self.event)
+        TeamMember.objects.create(team=team_a, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        # Bob has Team B in game2
+        team_b = Team.objects.create(name="Team B", captain=self.user2, game=self.game2, event=self.event)
+        TeamMember.objects.create(team=team_b, user=self.user2, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        # Alice tries to join Team B with code -> rejected because already in Team A
+        self.client.login(username="alice", password="password")
+        resp = self.client.post(reverse('team_join_by_code'), {'invite_code': team_b.invite_code})
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(team_b.is_member(self.user1))
+
+    def test_single_team_per_game_rule_apply_and_accept(self):
+        # Alice has Team A in game2
+        team_a = Team.objects.create(name="Team A", captain=self.user1, game=self.game2, event=self.event)
+        TeamMember.objects.create(team=team_a, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        # Bob has Team B in game2
+        team_b = Team.objects.create(name="Team B", captain=self.user2, game=self.game2, event=self.event)
+        TeamMember.objects.create(team=team_b, user=self.user2, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        # Alice tries to apply to Team B -> rejected
+        self.client.login(username="alice", password="password")
+        resp = self.client.post(reverse('team_apply', kwargs={'slug': team_b.slug}))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(TeamMember.objects.filter(team=team_b, user=self.user1).exists())
+
+        # Charlie (not in any team) applies to Team B
+        self.client.login(username="charlie", password="password")
+        resp2 = self.client.post(reverse('team_apply', kwargs={'slug': team_b.slug}))
+        self.assertEqual(resp2.status_code, 302)
+        membership = TeamMember.objects.get(team=team_b, user=self.user3)
+        self.assertEqual(membership.status, TeamMember.Status.PENDING)
+
+        # Meanwhile Charlie joins Team A for game2 directly
+        TeamMember.objects.create(team=team_a, user=self.user3, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+
+        # Bob tries to accept Charlie's pending application for Team B -> rejected because Charlie already has an active team
+        self.client.login(username="bob", password="password")
+        resp3 = self.client.post(reverse('team_accept_membership', kwargs={'slug': team_b.slug, 'membership_id': membership.id}))
+        self.assertEqual(resp3.status_code, 302)
+        membership.refresh_from_db()
+        self.assertEqual(membership.status, TeamMember.Status.PENDING)
+
+    def test_team_list_game_filter_and_sorting(self):
+        t_sc2 = Team.objects.create(name="Zerg Rush", captain=self.user1, game=self.game1, event=self.event)
+        t_cs2 = Team.objects.create(name="AWP Kings", captain=self.user2, game=self.game2, event=self.event)
+
+        # Request with filter game=self.game1.id
+        resp = self.client.get(reverse('team_list') + f'?game={self.game1.id}')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(t_sc2, resp.context['active_teams'])
+        self.assertNotIn(t_cs2, resp.context['active_teams'])
+
+        # Request without filter shows both, sorted by game name (Counter-Strike 2 then StarCraft II)
+        resp2 = self.client.get(reverse('team_list'))
+        self.assertEqual(resp2.status_code, 200)
+        teams = list(resp2.context['active_teams'])
+        self.assertIn(t_cs2, teams)
+        self.assertIn(t_sc2, teams)
+        self.assertEqual(teams[0], t_cs2)
+        self.assertEqual(teams[1], t_sc2)
+
+    def test_theme_css_variables_status_colors(self):
+        from configuration.models import SiteCustomization
+        customization = SiteCustomization.load()
+
+        # Light theme preset (WARM_AMBER)
+        customization.theme_preset = SiteCustomization.ThemePreset.WARM_AMBER
+        customization.background_color = ''
+        customization.save()
+        vars_light = customization.get_css_variables()
+        self.assertEqual(vars_light['--warning-text'], '#b45309')
+        self.assertEqual(vars_light['--info-text'], '#0369a1')
+
+        # Dark theme preset (CYBERPUNK)
+        customization.theme_preset = SiteCustomization.ThemePreset.CYBERPUNK
+        customization.save()
+        vars_dark = customization.get_css_variables()
+        self.assertEqual(vars_dark['--warning-text'], '#facc15')
+        self.assertEqual(vars_dark['--info-text'], '#38bdf8')
+
+    def test_navigation_dot_and_context_processor(self):
+        from django.core.cache import cache
+        from configuration.models import NavigationItem
+        cache.clear()
+        NavigationItem.objects.create(title="Teams", url_name="team_list", order=1, is_active=True)
+
+        # Alice is captain of team_a
+        team_a = Team.objects.create(name="Team A", captain=self.user1, game=self.game1, event=self.event)
+        TeamMember.objects.create(team=team_a, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        # Alice logs in: currently 0 pending requests
+        self.client.login(username="alice", password="password")
+        resp = self.client.get(reverse('dashboard'))
+        self.assertEqual(resp.context['user_pending_team_requests_count'], 0)
+        self.assertNotContains(resp, 'class="nav-notification-dot"')
+
+        # Bob applies to Team A
+        TeamMember.objects.create(team=team_a, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.PENDING)
+
+        resp2 = self.client.get(reverse('dashboard'))
+        self.assertEqual(resp2.context['user_pending_team_requests_count'], 1)
+        self.assertContains(resp2, 'class="nav-notification-dot"')
+
+    def test_tournament_list_registered_button(self):
+        # Create tournament
+        tournament = Tournament.objects.create(
+            title="SC2 Cup",
+            event=self.event,
+            game=self.game1,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            registration_start=timezone.now() - timedelta(hours=1),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.REGISTRATION_OPEN,
+        )
+        team_a = Team.objects.create(name="Team A", captain=self.user1, game=self.game1, event=self.event)
+        TeamMember.objects.create(team=team_a, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        # EventRegistration with check-in so Alice is eligible
+        EventRegistration.objects.create(
+            user=self.user1,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+            is_checked_in=True,
+        )
+
+        self.client.login(username="alice", password="password")
+        resp = self.client.get(reverse('tournament_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn(tournament.id, resp.context['registered_tournament_ids'])
+        self.assertContains(resp, 'btn-action-primary')
+
+        # Register team
+        TournamentRegistration.objects.create(tournament=tournament, team=team_a)
+
+        resp2 = self.client.get(reverse('tournament_list'))
+        self.assertEqual(resp2.status_code, 200)
+        self.assertIn(tournament.id, resp2.context['registered_tournament_ids'])
+        self.assertContains(resp2, 'btn-action-green')
+        self.assertContains(resp2, 'Angemeldet')
+
+    def test_single_team_per_game_rule_team_reactivate(self):
+        # Alice already has an active team for game1
+        active_team = Team.objects.create(name="Active Team", captain=self.user1, game=self.game1, event=self.event)
+        TeamMember.objects.create(team=active_team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        # Alice also has an archived team from a past event
+        archived_team = Team.objects.create(name="Old Team", captain=self.user1, game=self.game1, is_archived=True)
+        TeamMember.objects.create(team=archived_team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="alice", password="password")
+        # Alice attempts to reactivate archived_team for game1 -> rejected because she already has active_team for game1
+        resp = self.client.post(reverse('team_reactivate', kwargs={'slug': archived_team.slug}), {
+            'game_id': self.game1.id,
+        })
+        self.assertEqual(resp.status_code, 302)
+        archived_team.refresh_from_db()
+        self.assertTrue(archived_team.is_archived)
+
+        # But Alice can reactivate archived_team for game2!
+        resp2 = self.client.post(reverse('team_reactivate', kwargs={'slug': archived_team.slug}), {
+            'game_id': self.game2.id,
+        })
+        self.assertEqual(resp2.status_code, 302)
+        archived_team.refresh_from_db()
+        self.assertFalse(archived_team.is_archived)
+        self.assertEqual(archived_team.game, self.game2)
+
+
+
+
+
 
 
 

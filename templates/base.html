@@ -102,7 +102,12 @@
                 <circle cx="12" cy="12" r="10"></circle>
               </svg>
             {% endif %}
-            <span>{{ item.title }}</span>
+            <span class="nav-title-wrapper">
+              <span>{{ item.title }}</span>
+              {% if item.url_name == 'team_list' and user_pending_team_requests_count %}
+                <span class="nav-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
+              {% endif %}
+            </span>
           </span>
           {% if item.badge_text %}
             <span class="nav-badge">{{ item.badge_text }}</span>
@@ -183,7 +188,12 @@
             <circle cx="12" cy="12" r="10"></circle>
           </svg>
         {% endif %}
-        <span>{{ item.title }}</span>
+        <span class="nav-title-wrapper">
+          <span>{{ item.title }}</span>
+          {% if item.url_name == 'team_list' and user_pending_team_requests_count %}
+            <span class="nav-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
+          {% endif %}
+        </span>
       </a>
     {% endwith %}
   {% endfor %}
@@ -223,7 +233,12 @@
                 <circle cx="12" cy="12" r="10"></circle>
               </svg>
             {% endif %}
-            <span>{{ item.title }}</span>
+            <span class="nav-title-wrapper">
+              <span>{{ item.title }}</span>
+              {% if item.url_name == 'team_list' and user_pending_team_requests_count %}
+                <span class="nav-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
+              {% endif %}
+            </span>
           </a>
         {% endwith %}
       {% endfor %}

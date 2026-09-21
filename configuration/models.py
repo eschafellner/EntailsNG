@@ -968,6 +968,32 @@ class SiteCustomization(models.Model):
         scale_vars = scale_map.get(self.ui_scale, scale_map[self.UIScale.MEDIUM])
         base_vars.update(scale_vars)
 
+        # Farbliche Statusvariablen (theme-abhängig für optimale Lesbarkeit und Kontrast)
+        paper_hex = base_vars.get('--paper', '#fffaf2').lstrip('#')
+        is_dark = False
+        try:
+            if len(paper_hex) == 6:
+                r, g, b = int(paper_hex[0:2], 16), int(paper_hex[2:4], 16), int(paper_hex[4:6], 16)
+                luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+                is_dark = luminance < 0.5
+        except Exception:
+            pass
+
+        if is_dark:
+            base_vars['--warning-text'] = '#facc15'
+            base_vars['--warning-bg'] = 'rgba(234, 179, 8, 0.15)'
+            base_vars['--warning-border'] = 'rgba(234, 179, 8, 0.35)'
+            base_vars['--info-text'] = '#38bdf8'
+            base_vars['--info-bg'] = 'rgba(56, 189, 248, 0.12)'
+            base_vars['--info-border'] = 'rgba(56, 189, 248, 0.3)'
+        else:
+            base_vars['--warning-text'] = '#b45309'
+            base_vars['--warning-bg'] = 'rgba(245, 158, 11, 0.12)'
+            base_vars['--warning-border'] = 'rgba(245, 158, 11, 0.35)'
+            base_vars['--info-text'] = '#0369a1'
+            base_vars['--info-bg'] = 'rgba(2, 132, 199, 0.08)'
+            base_vars['--info-border'] = 'rgba(2, 132, 199, 0.25)'
+
         return base_vars
 
 

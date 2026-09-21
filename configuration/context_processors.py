@@ -39,6 +39,17 @@ def _get_user_registration(request):
     )
 
 
+def _get_user_pending_team_requests_count(request):
+    if not request.user.is_authenticated:
+        return 0
+    from tournaments.models import TeamMember
+    return TeamMember.objects.filter(
+        team__captain=request.user,
+        team__is_archived=False,
+        status=TeamMember.Status.PENDING,
+    ).count()
+
+
 def feature_flags(request):
     """
     Schlanker Context Processor:
@@ -68,4 +79,6 @@ def feature_flags(request):
         'custom_css': site_customization.custom_css,
         'upcoming_event': SimpleLazyObject(_get_active_event),
         'user_registration': SimpleLazyObject(lambda: _get_user_registration(request)),
+        'user_pending_team_requests_count': SimpleLazyObject(lambda: _get_user_pending_team_requests_count(request)),
     }
+

@@ -98,6 +98,12 @@ class Tournament(models.Model):
 
     registration_start = models.DateTimeField(verbose_name="Anmeldebeginn")
     registration_end = models.DateTimeField(verbose_name="Anmeldeschluss")
+    tournament_start = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Turnierstart",
+        help_text="Beginn des Turniers. Bleibt dieses Feld leer, gilt automatisch das Ende des Anmeldeschlusses.",
+    )
 
     tournament_admin = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -168,6 +174,14 @@ class Tournament(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.get_mode_display()})"
+
+    @property
+    def effective_tournament_start(self):
+        """
+        Gibt das explizite Startdatum des Turniers zurück.
+        Falls kein expliziter Start hinterlegt wurde, wird das Ende des Anmeldeschlusses verwendet.
+        """
+        return self.tournament_start or self.registration_end
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -334,6 +348,16 @@ class Team(models.Model):
         if hasattr(self, '_prefetched_objects_cache') and 'memberships' in self._prefetched_objects_cache:
             return sum(1 for m in self.memberships.all() if m.status == TeamMember.Status.ACCEPTED)
         return self.memberships.filter(status=TeamMember.Status.ACCEPTED).count()
+
+    @property
+    def pending_members_count(self):
+        """
+        Liefert die Anzahl der ausstehenden Beitrittsanfragen.
+        Verwendet den Prefetch-Cache, falls verfügbar.
+        """
+        if hasattr(self, '_prefetched_objects_cache') and 'memberships' in self._prefetched_objects_cache:
+            return sum(1 for m in self.memberships.all() if m.status == TeamMember.Status.PENDING)
+        return self.memberships.filter(status=TeamMember.Status.PENDING).count()
 
     def get_accepted_members(self):
         return self.memberships.filter(status=TeamMember.Status.ACCEPTED).select_related('user')

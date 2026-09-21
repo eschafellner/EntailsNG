@@ -35,7 +35,7 @@
             </span>
           {% else %}
             <span style="background: rgba(34, 197, 94, 0.15); color: #16a34a; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
-              ● {% t "team_active_badge" "AKTIV" %} ({{ team.event.title|default:active_event.title|default:"Haupt-Event" }})
+              ● {% t "team_active_badge" "AKTIV" %}
             </span>
           {% endif %}
           {% if team.tag %}
@@ -44,7 +44,7 @@
             </span>
           {% endif %}
           {% if team.game %}
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink); font-weight: 600;">
               🎮 {{ team.game.name }} ({{ team.game.team_size }}er)
             </span>
             {% if is_team_full %}
@@ -58,8 +58,11 @@
             {% endif %}
           {% endif %}
         </div>
-        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; color: var(--ink);">
+        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; color: var(--ink); display: flex; align-items: center; gap: 8px;">
           {{ team.name }}
+          {% if is_captain and pending_members %}
+            <span class="badge-pending-indicator" title="{{ pending_members|length }} offene Beitrittsanfrage(n)">🔴 {{ pending_members|length }}</span>
+          {% endif %}
         </h1>
         <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
           {% t "team_captain_label" "Kapitän:" %} <strong>{{ team.captain.username }}</strong> | {% t "team_founded_label" "Gegründet am:" %} {{ team.created_at|date:"d.m.Y" }}

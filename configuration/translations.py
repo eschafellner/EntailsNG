@@ -660,6 +660,11 @@ DEFAULT_TEXTS = {
     'msg_team_accept_forbidden': 'Nur der Kapitän kann Bewerbungen annehmen.',
     'msg_team_accept_full': 'Das Team "{team_name}" hat die maximale Mitgliederanzahl ({max_players} Spieler) bereits erreicht.',
     'msg_team_application_accepted': 'Bewerbung von "{username}" angenommen!',
+    'msg_team_user_already_has_team': 'Du gehörst für das Spiel "{game_name}" bereits dem Team "{team_name}" an. Ein Gast darf nur einem Team pro Spiel angehören.',
+    'msg_team_applicant_already_has_team': 'Der Benutzer "{username}" gehört für "{game_name}" bereits dem Team "{team_name}" an.',
+    'tournament_start_label': 'Turnierstart:',
+    'tournament_already_registered': 'Angemeldet',
+    'team_filter_all_games': 'Alle Spiele',
 
     # Erweiterte Dashboard Hinweistexte & Fehler
     'dash_past_event_reregister_hint_1': 'Du warst bei',

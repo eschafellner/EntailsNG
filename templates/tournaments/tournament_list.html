@@ -40,7 +40,7 @@
   </div>
 
   <!-- Tournament Grid -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(390px, 1fr)); gap: 24px;">
+  <div class="tournament-grid">
     {% for tournament in tournaments %}
       <div class="card tournament-card">
         <div>
@@ -109,9 +109,14 @@
               </div>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line); flex-wrap: wrap; gap: 6px;">
-              <span>📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong>{{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr</strong></span>
-              <span>👤 {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_admin_default" "Orga-Team" %}{% endif %}</span>
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line);">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                <span>📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong>{{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr</strong></span>
+                <span>👤 {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_admin_default" "Orga-Team" %}{% endif %}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                <span>🚀 {% t "tournament_start_label" "Turnierstart:" %} <strong>{{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr</strong></span>
+              </div>
             </div>
           </div>
         </div>
@@ -121,7 +126,11 @@
           <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
             ID: #{{ tournament.id }}
           </span>
-          {% if tournament.is_registration_open %}
+          {% if tournament.id in registered_tournament_ids %}
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="btn-action-green">
+              ✓ {% t "tournament_already_registered" "Angemeldet" %}
+            </a>
+          {% elif tournament.is_registration_open %}
             <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="btn-action-primary">
               {% t "tournament_register_btn" "🎮 Jetzt anmelden →" %}
             </a>

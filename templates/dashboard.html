@@ -342,8 +342,8 @@
             </span>
           {% elif user_status_step == 2 %}
             <div style="display: flex; flex-direction: column; gap: 8px;">
-              <span style="display: inline-flex; align-items: center; gap: 6px; color: #eab308; font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: rgba(234, 179, 8, 0.12); padding: 4px 8px; border-radius: 6px; border: 1px solid #eab308; width: fit-content;">
-                <span style="width: 7px; height: 7px; background: #eab308; border-radius: 50%; display: inline-block;"></span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; color: var(--warning-text); font-weight: bold; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: var(--warning-bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--warning-border); width: fit-content;">
+                <span style="width: 7px; height: 7px; background: var(--warning-text); border-radius: 50%; display: inline-block;"></span>
                 ⏳ {% t "status_step_2" %}
               </span>
 
@@ -407,11 +407,11 @@
             ℹ️ {% t "seat_no_event_text" %}
           </p>
         {% elif not is_user_registered %}
-          <p style="margin: 0 0 16px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #eab308;">
+          <p style="margin: 0 0 16px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--warning-text);">
             ⚠️ {% t "seat_not_registered_text" %}
           </p>
           {% if past_registrations %}
-            <div style="margin: 0 0 16px 0; padding: 10px 12px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #93c5fd;">
+            <div style="margin: 0 0 16px 0; padding: 10px 12px; background: var(--info-bg); border: 1px solid var(--info-border); border-radius: 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--info-text);">
               ℹ️ {% t "dash_past_event_reregister_hint_1" "Du warst bei" %} <strong>{{ past_registrations.0.event.title }}</strong> {% t "dash_past_event_reregister_hint_2" "angemeldet. Für" %} <strong>{{ upcoming_event.title }}</strong> {% t "dash_past_event_reregister_hint_3" "ist eine neue Anmeldung erforderlich." %}
             </div>
           {% endif %}
@@ -510,7 +510,7 @@
       ✕
     </button>
 
-    <p class="eyebrow" style="margin: 0 0 4px 0; color: #eab308; font-weight: bold; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase;">
+    <p class="eyebrow" style="margin: 0 0 4px 0; color: var(--warning-text); font-weight: bold; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase;">
       {% t "dash_payment_modal_eyebrow" "SEPA-Überweisung per GiroCode / QR" %}
     </p>
     <h3 style="margin: 0 0 8px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: #111827;">

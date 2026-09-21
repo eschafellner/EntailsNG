@@ -36,7 +36,7 @@ class TournamentMatchInline(admin.TabularInline):
 class TournamentAdmin(admin.ModelAdmin):
     list_display = (
         'title', 'event', 'game', 'mode', 'status',
-        'registered_count', 'max_teams', 'is_generated', 'registration_start', 'registration_end'
+        'registered_count', 'max_teams', 'is_generated', 'registration_start', 'registration_end', 'tournament_start'
     )
     list_filter = ('event', 'mode', 'status', 'is_generated')
     search_fields = ('title', 'description', 'game__name')

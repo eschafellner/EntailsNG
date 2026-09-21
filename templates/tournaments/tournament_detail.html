@@ -118,7 +118,7 @@
             {{ tournament.title }}
           </h1>
           <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
-            {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ tournament.event.title }} | {% t "tournament_detail_admin_label" "Orga-Admin:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %}
+            {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ tournament.event.title }} | {% t "tournament_detail_admin_label" "Orga-Admin:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %} | 📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr | 🚀 {% t "tournament_start_label" "Turnierstart:" %} {{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr
           </p>
         </div>
       </div>
