@@ -3015,6 +3015,7 @@ class FeedbackFeaturesTests(TestCase):
         resp = self.client.get(reverse('dashboard'))
         self.assertEqual(resp.context['user_pending_team_requests_count'], 0)
         self.assertNotContains(resp, 'class="nav-notification-dot"')
+        self.assertNotContains(resp, 'class="mobile-notification-dot"')
 
         # Bob applies to Team A
         TeamMember.objects.create(team=team_a, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.PENDING)
@@ -3022,6 +3023,7 @@ class FeedbackFeaturesTests(TestCase):
         resp2 = self.client.get(reverse('dashboard'))
         self.assertEqual(resp2.context['user_pending_team_requests_count'], 1)
         self.assertContains(resp2, 'class="nav-notification-dot"')
+        self.assertContains(resp2, 'class="mobile-notification-dot"')
 
     def test_tournament_list_registered_button(self):
         # Create tournament

@@ -1356,6 +1356,38 @@ h3 {
     box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
     pointer-events: none;
 }
+
+/* Mobile Icon Wrapper & Notification Dot (oben rechts am Icon) */
+.mobile-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    overflow: visible !important;
+}
+.mobile-item .mobile-icon-wrapper {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+}
+.mobile-modal-item .mobile-icon-wrapper {
+    overflow: visible !important;
+}
+.mobile-notification-dot {
+    position: absolute;
+    top: -2px;
+    right: -4px;
+    width: 9px;
+    height: 9px;
+    background-color: #ef4444;
+    border: 2px solid var(--panel, #ffffff);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.9);
+    pointer-events: none;
+    z-index: 5;
+}
+
 .badge-pending-indicator {
     display: inline-flex;
     align-items: center;

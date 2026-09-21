@@ -180,32 +180,34 @@
     {% with nav_url=item.get_url %}
       <a href="{{ nav_url|default:'#' }}"
          class="mobile-item{% if nav_url and request.path == nav_url %} active{% endif %}">
-        {% if item.icon_svg %}
-          {{ item.icon_svg|safe }}
-        {% else %}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-          </svg>
-        {% endif %}
-        <span class="nav-title-wrapper">
-          <span>{{ item.title }}</span>
+        <span class="mobile-icon-wrapper">
+          {% if item.icon_svg %}
+            {{ item.icon_svg|safe }}
+          {% else %}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+            </svg>
+          {% endif %}
           {% if item.url_name == 'team_list' and user_pending_team_requests_count %}
-            <span class="nav-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
+            <span class="mobile-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
           {% endif %}
         </span>
+        <span>{{ item.title }}</span>
       </a>
     {% endwith %}
   {% endfor %}
 
   <button type="button" class="mobile-item mobile-more-btn{% if request.path == '/impressum/' or request.path == '/datenschutz/' %} active{% endif %}"
           aria-controls="mobile-menu-overlay" aria-expanded="false">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2">
-      <circle cx="12" cy="12" r="1"></circle>
-      <circle cx="19" cy="12" r="1"></circle>
-      <circle cx="5" cy="12" r="1"></circle>
-    </svg>
+    <span class="mobile-icon-wrapper">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="1"></circle>
+        <circle cx="19" cy="12" r="1"></circle>
+        <circle cx="5" cy="12" r="1"></circle>
+      </svg>
+    </span>
     <span>{% t "nav_more" "Mehr" %}</span>
   </button>
 </nav>
@@ -225,20 +227,20 @@
         {% with nav_url=item.get_url %}
           <a href="{{ nav_url|default:'#' }}"
              class="mobile-modal-item{% if nav_url and request.path == nav_url %} active{% endif %}">
-            {% if item.icon_svg %}
-              {{ item.icon_svg|safe }}
-            {% else %}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-              </svg>
-            {% endif %}
-            <span class="nav-title-wrapper">
-              <span>{{ item.title }}</span>
+            <span class="mobile-icon-wrapper">
+              {% if item.icon_svg %}
+                {{ item.icon_svg|safe }}
+              {% else %}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+              {% endif %}
               {% if item.url_name == 'team_list' and user_pending_team_requests_count %}
-                <span class="nav-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
+                <span class="mobile-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
               {% endif %}
             </span>
+            <span>{{ item.title }}</span>
           </a>
         {% endwith %}
       {% endfor %}
