@@ -3,7 +3,7 @@
 > **Stand:** September 2026  
 > **Repository:** `entails-ng`  
 > **Git-Branch:** `main` (Up-to-date mit `origin/main`, Clean State)  
-> **Test-Status:** 🟢 **370 von 370 Tests erfolgreich bestanden** (0 Fehler, 0 Warnungen)  
+> **Test-Status:** 🟢 **414 von 414 Tests erfolgreich bestanden** (0 Fehler, 0 Warnungen)  
 > **Python / Django:** Python 3.12+ (kompatibel mit 3.14) / Django 6.0  
 
 ---
@@ -58,17 +58,23 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Helfer Check-in Scanner (`/checkin/scanner/`):** Vor-Ort-Kamera-QR-Scan für Helfer mit akustischem Feedback und Ausweis-Abgleich (`can_check_in()`).
 * **GiroCode (EPC-QR):** Generiert SEPA-Überweisungs-QRs mit vorbefülltem Betrag und Verwendungszweck.
 
-### 🏆 `tournaments` (Turnier-Engine)
+### 🏆 `tournaments` (Turnier-Engine & Team-Management)
 * **Modi:** Single Elimination, Double Elimination, Liga (Round Robin), Gruppenphase + K.O., Free For All (FFA).
 * **Services:**
   * `TournamentBracketService`: Generierung aller Turnierbäume inkl. automatischer Freilos-Verteilung (BYEs).
   * `TournamentMatchService`: Score-Verarbeitung, Gewinner-Vorlauf, Bracket-Reset, Walkover-Automatisierung beim Löschen von Teams.
+* **Team-Management:**
+  * **Spielbezug & Filter:** Teams zeigen das zugehörige Spiel (`team.game.name`); die Teamübersicht bietet Filter-Pills und Sortierung nach Spiel.
+  * **Fairplay-Regel:** Ein Teilnehmer darf pro Spiel nur maximal einem aktiven Team angehören (verhindert Doppelteilnahmen).
+  * **Benachrichtigungspunkt:** Roter Indikator am Menüpunkt „Teams“ (Sidebar & Mobile Nav) und im Team-Header bei offenen Beitrittsanfragen.
 * **Highlights:**
-  * **Loser-Reporting mit Fairplay-Schutz:** Unterlegene Teams können die eigene Niederlage selbst erfassen (`is_loser_reporting`), ohne auf Admins warten zu müssen. Siege können nicht eigenmächtig vergeben werden.
+  * **Dynamischer Anmeldestatus:** Buttons spiegeln den Status direkt wider (`✓ Angemeldet` vs. `🎮 Jetzt anmelden →`).
+  * **Turnierstart:** Datenfeld `tournament_start` mit transparentem Fallback auf `registration_end` (`effective_tournament_start`).
+  * **Responsive Kacheln:** `.tournament-grid` verhindert horizontales Scrollen auf Smartphones ($\le 390\text{px}$).
+  * **Loser-Reporting mit Fairplay-Schutz:** Unterlegene Teams können die eigene Niederlage selbst erfassen (`is_loser_reporting`).
   * **Double Elimination 3-Teilung:** Getrennte Bereiche für Winner Bracket (grün), Loser Bracket (orange) und zentrierte goldene Abschluss-Kachel für das **Grand Final**.
   * **Siegerehrung & Podium:** Dynamische Berechnung von Platz 1, 2 und 3 nach Match-Abschluss.
   * **Admin-Vorschau:** Interaktiver Simulations-Tab für Admins vor Turnierstart.
-  * **Dynamische Bezeichnungen:** Spielmodi und Stati können via `SystemTranslation` im Admin gewartet werden.
 
 ### 🗺️ `seating` (Interaktiver 2D-Sitzplan)
 * **Modelle:** `SeatingPlan`, `SeatingCell`.
@@ -92,12 +98,14 @@ Das Projekt ist in saubere Django-Apps unterteilt:
   * Globale Hilfsfunktion `get_translation(key, default, **kwargs)`.
   * Globales Template-Tag `{% t "key" "Standard" %}` (als Builtin registriert – kein `{% load %}` nötig!).
 * **Themes & Branding:** Live-Anpassung von Farbschemata, Logo und `UIScale`.
+  * Kontrastreiche, theme-abhängige Statusfarben für Hinweise und Warnungen (WCAG AA).
+* **Navigation & Caching:** `NavigationItem` mit automatischer SVG-Bereinigung und robuster Cache-Invalidierung auch bei Massenlöschungen.
 * **Error-Logging:** `DynamicDebugMiddleware` loggt ungefangene 500er-Fehler persistent als `SystemErrorLog` in die DB und vergibt eine Referenz-ID für den Benutzer.
 
 ### 📄 `info`, `news`, `emails`, `sponsors`
-* `info`: Leichtgewichtiges Mehrseiten-CMS mit Slug-Routing (`/info/<slug>/`) und automatischer Menü-Synchronisation (`NavigationItem`).
+* `info`: Mehrseiten-CMS mit Tab-Leiste (`/info/<slug>/`), Slugs mit automatischer Kollisionsauflösung (`-2`, `-3`), XSS-Bereinigung (`sanitize_html`), granularen Rechten (`info.view_eventinfo`), Gast-Fallback auf `/info/` und atomarer Menü-Synchronisation (`NavigationItem`).
 * `news`: Newsartikel mit TinyMCE-Editor.
-* `emails`: Multi-Backend-E-Mail-Versand (SMTP, Resend API, Console) mit verschlüsselter Speicherung von Passwörtern (`FIELD_ENCRYPTION_KEY`).
+* `emails`: Multi-Backend-E-Mail-Versand (SMTP, Resend API, Console) mit verschlüsselter Speicherung von Passwörtern (`FIELD_ENCRYPTION_KEY`) und transaktionssicherer E-Mail-Warteschlange (`OutgoingEmail` Outbox-Pattern).
 * `sponsors`: Partner- und Sponsoren-Verwaltung.
 
 ---
