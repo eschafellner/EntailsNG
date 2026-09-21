@@ -1,10 +1,13 @@
-from django.db import models
-from django.db.models.signals import post_delete
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.db.models.signals import post_delete, pre_delete
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.text import slugify
 from tinymce.models import HTMLField
-from configuration.models import NavigationItem
+
+from configuration.cache import safe_cache_delete
+from configuration.models import SYSTEM_ICONS, NavigationItem, sanitize_html
 
 
 class EventInfo(models.Model):
@@ -87,27 +90,73 @@ class EventInfo(models.Model):
     def get_absolute_url(self):
         return reverse('event_info_page', kwargs={'slug': self.slug})
 
-    def save(self, *args, **kwargs):
+    def _generate_unique_slug(self):
+        base_slug = slugify(self.title) or 'info'
+        slug = base_slug
+        counter = 2
+        qs = EventInfo.objects.all()
+        if self.pk:
+            qs = qs.exclude(pk=self.pk)
+        while qs.filter(slug=slug).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        return slug
+
+    def clean(self):
+        super().clean()
+        if self.content:
+            self.content = sanitize_html(self.content)
+
         if not self.slug:
-            self.slug = slugify(self.title) or 'info'
+            self.slug = self._generate_unique_slug()
+
+        if self.show_in_nav:
+            if len(self.title) > 200:
+                raise ValidationError({
+                    'title': 'Der Seitentitel darf bei Anzeige im Menü maximal 200 Zeichen lang sein.'
+                })
+            expected_slug = self.slug or 'info'
+            url_path = f"/info/{expected_slug}/"
+            if len(url_path) > 255:
+                raise ValidationError({
+                    'slug': f'Die Menü-Zieladresse darf maximal 255 Zeichen lang sein (aktuell: {len(url_path)}).'
+                })
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        if self.content:
+            self.content = sanitize_html(self.content)
+
+        if not self.slug:
+            self.slug = self._generate_unique_slug()
+        else:
+            qs = EventInfo.objects.filter(slug=self.slug)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
+                self.slug = self._generate_unique_slug()
 
         super().save(*args, **kwargs)
 
         # Synchronisiere mit NavigationItem
         if self.show_in_nav:
             target_url = self.get_absolute_url()
+            svg = SYSTEM_ICONS.get(self.nav_icon, '')
             if self.nav_item:
                 item = self.nav_item
-                item.title = self.title
+                item.title = self.title[:200]
                 item.url_name = target_url
                 item.icon_name = self.nav_icon
+                item.icon_svg = svg
+                item.order = 10 + self.order
                 item.is_active = self.is_active
                 item.save()
             else:
                 item = NavigationItem.objects.create(
-                    title=self.title,
+                    title=self.title[:200],
                     url_name=target_url,
                     icon_name=self.nav_icon,
+                    icon_svg=svg,
                     order=10 + self.order,
                     is_active=self.is_active,
                 )
@@ -126,13 +175,11 @@ class EventInfo(models.Model):
         super().delete(*args, **kwargs)
 
 
-from django.db.models.signals import pre_delete, post_delete
-
-
 @receiver(post_delete, sender=EventInfo)
 def delete_nav_item_on_info_delete(sender, instance, **kwargs):
     if instance.nav_item_id:
         NavigationItem.objects.filter(pk=instance.nav_item_id).delete()
+        safe_cache_delete('navigation_items')
 
 
 @receiver(pre_delete, sender=NavigationItem)

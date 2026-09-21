@@ -31,7 +31,7 @@
       {% endif %}
       <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
         <h1 style="margin: 0;">{{ event_info.title }}</h1>
-        {% if user.is_staff %}
+        {% if perms.info.change_eventinfo or user.is_superuser %}
           <a href="{% url 'admin:info_eventinfo_change' event_info.pk %}"
              class="btn"
              style="background: transparent; border: 1px solid var(--line, #374151); color: var(--muted, #9ca3af); font-size: 12px; padding: 4px 10px; border-radius: 6px; text-decoration: none;"
@@ -53,7 +53,7 @@
       <h1>{% t "info_title" "Veranstaltungsinformationen" %}</h1>
       <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">
       <p style="color: var(--muted);">{% t "info_empty" "Es wurden noch keine Informationsseiten hinterlegt." %}</p>
-      {% if user.is_staff %}
+      {% if perms.info.add_eventinfo or user.is_superuser %}
         <div style="margin-top: 20px;">
           <a href="{% url 'admin:info_eventinfo_add' %}" class="btn" style="padding: 8px 16px; background: var(--accent, #f59e0b); color: #111827; font-weight: bold; border-radius: 6px; text-decoration: none;">
             ➕ Erste Inhaltsseite anlegen

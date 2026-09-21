@@ -5,24 +5,38 @@ from django.shortcuts import get_object_or_404, render
 from .models import EventInfo
 
 
+
+def _can_view_drafts(user):
+    """Prüft, ob der Benutzer Entwürfe der Inhaltsseiten einsehen darf."""
+    return user.is_authenticated and (
+        user.is_superuser or
+        user.has_perm('info.view_eventinfo') or
+        user.has_perm('info.change_eventinfo')
+    )
+
+
 def event_info_detail_view(request):
     """
     Hauptansicht unter /info/:
-    Zeigt die erste aktive Inhaltsseite an und übergibt alle Seiten für die Tab-Leiste.
+    Zeigt die erste zugängliche aktive Inhaltsseite an und übergibt alle Seiten für die Tab-Leiste.
+    Unangemeldete Besucher werden nicht ausgesperrt, solange mindestens eine öffentliche Seite existiert.
     """
-    if request.user.is_staff:
+    can_preview = _can_view_drafts(request.user)
+    if can_preview:
         pages_qs = EventInfo.objects.all().order_by('order', 'id')
     else:
         pages_qs = EventInfo.objects.filter(is_active=True).order_by('order', 'id')
 
-    current_page = pages_qs.first()
-
-    if current_page and current_page.login_required and not request.user.is_authenticated:
-        messages.warning(
-            request,
-            "Diese Informationsseite ist nur für angemeldete Teilnehmer sichtbar. Bitte melde dich an."
-        )
-        return redirect_to_login(request.get_full_path(), login_url='login')
+    if not request.user.is_authenticated:
+        current_page = pages_qs.filter(login_required=False).first()
+        if not current_page and pages_qs.filter(login_required=True).exists():
+            messages.warning(
+                request,
+                "Diese Informationsseite ist nur für angemeldete Teilnehmer sichtbar. Bitte melde dich an."
+            )
+            return redirect_to_login(request.get_full_path(), login_url='login')
+    else:
+        current_page = pages_qs.first()
 
     return render(
         request,
@@ -39,7 +53,8 @@ def event_info_page_view(request, slug):
     """
     Detailansicht einer spezifischen Inhaltsseite unter /info/<slug>/.
     """
-    if request.user.is_staff:
+    can_preview = _can_view_drafts(request.user)
+    if can_preview:
         current_page = get_object_or_404(EventInfo, slug=slug)
         pages_qs = EventInfo.objects.all().order_by('order', 'id')
     else:
@@ -62,3 +77,4 @@ def event_info_page_view(request, slug):
             'all_pages': pages_qs,
         }
     )
+

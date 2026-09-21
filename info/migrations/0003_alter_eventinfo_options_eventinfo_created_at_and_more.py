@@ -4,6 +4,24 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+def populate_unique_slugs(apps, schema_editor):
+    from django.utils.text import slugify
+    EventInfo = apps.get_model('info', 'EventInfo')
+    slugs_seen = set()
+    for idx, obj in enumerate(EventInfo.objects.order_by('id')):
+        base_slug = slugify(obj.title) if getattr(obj, 'title', None) else 'info'
+        if not base_slug:
+            base_slug = 'allgemein' if idx == 0 else f'info-{obj.id}'
+        slug = base_slug
+        counter = 2
+        while slug in slugs_seen:
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        slugs_seen.add(slug)
+        obj.slug = slug
+        obj.save(update_fields=['slug'])
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -52,6 +70,12 @@ class Migration(migrations.Migration):
             field=models.BooleanField(default=False, help_text='Erstellt automatisch einen Menüpunkt in der linken Seitenleiste.', verbose_name='In Hauptnavigation anzeigen?'),
         ),
         migrations.AddField(
+            model_name='eventinfo',
+            name='slug',
+            field=models.SlugField(default='allgemein', help_text="Wird für die URL verwendet (z. B. 'allgemein', 'catering', 'regeln').", max_length=100, null=True, verbose_name='URL-Kürzel (Slug)'),
+        ),
+        migrations.RunPython(populate_unique_slugs, reverse_code=migrations.RunPython.noop),
+        migrations.AlterField(
             model_name='eventinfo',
             name='slug',
             field=models.SlugField(default='allgemein', help_text="Wird für die URL verwendet (z. B. 'allgemein', 'catering', 'regeln').", max_length=100, unique=True, verbose_name='URL-Kürzel (Slug)'),

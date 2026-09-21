@@ -4,6 +4,8 @@ from html.parser import HTMLParser
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.urls import NoReverseMatch, reverse
 
 from .validators import validate_bic, validate_iban
@@ -117,6 +119,7 @@ class SafeHTMLSanitizer(HTMLParser):
         'ul', 'ol', 'li', 'blockquote', 'a',
         'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div', 'span'
     }
+    DROP_CONTENT_TAGS = {'script', 'style', 'noscript', 'iframe'}
     ALLOWED_ATTRS = {'href', 'title', 'target', 'rel', 'class', 'id', 'align'}
     VOID_TAGS = {'br', 'hr', 'img'}
     DISALLOWED_PROTOCOLS = re.compile(r'^\s*(javascript|data|vbscript):', re.IGNORECASE)
@@ -125,9 +128,15 @@ class SafeHTMLSanitizer(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.result = []
         self.tag_stack = []
+        self.drop_depth = 0
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
+        if tag in self.DROP_CONTENT_TAGS:
+            self.drop_depth += 1
+            return
+        if self.drop_depth > 0:
+            return
         if tag not in self.ALLOWED_TAGS:
             return
 
@@ -151,6 +160,12 @@ class SafeHTMLSanitizer(HTMLParser):
 
     def handle_endtag(self, tag):
         tag = tag.lower()
+        if tag in self.DROP_CONTENT_TAGS:
+            if self.drop_depth > 0:
+                self.drop_depth -= 1
+            return
+        if self.drop_depth > 0:
+            return
         if tag in self.tag_stack:
             while self.tag_stack:
                 popped = self.tag_stack.pop()
@@ -159,6 +174,8 @@ class SafeHTMLSanitizer(HTMLParser):
                     break
 
     def handle_data(self, data):
+        if self.drop_depth > 0:
+            return
         self.result.append(data)
 
     def handle_entityref(self, name):
@@ -251,11 +268,11 @@ class NavigationItem(models.Model):
         CUSTOM = 'custom', 'Benutzerdefiniertes SVG (Nur Superuser)'
 
     title = models.CharField(
-        max_length=100,
+        max_length=200,
         help_text='Anzeigename im Menü (z. B. Übersicht, Sitzplan)',
     )
     url_name = models.CharField(
-        max_length=100,
+        max_length=255,
         help_text='Django URL-Name oder Modulkürzel, z. B. dashboard, teams, tournaments, seating, news, info, clans, sponsors',
     )
     icon_name = models.CharField(
@@ -338,14 +355,21 @@ class NavigationItem(models.Model):
             return ''
 
     def save(self, *args, **kwargs):
-        if self.icon_name != self.IconChoices.CUSTOM and not self.icon_svg:
+        if self.icon_name != self.IconChoices.CUSTOM:
             self.icon_svg = SYSTEM_ICONS.get(self.icon_name, '')
+        elif not self.icon_svg:
+            self.icon_svg = SYSTEM_ICONS.get('dashboard', '')
         super().save(*args, **kwargs)
         safe_cache_delete('navigation_items')
 
     def delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)
         safe_cache_delete('navigation_items')
+
+
+@receiver(post_delete, sender=NavigationItem)
+def invalidate_navigation_cache_on_item_delete(sender, **kwargs):
+    safe_cache_delete('navigation_items')
 
 
 class SystemTranslation(models.Model):

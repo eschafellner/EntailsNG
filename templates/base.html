@@ -91,7 +91,7 @@
     {% for item in nav_items %}
       {% with nav_url=item.get_url %}
         <a href="{{ nav_url|default:'#' }}"
-           class="nav-item{% if nav_url and request.path == nav_url %} active{% endif %}"
+           class="nav-item{% if nav_url and request.path == nav_url or nav_url == '/info/' and '/info/' in request.path %} active{% endif %}"
            {% if not nav_url %}aria-disabled="true"{% endif %}>
           <span class="nav-item-content">
             {% if item.icon_svg %}
@@ -179,7 +179,7 @@
   {% for item in nav_items|slice:":4" %}
     {% with nav_url=item.get_url %}
       <a href="{{ nav_url|default:'#' }}"
-         class="mobile-item{% if nav_url and request.path == nav_url %} active{% endif %}">
+         class="mobile-item{% if nav_url and request.path == nav_url or nav_url == '/info/' and '/info/' in request.path %} active{% endif %}">
         <span class="mobile-icon-wrapper">
           {% if item.icon_svg %}
             {{ item.icon_svg|safe }}
@@ -226,7 +226,7 @@
       {% for item in nav_items|slice:"4:" %}
         {% with nav_url=item.get_url %}
           <a href="{{ nav_url|default:'#' }}"
-             class="mobile-modal-item{% if nav_url and request.path == nav_url %} active{% endif %}">
+             class="mobile-modal-item{% if nav_url and request.path == nav_url or nav_url == '/info/' and '/info/' in request.path %} active{% endif %}">
             <span class="mobile-icon-wrapper">
               {% if item.icon_svg %}
                 {{ item.icon_svg|safe }}

@@ -19,7 +19,6 @@ from django.views.decorators.http import require_POST
 from configuration.translations import get_translation
 from configuration.models import GeneralConfiguration
 from configuration.services import should_show_onboarding_ticket
-from info.services import get_event_info
 from news.services import get_latest_news, get_pinned_news
 from seating.services import get_event_capacity_stats
 from sponsors.services import get_random_active_sponsor
@@ -88,7 +87,6 @@ def dashboard_view(request):
     context = {
         'event': event,
         'upcoming_event': event,
-        'event_info': get_event_info(),
         'latest_news': get_latest_news(limit=DASHBOARD_NEWS_LIMIT),
         'pinned_news': get_pinned_news(),
         'registration': registration,
