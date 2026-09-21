@@ -2699,6 +2699,150 @@ class TournamentQueryPerformanceTests(TestCase):
         self.assertLessEqual(q10, 15)
 
 
+class TournamentRefactoringIntegrityTests(TestCase):
+    """
+    Tests für die Refactoring-Verbesserungen:
+    - Atomare Berechtigungs- und Zustandsprüfung im Service unter DB-Locks
+    - Seiteneffektfreie GET-Views (tournament_detail mutiert keinen Zustand)
+    - Korrekte Funktionsweise der modularisierten Services und Tabellenberechnung
+    """
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="Refactor LAN 2026",
+            slug="refactor-lan-2026",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game = Game.objects.create(name="StarCraft II", team_size=1)
+        self.admin_user = User.objects.create_superuser(
+            username="admin_user",
+            email="admin@test.de",
+            password="password",
+        )
+        self.player1 = User.objects.create_user(username="player1", email="p1@test.de", password="password")
+        self.player2 = User.objects.create_user(username="player2", email="p2@test.de", password="password")
+        self.unrelated = User.objects.create_user(username="unrelated", email="un@test.de", password="password")
+
+        self.team1 = Team.objects.create(name="Team One", captain=self.player1, game=self.game, event=self.event)
+        TeamMember.objects.create(team=self.team1, user=self.player1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.team2 = Team.objects.create(name="Team Two", captain=self.player2, game=self.game, event=self.event)
+        TeamMember.objects.create(team=self.team2, user=self.player2, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.tournament = Tournament.objects.create(
+            title="SC2 Tournament",
+            slug="sc2-tournament",
+            event=self.event,
+            game=self.game,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.REGISTRATION_OPEN,
+            max_teams=4,
+            registration_start=timezone.now() - timedelta(hours=1),
+            registration_end=timezone.now() + timedelta(hours=2),
+        )
+        TournamentRegistration.objects.create(tournament=self.tournament, team=self.team1)
+        TournamentRegistration.objects.create(tournament=self.tournament, team=self.team2)
+
+    def test_service_enforces_actor_permissions_under_lock(self):
+        """Service prüft Berechtigungen direkt unter select_for_update Lock."""
+        from tournaments.services import TournamentBracketService, TournamentMatchService
+        from tournaments.exceptions import MatchPermissionDeniedError, InvalidWinnerError, MatchNotReadyError
+
+        TournamentBracketService.generate_bracket(self.tournament.id, actor=self.admin_user)
+        match = self.tournament.matches.filter(
+            bracket_type=TournamentMatch.BracketType.FINAL,
+            status=TournamentMatch.Status.READY
+        ).first()
+
+        # 1. Unbeteiligter Nutzer darf kein Ergebnis eintragen
+        with self.assertRaises(MatchPermissionDeniedError):
+            TournamentMatchService.update_match_score(
+                match_id=match.id,
+                score1=2,
+                score2=0,
+                winner_id=self.team1.id,
+                actor=self.unrelated,
+            )
+
+        # 2. Teilnehmer versucht sich selbst als Sieger einzutragen (Fairplay-Verstoß)
+        with self.assertRaises(InvalidWinnerError):
+            TournamentMatchService.update_match_score(
+                match_id=match.id,
+                score1=2,
+                score2=0,
+                winner_id=self.team1.id,
+                actor=self.player1,
+            )
+
+        # 3. Teilnehmer darf eigene Niederlage eintragen
+        match_res, winner = TournamentMatchService.update_match_score(
+            match_id=match.id,
+            score1=0,
+            score2=2,
+            winner_id=self.team2.id,
+            actor=self.player1,
+        )
+        self.assertEqual(winner, self.team2)
+        match.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+
+        # 4. Teilnehmer darf ein abgeschlossenes Match nicht mehr nachträglich bearbeiten
+        with self.assertRaises(MatchPermissionDeniedError):
+            TournamentMatchService.update_match_score(
+                match_id=match.id,
+                score1=2,
+                score2=1,
+                winner_id=self.team1.id,
+                actor=self.player2,
+            )
+
+    def test_service_rejects_unready_match(self):
+        """MatchNotReadyError wird geworfen, wenn Teams im Match noch fehlen."""
+        from tournaments.services import TournamentMatchService
+        from tournaments.exceptions import MatchNotReadyError
+
+        unready_match = TournamentMatch.objects.create(
+            tournament=self.tournament,
+            round_number=2,
+            match_number=1,
+            team1=self.team1,
+            team2=None,
+            status=TournamentMatch.Status.PENDING,
+        )
+
+        with self.assertRaises(MatchNotReadyError):
+            TournamentMatchService.update_match_score(
+                match_id=unready_match.id,
+                score1=1,
+                score2=0,
+                winner_id=self.team1.id,
+                actor=self.admin_user,
+            )
+
+    def test_tournament_detail_get_is_completely_read_only(self):
+        """GET auf tournament_detail führt keine Status-Änderung (FINISHED) aus."""
+        from tournaments.services import TournamentBracketService
+
+        TournamentBracketService.generate_bracket(self.tournament.id, actor=self.admin_user)
+        self.tournament.refresh_from_db()
+        self.assertEqual(self.tournament.status, Tournament.Status.IN_PROGRESS)
+
+        # Simuliere manuell beendete Matches ohne Abschluss-Trigger im Service
+        self.tournament.matches.all().update(status=TournamentMatch.Status.COMPLETED)
+
+        # GET Request auf Detail-Seite
+        self.client.login(username="admin_user", password="password")
+        url = reverse('tournament_detail', kwargs={'slug': self.tournament.slug})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+        # Status muss unverändert IN_PROGRESS sein (kein Seiteneffekt im GET-Handler)
+        self.tournament.refresh_from_db()
+        self.assertEqual(self.tournament.status, Tournament.Status.IN_PROGRESS)
+
+
+
 
 
 

@@ -66,3 +66,14 @@ class InvalidScoreError(TournamentMatchError):
 class InvalidWinnerError(TournamentMatchError):
     """Ungültiger oder widersprüchlicher Sieger."""
     pass
+
+
+class MatchPermissionDeniedError(TournamentMatchError):
+    """Keine Berechtigung zur Ergebniseingabe oder unerlaubte Selbstbestätigung eines Sieges."""
+    pass
+
+
+class MatchNotReadyError(TournamentMatchError):
+    """Match ist noch nicht vollständig mit Teams besetzt."""
+    pass
+

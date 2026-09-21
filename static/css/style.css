@@ -1047,3 +1047,253 @@ h3 {
     background: var(--line);
 }
 
+
+/* =============================================================================
+   TOURNAMENTS & TEAMS COMPONENT STYLES
+   ============================================================================= */
+
+/* Badges für Turniermodi, Formate und Status */
+.badge-mode {
+    background: var(--navy);
+    color: var(--signal);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.badge-format {
+    background: rgba(248, 171, 45, 0.15);
+    color: var(--signal-deep);
+    border: 1px solid rgba(248, 171, 45, 0.35);
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.badge-status-open {
+    background: rgba(16, 185, 129, 0.15);
+    color: #047857;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.badge-status-running {
+    background: rgba(2, 132, 199, 0.15);
+    color: #0284c7;
+    border: 1px solid rgba(2, 132, 199, 0.3);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.badge-status-finished {
+    background: rgba(100, 116, 139, 0.15);
+    color: #475569;
+    border: 1px solid rgba(100, 116, 139, 0.3);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+
+.badge-status-default {
+    background: rgba(100, 116, 139, 0.15);
+    color: var(--muted);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+
+.badge-captain {
+    background: rgba(248, 171, 45, 0.2);
+    color: var(--signal-deep);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.badge-archive {
+    background: var(--line);
+    color: var(--muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.badge-tag {
+    background: var(--line);
+    color: var(--ink);
+    font-size: 10px;
+    font-weight: bold;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.badge-esports {
+    background: var(--signal);
+    color: var(--navy);
+    font-size: 10px;
+    font-weight: bold;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+/* Aktions-Buttons */
+.btn-action-primary {
+    background: var(--signal);
+    color: var(--navy);
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-action-blue {
+    background: #0284c7;
+    color: white;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-action-blue-sm {
+    display: block;
+    text-align: center;
+    background: #0284c7;
+    color: white;
+    padding: 8px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.btn-action-navy {
+    background: var(--navy);
+    color: var(--signal);
+    border: none;
+    padding: 11px 18px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* Checkin-Status im Header */
+.badge-checkin-eligible {
+    background: rgba(16, 185, 129, 0.15);
+    color: #047857;
+    border: 1px solid #10b981;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.badge-checkin-needed {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid #f87171;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+
+/* Turnier- & Team-Karten */
+.tournament-card {
+    padding: 24px;
+    border-radius: 14px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.tournament-avatar-img {
+    width: 68px;
+    height: 68px;
+    object-fit: contain;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 6px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    flex-shrink: 0;
+}
+
+.tournament-avatar-placeholder {
+    width: 68px;
+    height: 68px;
+    background: var(--navy);
+    color: var(--signal);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.tournament-stats-box {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.team-card-active {
+    padding: 18px;
+    border-radius: 10px;
+    background: var(--paper);
+    border: 2px solid #22c55e;
+}
+
+.team-card-archived {
+    padding: 18px;
+    border-radius: 10px;
+    background: var(--paper);
+    border: 1px dashed var(--line);
+    opacity: 0.9;
+}

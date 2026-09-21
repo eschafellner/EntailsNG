@@ -24,11 +24,11 @@
 
       <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
         {% if user_checkin %}
-          <span style="background: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid #10b981; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
+          <span class="badge-checkin-eligible">
             ✓ {% t "tournament_checkin_eligible" "Vor Ort eingecheckt (Berechtigt)" %}
           </span>
         {% elif user.is_authenticated %}
-          <span style="background: rgba(239, 68, 68, 0.1); color: #dc2626; border: 1px solid #f87171; padding: 6px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+          <span class="badge-checkin-needed">
             ⚠️ {% t "tournament_checkin_needed" "Nicht eingecheckt (Check-in am Einlass nötig)" %}
           </span>
         {% endif %}
@@ -42,33 +42,33 @@
   <!-- Tournament Grid -->
   <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(390px, 1fr)); gap: 24px;">
     {% for tournament in tournaments %}
-      <div class="card" style="padding: 24px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+      <div class="card tournament-card">
         <div>
           <!-- Header Badges: Modus, Teamgröße & Status -->
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-              <span style="background: var(--navy); color: var(--signal); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+              <span class="badge-mode">
                 {{ tournament.get_mode_display }}
               </span>
-              <span style="background: rgba(248, 171, 45, 0.15); color: var(--signal-deep); border: 1px solid rgba(248, 171, 45, 0.35); padding: 4px 9px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+              <span class="badge-format">
                 {% if tournament.game.team_size == 1 %}{% t "tournament_format_solo" "👤 1v1 Solo" %}{% else %}{% t "tournament_format_team" "👥 {size}v{size} Team" size=tournament.game.team_size %}{% endif %}
               </span>
             </div>
 
             {% if tournament.status == 'OPEN' %}
-              <span style="background: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+              <span class="badge-status-open">
                 🟢 {% t "tournament_status_open" "Anmeldephase" %}
               </span>
             {% elif tournament.status == 'IN_PROGRESS' %}
-              <span style="background: rgba(2, 132, 199, 0.15); color: #0284c7; border: 1px solid rgba(2, 132, 199, 0.3); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">
+              <span class="badge-status-running">
                 ⚔️ {% t "tournament_status_running" "Läuft aktuell" %}
               </span>
             {% elif tournament.status == 'FINISHED' %}
-              <span style="background: rgba(100, 116, 139, 0.15); color: #475569; border: 1px solid rgba(100, 116, 139, 0.3); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+              <span class="badge-status-finished">
                 🏁 {% t "tournament_status_finished" "Beendet" %}
               </span>
             {% else %}
-              <span style="background: rgba(100, 116, 139, 0.15); color: var(--muted); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+              <span class="badge-status-default">
                 {{ tournament.get_status_display }}
               </span>
             {% endif %}
@@ -77,9 +77,9 @@
           <!-- Game & Tournament Info -->
           <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 18px;">
             {% if tournament.game.logo %}
-              <img src="{{ tournament.game.logo.url }}" alt="{{ tournament.game.name }}" style="width: 68px; height: 68px; object-fit: contain; border-radius: 10px; border: 1px solid var(--line); padding: 6px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-shrink: 0;">
+              <img src="{{ tournament.game.logo.url }}" alt="{{ tournament.game.name }}" class="tournament-avatar-img">
             {% else %}
-              <div style="width: 68px; height: 68px; background: var(--navy); color: var(--signal); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+              <div class="tournament-avatar-placeholder">
                 🎮
               </div>
             {% endif %}
@@ -98,7 +98,7 @@
           </div>
 
           <!-- Structured Key Stats Card -->
-          <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;">
+          <div class="tournament-stats-box">
             <div>
               <div style="display: flex; justify-content: space-between; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 6px;">
                 <span>👥 {% t "tournament_teams_label" "Angemeldete Teams" %}</span>
@@ -122,11 +122,11 @@
             ID: #{{ tournament.id }}
           </span>
           {% if tournament.is_registration_open %}
-            <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: var(--signal); color: var(--navy); padding: 9px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="btn-action-primary">
               {% t "tournament_register_btn" "🎮 Jetzt anmelden →" %}
             </a>
           {% else %}
-            <a href="{% url 'tournament_detail' slug=tournament.slug %}" style="background: #0284c7; color: white; padding: 9px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="btn-action-blue">
               {% t "tournament_details_btn" "Details & Spielplan →" %}
             </a>
           {% endif %}

@@ -32,7 +32,7 @@
     <div class="card" style="padding: 22px; border-radius: 12px; background: linear-gradient(135deg, var(--paper) 0%, var(--panel) 100%); border: 2px solid var(--signal); box-shadow: 0 4px 15px rgba(248, 171, 45, 0.15); display: flex; flex-direction: column; justify-content: space-between; gap: 14px;">
       <div>
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          <span style="background: var(--signal); color: var(--navy); font-size: 10px; font-weight: bold; font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">
+          <span class="badge-esports">
             {% t "team_list_esports_badge" "Turniere & Esports" %}
           </span>
         </div>
@@ -54,7 +54,7 @@
     <div class="card" style="padding: 22px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; gap: 14px;">
       <div>
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          <span style="background: var(--line); color: var(--ink); font-size: 10px; font-weight: bold; font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">
+          <span class="badge-tag">
             {% t "team_join_card_badge" "Direkt-Beitritt" %}
           </span>
         </div>
@@ -68,7 +68,7 @@
       <form method="post" action="{% url 'team_join_by_code' %}" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
         {% csrf_token %}
         <input type="text" name="invite_code" placeholder="z. B. 4A8B9C12" required uppercase style="flex: 1; min-width: 140px; padding: 11px 14px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 13px; text-transform: uppercase;">
-        <button type="submit" style="background: var(--navy); color: var(--signal); border: none; padding: 11px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap;">
+        <button type="submit" class="btn-action-navy">
           {% t "team_join_btn" "Beitreten →" %}
         </button>
       </form>
@@ -83,7 +83,7 @@
     </h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
       {% for team in my_active_teams %}
-        <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 2px solid #22c55e;">
+        <div class="card team-card-active">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
             <div>
               <div style="display: flex; align-items: center; gap: 6px;">
@@ -96,7 +96,7 @@
               </div>
             </div>
             {% if team.captain_id == user.id %}
-              <span style="background: rgba(248, 171, 45, 0.2); color: var(--signal-deep); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;">
+              <span class="badge-captain">
                 {% t "team_captain_badge" "👑 Kapitän" %}
               </span>
             {% endif %}
@@ -106,14 +106,14 @@
             👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglied(er)" %} | Code: <code>{{ team.invite_code }}</code>
           </div>
 
-          <a href="{% url 'team_detail' slug=team.slug %}" style="display: block; text-align: center; background: #0284c7; color: white; padding: 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+          <a href="{% url 'team_detail' slug=team.slug %}" class="btn-action-blue-sm">
             {% t "team_manage_btn" "Team verwalten →" %}
           </a>
         </div>
       {% endfor %}
 
       {% for team in my_archived_teams %}
-        <div class="card" style="padding: 18px; border-radius: 10px; background: var(--paper); border: 1px dashed var(--line); opacity: 0.9;">
+        <div class="card team-card-archived">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
             <div>
               <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--muted);">
@@ -123,7 +123,7 @@
                 📁 {% t "team_archived_banner_title" "Archiviert" %} ({{ team.event.title|default:"Früheres Event" }})
               </div>
             </div>
-            <span style="background: var(--line); color: var(--muted); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: bold;">
+            <span class="badge-archive">
               {% t "team_archived_badge" "ARCHIV" %}
             </span>
           </div>

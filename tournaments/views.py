@@ -18,6 +18,7 @@ from tournaments.exceptions import (
     TournamentRegistrationError,
     TournamentBracketError,
     TournamentMatchError,
+    MatchPermissionDeniedError,
 )
 from tournaments.services import (
     FFAMatchService,
@@ -137,13 +138,6 @@ def tournament_detail(request, slug):
     podium = {'first': None, 'second': None, 'third': None}
 
     if tournament.is_generated:
-        # Automatischer Sync: Wenn alle Matches beendet sind, Status auf FINISHED setzen
-        if tournament.status != Tournament.Status.FINISHED:
-            has_open_matches = matches.exclude(status=TournamentMatch.Status.COMPLETED).exists()
-            if not has_open_matches and matches.exists():
-                tournament.status = Tournament.Status.FINISHED
-                tournament.save(update_fields=['status'])
-
         if tournament.mode == Tournament.Mode.DOUBLE_ELIMINATION:
             wb_matches = matches.filter(bracket_type=TournamentMatch.BracketType.WINNERS).order_by('round_number', 'match_number')
             lb_matches = matches.filter(bracket_type=TournamentMatch.BracketType.LOSERS).order_by('round_number', 'match_number')
@@ -344,63 +338,17 @@ def tournament_generate_bracket(request, slug):
 def match_update_score(request, match_id):
     """
     Quick-Result Modal für Turnier-Admins und Teilnehmer: Trägt Spielergebnisse ein und rückt Sieger vor.
-    Teilnehmer können als Fairplay-Schutz nur die eigene Niederlage bestätigen.
+    Validierung und Berechtigungsprüfung (inkl. Fairplay-Schutz) erfolgen
+    vollständig und atomar im Service unter DB-Row-Locks.
     """
-    match_obj = get_object_or_404(
-        TournamentMatch.objects.select_related('tournament', 'team1', 'team2'),
-        id=match_id
-    )
-    tournament = match_obj.tournament
-
-    is_admin = tournament.is_managed_by(request.user)
-    is_team1_member = bool(match_obj.team1 and match_obj.team1.is_member(request.user))
-    is_team2_member = bool(match_obj.team2 and match_obj.team2.is_member(request.user))
-
-    if not is_admin and not is_team1_member and not is_team2_member:
-        return JsonResponse({'success': False, 'error': 'Keine Berechtigung zur Ergebniseingabe für dieses Match.'}, status=403)
-
-    if not is_admin and match_obj.status == TournamentMatch.Status.COMPLETED:
-        return JsonResponse({'success': False, 'error': 'Dieses Match wurde bereits gewertet und kann nur von einem Turnier-Admin bearbeitet werden.'}, status=403)
-
-    if not match_obj.team1 or not match_obj.team2:
-        return JsonResponse({'success': False, 'error': 'Das Match ist noch nicht vollständig mit Teams besetzt.'}, status=400)
-
     try:
         score1 = request.POST.get('score_team1', 0)
         score2 = request.POST.get('score_team2', 0)
         winner_id = request.POST.get('winner_id')
         decision_reason = (request.POST.get('decision_reason') or '').strip()
 
-        # Teilnehmer-Schutz: Darf nur die eigene Niederlage bestätigen (Gegner als Sieger)
-        if not is_admin:
-            try:
-                s1 = int(score1)
-                s2 = int(score2)
-            except (ValueError, TypeError):
-                return JsonResponse({'success': False, 'error': 'Ungültiges Punkteformat übergeben.'}, status=400)
-
-            if is_team1_member and not is_team2_member:
-                if winner_id and int(winner_id) != match_obj.team2.id:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Teilnehmer können nur die eigene Niederlage bestätigen. Um einen Sieg für dein Team einzutragen, muss der Gegner das Ergebnis bestätigen oder ein Admin kontaktiert werden.'
-                    }, status=400)
-                winner_id = match_obj.team2.id
-                if not decision_reason:
-                    decision_reason = f"Niederlage bestätigt durch {request.user.username} ({match_obj.team1.name})"
-
-            elif is_team2_member and not is_team1_member:
-                if winner_id and int(winner_id) != match_obj.team1.id:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Teilnehmer können nur die eigene Niederlage bestätigen. Um einen Sieg für dein Team einzutragen, muss der Gegner das Ergebnis bestätigen oder ein Admin kontaktiert werden.'
-                    }, status=400)
-                winner_id = match_obj.team1.id
-                if not decision_reason:
-                    decision_reason = f"Niederlage bestätigt durch {request.user.username} ({match_obj.team2.name})"
-
         match_updated, winner_team = TournamentMatchService.update_match_score(
-            match_id=match_obj.id,
+            match_id=match_id,
             score1=score1,
             score2=score2,
             winner_id=winner_id,
@@ -427,6 +375,10 @@ def match_update_score(request, match_id):
                 ),
             )
             return JsonResponse({'success': True, 'winner': None, 'draw': True})
+    except TournamentMatch.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Match nicht gefunden.'}, status=404)
+    except MatchPermissionDeniedError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=403)
     except TournamentError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
     except Exception as e:
