@@ -559,14 +559,24 @@ class AuthBackendAndLockoutTests(TestCase):
 
 
 class ClientIPDetectionTests(TestCase):
-    def test_get_client_ip_cf_connecting_ip(self):
+    def test_get_client_ip_cf_connecting_ip_when_trusted(self):
         from users.auth_backends import get_client_ip
         from django.test import RequestFactory
         rf = RequestFactory()
         request = rf.get('/', HTTP_CF_CONNECTING_IP='203.0.113.19', REMOTE_ADDR='172.18.0.5')
-        with self.settings(BEHIND_PROXY=True):
+        with self.settings(BEHIND_PROXY=True, TRUST_CLOUDFLARE=True):
             ip = get_client_ip(request)
             self.assertEqual(ip, '203.0.113.19')
+
+    def test_get_client_ip_cf_connecting_ip_ignored_when_untrusted(self):
+        from users.auth_backends import get_client_ip
+        from django.test import RequestFactory
+        rf = RequestFactory()
+        request = rf.get('/', HTTP_CF_CONNECTING_IP='203.0.113.19', REMOTE_ADDR='172.18.0.5')
+        with self.settings(BEHIND_PROXY=True, TRUST_CLOUDFLARE=False):
+            ip = get_client_ip(request)
+            # CF header must be ignored; falls back to REMOTE_ADDR
+            self.assertEqual(ip, '172.18.0.5')
 
     def test_get_client_ip_x_real_ip(self):
         from users.auth_backends import get_client_ip

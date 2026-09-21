@@ -328,7 +328,7 @@ def check_and_advance_match(match, visited=None):
     - 'PENDING': Der Zubringer für diesen Slot ist noch nicht COMPLETED (Teilnehmer steht noch aus).
     - 'EMPTY': Der Slot bleibt endgültig leer (kein Zubringer vorhanden oder Zubringer COMPLETED ohne Teilnehmer).
     """
-    from tournaments.models import TournamentMatch
+    from tournaments.models import TournamentMatch, TournamentRegistration
 
     if visited is None:
         visited = set()
@@ -340,9 +340,26 @@ def check_and_advance_match(match, visited=None):
     if match.status == TournamentMatch.Status.COMPLETED or match.is_bye:
         return
 
+    # Ermittle alle aufgegebenen Teams in diesem Turnier
+    forfeited_team_ids = set(
+        TournamentRegistration.objects.filter(
+            tournament_id=match.tournament_id,
+            is_forfeited=True,
+        ).values_list('team_id', flat=True)
+    )
+
+    def is_forfeited(t):
+        return t is not None and t.id in forfeited_team_ids
+
     def evaluate_slot(slot_num):
         team = match.team1 if slot_num == 1 else match.team2
         if team is not None:
+            if is_forfeited(team):
+                if slot_num == 1:
+                    match.team1 = None
+                else:
+                    match.team2 = None
+                return 'EMPTY', None
             return 'FILLED', team
 
         prev_w = list(match.prev_matches_winner.filter(next_match_winner_slot=slot_num))
@@ -358,18 +375,21 @@ def check_and_advance_match(match, visited=None):
 
         # Alle Zubringer sind COMPLETED. Prüfen, ob ein Teilnehmer bereitsteht
         for f in prev_w:
-            if f.winner:
+            if f.winner and not is_forfeited(f.winner):
                 return 'FILLED', f.winner
         for f in prev_l:
-            if f.loser:
+            if f.loser and not is_forfeited(f.loser):
                 return 'FILLED', f.loser
 
         return 'EMPTY', None
 
+    orig_team1 = match.team1
+    orig_team2 = match.team2
+
     state1, team1 = evaluate_slot(1)
     state2, team2 = evaluate_slot(2)
 
-    updated_teams = False
+    updated_teams = (match.team1 != orig_team1) or (match.team2 != orig_team2)
     if state1 == 'FILLED' and match.team1 != team1:
         match.team1 = team1
         updated_teams = True
@@ -431,7 +451,7 @@ def check_and_advance_match(match, visited=None):
         match.winner = None
         match.loser = None
         match.status = TournamentMatch.Status.COMPLETED
-        match.save(update_fields=['is_bye', 'winner', 'loser', 'status'])
+        match.save(update_fields=['team1', 'team2', 'is_bye', 'winner', 'loser', 'status'])
 
         if match.next_match_winner:
             next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
@@ -465,23 +485,53 @@ class TournamentMatchService:
 
         with transaction.atomic():
             match = TournamentMatch.objects.select_for_update().get(pk=match_id)
+            tournament = match.tournament
+
+            # 0. Schutz für abgeschlossene Turniere
+            if tournament.status == Tournament.Status.FINISHED:
+                raise MatchAlreadyCompletedError(
+                    "Das Turnier ist bereits abgeschlossen. Ergebnisse können nicht mehr geändert werden."
+                )
 
             # 1. Folgematch-Schutz bei nachträglicher Änderung
             if match.status == TournamentMatch.Status.COMPLETED:
                 if match.next_match_winner:
                     next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
-                    if next_w.status == TournamentMatch.Status.COMPLETED:
+                    if next_w.status in [TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]:
                         raise MatchAlreadyCompletedError(
                             "Das Folgematch wurde bereits gespielt und gewertet. Das Ergebnis kann nicht mehr geändert werden."
                         )
                 if match.next_match_loser:
                     next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
-                    if next_l.status == TournamentMatch.Status.COMPLETED:
+                    if next_l.status in [TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]:
                         raise MatchAlreadyCompletedError(
                             "Das Folgematch im Loser-Bracket wurde bereits gespielt. Das Ergebnis kann nicht mehr geändert werden."
                         )
+                # Schutz für Gruppenphase: wenn Finalphase bereits begonnen hat
+                if match.bracket_type == TournamentMatch.BracketType.GROUP:
+                    if tournament.matches.filter(
+                        bracket_type=TournamentMatch.BracketType.FINAL,
+                        status__in=[TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]
+                    ).exists():
+                        raise MatchAlreadyCompletedError(
+                            "Die Finalspiele wurden bereits begonnen oder beendet. Das Gruppenergebnis kann nicht mehr geändert werden."
+                        )
+                # Schutz für Grand Final: wenn Grand Final Reset bereits begonnen hat
+                if match.bracket_type == TournamentMatch.BracketType.GRAND_FINAL:
+                    if tournament.matches.filter(
+                        bracket_type=TournamentMatch.BracketType.GRAND_FINAL_RESET,
+                        status__in=[TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]
+                    ).exists():
+                        raise MatchAlreadyCompletedError(
+                            "Das Grand Final Reset Match wurde bereits begonnen oder beendet. Das Grand Final Ergebnis kann nicht mehr geändert werden."
+                        )
 
             # 2. Sieger bestimmen und plausibilisieren
+            allows_draw = (
+                match.bracket_type == TournamentMatch.BracketType.GROUP
+                or tournament.mode == Tournament.Mode.LEAGUE
+            )
+
             winner_team = None
             if winner_id:
                 try:
@@ -501,17 +551,19 @@ class TournamentMatchService:
                 elif score2 > score1:
                     winner_team = match.team2
                 else:
-                    raise InvalidWinnerError("Unentschieden ist in KO-Matches nicht erlaubt. Bitte Sieger auswählen.")
+                    if not allows_draw:
+                        raise InvalidWinnerError("Unentschieden ist in KO-Matches nicht erlaubt. Bitte Sieger auswählen.")
 
-            if not winner_team:
+            if not winner_team and not (allows_draw and score1 == score2 and not winner_id):
                 raise InvalidWinnerError("Es konnte kein gültiger Sieger ermittelt werden.")
 
             # Plausibilität: Widerspruch zwischen Score und gewähltem Sieger verlangt Begründung
             score_discrepancy = False
-            if score1 > score2 and winner_team == match.team2:
-                score_discrepancy = True
-            elif score2 > score1 and winner_team == match.team1:
-                score_discrepancy = True
+            if winner_team:
+                if score1 > score2 and winner_team == match.team2:
+                    score_discrepancy = True
+                elif score2 > score1 and winner_team == match.team1:
+                    score_discrepancy = True
 
             if score_discrepancy:
                 if not decision_reason or not str(decision_reason).strip():
@@ -524,7 +576,10 @@ class TournamentMatchService:
             match.score_team1 = score1
             match.score_team2 = score2
             match.winner = winner_team
-            match.loser = match.team2 if winner_team == match.team1 else match.team1
+            if winner_team:
+                match.loser = match.team2 if winner_team == match.team1 else match.team1
+            else:
+                match.loser = None
             match.decision_reason = str(decision_reason).strip() if decision_reason else ""
             match.status = TournamentMatch.Status.COMPLETED
             match.save()
@@ -532,38 +587,40 @@ class TournamentMatchService:
             # 4. Sieger ins Folgematch vorrücken (unter Lock)
             if match.next_match_winner:
                 next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
-                if match.next_match_winner_slot == 1:
-                    next_w.team1 = winner_team
-                elif match.next_match_winner_slot == 2:
-                    next_w.team2 = winner_team
-                else:
-                    if not next_w.team1:
+                if winner_team and not TournamentRegistration.objects.filter(tournament=tournament, team=winner_team, is_forfeited=True).exists():
+                    if match.next_match_winner_slot == 1:
                         next_w.team1 = winner_team
-                    elif not next_w.team2 and next_w.team1 != winner_team:
+                    elif match.next_match_winner_slot == 2:
                         next_w.team2 = winner_team
-                    elif next_w.team1 != winner_team and next_w.team2 != winner_team:
-                        next_w.team1 = winner_team
+                    else:
+                        if not next_w.team1:
+                            next_w.team1 = winner_team
+                        elif not next_w.team2 and next_w.team1 != winner_team:
+                            next_w.team2 = winner_team
+                        elif next_w.team1 != winner_team and next_w.team2 != winner_team:
+                            next_w.team1 = winner_team
 
-                if next_w.team1 and next_w.team2 and not next_w.is_bye and next_w.status == TournamentMatch.Status.PENDING:
-                    next_w.status = TournamentMatch.Status.READY
-                next_w.save()
+                    if next_w.team1 and next_w.team2 and not next_w.is_bye and next_w.status == TournamentMatch.Status.PENDING:
+                        next_w.status = TournamentMatch.Status.READY
+                    next_w.save()
                 check_and_advance_match(next_w)
 
             # 5. Verlierer ins Folgematch (unter Lock)
             if match.next_match_loser:
                 next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
-                if match.loser:
+                loser = match.loser
+                if loser and not TournamentRegistration.objects.filter(tournament=tournament, team=loser, is_forfeited=True).exists():
                     if match.next_match_loser_slot == 1:
-                        next_l.team1 = match.loser
+                        next_l.team1 = loser
                     elif match.next_match_loser_slot == 2:
-                        next_l.team2 = match.loser
+                        next_l.team2 = loser
                     else:
                         if not next_l.team1:
-                            next_l.team1 = match.loser
-                        elif not next_l.team2 and next_l.team1 != match.loser:
-                            next_l.team2 = match.loser
-                        elif next_l.team1 != match.loser and next_l.team2 != match.loser:
-                            next_l.team1 = match.loser
+                            next_l.team1 = loser
+                        elif not next_l.team2 and next_l.team1 != loser:
+                            next_l.team2 = loser
+                        elif next_l.team1 != loser and next_l.team2 != loser:
+                            next_l.team1 = loser
 
                     if next_l.team1 and next_l.team2 and not next_l.is_bye and next_l.status == TournamentMatch.Status.PENDING:
                         next_l.status = TournamentMatch.Status.READY
@@ -624,9 +681,19 @@ def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
     als Walkover / Freilos für den jeweiligen Gegner ab, sodass der Turnierbaum
     nicht blockiert wird.
     """
-    from tournaments.models import TournamentMatch, TournamentMatchParticipant
+    from tournaments.models import Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration
 
     with transaction.atomic():
+        # 0. Turnieranmeldungen in aktiven Turnieren als aufgegeben markieren
+        TournamentRegistration.objects.filter(
+            team=team,
+        ).exclude(
+            tournament__status__in=[
+                Tournament.Status.FINISHED,
+                Tournament.Status.CANCELLED,
+            ]
+        ).update(is_forfeited=True)
+
         # 1. FFA-Matches
         TournamentMatchParticipant.objects.filter(
             team=team,
@@ -917,6 +984,11 @@ class GroupStageStandingService:
             return False
 
         if group_matches.exclude(status=TournamentMatch.Status.COMPLETED).exists():
+            return False
+
+        # Wenn Finalspiele bereits begonnen oder abgeschlossen wurden, nicht erneut überschreiben
+        playoff_matches = tournament.matches.filter(bracket_type=TournamentMatch.BracketType.FINAL)
+        if playoff_matches.filter(status__in=[TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]).exists():
             return False
 
         standings_a = GroupStageStandingService.calculate_group_standings(tournament, 'Gruppe A')

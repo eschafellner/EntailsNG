@@ -19,17 +19,19 @@ def get_client_ip(request):
     behind_proxy = getattr(settings, 'BEHIND_PROXY', False)
     use_x_forwarded_for = getattr(settings, 'USE_X_FORWARDED_FOR', behind_proxy)
     num_proxies = getattr(settings, 'NUM_PROXIES', 1)
+    trust_cloudflare = getattr(settings, 'TRUST_CLOUDFLARE', False)
 
     if behind_proxy or use_x_forwarded_for:
-        # 1. Cloudflare Edge liefert die reale Client-IP in CF-Connecting-IP
-        cf_ip = request.META.get('HTTP_CF_CONNECTING_IP')
-        if cf_ip:
-            candidate = cf_ip.strip()
-            try:
-                ipaddress.ip_address(candidate)
-                return candidate
-            except ValueError:
-                pass
+        # 1. Cloudflare Edge liefert die reale Client-IP in CF-Connecting-IP (nur wenn TRUST_CLOUDFLARE aktiviert)
+        if trust_cloudflare:
+            cf_ip = request.META.get('HTTP_CF_CONNECTING_IP')
+            if cf_ip:
+                candidate = cf_ip.strip()
+                try:
+                    ipaddress.ip_address(candidate)
+                    return candidate
+                except ValueError:
+                    pass
 
         # 2. Reverse Proxy (Nginx) liefert X-Real-IP
         real_ip = request.META.get('HTTP_X_REAL_IP')

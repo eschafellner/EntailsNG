@@ -6,7 +6,7 @@ from datetime import timedelta
 from users.models import User
 from events.models import Event, EventRegistration
 from tournaments.exceptions import (
-    TournamentError, TournamentRegistrationError, TournamentNotCheckedInError
+    InvalidWinnerError, MatchAlreadyCompletedError, TournamentError, TournamentRegistrationError, TournamentNotCheckedInError
 )
 from tournaments.models import (
     Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration
@@ -2187,6 +2187,408 @@ class TournamentTranslationMaintenanceTests(TestCase):
 
         messages = list(get_messages(resp.wsgi_request))
         self.assertTrue(any("Fehler: Bitte einen Teamnamen eingeben!" in str(m) for m in messages))
+
+
+class TournamentResultProtectionTests(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="Protection LAN",
+            slug="protection-lan",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game = Game.objects.create(name="Game 1", mode="1v1", team_size=1)
+        self.admin_user = User.objects.create_superuser("admin_prot", "admin_prot@example.com", "pass")
+        self.u1 = User.objects.create_user("u1", "u1@example.com", "pass")
+        self.u2 = User.objects.create_user("u2", "u2@example.com", "pass")
+        self.u3 = User.objects.create_user("u3", "u3@example.com", "pass")
+        self.u4 = User.objects.create_user("u4", "u4@example.com", "pass")
+        self.t1 = Team.objects.create(name="T1", captain=self.u1, game=self.game)
+        self.t2 = Team.objects.create(name="T2", captain=self.u2, game=self.game)
+        self.t3 = Team.objects.create(name="T3", captain=self.u3, game=self.game)
+        self.t4 = Team.objects.create(name="T4", captain=self.u4, game=self.game)
+
+    def test_score_change_rejected_when_tournament_finished(self):
+        """Ergebnisänderungen in bereits abgeschlossenen Turnieren werden abgelehnt."""
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="Finished Cup",
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.FINISHED,
+        )
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.FINAL,
+            team1=self.t1,
+            team2=self.t2,
+            score_team1=16,
+            score_team2=10,
+            winner=self.t1,
+            loser=self.t2,
+            status=TournamentMatch.Status.COMPLETED,
+        )
+        with self.assertRaises(MatchAlreadyCompletedError):
+            TournamentMatchService.update_match_score(
+                match_id=match.id,
+                score1=10,
+                score2=16,
+                winner_id=self.t2.id,
+            )
+
+    def test_group_stage_score_change_rejected_if_playoffs_active(self):
+        """Änderung eines Gruppenspiels ablehnen, wenn Finalspiele bereits begonnen oder abgeschlossen wurden."""
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="Group Cup",
+            mode=Tournament.Mode.GROUP_STAGE,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.IN_PROGRESS,
+        )
+        group_match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.GROUP,
+            group_name="Gruppe A",
+            team1=self.t1,
+            team2=self.t2,
+            score_team1=16,
+            score_team2=10,
+            winner=self.t1,
+            status=TournamentMatch.Status.COMPLETED,
+        )
+        # Playoff match ist bereits IN_PROGRESS
+        playoff_match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=2,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.FINAL,
+            team1=self.t1,
+            team2=self.t3,
+            status=TournamentMatch.Status.IN_PROGRESS,
+        )
+        with self.assertRaises(MatchAlreadyCompletedError):
+            TournamentMatchService.update_match_score(
+                match_id=group_match.id,
+                score1=5,
+                score2=16,
+                winner_id=self.t2.id,
+            )
+
+    def test_grand_final_score_change_rejected_if_reset_active(self):
+        """Änderung des Grand Finals ablehnen, wenn das Grand Final Reset Match bereits läuft oder abgeschlossen ist."""
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="DE Grand Final Cup",
+            mode=Tournament.Mode.DOUBLE_ELIMINATION,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.IN_PROGRESS,
+        )
+        gf_match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=3,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.GRAND_FINAL,
+            team1=self.t1,
+            team2=self.t2,
+            score_team1=10,
+            score_team2=16,
+            winner=self.t2,
+            loser=self.t1,
+            status=TournamentMatch.Status.COMPLETED,
+        )
+        reset_match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=4,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.GRAND_FINAL_RESET,
+            team1=self.t1,
+            team2=self.t2,
+            status=TournamentMatch.Status.IN_PROGRESS,
+        )
+        with self.assertRaises(MatchAlreadyCompletedError):
+            TournamentMatchService.update_match_score(
+                match_id=gf_match.id,
+                score1=16,
+                score2=10,
+                winner_id=self.t1.id,
+            )
+
+    def test_check_and_advance_group_stage_preserves_active_playoffs(self):
+        """check_and_advance_group_stage überschreibt keine Finalspiele, die bereits laufen oder fertig sind."""
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="Group Preservation Cup",
+            mode=Tournament.Mode.GROUP_STAGE,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.IN_PROGRESS,
+        )
+        TournamentRegistration.objects.create(tournament=tournament, team=self.t1, group_name="Gruppe A")
+        TournamentRegistration.objects.create(tournament=tournament, team=self.t2, group_name="Gruppe A")
+        TournamentRegistration.objects.create(tournament=tournament, team=self.t3, group_name="Gruppe B")
+        TournamentRegistration.objects.create(tournament=tournament, team=self.t4, group_name="Gruppe B")
+
+        # Gruppe A & B Matches
+        TournamentMatch.objects.create(
+            tournament=tournament, round_number=1, match_number=1,
+            bracket_type=TournamentMatch.BracketType.GROUP, group_name="Gruppe A",
+            team1=self.t1, team2=self.t2, score_team1=16, score_team2=5, winner=self.t1,
+            status=TournamentMatch.Status.COMPLETED,
+        )
+        TournamentMatch.objects.create(
+            tournament=tournament, round_number=1, match_number=2,
+            bracket_type=TournamentMatch.BracketType.GROUP, group_name="Gruppe B",
+            team1=self.t3, team2=self.t4, score_team1=16, score_team2=5, winner=self.t3,
+            status=TournamentMatch.Status.COMPLETED,
+        )
+        # Finale existiert und ist COMPLETED
+        final_match = TournamentMatch.objects.create(
+            tournament=tournament, round_number=2, match_number=1,
+            bracket_type=TournamentMatch.BracketType.FINAL,
+            team1=self.t1, team2=self.t3, score_team1=16, score_team2=12, winner=self.t1,
+            status=TournamentMatch.Status.COMPLETED,
+        )
+        advanced = GroupStageStandingService.check_and_advance_group_stage(tournament)
+        self.assertFalse(advanced)
+        final_match.refresh_from_db()
+        self.assertEqual(final_match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(final_match.winner, self.t1)
+
+
+class ForfeitedTeamAdvancementTests(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="Forfeit LAN",
+            slug="forfeit-lan",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game = Game.objects.create(name="Game F", mode="1v1", team_size=1)
+        self.u1 = User.objects.create_user("fu1", "fu1@example.com", "pass")
+        self.u2 = User.objects.create_user("fu2", "fu2@example.com", "pass")
+        self.u3 = User.objects.create_user("fu3", "fu3@example.com", "pass")
+        self.t1 = Team.objects.create(name="T1", captain=self.u1, game=self.game)
+        self.t2 = Team.objects.create(name="T2", captain=self.u2, game=self.game)
+        self.t3 = Team.objects.create(name="T3", captain=self.u3, game=self.game)
+
+    def test_forfeited_team_does_not_advance_to_loser_bracket_and_opponent_gets_bye(self):
+        """Ein aufgegebenes Team wird nicht im Loser Bracket eingesetzt; der Gegner erhält ein Freilos (BYE)."""
+        from tournaments.services import forfeit_team_in_active_tournaments
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="DE Forfeit Cup",
+            mode=Tournament.Mode.DOUBLE_ELIMINATION,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.IN_PROGRESS,
+        )
+        reg1 = TournamentRegistration.objects.create(tournament=tournament, team=self.t1)
+        reg2 = TournamentRegistration.objects.create(tournament=tournament, team=self.t2)
+        reg3 = TournamentRegistration.objects.create(tournament=tournament, team=self.t3)
+
+        # Match in WB: T1 vs T2
+        # Folgematch für Loser: lb_match
+        lb_match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.LOSERS,
+            team1=self.t3,
+            team2=None,
+            status=TournamentMatch.Status.PENDING,
+        )
+        wb_match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.WINNERS,
+            team1=self.t1,
+            team2=self.t2,
+            next_match_loser=lb_match,
+            next_match_loser_slot=2,
+            status=TournamentMatch.Status.READY,
+        )
+
+        # T2 gibt auf
+        forfeit_team_in_active_tournaments(self.t2, reason="Aufgabe Test")
+
+        # Turnieranmeldung von T2 muss is_forfeited=True haben
+        reg2.refresh_from_db()
+        self.assertTrue(reg2.is_forfeited)
+
+        # wb_match muss durch den Walkover abgeschlossen sein mit Sieger T1
+        wb_match.refresh_from_db()
+        self.assertEqual(wb_match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(wb_match.winner, self.t1)
+        self.assertEqual(wb_match.loser, self.t2)
+
+        # lb_match darf T2 NICHT als team2 erhalten, sondern T3 muss sofort ein Freilos (BYE) bekommen!
+        lb_match.refresh_from_db()
+        self.assertNotEqual(lb_match.team2, self.t2)
+        self.assertTrue(lb_match.is_bye)
+        self.assertEqual(lb_match.winner, self.t3)
+        self.assertEqual(lb_match.status, TournamentMatch.Status.COMPLETED)
+
+
+class LeagueAndGroupStageDrawTests(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="Draw LAN",
+            slug="draw-lan",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game = Game.objects.create(name="Draw Game", mode="1v1", team_size=1)
+        self.u1 = User.objects.create_user("du1", "du1@example.com", "pass")
+        self.u2 = User.objects.create_user("du2", "du2@example.com", "pass")
+        self.t1 = Team.objects.create(name="D1", captain=self.u1, game=self.game)
+        self.t2 = Team.objects.create(name="D2", captain=self.u2, game=self.game)
+
+    def test_draw_allowed_in_league(self):
+        """Unentschieden in Ligaturnieren ist erlaubt und führt zu winner=None, loser=None."""
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="League Draw",
+            mode=Tournament.Mode.LEAGUE,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.IN_PROGRESS,
+        )
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.GROUP,
+            team1=self.t1,
+            team2=self.t2,
+            status=TournamentMatch.Status.READY,
+        )
+        m, winner = TournamentMatchService.update_match_score(
+            match_id=match.id,
+            score1=10,
+            score2=10,
+        )
+        self.assertIsNone(winner)
+        self.assertIsNone(m.winner)
+        self.assertIsNone(m.loser)
+        self.assertEqual(m.status, TournamentMatch.Status.COMPLETED)
+
+        # Ligatabelle prüfen
+        TournamentRegistration.objects.create(tournament=tournament, team=self.t1)
+        TournamentRegistration.objects.create(tournament=tournament, team=self.t2)
+        standings = LeagueStandingService.calculate_league_standings(tournament)
+        self.assertEqual(len(standings), 2)
+        self.assertEqual(standings[0]['points'], 1)
+        self.assertEqual(standings[1]['points'], 1)
+        self.assertEqual(standings[0]['drawn'], 1)
+        self.assertEqual(standings[1]['drawn'], 1)
+
+    def test_draw_allowed_in_group_stage(self):
+        """Unentschieden in Gruppenphase ist erlaubt."""
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="Group Draw",
+            mode=Tournament.Mode.GROUP_STAGE,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.IN_PROGRESS,
+        )
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.GROUP,
+            group_name="Gruppe A",
+            team1=self.t1,
+            team2=self.t2,
+            status=TournamentMatch.Status.READY,
+        )
+        m, winner = TournamentMatchService.update_match_score(
+            match_id=match.id,
+            score1=5,
+            score2=5,
+        )
+        self.assertIsNone(winner)
+        self.assertIsNone(m.winner)
+        self.assertIsNone(m.loser)
+        self.assertEqual(m.status, TournamentMatch.Status.COMPLETED)
+
+    def test_draw_rejected_in_ko(self):
+        """Unentschieden in K.O.-Matches ohne Siegerauswahl wird abgelehnt."""
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="KO Cup",
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.IN_PROGRESS,
+        )
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.FINAL,
+            team1=self.t1,
+            team2=self.t2,
+            status=TournamentMatch.Status.READY,
+        )
+        with self.assertRaises(InvalidWinnerError):
+            TournamentMatchService.update_match_score(
+                match_id=match.id,
+                score1=10,
+                score2=10,
+            )
+
+    def test_match_update_score_view_draw(self):
+        """View gibt bei Unentschieden draw: True und 200 zurück."""
+        tournament = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="View Draw Cup",
+            mode=Tournament.Mode.LEAGUE,
+            registration_start=timezone.now(),
+            registration_end=timezone.now() + timedelta(days=1),
+            status=Tournament.Status.IN_PROGRESS,
+        )
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            round_number=1,
+            match_number=1,
+            bracket_type=TournamentMatch.BracketType.GROUP,
+            team1=self.t1,
+            team2=self.t2,
+            status=TournamentMatch.Status.READY,
+        )
+        admin = User.objects.create_superuser("admin_draw", "admin_draw@example.com", "pass")
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('match_update_score', kwargs={'match_id': match.id}),
+            {'score1': 5, 'score2': 5},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get('success'))
+        self.assertTrue(data.get('draw'))
+        self.assertIsNone(data.get('winner'))
 
 
 

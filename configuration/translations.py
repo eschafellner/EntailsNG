@@ -629,6 +629,7 @@ DEFAULT_TEXTS = {
     'msg_tournament_unreg_success': 'Team "{team_name}" erfolgreich vom Turnier "{tournament_title}" abgemeldet.',
     'msg_tournament_no_perm_bracket': 'Keine Berechtigung zur Generierung des Turnierbaums.',
     'msg_tournament_score_saved': 'Ergebnis gespeichert! Sieger: {winner_name}',
+    'msg_tournament_score_draw': 'Ergebnis gespeichert! Unentschieden.',
     'msg_tournament_no_perm_score': 'Keine Berechtigung zur Ergebniseingabe.',
     'msg_tournament_ffa_scores_saved': 'FFA-Ergebnisse für "{tournament_title}" erfolgreich gespeichert!',
     'msg_team_name_required': 'Bitte gib einen Teamnamen ein.',

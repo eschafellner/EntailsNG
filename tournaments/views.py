@@ -404,15 +404,25 @@ def match_update_score(request, match_id):
             actor=request.user,
         )
 
-        messages.success(
-            request,
-            get_translation(
-                'msg_tournament_score_saved',
-                'Ergebnis gespeichert! Sieger: {winner_name}',
-                winner_name=winner_team.name,
-            ),
-        )
-        return JsonResponse({'success': True, 'winner': winner_team.name})
+        if winner_team:
+            messages.success(
+                request,
+                get_translation(
+                    'msg_tournament_score_saved',
+                    'Ergebnis gespeichert! Sieger: {winner_name}',
+                    winner_name=winner_team.name,
+                ),
+            )
+            return JsonResponse({'success': True, 'winner': winner_team.name})
+        else:
+            messages.success(
+                request,
+                get_translation(
+                    'msg_tournament_score_draw',
+                    'Ergebnis gespeichert! Unentschieden.',
+                ),
+            )
+            return JsonResponse({'success': True, 'winner': None, 'draw': True})
     except TournamentError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
     except Exception as e:

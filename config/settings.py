@@ -60,6 +60,8 @@ if CSRF_TRUSTED_ORIGINS_ENV:
 else:
     CSRF_TRUSTED_ORIGINS = []
 
+TRUST_CLOUDFLARE = env_bool('TRUST_CLOUDFLARE', default=False)
+
 
 # -----------------------------------------------------------------------------
 # Application definition
@@ -174,6 +176,9 @@ else:
 # Cache Configuration (Redis für Multi-Worker Konsistenz)
 # -----------------------------------------------------------------------------
 REDIS_URL = os.environ.get('REDIS_URL')
+CLI_COMMANDS_FALLBACK = {'test', 'makemigrations', 'showmigrations', 'migrate', 'check', 'collectstatic', 'help', 'diffsettings'}
+is_cli_fallback = any(arg in sys.argv for arg in CLI_COMMANDS_FALLBACK)
+
 if REDIS_URL and 'test' not in sys.argv:
     CACHES = {
         'default': {
@@ -182,7 +187,7 @@ if REDIS_URL and 'test' not in sys.argv:
         }
     }
 else:
-    if not DEBUG and 'test' not in sys.argv:
+    if not DEBUG and not is_cli_fallback:
         raise ImproperlyConfigured(
             "Umgebungsvariable REDIS_URL ist für den Produktionsbetrieb (DEBUG=False) zwingend erforderlich (Multi-Worker Cache Konsistenz)!"
         )
