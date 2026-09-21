@@ -213,6 +213,8 @@ class Event(models.Model):
     @property
     def active_registrations_count(self):
         """Liefert die Anzahl der aktiven (nicht stornierten) Anmeldungen."""
+        if hasattr(self, 'annotated_active_registrations_count'):
+            return self.annotated_active_registrations_count
         return self.registrations.exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED).count()
 
     @property

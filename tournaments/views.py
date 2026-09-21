@@ -42,7 +42,11 @@ def tournament_list(request):
     Übersichtsseite aller Turniere für die aktive Hauptveranstaltung.
     """
     active_event = Event.objects.get_active()
-    tournaments = Tournament.objects.filter(event=active_event).select_related('game', 'event') if active_event else []
+    tournaments = (
+        Tournament.objects.filter(event=active_event)
+        .select_related('game', 'event')
+        .annotate(annotated_registered_teams_count=models.Count('registrations'))
+    ) if active_event else []
 
     user_checkin = False
     if request.user.is_authenticated and active_event:
@@ -524,7 +528,7 @@ def team_list(request):
         user_teams = Team.objects.filter(
             memberships__user=request.user,
             memberships__status=TeamMember.Status.ACCEPTED
-        ).select_related('captain', 'game', 'event').distinct()
+        ).select_related('captain', 'game', 'event').prefetch_related('memberships__user').distinct()
 
         for t in user_teams:
             if t.is_archived or (active_event and t.event_id and t.event_id != active_event.id):

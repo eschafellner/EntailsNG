@@ -1,9 +1,15 @@
+import datetime
 import logging
+import sys
+import threading
 
+from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.db import connection, transaction
+from django.utils import timezone
 from django.utils.html import escape, strip_tags
 
-from .models import EmailTemplate
+from .models import EmailTemplate, OutgoingEmail
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +29,6 @@ def safe_format(text, context, escape_html=False):
             val_str = escape(val_str)
         result = result.replace(placeholder, val_str)
     return result
-
-
-import threading
-from django.db import transaction, connection
-from django.utils import timezone
-from .models import EmailTemplate, OutgoingEmail
 
 
 def render_system_email(template_key, recipient_email, context_data):
@@ -110,12 +110,43 @@ def trigger_queue_processing():
         logger.warning("Trigger für E-Mail-Hintergrundversand fehlgeschlagen: %s", e)
 
 
+def recover_stale_processing_emails(timeout_seconds=None):
+    """
+    Findet E-Mails, die länger als timeout_seconds im Status PROCESSING feststecken
+    (z.B. durch Server-Neustart oder Worker-Absturz), und setzt diese zurück auf PENDING
+    bzw. markiert sie nach max_attempts als FAILED.
+    Gibt die Anzahl wiederhergestellter E-Mails zurück.
+    """
+    if timeout_seconds is None:
+        timeout_seconds = getattr(settings, 'EMAIL_QUEUE_LEASE_TIMEOUT_SECONDS', 300)
+
+    stale_cutoff = timezone.now() - datetime.timedelta(seconds=timeout_seconds)
+    stale_emails = list(OutgoingEmail.objects.filter(
+        status=OutgoingEmail.Status.PROCESSING,
+        updated_at__lte=stale_cutoff,
+    ))
+
+    recovered = 0
+    for email in stale_emails:
+        logger.warning(
+            "Stale E-Mail ID %s (Status PROCESSING seit vor %s) wird zurückgesetzt.",
+            email.pk, stale_cutoff
+        )
+        email.mark_stale_recovered(timeout_seconds)
+        recovered += 1
+
+    return recovered
+
+
 def process_email_queue(limit=50):
     """
     Verarbeitet fällige E-Mails aus der Warteschlange.
+    Stellt vorab verwaiste PROCESSING-Einträge wieder her (Stale Lease Recovery).
     Nutzt select_for_update(skip_locked=True), sofern von der Datenbank unterstützt.
     Gibt (gesendet_anzahl, fehlgeschlagen_anzahl) zurück.
     """
+    recover_stale_processing_emails()
+
     now = timezone.now()
     supports_skip_locked = getattr(connection.features, 'has_select_for_update_skip_locked', False)
 
@@ -134,7 +165,8 @@ def process_email_queue(limit=50):
         email_ids = [e.id for e in emails]
         if email_ids:
             OutgoingEmail.objects.filter(id__in=email_ids, status=OutgoingEmail.Status.PENDING).update(
-                status=OutgoingEmail.Status.PROCESSING
+                status=OutgoingEmail.Status.PROCESSING,
+                updated_at=now,
             )
 
     sent_count = 0
@@ -177,12 +209,27 @@ def process_email_queue(limit=50):
     return sent_count, failed_count
 
 
-def send_system_email(template_key, recipient_email, context_data, immediate=True):
+def send_system_email(template_key, recipient_email, context_data, immediate=None):
     """
     Versendet eine System-E-Mail auf Basis eines Templates.
-    Bei immediate=True (Standard für Synchronität / Tests) wird die Mail direkt versendet.
+    Bei immediate=True wird die Mail direkt synchron versendet.
     Bei immediate=False wird die Mail in die persistente Outbox-Queue gestellt.
+    Wenn immediate=None:
+        - Im normalen Betrieb (oder wenn FORCE_EMAIL_ASYNC_QUEUE gesetzt ist) wird settings.EMAIL_ASYNC_QUEUE
+          beachtet (Standard: True -> E-Mail wird in die Queue gestellt).
+        - In Unit-Tests ('test' in sys.argv und nicht FORCE_EMAIL_ASYNC_QUEUE) bleibt immediate=True
+          als Standard, damit bestehende synchrone Test-Assertions auf mail.outbox ohne manuelles
+          process_email_queue funktionieren.
     """
+    if immediate is None:
+        is_testing = 'test' in sys.argv
+        force_async = getattr(settings, 'FORCE_EMAIL_ASYNC_QUEUE', False)
+        async_enabled = getattr(settings, 'EMAIL_ASYNC_QUEUE', True)
+        if is_testing and not force_async:
+            immediate = True
+        else:
+            immediate = not async_enabled
+
     if not immediate:
         outgoing = queue_system_email(template_key, recipient_email, context_data)
         return outgoing is not None

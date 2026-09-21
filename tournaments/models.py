@@ -242,6 +242,8 @@ class Tournament(models.Model):
         return True, ""
 
     def registered_teams_count(self):
+        if hasattr(self, 'annotated_registered_teams_count'):
+            return self.annotated_registered_teams_count
         return self.registrations.count()
 
 
@@ -320,6 +322,18 @@ class Team(models.Model):
         if not self.invite_code:
             self.invite_code = generate_invite_code()
         super().save(*args, **kwargs)
+
+    @property
+    def accepted_members_count(self):
+        """
+        Liefert die Anzahl der akzeptierten Mitglieder.
+        Verwendet bevorzugt Vor-Annotationen oder den Prefetch-Cache, um N+1-Queries zu vermeiden.
+        """
+        if hasattr(self, 'annotated_accepted_members_count'):
+            return self.annotated_accepted_members_count
+        if hasattr(self, '_prefetched_objects_cache') and 'memberships' in self._prefetched_objects_cache:
+            return sum(1 for m in self.memberships.all() if m.status == TeamMember.Status.ACCEPTED)
+        return self.memberships.filter(status=TeamMember.Status.ACCEPTED).count()
 
     def get_accepted_members(self):
         return self.memberships.filter(status=TeamMember.Status.ACCEPTED).select_related('user')

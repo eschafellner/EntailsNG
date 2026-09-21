@@ -103,7 +103,7 @@
           </div>
 
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 12px;">
-            👥 {{ team.get_accepted_members.count }} {% t "team_members_unit" "Mitglied(er)" %} | Code: <code>{{ team.invite_code }}</code>
+            👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglied(er)" %} | Code: <code>{{ team.invite_code }}</code>
           </div>
 
           <a href="{% url 'team_detail' slug=team.slug %}" style="display: block; text-align: center; background: #0284c7; color: white; padding: 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
@@ -129,7 +129,7 @@
           </div>
 
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 12px;">
-            👥 {{ team.get_accepted_members.count }} {% t "team_members_unit" "Mitglied(er)" %}
+            👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglied(er)" %}
           </div>
 
           <div style="display: flex; gap: 8px;">
@@ -175,7 +175,7 @@
                 {% t "team_game_label" "Spiel:" %} {{ team.game.name|default:"Allgemein" }} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.username }}
               </div>
               <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 14px;">
-                👥 {{ team.get_accepted_members.count }} {% t "team_members_unit" "Mitglieder" %}
+                👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglieder" %}
               </div>
             </div>
 
@@ -208,7 +208,7 @@
                 {% t "team_game_label" "Spiel:" %} {{ team.game.name|default:"Allgemein" }} | {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ team.event.title|default:"Vergangenes Event" }}
               </div>
               <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 14px;">
-                👥 {{ team.get_accepted_members.count }} {% t "team_members_unit" "Mitglieder" %} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.username }}
+                👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglieder" %} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.username }}
               </div>
             </div>
 

@@ -367,6 +367,11 @@ class OutgoingEmail(models.Model):
         db_index=True,
         verbose_name="Erstellt am",
     )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        db_index=True,
+        verbose_name="Zuletzt geändert",
+    )
 
     class Meta:
         ordering = ['scheduled_at', 'created_at']
@@ -374,6 +379,7 @@ class OutgoingEmail(models.Model):
         verbose_name_plural = "Ausgehende E-Mails"
         indexes = [
             models.Index(fields=['status', 'scheduled_at'], name='email_queue_status_sched_idx'),
+            models.Index(fields=['status', 'updated_at'], name='email_queue_status_upd_idx'),
         ]
 
     def __str__(self):
@@ -381,13 +387,15 @@ class OutgoingEmail(models.Model):
 
     def mark_processing(self):
         self.status = self.Status.PROCESSING
-        self.save(update_fields=['status'])
+        self.updated_at = timezone.now()
+        self.save(update_fields=['status', 'updated_at'])
 
     def mark_sent(self):
         self.status = self.Status.SENT
         self.sent_at = timezone.now()
         self.last_error = ''
-        self.save(update_fields=['status', 'sent_at', 'last_error'])
+        self.updated_at = timezone.now()
+        self.save(update_fields=['status', 'sent_at', 'last_error', 'updated_at'])
 
     def mark_failed_attempt(self, error_message: str):
         from datetime import timedelta
@@ -400,11 +408,25 @@ class OutgoingEmail(models.Model):
             # Exponential backoff: 1 min, 2 min, 4 min, 8 min, ...
             backoff_seconds = 60 * (2 ** (self.attempts - 1))
             self.scheduled_at = timezone.now() + timedelta(seconds=backoff_seconds)
-        self.save(update_fields=['attempts', 'last_error', 'status', 'scheduled_at'])
+        self.updated_at = timezone.now()
+        self.save(update_fields=['attempts', 'last_error', 'status', 'scheduled_at', 'updated_at'])
+
+    def mark_stale_recovered(self, timeout_seconds: int):
+        """Setzt eine verwaiste PROCESSING-E-Mail zurück auf PENDING oder markiert sie als FAILED."""
+        self.attempts += 1
+        self.last_error = f"Timeout nach {timeout_seconds}s im Status PROCESSING (Worker abgebrochen/stale)."
+        if self.attempts >= self.max_attempts:
+            self.status = self.Status.FAILED
+        else:
+            self.status = self.Status.PENDING
+            self.scheduled_at = timezone.now()
+        self.updated_at = timezone.now()
+        self.save(update_fields=['attempts', 'last_error', 'status', 'scheduled_at', 'updated_at'])
 
     def reset_for_retry(self):
         """Setzt die E-Mail für einen sofortigen erneuten Sendeversuch zurück."""
         self.status = self.Status.PENDING
         self.scheduled_at = timezone.now()
-        self.save(update_fields=['status', 'scheduled_at'])
+        self.updated_at = timezone.now()
+        self.save(update_fields=['status', 'scheduled_at', 'updated_at'])
 

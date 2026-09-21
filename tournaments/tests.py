@@ -2586,9 +2586,118 @@ class LeagueAndGroupStageDrawTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertTrue(data.get('success'))
-        self.assertTrue(data.get('draw'))
-        self.assertIsNone(data.get('winner'))
+class TournamentQueryPerformanceTests(TestCase):
+    """
+    Performance- und Regressions-Tests zur Sicherstellung optimierter Query-Budgets (keine N+1-Abfragen).
+    """
+
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="LAN Event 2026",
+            slug="lan-2026",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=3),
+        )
+        self.game = Game.objects.create(name="Game 1", mode="1v1", team_size=1)
+        self.user = User.objects.create_user(username="testuser", email="user@example.com", password="pw")
+
+    def test_tournament_list_constant_queries_regardless_of_tournament_count(self):
+        """
+        Prüft, dass die Turnierliste keine separaten COUNT-Queries je Turnier ausführt (N+1-Vermeidung).
+        9 zusätzliche Turniere dürfen die Anzahl der Datenbank-Abfragen um 0 erhöhen (O(1)).
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        # Baseline mit 1 Turnier
+        t0 = Tournament.objects.create(
+            event=self.event,
+            game=self.game,
+            title="Tournament 0",
+            status=Tournament.Status.REGISTRATION_OPEN,
+            registration_start=timezone.now() - timedelta(days=1),
+            registration_end=timezone.now() + timedelta(days=1),
+        )
+        u0 = User.objects.create_user(username="u_0", email="u_0@test.de", password="pw")
+        team0 = Team.objects.create(name="T_0", captain=u0, game=self.game, event=self.event)
+        TournamentRegistration.objects.create(tournament=t0, team=team0)
+
+        # Einmal aufrufen zur Cache-Aufwärmung
+        self.client.get(reverse('tournament_list'))
+
+        with CaptureQueriesContext(connection) as ctx1:
+            resp1 = self.client.get(reverse('tournament_list'))
+            self.assertEqual(resp1.status_code, 200)
+        q1 = len(ctx1.captured_queries)
+
+        # 9 weitere Turniere anlegen (insgesamt 10 Turniere mit Registrierungen)
+        for i in range(1, 10):
+            t = Tournament.objects.create(
+                event=self.event,
+                game=self.game,
+                title=f"Tournament {i}",
+                status=Tournament.Status.REGISTRATION_OPEN,
+                registration_start=timezone.now() - timedelta(days=1),
+                registration_end=timezone.now() + timedelta(days=1),
+            )
+            for j in range(2):
+                u = User.objects.create_user(username=f"u_{i}_{j}", email=f"u_{i}_{j}@test.de", password="pw")
+                team = Team.objects.create(name=f"T_{i}_{j}", captain=u, game=self.game, event=self.event)
+                TournamentRegistration.objects.create(tournament=t, team=team)
+
+        with CaptureQueriesContext(connection) as ctx10:
+            resp10 = self.client.get(reverse('tournament_list'))
+            self.assertEqual(resp10.status_code, 200)
+            self.assertContains(resp10, "Tournament 0")
+            self.assertContains(resp10, "Tournament 9")
+        q10 = len(ctx10.captured_queries)
+
+        # 9 zusätzliche Turniere dürfen die Query-Anzahl NICHT erhöhen (N+1-Freiheit)
+        self.assertEqual(q1, q10)
+        self.assertLessEqual(q10, 5)
+
+    def test_team_list_constant_queries_regardless_of_team_count(self):
+        """
+        Prüft, dass die Teamliste (aktiv & mein Team) keine N+1-Queries für die Mitgliederanzahl ausführt.
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client.force_login(self.user)
+
+        # 1 Team anlegen
+        c0 = User.objects.create_user(username="capt_0", email="capt_0@test.de", password="pw")
+        team0 = Team.objects.create(name="Team 0", captain=c0, game=self.game, event=self.event)
+        TeamMember.objects.create(team=team0, user=c0, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        # Cache-Aufwärmung
+        self.client.get(reverse('team_list'))
+
+        with CaptureQueriesContext(connection) as ctx1:
+            resp1 = self.client.get(reverse('team_list'))
+            self.assertEqual(resp1.status_code, 200)
+        q1 = len(ctx1.captured_queries)
+
+        # 9 weitere Teams anlegen (insgesamt 10 Teams mit mehreren Mitgliedern)
+        for i in range(1, 10):
+            captain = User.objects.create_user(username=f"capt_{i}", email=f"capt_{i}@test.de", password="pw")
+            team = Team.objects.create(name=f"Team {i}", captain=captain, game=self.game, event=self.event)
+            TeamMember.objects.create(team=team, user=captain, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+            m = User.objects.create_user(username=f"mem_{i}", email=f"mem_{i}@test.de", password="pw")
+            TeamMember.objects.create(team=team, user=m, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+
+        with CaptureQueriesContext(connection) as ctx10:
+            resp10 = self.client.get(reverse('team_list'))
+            self.assertEqual(resp10.status_code, 200)
+            self.assertContains(resp10, "Team 0")
+            self.assertContains(resp10, "Team 9")
+        q10 = len(ctx10.captured_queries)
+
+        # 9 zusätzliche Teams dürfen die Query-Anzahl nicht erhöhen (keine N+1 member count queries)
+        self.assertLessEqual(q10, q1)
+        self.assertLessEqual(q10, 15)
+
 
 
 

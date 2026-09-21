@@ -690,3 +690,133 @@ class OutgoingEmailQueueTests(TestCase):
         retry_outgoing_emails(admin_instance, req, OutgoingEmail.objects.filter(pk=outgoing.pk))
         outgoing.refresh_from_db()
         self.assertEqual(outgoing.status, OutgoingEmail.Status.PENDING)
+
+    def test_recover_stale_processing_emails_resets_to_pending(self):
+        """E-Mails im Status PROCESSING, die älter als der Lease-Timeout sind, werden auf PENDING zurückgesetzt."""
+        from emails.services import recover_stale_processing_emails
+
+        outgoing = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='stale@example.com',
+            subject='Stale Test',
+            body_text='Stale',
+            body_html='<p>Stale</p>',
+            status=OutgoingEmail.Status.PROCESSING,
+            attempts=1,
+            max_attempts=3,
+        )
+        # Manuell in die Vergangenheit datieren
+        OutgoingEmail.objects.filter(pk=outgoing.pk).update(
+            updated_at=timezone.now() - timedelta(seconds=400)
+        )
+
+        recovered = recover_stale_processing_emails(timeout_seconds=300)
+        self.assertEqual(recovered, 1)
+
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.PENDING)
+        self.assertEqual(outgoing.attempts, 2)
+        self.assertIn("Timeout nach 300s", outgoing.last_error)
+
+    def test_recover_stale_processing_emails_marks_failed_on_max_attempts(self):
+        """Stale PROCESSING E-Mails, die max_attempts erreichen, werden auf FAILED gesetzt."""
+        from emails.services import recover_stale_processing_emails
+
+        outgoing = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='stale_fail@example.com',
+            subject='Stale Fail Test',
+            body_text='Stale Fail',
+            body_html='<p>Stale Fail</p>',
+            status=OutgoingEmail.Status.PROCESSING,
+            attempts=2,
+            max_attempts=3,
+        )
+        OutgoingEmail.objects.filter(pk=outgoing.pk).update(
+            updated_at=timezone.now() - timedelta(seconds=400)
+        )
+
+        recovered = recover_stale_processing_emails(timeout_seconds=300)
+        self.assertEqual(recovered, 1)
+
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.FAILED)
+        self.assertEqual(outgoing.attempts, 3)
+
+    def test_recover_stale_processing_emails_ignores_recent_processing(self):
+        """Laufende PROCESSING-Einträge innerhalb des Timeouts werden nicht angerührt."""
+        from emails.services import recover_stale_processing_emails
+
+        outgoing = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='active_proc@example.com',
+            subject='Active Proc',
+            body_text='Active',
+            body_html='<p>Active</p>',
+            status=OutgoingEmail.Status.PROCESSING,
+            attempts=0,
+            max_attempts=3,
+        )
+        # updated_at ist jetzt (frisch angelegt)
+        recovered = recover_stale_processing_emails(timeout_seconds=300)
+        self.assertEqual(recovered, 0)
+
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.PROCESSING)
+        self.assertEqual(outgoing.attempts, 0)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_process_email_queue_recovers_and_sends_stale_email(self):
+        """process_email_queue stellt verwaiste PROCESSING-Einträge wieder her und versendet sie im selben Lauf."""
+        outgoing = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='recovered_send@example.com',
+            subject='Recovered Send',
+            body_text='Recovered Body',
+            body_html='<p>Recovered Body</p>',
+            status=OutgoingEmail.Status.PROCESSING,
+            attempts=0,
+            max_attempts=3,
+        )
+        OutgoingEmail.objects.filter(pk=outgoing.pk).update(
+            updated_at=timezone.now() - timedelta(seconds=600)
+        )
+
+        sent, failed = process_email_queue(limit=10)
+        self.assertEqual(sent, 1)
+        self.assertEqual(failed, 0)
+
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.SENT)
+        self.assertEqual(outgoing.attempts, 1)
+
+    @override_settings(FORCE_EMAIL_ASYNC_QUEUE=True, EMAIL_ASYNC_QUEUE=True)
+    def test_send_system_email_default_uses_async_queue_when_configured(self):
+        """send_system_email legt die Mail standardmäßig in die Warteschlange, wenn EMAIL_ASYNC_QUEUE aktiv ist."""
+        success = send_system_email(
+            'queue_test_tpl',
+            'async_default@example.com',
+            {'username': 'AsyncUser'},
+            immediate=None,
+        )
+        self.assertTrue(success)
+        self.assertTrue(OutgoingEmail.objects.filter(recipient_email='async_default@example.com').exists())
+
+    @override_settings(
+        FORCE_EMAIL_ASYNC_QUEUE=True,
+        EMAIL_ASYNC_QUEUE=False,
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'
+    )
+    def test_send_system_email_default_uses_sync_when_async_disabled(self):
+        """send_system_email versendet synchron, wenn EMAIL_ASYNC_QUEUE=False konfiguriert ist."""
+        from django.core import mail
+        success = send_system_email(
+            'queue_test_tpl',
+            'sync_default@example.com',
+            {'username': 'SyncUser'},
+            immediate=None,
+        )
+        self.assertTrue(success)
+        self.assertFalse(OutgoingEmail.objects.filter(recipient_email='sync_default@example.com').exists())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['sync_default@example.com'])

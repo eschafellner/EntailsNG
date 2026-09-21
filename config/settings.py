@@ -278,6 +278,8 @@ EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', '')
 SERVER_EMAIL = os.environ.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
+EMAIL_ASYNC_QUEUE = env_bool('EMAIL_ASYNC_QUEUE', default=True)
+EMAIL_QUEUE_LEASE_TIMEOUT_SECONDS = int(os.environ.get('EMAIL_QUEUE_LEASE_TIMEOUT_SECONDS', '300'))
 
 
 # -----------------------------------------------------------------------------

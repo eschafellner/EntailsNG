@@ -56,6 +56,22 @@ class EventDashboardTests(TestCase):
         response_user = self.client.get(reverse('dashboard'))
         self.assertContains(response_user, 'Saalbelegung')
 
+    def test_dashboard_query_budget(self):
+        """Dashboard-Abfragen für eingeloggten User mit aktiver Registrierung bleiben innerhalb des Budgets."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client.login(username='gamer1', password='password')
+        # Cache-Aufwärmung
+        self.client.get(reverse('dashboard'))
+
+        with CaptureQueriesContext(connection) as ctx:
+            resp = self.client.get(reverse('dashboard'))
+            self.assertEqual(resp.status_code, 200)
+
+        # Dashboard muss unter 15 Queries bleiben (keine N+1 Schleifen)
+        self.assertLessEqual(len(ctx.captured_queries), 15)
+
     def test_register_for_event(self):
         self.client.login(username='gamer1', password='password')
         response = self.client.post(
