@@ -1,5 +1,5 @@
 import math
-from django.db import transaction
+from django.db import models, transaction
 
 from tournaments.models import (
     Tournament,
@@ -126,7 +126,12 @@ def generate_bracket(tournament, preview=False):
     Hauptfunktion zur Generierung und Vorschau von Turnierbäumen für alle 5 Turniermodi.
     Wenn preview=True, werden keine Daten in die DB geschrieben, sondern ein Dict mit der Vorschau-Struktur geliefert.
     """
-    teams = list(tournament.registrations.select_related('team').order_by('registered_at'))
+    teams = list(
+        tournament.registrations.select_related('team').order_by(
+            models.F('seed').asc(nulls_last=True),
+            'registered_at',
+        )
+    )
     num_teams = len(teams)
 
     if tournament.mode == Tournament.Mode.FFA:

@@ -384,6 +384,8 @@ class Team(models.Model):
         return self.tournament_registrations.filter(
             models.Q(tournament__is_generated=True) |
             models.Q(tournament__status=Tournament.Status.IN_PROGRESS)
+        ).exclude(
+            tournament__status__in=[Tournament.Status.FINISHED, Tournament.Status.CANCELLED]
         ).exists()
 
     def delete(self, *args, **kwargs):
@@ -411,7 +413,8 @@ class Team(models.Model):
 
         if self.is_in_active_tournament():
             accepted_count = self.memberships.filter(status=TeamMember.Status.ACCEPTED).count()
-            if accepted_count <= 1:
+            required_size = self.game.team_size if self.game and self.game.team_size else 1
+            if (accepted_count - 1) < required_size or accepted_count <= 1:
                 if not force_forfeit:
                     return 'in_active_tournament'
                 from tournaments.services import forfeit_team_in_active_tournaments

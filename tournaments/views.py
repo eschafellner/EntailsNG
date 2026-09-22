@@ -693,6 +693,20 @@ def team_reactivate(request, slug):
         messages.error(request, get_translation('msg_team_reactivate_captain_only', 'Nur der Teamkapitän kann das Team reaktivieren.'))
         return redirect('team_detail', slug=team.slug)
 
+    if not team.is_archived:
+        messages.info(request, get_translation('msg_team_already_active', 'Dieses Team ist bereits aktiv und muss nicht reaktiviert werden.'))
+        return redirect('team_detail', slug=team.slug)
+
+    if team.is_in_active_tournament():
+        messages.error(
+            request,
+            get_translation(
+                'msg_team_reactivate_in_tournament',
+                'Das Team nimmt an einem laufenden oder generierten Turnier teil und kann nicht reaktiviert oder verändert werden.',
+            ),
+        )
+        return redirect('team_detail', slug=team.slug)
+
     if not active_event:
         messages.error(request, get_translation('msg_team_reactivate_no_event', 'Derzeit ist keine aktive Veranstaltung vorhanden, für die das Team reaktiviert werden kann.'))
         return redirect('team_detail', slug=team.slug)
@@ -764,10 +778,15 @@ def team_reactivate(request, slug):
         )
         return redirect('team_detail', slug=team.slug)
 
-    # GET: Roster vorbereiten
+    # GET: Roster vorbereiten (batch-loading gegen N+1 Queries)
+    user_ids = [m.user_id for m in accepted_members]
+    event_regs = {
+        reg.user_id: reg
+        for reg in EventRegistration.objects.filter(user_id__in=user_ids, event=active_event).select_related('ticket_type')
+    }
     roster = []
     for m in accepted_members:
-        reg = EventRegistration.objects.filter(user=m.user, event=active_event).first()
+        reg = event_regs.get(m.user_id)
         roster.append({
             'member': m,
             'user': m.user,
@@ -788,7 +807,6 @@ def team_reactivate(request, slug):
     return render(request, 'tournaments/team_reactivate.html', context)
 
 
-
 @login_required
 @require_POST
 def team_join_by_code(request):
@@ -801,67 +819,79 @@ def team_join_by_code(request):
         messages.error(request, get_translation('msg_team_code_required', 'Bitte gib einen Einladungscode ein.'))
         return redirect('team_list')
 
-    team = Team.objects.filter(invite_code=code).first()
-    if not team:
-        messages.error(request, get_translation('msg_team_code_invalid', 'Ungültiger Einladungscode.'))
-        return redirect('team_list')
+    with transaction.atomic():
+        team = Team.objects.select_for_update().filter(invite_code=code).first()
+        if not team:
+            messages.error(request, get_translation('msg_team_code_invalid', 'Ungültiger Einladungscode.'))
+            return redirect('team_list')
 
-    if team.is_member(request.user):
-        messages.info(
-            request,
-            get_translation(
-                'msg_team_already_member',
-                'Du bist bereits Mitglied im Team "{team_name}".',
-                team_name=team.name,
-            ),
-        )
-        return redirect('team_detail', slug=team.slug)
-
-    # Regel: Nur 1 aktives Team pro Spiel pro Gast
-    if team.game:
-        existing_membership = TeamMember.objects.filter(
-            user=request.user,
-            status=TeamMember.Status.ACCEPTED,
-            team__game=team.game,
-            team__is_archived=False,
-        ).exclude(team=team).select_related('team').first()
-        if existing_membership:
+        if team.is_in_active_tournament():
             messages.error(
                 request,
                 get_translation(
-                    'msg_team_user_already_has_team',
-                    'Du gehörst für das Spiel "{game_name}" bereits dem Team "{team_name}" an. Ein Gast darf nur einem Team pro Spiel angehören.',
-                    game_name=team.game.name,
-                    team_name=existing_membership.team.name,
+                    'msg_team_in_active_tournament',
+                    'Das Team "{team_name}" nimmt an einem laufenden Turnier teil. Ein Beitritt ist während des Turniers nicht möglich.',
+                    team_name=team.name,
                 ),
             )
             return redirect('team_list')
 
-    if team.game and team.get_accepted_members().count() >= team.game.team_size:
-        messages.error(
-            request,
-            get_translation(
-                'msg_team_full',
-                'Das Team "{team_name}" ist bereits voll (maximal {max_players} Spieler für {game_name}).',
-                team_name=team.name,
-                max_players=team.game.team_size,
-                game_name=team.game.name,
-            ),
+        if team.is_member(request.user):
+            messages.info(
+                request,
+                get_translation(
+                    'msg_team_already_member',
+                    'Du bist bereits Mitglied im Team "{team_name}".',
+                    team_name=team.name,
+                ),
+            )
+            return redirect('team_detail', slug=team.slug)
+
+        # Regel: Nur 1 aktives Team pro Spiel pro Gast
+        if team.game:
+            existing_membership = TeamMember.objects.filter(
+                user=request.user,
+                status=TeamMember.Status.ACCEPTED,
+                team__game=team.game,
+                team__is_archived=False,
+            ).exclude(team=team).select_related('team').first()
+            if existing_membership:
+                messages.error(
+                    request,
+                    get_translation(
+                        'msg_team_user_already_has_team',
+                        'Du gehörst für das Spiel "{game_name}" bereits dem Team "{team_name}" an. Ein Gast darf nur einem Team pro Spiel angehören.',
+                        game_name=team.game.name,
+                        team_name=existing_membership.team.name,
+                    ),
+                )
+                return redirect('team_list')
+
+        if team.game and team.get_accepted_members().count() >= team.game.team_size:
+            messages.error(
+                request,
+                get_translation(
+                    'msg_team_full',
+                    'Das Team "{team_name}" ist bereits voll (maximal {max_players} Spieler für {game_name}).',
+                    team_name=team.name,
+                    max_players=team.game.team_size,
+                    game_name=team.game.name,
+                ),
+            )
+            return redirect('team_list')
+
+        membership, created = TeamMember.objects.get_or_create(
+            team=team,
+            user=request.user,
+            defaults={
+                'role': TeamMember.Role.MEMBER,
+                'status': TeamMember.Status.ACCEPTED,
+            }
         )
-        return redirect('team_list')
 
-    membership, created = TeamMember.objects.get_or_create(
-        team=team,
-        user=request.user,
-        defaults={
-            'role': TeamMember.Role.MEMBER,
-            'status': TeamMember.Status.ACCEPTED,
-        }
-    )
-
-    if not created and membership.status == TeamMember.Status.PENDING:
-        membership.status = TeamMember.Status.ACCEPTED
-        membership.save(update_fields=['status'])
+        if not created and membership.status == TeamMember.Status.PENDING:
+            membership.status = TeamMember.Status.ACCEPTED
+            membership.save(update_fields=['status'])
 
     messages.success(
         request,
@@ -1010,6 +1040,17 @@ def team_apply(request, slug):
         )
         return redirect('team_detail', slug=slug)
 
+    if team.is_in_active_tournament():
+        messages.error(
+            request,
+            get_translation(
+                'msg_team_in_active_tournament',
+                'Das Team "{team_name}" nimmt an einem laufenden Turnier teil. Bewerbungen sind während des Turniers nicht möglich.',
+                team_name=team.name,
+            ),
+        )
+        return redirect('team_detail', slug=slug)
+
     # Regel: Nur 1 aktives Team pro Spiel pro Gast
     if team.game:
         existing_membership = TeamMember.objects.filter(
@@ -1069,52 +1110,64 @@ def team_accept_membership(request, slug, membership_id):
     """
     Kapitän akzeptiert eine ausstehende Bewerbung.
     """
-    team = get_object_or_404(Team, slug=slug)
+    with transaction.atomic():
+        team = get_object_or_404(Team.objects.select_for_update(), slug=slug)
 
-    if not team.is_captain(request.user) and not request.user.is_staff:
-        messages.error(
-            request,
-            get_translation('msg_team_accept_forbidden', 'Nur der Kapitän kann Bewerbungen annehmen.'),
-        )
-        return redirect('team_detail', slug=slug)
+        if not team.is_captain(request.user) and not request.user.is_staff:
+            messages.error(
+                request,
+                get_translation('msg_team_accept_forbidden', 'Nur der Kapitän kann Bewerbungen annehmen.'),
+            )
+            return redirect('team_detail', slug=slug)
 
-    if team.game and team.get_accepted_members().count() >= team.game.team_size:
-        messages.error(
-            request,
-            get_translation(
-                'msg_team_accept_full',
-                'Das Team "{team_name}" hat die maximale Mitgliederanzahl ({max_players} Spieler) bereits erreicht.',
-                team_name=team.name,
-                max_players=team.game.team_size,
-            ),
-        )
-        return redirect('team_detail', slug=slug)
-
-    membership = get_object_or_404(TeamMember, id=membership_id, team=team)
-
-    # Regel: Nur 1 aktives Team pro Spiel pro Gast
-    if team.game:
-        existing_membership = TeamMember.objects.filter(
-            user=membership.user,
-            status=TeamMember.Status.ACCEPTED,
-            team__game=team.game,
-            team__is_archived=False,
-        ).exclude(team=team).select_related('team').first()
-        if existing_membership:
+        if team.is_in_active_tournament():
             messages.error(
                 request,
                 get_translation(
-                    'msg_team_applicant_already_has_team',
-                    'Der Benutzer "{username}" gehört für das Spiel "{game_name}" bereits dem Team "{team_name}" an.',
-                    username=membership.user.username,
-                    game_name=team.game.name,
-                    team_name=existing_membership.team.name,
+                    'msg_team_in_active_tournament',
+                    'Das Team "{team_name}" nimmt an einem laufenden Turnier teil. Beitritte sind während des Turniers nicht möglich.',
+                    team_name=team.name,
                 ),
             )
             return redirect('team_detail', slug=slug)
 
-    membership.status = TeamMember.Status.ACCEPTED
-    membership.save()
+        if team.game and team.get_accepted_members().count() >= team.game.team_size:
+            messages.error(
+                request,
+                get_translation(
+                    'msg_team_accept_full',
+                    'Das Team "{team_name}" hat die maximale Mitgliederanzahl ({max_players} Spieler) bereits erreicht.',
+                    team_name=team.name,
+                    max_players=team.game.team_size,
+                ),
+            )
+            return redirect('team_detail', slug=slug)
+
+        membership = get_object_or_404(TeamMember.objects.select_for_update(), id=membership_id, team=team)
+
+        # Regel: Nur 1 aktives Team pro Spiel pro Gast
+        if team.game:
+            existing_membership = TeamMember.objects.filter(
+                user=membership.user,
+                status=TeamMember.Status.ACCEPTED,
+                team__game=team.game,
+                team__is_archived=False,
+            ).exclude(team=team).select_related('team').first()
+            if existing_membership:
+                messages.error(
+                    request,
+                    get_translation(
+                        'msg_team_applicant_already_has_team',
+                        'Der Benutzer "{username}" gehört für das Spiel "{game_name}" bereits dem Team "{team_name}" an.',
+                        username=membership.user.username,
+                        game_name=team.game.name,
+                        team_name=existing_membership.team.name,
+                    ),
+                )
+                return redirect('team_detail', slug=slug)
+
+        membership.status = TeamMember.Status.ACCEPTED
+        membership.save(update_fields=['status'])
 
     messages.success(
         request,

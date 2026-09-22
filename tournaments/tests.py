@@ -6,7 +6,8 @@ from datetime import timedelta
 from users.models import User
 from events.models import Event, EventRegistration
 from tournaments.exceptions import (
-    InvalidWinnerError, MatchAlreadyCompletedError, TournamentError, TournamentRegistrationError, TournamentNotCheckedInError
+    InvalidWinnerError, MatchAlreadyCompletedError, TournamentError, TournamentRegistrationError, TournamentNotCheckedInError,
+    TournamentMatchError
 )
 from tournaments.models import (
     Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration
@@ -3169,6 +3170,327 @@ class FeedbackFeaturesTests(TestCase):
         self.assertIn('id="copyCodeBtn"', content)
         self.assertIn('margin-left: auto', content)
         self.assertIn('@media (max-width: 860px)', content)
+
+
+class TournamentAndTeamHardeningTests(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(
+            title="Hardening LAN",
+            slug="hardening-lan",
+            is_active=True,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.game = Game.objects.create(name="CS2", mode="5v5", team_size=5)
+        self.game_1v1 = Game.objects.create(name="StarCraft", mode="1v1", team_size=1)
+        self.game_ffa = Game.objects.create(name="TrackMania", mode="FFA", team_size=1)
+
+        self.admin = User.objects.create_superuser(username="superadmin", email="admin@lan.com", password="password")
+        self.u1 = User.objects.create_user(username="user1", password="password")
+        self.u2 = User.objects.create_user(username="user2", password="password")
+        self.u3 = User.objects.create_user(username="user3", password="password")
+        self.u4 = User.objects.create_user(username="user4", password="password")
+
+        EventRegistration.objects.create(user=self.admin, event=self.event, is_checked_in=True)
+        EventRegistration.objects.create(user=self.u1, event=self.event, is_checked_in=True)
+        EventRegistration.objects.create(user=self.u2, event=self.event, is_checked_in=True)
+        EventRegistration.objects.create(user=self.u3, event=self.event, is_checked_in=True)
+        EventRegistration.objects.create(user=self.u4, event=self.event, is_checked_in=True)
+
+    def _create_tournament(self, **kwargs):
+        defaults = {
+            'registration_start': timezone.now() - timedelta(days=1),
+            'registration_end': timezone.now() + timedelta(days=1),
+            'tournament_start': timezone.now() + timedelta(days=2),
+        }
+        defaults.update(kwargs)
+        return Tournament.objects.create(**defaults)
+
+    def test_match_draw_handling_in_league(self):
+        tournament = self._create_tournament(
+            title="League Test",
+            event=self.event,
+            game=self.game_1v1,
+            mode=Tournament.Mode.LEAGUE,
+            status=Tournament.Status.IN_PROGRESS,
+            is_generated=True,
+            max_teams=4,
+        )
+        team1 = Team.objects.create(name="Team Alpha", captain=self.u1, game=self.game_1v1, event=self.event)
+        TeamMember.objects.create(team=team1, user=self.u1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        team2 = Team.objects.create(name="Team Beta", captain=self.u2, game=self.game_1v1, event=self.event)
+        TeamMember.objects.create(team=team2, user=self.u2, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            bracket_type=TournamentMatch.BracketType.GROUP,
+            round_number=1,
+            match_number=1,
+            team1=team1,
+            team2=team2,
+            status=TournamentMatch.Status.READY,
+        )
+        # u1 enters 1:1 draw
+        TournamentMatchService.update_match_score(
+            match_id=match.id,
+            score1=1,
+            score2=1,
+            actor=self.u1,
+        )
+        match.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertIsNone(match.winner)
+        self.assertIsNone(match.loser)
+        self.assertIn("Unentschieden", match.decision_reason)
+
+    def test_ffa_validation_and_winner_reset(self):
+        tournament = self._create_tournament(
+            title="FFA Cup",
+            event=self.event,
+            game=self.game_ffa,
+            mode=Tournament.Mode.FFA,
+            status=Tournament.Status.IN_PROGRESS,
+            is_generated=True,
+            max_teams=4,
+        )
+        team1 = Team.objects.create(name="Racer 1", captain=self.u1, game=self.game_ffa, event=self.event)
+        team2 = Team.objects.create(name="Racer 2", captain=self.u2, game=self.game_ffa, event=self.event)
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            bracket_type=TournamentMatch.BracketType.FFA,
+            round_number=1,
+            match_number=1,
+            status=TournamentMatch.Status.READY,
+        )
+        p1 = TournamentMatchParticipant.objects.create(match=match, team=team1)
+        p2 = TournamentMatchParticipant.objects.create(match=match, team=team2)
+
+        # Empty participant_scores raises TournamentMatchError
+        with self.assertRaises(TournamentMatchError):
+            FFAMatchService.update_ffa_scores(match.id, [], actor=self.admin)
+
+        # Duplicate rank 1 raises TournamentMatchError
+        with self.assertRaises(TournamentMatchError):
+            FFAMatchService.update_ffa_scores(
+                match.id,
+                [
+                    {'participant_id': p1.id, 'rank': 1, 'score': 100},
+                    {'participant_id': p2.id, 'rank': 1, 'score': 100},
+                ],
+                actor=self.admin,
+            )
+
+        # Normal valid win
+        FFAMatchService.update_ffa_scores(
+            match.id,
+            [
+                {'participant_id': p1.id, 'rank': 1, 'score': 100},
+                {'participant_id': p2.id, 'rank': 2, 'score': 80},
+            ],
+            actor=self.admin,
+        )
+        match.refresh_from_db()
+        self.assertEqual(match.winner, team1)
+        tournament.refresh_from_db()
+        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
+
+        # Re-evaluate with rank 1 disqualified -> winner reset to None, tournament status reset/not finished
+        tournament.status = Tournament.Status.IN_PROGRESS
+        tournament.save()
+        FFAMatchService.update_ffa_scores(
+            match.id,
+            [
+                {'participant_id': p1.id, 'rank': 1, 'score': 100, 'is_disqualified': True},
+                {'participant_id': p2.id, 'rank': 2, 'score': 80},
+            ],
+            actor=self.admin,
+        )
+        match.refresh_from_db()
+        self.assertIsNone(match.winner)
+        tournament.refresh_from_db()
+        self.assertEqual(tournament.status, Tournament.Status.IN_PROGRESS)
+
+    def test_is_in_active_tournament_and_status(self):
+        tournament = self._create_tournament(
+            title="Active Check",
+            event=self.event,
+            game=self.game_1v1,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.IN_PROGRESS,
+            is_generated=True,
+            max_teams=2,
+        )
+        team = Team.objects.create(name="Active Team", captain=self.u1, game=self.game_1v1, event=self.event)
+        TournamentRegistration.objects.create(tournament=tournament, team=team)
+
+        self.assertTrue(team.is_in_active_tournament())
+
+        tournament.status = Tournament.Status.FINISHED
+        tournament.save()
+        self.assertFalse(team.is_in_active_tournament())
+
+        tournament.status = Tournament.Status.CANCELLED
+        tournament.save()
+        self.assertFalse(team.is_in_active_tournament())
+
+    def test_team_reactivate_blocked_for_active_and_tournament_teams(self):
+        team = Team.objects.create(name="Reactivate Team", captain=self.u1, game=self.game_1v1, event=self.event, is_archived=False)
+        TeamMember.objects.create(team=team, user=self.u1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="user1", password="password")
+        # Team is not archived -> redirect with info
+        resp = self.client.get(reverse('team_reactivate', kwargs={'slug': team.slug}), follow=True)
+        self.assertContains(resp, "bereits aktiv")
+
+        # Archive team, but put it in active tournament -> redirect with error
+        team.is_archived = True
+        team.save()
+        tournament = self._create_tournament(
+            title="Reactivate Tourney",
+            event=self.event,
+            game=self.game_1v1,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.IN_PROGRESS,
+            is_generated=True,
+            max_teams=2,
+        )
+        TournamentRegistration.objects.create(tournament=tournament, team=team)
+        resp = self.client.get(reverse('team_reactivate', kwargs={'slug': team.slug}), follow=True)
+        self.assertContains(resp, "laufenden oder generierten Turnier")
+
+    def test_roster_changes_blocked_during_active_tournament(self):
+        team = Team.objects.create(name="Locked Team", captain=self.u1, game=self.game, event=self.event)
+        TeamMember.objects.create(team=team, user=self.u1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        tournament = self._create_tournament(
+            title="Locked Tourney",
+            event=self.event,
+            game=self.game,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.IN_PROGRESS,
+            is_generated=True,
+            max_teams=2,
+        )
+        TournamentRegistration.objects.create(tournament=tournament, team=team)
+
+        # Attempt join by code
+        self.client.login(username="user2", password="password")
+        resp = self.client.post(reverse('team_join_by_code'), {'invite_code': team.invite_code}, follow=True)
+        self.assertContains(resp, "laufenden Turnier")
+        self.assertFalse(TeamMember.objects.filter(team=team, user=self.u2).exists())
+
+        # Attempt accept membership
+        applicant_member = TeamMember.objects.create(team=team, user=self.u3, status=TeamMember.Status.PENDING)
+        self.client.login(username="user1", password="password")
+        resp = self.client.post(reverse('team_accept_membership', kwargs={'slug': team.slug, 'membership_id': applicant_member.id}), follow=True)
+        self.assertContains(resp, "laufenden Turnier")
+        applicant_member.refresh_from_db()
+        self.assertEqual(applicant_member.status, TeamMember.Status.PENDING)
+
+        # Attempt leave team without force_forfeit (team drops below required size)
+        res = team.leave_team(self.u1)
+        self.assertEqual(res, 'in_active_tournament')
+
+    def test_seed_sorting_in_bracket_generation(self):
+        tournament = self._create_tournament(
+            title="Seeded Cup",
+            event=self.event,
+            game=self.game_1v1,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.REGISTRATION_CLOSED,
+            max_teams=4,
+        )
+        tA = Team.objects.create(name="Team A (Seed 2)", captain=self.u1, game=self.game_1v1, event=self.event)
+        tB = Team.objects.create(name="Team B (Seed 1)", captain=self.u2, game=self.game_1v1, event=self.event)
+        tC = Team.objects.create(name="Team C (Unseeded)", captain=self.u3, game=self.game_1v1, event=self.event)
+        tD = Team.objects.create(name="Team D (Seed 3)", captain=self.u4, game=self.game_1v1, event=self.event)
+
+        TournamentRegistration.objects.create(tournament=tournament, team=tA, seed=2, registered_at=timezone.now() - timedelta(hours=4))
+        TournamentRegistration.objects.create(tournament=tournament, team=tB, seed=1, registered_at=timezone.now() - timedelta(hours=3))
+        TournamentRegistration.objects.create(tournament=tournament, team=tC, seed=None, registered_at=timezone.now() - timedelta(hours=2))
+        TournamentRegistration.objects.create(tournament=tournament, team=tD, seed=3, registered_at=timezone.now() - timedelta(hours=1))
+
+        generate_bracket(tournament)
+
+        # Round 1 matches:
+        # Standard seed pairing for 4 teams is (1, 4) and (2, 3)
+        # Seed 1 is tB (seed 1)
+        # Seed 2 is tA (seed 2)
+        # Seed 3 is tD (seed 3)
+        # Seed 4 is tC (unseeded, nulls_last)
+        # Match 1: tB vs tC
+        # Match 2: tA vs tD
+        m1 = TournamentMatch.objects.get(tournament=tournament, round_number=1, match_number=1)
+        m2 = TournamentMatch.objects.get(tournament=tournament, round_number=1, match_number=2)
+
+        self.assertEqual(m1.team1, tB)
+        self.assertEqual(m1.team2, tC)
+        self.assertEqual(m2.team1, tA)
+        self.assertEqual(m2.team2, tD)
+
+    def test_tournament_match_admin_service_delegation(self):
+        from tournaments.admin import TournamentMatchAdmin
+        from django.contrib.admin.sites import AdminSite
+
+        tournament = self._create_tournament(
+            title="Admin Delegated Cup",
+            event=self.event,
+            game=self.game_1v1,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.IN_PROGRESS,
+            is_generated=True,
+            max_teams=2,
+        )
+        team1 = Team.objects.create(name="Admin T1", captain=self.u1, game=self.game_1v1, event=self.event)
+        team2 = Team.objects.create(name="Admin T2", captain=self.u2, game=self.game_1v1, event=self.event)
+        match = TournamentMatch.objects.create(
+            tournament=tournament,
+            bracket_type=TournamentMatch.BracketType.FINAL,
+            round_number=1,
+            match_number=1,
+            team1=team1,
+            team2=team2,
+            status=TournamentMatch.Status.READY,
+        )
+
+        admin_site = AdminSite()
+        match_admin = TournamentMatchAdmin(TournamentMatch, admin_site)
+
+        match.score_team1 = 3
+        match.score_team2 = 1
+
+        request = type('Request', (), {'user': self.admin})()
+        form = type('Form', (), {'cleaned_data': {'winner': team1, 'decision_reason': 'Admin scored'}})()
+
+        match_admin.save_model(request, match, form, change=True)
+
+        match.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(match.winner, team1)
+        self.assertEqual(match.loser, team2)
+
+        tournament.refresh_from_db()
+        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
+
+    def test_tournament_admin_registered_count_annotation(self):
+        from tournaments.admin import TournamentAdmin
+        from django.contrib.admin.sites import AdminSite
+
+        tournament = self._create_tournament(
+            title="Annotated Tourney",
+            event=self.event,
+            game=self.game_1v1,
+            mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.REGISTRATION_OPEN,
+        )
+        t1 = Team.objects.create(name="Reg Team", captain=self.u1, game=self.game_1v1, event=self.event)
+        TournamentRegistration.objects.create(tournament=tournament, team=t1)
+
+        admin_site = AdminSite()
+        t_admin = TournamentAdmin(Tournament, admin_site)
+        request = type('Request', (), {'user': self.admin})()
+        qs = t_admin.get_queryset(request)
+        annotated_t = qs.get(pk=tournament.pk)
+        self.assertEqual(annotated_t.reg_count, 1)
+        self.assertEqual(t_admin.registered_count(annotated_t), 1)
 
 
 

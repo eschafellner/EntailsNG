@@ -192,8 +192,13 @@ class TournamentMatchService:
             raise InvalidScoreError("Punkte müssen nicht-negative Ganzzahlen (>= 0) sein.")
 
         with transaction.atomic():
-            match = TournamentMatch.objects.select_for_update().select_related('tournament', 'team1', 'team2').get(pk=match_id)
+            match = TournamentMatch.objects.select_for_update(of=('self',)).select_related('tournament', 'team1', 'team2').get(pk=match_id)
             tournament = match.tournament
+
+            allows_draw = (
+                match.bracket_type == TournamentMatch.BracketType.GROUP
+                or tournament.mode == Tournament.Mode.LEAGUE
+            )
 
             # 0. Berechtigungen und Match-Vollständigkeit prüfen (unter Lock)
             is_admin = tournament.is_managed_by(actor) if actor else True
@@ -214,23 +219,34 @@ class TournamentMatchService:
                     raise MatchNotReadyError("Das Match ist noch nicht vollständig mit Teams besetzt.")
 
                 # Fairplay-Schutz: Teilnehmer können nur die eigene Niederlage bestätigen (Gegner als Sieger)
+                # Bei erlaubten Unentschieden (Liga/Gruppe) wird bei Punktgleichheit kein Sieger forciert
                 if is_team1_member and not is_team2_member:
-                    if winner_id and int(winner_id) != match.team2.id:
-                        raise InvalidWinnerError(
-                            "Teilnehmer können nur die eigene Niederlage bestätigen. Um einen Sieg für dein Team einzutragen, muss der Gegner das Ergebnis bestätigen oder ein Admin kontaktiert werden."
-                        )
-                    winner_id = match.team2.id
-                    if not decision_reason:
-                        decision_reason = f"Niederlage bestätigt durch {actor.username} ({match.team1.name})"
+                    if allows_draw and score1 == score2:
+                        winner_id = None
+                        if not decision_reason:
+                            decision_reason = f"Unentschieden bestätigt durch {actor.username} ({match.team1.name})"
+                    else:
+                        if winner_id and int(winner_id) != match.team2.id:
+                            raise InvalidWinnerError(
+                                "Teilnehmer können nur die eigene Niederlage bestätigen. Um einen Sieg für dein Team einzutragen, muss der Gegner das Ergebnis bestätigen oder ein Admin kontaktiert werden."
+                            )
+                        winner_id = match.team2.id
+                        if not decision_reason:
+                            decision_reason = f"Niederlage bestätigt durch {actor.username} ({match.team1.name})"
 
                 elif is_team2_member and not is_team1_member:
-                    if winner_id and int(winner_id) != match.team1.id:
-                        raise InvalidWinnerError(
-                            "Teilnehmer können nur die eigene Niederlage bestätigen. Um einen Sieg für dein Team einzutragen, muss der Gegner das Ergebnis bestätigen oder ein Admin kontaktiert werden."
-                        )
-                    winner_id = match.team1.id
-                    if not decision_reason:
-                        decision_reason = f"Niederlage bestätigt durch {actor.username} ({match.team2.name})"
+                    if allows_draw and score1 == score2:
+                        winner_id = None
+                        if not decision_reason:
+                            decision_reason = f"Unentschieden bestätigt durch {actor.username} ({match.team2.name})"
+                    else:
+                        if winner_id and int(winner_id) != match.team1.id:
+                            raise InvalidWinnerError(
+                                "Teilnehmer können nur die eigene Niederlage bestätigen. Um einen Sieg für dein Team einzutragen, muss der Gegner das Ergebnis bestätigen oder ein Admin kontaktiert werden."
+                            )
+                        winner_id = match.team1.id
+                        if not decision_reason:
+                            decision_reason = f"Niederlage bestätigt durch {actor.username} ({match.team2.name})"
 
             if not match.is_bye and (not match.team1 or not match.team2):
                 raise MatchNotReadyError("Das Match ist noch nicht vollständig mit Teams besetzt.")
@@ -423,6 +439,9 @@ class FFAMatchService:
         participant_scores: List of dicts, z.B.:
         [{'participant_id': 12, 'rank': 1, 'score': 1500, 'is_disqualified': False, 'notes': ''}, ...]
         """
+        if not participant_scores:
+            raise TournamentMatchError("Es wurden keine Teilnehmer-Ergebnisse übergeben.")
+
         with transaction.atomic():
             match = TournamentMatch.objects.select_for_update().get(pk=match_id)
             if actor is not None and not match.tournament.is_managed_by(actor):
@@ -432,8 +451,12 @@ class FFAMatchService:
                 raise TournamentMatchError("Dieses Match ist kein Free-For-All (FFA) Match.")
 
             participants = {p.id: p for p in match.participants.select_for_update()}
+            if not participants:
+                raise TournamentMatchError("Das Match hat keine registrierten Teilnehmer.")
 
             winner_participant = None
+            rank_1_count = 0
+            valid_entries = []
 
             for item in participant_scores:
                 p_id = item.get('participant_id')
@@ -447,7 +470,6 @@ class FFAMatchService:
                 if p_id not in participants:
                     continue
 
-                p = participants[p_id]
                 try:
                     rank = int(item['rank']) if item.get('rank') is not None and str(item.get('rank')).strip() != '' else None
                 except (ValueError, TypeError):
@@ -458,25 +480,40 @@ class FFAMatchService:
                 except (ValueError, TypeError):
                     score = 0
 
+                is_disqualified = bool(item.get('is_disqualified', False))
+                notes = str(item.get('notes', '')).strip()
+
+                if rank == 1 and not is_disqualified:
+                    rank_1_count += 1
+
+                valid_entries.append((participants[p_id], rank, score, is_disqualified, notes))
+
+            if not valid_entries:
+                raise TournamentMatchError("Es wurden keine gültigen Teilnehmer-Ergebnisse übergeben.")
+
+            if rank_1_count > 1:
+                raise TournamentMatchError("Mehrere Teilnehmer können nicht gleichzeitig Rang 1 belegen.")
+
+            for p, rank, score, is_disqualified, notes in valid_entries:
                 p.rank = rank
                 p.score = score
-                p.is_disqualified = bool(item.get('is_disqualified', False))
-                p.notes = str(item.get('notes', '')).strip()
+                p.is_disqualified = is_disqualified
+                p.notes = notes
                 p.save(update_fields=['rank', 'score', 'is_disqualified', 'notes'])
 
-                if rank == 1 and not p.is_disqualified:
+                if rank == 1 and not is_disqualified:
                     winner_participant = p
 
             match.status = TournamentMatch.Status.COMPLETED
-            if winner_participant:
-                match.winner = winner_participant.team
+            match.winner = winner_participant.team if winner_participant else None
             if decision_reason:
                 match.decision_reason = str(decision_reason).strip()
             match.save(update_fields=['status', 'winner', 'decision_reason'])
 
             tournament = match.tournament
-            tournament.status = Tournament.Status.FINISHED
-            tournament.save(update_fields=['status'])
+            if winner_participant:
+                tournament.status = Tournament.Status.FINISHED
+                tournament.save(update_fields=['status'])
 
             return match, winner_participant.team if winner_participant else None
 

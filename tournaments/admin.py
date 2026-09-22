@@ -1,4 +1,6 @@
 from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
+from django.db import models
 from django.utils.html import format_html
 from tournaments.exceptions import TournamentError
 from tournaments.models import (
@@ -29,7 +31,18 @@ class TournamentMatchParticipantInline(admin.TabularInline):
 class TournamentMatchInline(admin.TabularInline):
     model = TournamentMatch
     extra = 0
-    raw_id_fields = ('team1', 'team2', 'winner', 'loser', 'next_match_winner', 'next_match_loser')
+    can_delete = False
+    fields = (
+        'bracket_type', 'round_number', 'match_number', 'team1', 'team2',
+        'score_team1', 'score_team2', 'winner', 'status'
+    )
+    readonly_fields = (
+        'bracket_type', 'round_number', 'match_number', 'team1', 'team2',
+        'score_team1', 'score_team2', 'winner', 'status'
+    )
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Tournament)
@@ -49,9 +62,15 @@ class TournamentAdmin(admin.ModelAdmin):
         'action_reset_bracket',
     ]
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(
+            reg_count=models.Count('registrations', distinct=True)
+        )
+
     def registered_count(self, obj):
-        return obj.registrations.count()
+        return getattr(obj, 'reg_count', obj.registrations.count())
     registered_count.short_description = "Angemeldete Teams"
+    registered_count.admin_order_field = 'reg_count'
 
     def formfield_for_choice_field(self, db_field, request, **kwargs):
         if db_field.name == 'mode':
@@ -224,8 +243,45 @@ class TournamentMatchAdmin(admin.ModelAdmin):
     )
     list_filter = ('tournament', 'bracket_type', 'status', 'round_number')
     search_fields = ('tournament__title', 'team1__name', 'team2__name')
-    raw_id_fields = ('tournament', 'team1', 'team2', 'winner', 'loser', 'next_match_winner', 'next_match_loser')
+    readonly_fields = (
+        'tournament', 'bracket_type', 'round_number', 'match_number',
+        'is_bye', 'loser', 'next_match_winner', 'next_match_loser',
+        'next_match_winner_slot', 'next_match_loser_slot', 'status',
+    )
+    raw_id_fields = ('team1', 'team2', 'winner')
     inlines = [TournamentMatchParticipantInline]
+
+    def save_model(self, request, obj, form, change):
+        if change and obj.bracket_type != TournamentMatch.BracketType.FFA:
+            if obj.score_team1 is not None and obj.score_team2 is not None:
+                from tournaments.services.matches import TournamentMatchService
+                from tournaments.exceptions import TournamentError
+                orig = TournamentMatch.objects.get(pk=obj.pk)
+                selected_winner = form.cleaned_data.get('winner')
+                selected_winner_id = selected_winner.id if selected_winner else None
+                if (
+                    orig.status != TournamentMatch.Status.COMPLETED
+                    or orig.score_team1 != obj.score_team1
+                    or orig.score_team2 != obj.score_team2
+                    or orig.winner_id != selected_winner_id
+                    or orig.decision_reason != obj.decision_reason
+                ):
+                    try:
+                        match, _ = TournamentMatchService.update_match_score(
+                            match_id=obj.id,
+                            score1=obj.score_team1,
+                            score2=obj.score_team2,
+                            winner_id=selected_winner_id,
+                            decision_reason=obj.decision_reason,
+                            actor=request.user,
+                        )
+                        obj.status = match.status
+                        obj.winner = match.winner
+                        obj.loser = match.loser
+                        return
+                    except TournamentError as e:
+                        raise ValidationError(str(e))
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(TournamentMatchParticipant)
