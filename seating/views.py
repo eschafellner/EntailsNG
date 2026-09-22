@@ -43,6 +43,7 @@ def seating_editor(request, plan_id):
 
     context = {
         'plan': plan,
+        'cells_data': cells_data,
         'cells_json': json.dumps(cells_data),
     }
     return render(request, 'seating/editor.html', context)
@@ -52,11 +53,20 @@ def seating_editor(request, plan_id):
 @require_POST
 def save_seating_plan(request, plan_id):
     """Speichert das geänderte Raster per AJAX-Call über den SeatingPlanService."""
+    if not request.user.has_perm('seating.change_seatingplan'):
+        return JsonResponse({'status': 'error', 'message': 'Keine Berechtigung zum Bearbeiten von Sitzplänen.'}, status=403)
+
     plan = get_object_or_404(SeatingPlan, pk=plan_id)
 
     try:
         data = json.loads(request.body)
-        cells_to_save = data.get('cells', [])
+        if not isinstance(data, dict):
+            return JsonResponse({'status': 'error', 'message': 'Ungültiges JSON: Objekt erwartet.'}, status=400)
+        if 'cells' not in data:
+            return JsonResponse({'status': 'error', 'message': 'Ungültige Anfrage: "cells" fehlt im Payload.'}, status=400)
+        cells_to_save = data['cells']
+        if not isinstance(cells_to_save, list):
+            return JsonResponse({'status': 'error', 'message': 'Ungültiges Format: "cells" muss eine Liste sein.'}, status=400)
         expected_version = data.get('version')
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse({'status': 'error', 'message': 'Ungültiges JSON übermittelt.'}, status=400)
@@ -352,21 +362,21 @@ def admin_assign_seat(request):
     API für Admins:
     Weist einem Benutzer gezielt einen Sitzplatz zu mit strikter Validierung von Zelltyp, Sperrstatus und Belegung.
     """
+    if not request.user.has_perm('seating.change_seatingcell'):
+        return JsonResponse({'status': 'error', 'message': 'Keine Berechtigung zum Zuweisen von Sitzplätzen.'}, status=403)
+
     try:
         data = json.loads(request.body)
-        registration_id = data.get('registration_id')
+        if not isinstance(data, dict):
+            return JsonResponse({'status': 'error', 'message': 'Ungültiges JSON: Objekt erwartet.'}, status=400)
+        registration_id = int(data.get('registration_id'))
         x = int(data.get('x'))
         y = int(data.get('y'))
-        force = bool(data.get('force', False))
-    except (json.JSONDecodeError, ValueError, TypeError):
+        raw_force = data.get('force', False)
+        force = raw_force in (True, 'true', 'True', 1, '1')
+    except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
         return JsonResponse(
             {'status': 'error', 'message': 'Ungültige oder unvollständige Parameter übergeben.'},
-            status=400,
-        )
-
-    if registration_id is None:
-        return JsonResponse(
-            {'status': 'error', 'message': 'Keine Registrierungs-ID übergeben.'},
             status=400,
         )
 
@@ -374,6 +384,12 @@ def admin_assign_seat(request):
         registration = EventRegistration.objects.select_for_update().get(pk=registration_id)
     except EventRegistration.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Anmeldung nicht gefunden.'}, status=404)
+
+    if registration.payment_status == EventRegistration.PaymentStatus.CANCELLED:
+        return JsonResponse(
+            {'status': 'error', 'message': 'Zuweisung fehlgeschlagen: Die Anmeldung wurde storniert.'},
+            status=400,
+        )
 
     try:
         plan = SeatingPlan.objects.get(event=registration.event)
@@ -467,6 +483,9 @@ def admin_toggle_block_seat(request):
     Sperrt einen Platz ohne Anmeldung (Status BLOCKED) oder gibt ihn wieder frei (Status FREE).
     Transaktionssicher mit DB-Row-Lock.
     """
+    if not request.user.has_perm('seating.change_seatingcell'):
+        return JsonResponse({'status': 'error', 'message': 'Keine Berechtigung zum Ändern des Sperrstatus.'}, status=403)
+
     try:
         data = json.loads(request.body)
         event_id = data.get('event_id')
@@ -528,6 +547,9 @@ def admin_release_seat(request):
     Gibt den Sitzplatz einer bestimmten Anmeldung frei ODER gibt eine Kachel per Koordinate frei.
     Transaktionssicher mit DB-Row-Lock.
     """
+    if not request.user.has_perm('seating.change_seatingcell'):
+        return JsonResponse({'status': 'error', 'message': 'Keine Berechtigung zum Freigeben von Sitzplätzen.'}, status=403)
+
     try:
         data = json.loads(request.body)
         registration_id = data.get('registration_id')

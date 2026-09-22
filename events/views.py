@@ -134,7 +134,7 @@ def registration_payment_qr_view(request, registration_id):
         return HttpResponseBadRequest("Zahlungs-QR-Code ist nur für offene Zahlungen verfügbar.")
 
     # 3. Kostenloses Ticket prüfen
-    if registration.ticket_type and registration.ticket_type.price == 0:
+    if registration.effective_price == 0:
         return HttpResponseBadRequest("Kostenlose Tickets erfordern keine Zahlung.")
 
     # 4. Zahlungsdaten prüfen
@@ -359,7 +359,22 @@ def process_checkin(request, registration_id, token):
     # POST-Request: Zustandsänderung durchführen!
     already_checked_in = registration.is_checked_in
     if not already_checked_in:
-        registration.check_in(target_event=active_event)
+        try:
+            registration.check_in(target_event=active_event)
+        except ValidationError as e:
+            error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+            if _wants_json(request):
+                return JsonResponse({'status': 'error', 'message': error_message}, status=400)
+            return render(
+                request,
+                'events/checkin_confirm.html',
+                {
+                    'registration': registration,
+                    'seat_label': seat_label,
+                    'error': error_message,
+                },
+                status=400,
+            )
 
     if _wants_json(request):
         return JsonResponse({
@@ -540,7 +555,15 @@ def scan_qr_api(request):
 
     already_checked_in = registration.is_checked_in
     if not already_checked_in:
-        registration.check_in(target_event=active_event)
+        try:
+            registration.check_in(target_event=active_event)
+        except ValidationError as e:
+            error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+            return JsonResponse({
+                'status': 'error',
+                'user': registration.user.username,
+                'message': error_message,
+            }, status=400)
 
     return JsonResponse({
         'status': 'already_checked_in' if already_checked_in else 'success',

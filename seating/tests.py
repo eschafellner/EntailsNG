@@ -198,8 +198,8 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.FREE)
 
     def test_save_seating_plan_bulk_update(self):
-        admin_user = User.objects.create_user(
-            username='seating_admin', email='admin@example.com', password='password', is_staff=True
+        admin_user = User.objects.create_superuser(
+            username='seating_admin', email='admin@example.com', password='password'
         )
         self.client.login(username='seating_admin', password='password')
 
@@ -210,7 +210,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         ]
         response = self.client.post(
             reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
-            data=json.dumps({'cells': cells_payload}),
+            data=json.dumps({'cells': cells_payload, 'version': self.plan.version}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200)
@@ -219,8 +219,8 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.assertEqual(self.seat_cell.seat_label, 'B1-Updated')
 
     def test_save_seating_plan_blocked_cells(self):
-        admin_user = User.objects.create_user(
-            username='seating_admin_block', email='sablock@example.com', password='password', is_staff=True
+        admin_user = User.objects.create_superuser(
+            username='seating_admin_block', email='sablock@example.com', password='password'
         )
         self.client.login(username='seating_admin_block', password='password')
 
@@ -230,7 +230,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         ]
         response = self.client.post(
             reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
-            data=json.dumps({'cells': cells_payload}),
+            data=json.dumps({'cells': cells_payload, 'version': self.plan.version}),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200)
@@ -238,8 +238,8 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.assertEqual(blocked_cell.reservation_status, SeatingCell.ReservationStatus.BLOCKED)
 
     def test_save_seating_plan_editor_validations(self):
-        admin_user = User.objects.create_user(
-            username='seating_validator', email='val@example.com', password='password', is_staff=True
+        admin_user = User.objects.create_superuser(
+            username='seating_validator', email='val@example.com', password='password'
         )
         self.client.login(username='seating_validator', password='password')
 
@@ -282,8 +282,8 @@ class SeatingConsistencyAndSignalTests(TestCase):
 
 
     def test_admin_assign_seat_validations(self):
-        admin_user = User.objects.create_user(
-            username='staff_seating', email='staff@example.com', password='password', is_staff=True
+        admin_user = User.objects.create_superuser(
+            username='staff_seating', email='staff@example.com', password='password'
         )
         user_c = User.objects.create_user(
             username='gamer_c', email='c@example.com', password='password'
@@ -1453,6 +1453,208 @@ class SeatingViewerFrontendTests(TestCase):
 
         result = subprocess.run([node_bin, '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, f"Node test fehlgeschlagen: {result.stderr or result.stdout}")
+
+
+class SeatingFeedbackRegressionTests(TestCase):
+    """
+    Regressionstests für das Feedback zu Sitzplan-Sicherheit, Vorlagen,
+    Berechtigungen, Validierung und Statussynchronisation.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = User.objects.create_user(
+            username='xss_tester<script>alert(1)</script>',
+            email='xss@test.com',
+            password='password',
+            first_name='Malicious',
+            last_name='User<script>'
+        )
+        self.superuser = User.objects.create_superuser(
+            username='super_admin', email='sa@test.com', password='password'
+        )
+        self.plain_staff = User.objects.create_user(
+            username='plain_staff', email='staff@test.com', password='password', is_staff=True
+        )
+        self.event = Event.objects.create(
+            title='Seating Test Event',
+            slug='seating-test-event',
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() + timedelta(days=1),
+            end_date=timezone.now() + timedelta(days=2),
+        )
+        self.plan = SeatingPlan.objects.create(
+            event=self.event, name='Test Plan', columns=10, rows=10
+        )
+        self.seat_cell = SeatingCell.objects.create(
+            plan=self.plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT, seat_label='R1-P1'
+        )
+        self.registration = EventRegistration.objects.create(
+            user=self.user, event=self.event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+    def test_p1_editor_json_script_escaping(self):
+        """P1: Editor überträgt Zellen via json_script und bricht Scriptblöcke nicht mit </script> auf."""
+        SeatingCell.objects.create(
+            plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.LABEL,
+            text_label='</script><script>alert("XSS")</script>'
+        )
+        self.client.login(username='super_admin', password='password')
+        response = self.client.get(reverse('seating_editor', kwargs={'plan_id': self.plan.id}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="cells-data"')
+        self.assertNotContains(response, '{{ cells_json|safe }}')
+        content = response.content.decode('utf-8')
+        self.assertNotIn('</script><script>alert("XSS")', content)
+
+    def test_p1_admin_preview_html_escaping_and_data_attributes(self):
+        """P1: Admin-Vorschau escaped Usernames/Namen und nutzt data-Attribute statt inline onclick."""
+        self.seat_cell.registration = self.registration
+        self.seat_cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat_cell.save()
+
+        from seating.admin import SeatingPlanAdmin
+        from django.contrib.admin.sites import AdminSite
+        admin_instance = SeatingPlanAdmin(SeatingPlan, AdminSite())
+        rendered_html = admin_instance.live_occupancy_preview(self.plan)
+
+        self.assertIn('data-action="release"', rendered_html)
+        self.assertNotIn('onclick="releaseOccupiedSeat', rendered_html)
+        self.assertIn('&lt;script&gt;alert(1)&lt;/script&gt;', rendered_html)
+        self.assertNotIn('<script>alert(1)</script>', rendered_html)
+
+    def test_p4_template_assigned_event_in_admin_form(self):
+        """P4: Admin-Formular hebt is_template auf, wenn einem Vorlagenplan ein Event zugewiesen wird."""
+        from seating.admin import SeatingPlanAdminForm
+        event_for_template = Event.objects.create(
+            title='Template Event', slug='template-event',
+            start_date=timezone.now() + timedelta(days=10),
+            end_date=timezone.now() + timedelta(days=12)
+        )
+        template = SeatingPlan.objects.create(name='Saal-Vorlage', columns=8, rows=8, is_template=True, event=None)
+        form = SeatingPlanAdminForm(
+            instance=template,
+            data={'name': 'Saal-Vorlage', 'columns': 8, 'rows': 8, 'event': event_for_template.id}
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        saved_plan = form.save()
+        self.assertFalse(saved_plan.is_template)
+        self.assertEqual(saved_plan.event, event_for_template)
+
+    def test_p5_save_seating_plan_incomplete_payload(self):
+        """P5: Speichern mit unvollständigem JSON-Payload ({}) wirft HTTP 400 und löscht keine Zellen."""
+        self.client.login(username='super_admin', password='password')
+        initial_cell_count = self.plan.cells.count()
+
+        # Leerer Payload ohne 'cells'
+        response = self.client.post(
+            reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
+            data=json.dumps({}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('"cells" fehlt', response.json()['message'])
+        self.assertEqual(self.plan.cells.count(), initial_cell_count)
+
+    def test_p6_shrinking_grid_with_occupied_seats_rejected(self):
+        """P6: Verkleinern des Rasters lehnt ab, wenn belegte Plätze außerhalb des neuen Rasters liegen."""
+        far_seat = SeatingCell.objects.create(
+            plan=self.plan, x=9, y=9, cell_type=SeatingCell.CellType.SEAT,
+            seat_label='Far-Seat', registration=self.registration
+        )
+        self.plan.columns = 5
+        self.plan.rows = 5
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError) as ctx:
+            self.plan.clean()
+        self.assertIn('Far-Seat', str(ctx.exception))
+
+    def test_p7_admin_assign_seat_rejects_cancelled_registration(self):
+        """P7: admin_assign_seat lehnt stornierte Registrierungen mit HTTP 400 ab."""
+        self.registration.payment_status = EventRegistration.PaymentStatus.CANCELLED
+        self.registration.save()
+
+        self.client.login(username='super_admin', password='password')
+        response = self.client.post(
+            reverse('admin_assign_seat'),
+            data=json.dumps({'registration_id': self.registration.id, 'x': 1, 'y': 1}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('storniert', response.json()['message'])
+
+    def test_p7_sync_seat_status_with_payment_releases_cancelled_seats(self):
+        """P7: sync_seat_status_with_payment gibt Sitze bei Status CANCELLED frei."""
+        from seating.services import sync_seat_status_with_payment
+        self.seat_cell.registration = self.registration
+        self.seat_cell.reservation_status = SeatingCell.ReservationStatus.RESERVED
+        self.seat_cell.save()
+
+        self.registration.payment_status = EventRegistration.PaymentStatus.CANCELLED
+        self.registration.save()
+
+        sync_seat_status_with_payment(self.registration)
+        self.seat_cell.refresh_from_db()
+        self.assertIsNone(self.seat_cell.registration)
+        self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.FREE)
+
+    def test_p9_save_grid_rejects_duplicate_seat_labels(self):
+        """P9: save_grid verweigert das Speichern doppelter Sitzplatzbezeichnungen."""
+        cells_data = [
+            {'x': 1, 'y': 1, 'cell_type': 'SEAT', 'seat_label': 'VIP-1'},
+            {'x': 1, 'y': 2, 'cell_type': 'SEAT', 'seat_label': 'VIP-1'},
+        ]
+        with self.assertRaises(SeatingPlanValidationError) as ctx:
+            SeatingPlanService.save_grid(self.plan, cells_data)
+        self.assertIn("Doppelte Sitzplatzbezeichnung 'VIP-1'", str(ctx.exception))
+
+    def test_p11_staff_without_permissions_denied(self):
+        """P11: Mitarbeiter ohne spezifische Modellberechtigungen erhalten HTTP 403."""
+        self.client.login(username='plain_staff', password='password')
+
+        # save_seating_plan erfordert change_seatingplan
+        res1 = self.client.post(
+            reverse('save_seating_plan', kwargs={'plan_id': self.plan.id}),
+            data=json.dumps({'cells': []}),
+            content_type='application/json'
+        )
+        self.assertEqual(res1.status_code, 403)
+
+        # admin_assign_seat erfordert change_seatingcell
+        res2 = self.client.post(
+            reverse('admin_assign_seat'),
+            data=json.dumps({'registration_id': self.registration.id, 'x': 1, 'y': 1}),
+            content_type='application/json'
+        )
+        self.assertEqual(res2.status_code, 403)
+
+    def test_p11_force_boolean_safe_parsing(self):
+        """P11: force='false' wird als False interpretiert und überschreibt keine Sperre."""
+        self.seat_cell.reservation_status = SeatingCell.ReservationStatus.BLOCKED
+        self.seat_cell.registration = None
+        self.seat_cell.save()
+
+        other_user = User.objects.create_user(username='other_g', email='og@test.com', password='pw')
+        other_reg = EventRegistration.objects.create(
+            user=other_user, event=self.event, payment_status=EventRegistration.PaymentStatus.PAID
+        )
+
+        self.client.login(username='super_admin', password='password')
+        response = self.client.post(
+            reverse('admin_assign_seat'),
+            data=json.dumps({
+                'registration_id': other_reg.id,
+                'x': 1,
+                'y': 1,
+                'force': 'false'  # String 'false' darf nicht zu True gecastet werden!
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('gesperrt', response.json()['message'])
+
 
 
 

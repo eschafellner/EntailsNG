@@ -72,12 +72,22 @@ def get_user_seat_map(event, user_ids):
 def sync_seat_status_with_payment(registration):
     """
     Synchronisiert den Reservierungsstatus aller Plätze einer Registrierung
-    mit deren Bezahlstatus (PAID -> RESERVED, sonst -> PRE_RESERVED).
+    mit deren Bezahlstatus (PAID -> RESERVED, CANCELLED -> Freigabe, sonst -> PRE_RESERVED).
     """
     if not registration or not registration.pk:
         return
 
-    is_paid = getattr(registration, 'payment_status', None) == 'PAID'
+    payment_status = getattr(registration, 'payment_status', None)
+    if payment_status == 'CANCELLED':
+        registration.seats.update(
+            registration=None,
+            reservation_status=SeatingCell.ReservationStatus.FREE,
+        )
+        if getattr(registration, 'event_id', None):
+            invalidate_event_capacity_cache(registration.event_id)
+        return
+
+    is_paid = payment_status == 'PAID'
     new_status = (
         SeatingCell.ReservationStatus.RESERVED
         if is_paid
@@ -122,6 +132,7 @@ class SeatingPlanService:
 
         valid_cell_types = set(SeatingCell.CellType.values)
         sent_coords = {}
+        seen_seat_labels = {}
 
         for idx, c in enumerate(cells_data):
             if not isinstance(c, dict):
@@ -147,14 +158,24 @@ class SeatingPlanService:
                 )
 
             # 3. Feldlängen validieren
-            seat_label = str(c.get('seat_label', '') or '')[:20]
-            text_label = str(c.get('text_label', '') or '')[:50]
+            seat_label = str(c.get('seat_label', '') or '').strip()[:20]
+            text_label = str(c.get('text_label', '') or '').strip()[:50]
             raw_res_status = c.get('reservation_status')
             reservation_status = (
                 SeatingCell.ReservationStatus.BLOCKED
                 if raw_res_status == SeatingCell.ReservationStatus.BLOCKED
                 else SeatingCell.ReservationStatus.FREE
             )
+
+            # P9: Eindeutigkeit von Sitzplatz-Bezeichnungen innerhalb des Plans prüfen
+            if cell_type == SeatingCell.CellType.SEAT and seat_label:
+                if seat_label in seen_seat_labels:
+                    prev_x, prev_y = seen_seat_labels[seat_label]
+                    raise SeatingPlanValidationError(
+                        f"Doppelte Sitzplatzbezeichnung '{seat_label}' an Position ({x},{y}). "
+                        f"Dieser Name wird bereits an Position ({prev_x},{prev_y}) verwendet."
+                    )
+                seen_seat_labels[seat_label] = (x, y)
 
             sent_coords[(x, y)] = {
                 'cell_type': cell_type,

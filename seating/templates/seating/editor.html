@@ -64,17 +64,18 @@
 <!-- Toast Notifications Container -->
 <div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:1000; display:flex; flex-direction:column; gap:10px; pointer-events:none; font-family:sans-serif;"></div>
 
+{{ cells_data|json_script:"cells-data" }}
+
 <script>
     const planId = {{ plan.id }};
     const columns = {{ plan.columns }};
     const rows = {{ plan.rows }};
-    const initialCells = {{ cells_json|safe }};
+    const initialCells = JSON.parse(document.getElementById('cells-data').textContent);
     const csrfToken = "{{ csrf_token }}";
     let planVersion = {{ plan.version|default:1 }};
 
     let currentTool = 'SEAT';
     let isMouseDown = false;
-    let seatCounter = 1;
     let isPromptOpen = false;
 
     const gridData = {};
@@ -104,7 +105,7 @@
                 cell.dataset.x = x;
                 cell.dataset.y = y;
 
-                if (data.cell_type === 'SEAT') cell.innerText = data.seat_label || `S${data.x}`;
+                if (data.cell_type === 'SEAT') cell.innerText = data.seat_label || `R${data.y}-P${data.x}`;
                 if (data.cell_type === 'LABEL') cell.innerText = data.text_label || 'T';
 
                 // Einzelklick vs. Dragging unterscheiden
@@ -207,7 +208,7 @@
         if (currentTool === 'BLOCKED') {
             item.cell_type = 'SEAT';
             item.reservation_status = 'BLOCKED';
-            if (!item.seat_label) item.seat_label = `P${seatCounter++}`;
+            if (!item.seat_label) item.seat_label = `R${y}-P${x}`;
             el.className = `cell BLOCKED`;
             el.innerText = item.seat_label;
             return;
@@ -232,7 +233,7 @@
         item.reservation_status = 'FREE'; // Zurücksetzen falls vorher gesperrt war
 
         if (currentTool === 'SEAT') {
-            if (!item.seat_label) item.seat_label = `P${seatCounter++}`;
+            if (!item.seat_label) item.seat_label = `R${y}-P${x}`;
         }
 
         el.className = `cell ${currentTool}`;

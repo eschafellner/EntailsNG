@@ -70,10 +70,13 @@ class RegistrationService:
             if len(active_tickets) >= 1:
                 selected_ticket = active_tickets[0]
 
+        booking_price = selected_ticket.price if selected_ticket else None
+
         # 7. Registrierung erstellen oder stornierte Registrierung reaktivieren
         if existing_reg:
             existing_reg.payment_status = EventRegistration.PaymentStatus.UNPAID
             existing_reg.ticket_type = selected_ticket
+            existing_reg.booking_price = booking_price
             existing_reg.paid_amount = 0.00
             existing_reg.paid_at = None
             existing_reg.cancelled_at = None
@@ -85,7 +88,8 @@ class RegistrationService:
         registration = EventRegistration.objects.create(
             user=user,
             event=event,
-            ticket_type=selected_ticket
+            ticket_type=selected_ticket,
+            booking_price=booking_price,
         )
         return registration, True, False
 
@@ -98,7 +102,7 @@ class PaymentService:
 
     @staticmethod
     @transaction.atomic
-    def mark_paid(registration, amount=None, send_email=True):
+    def mark_paid(registration, amount=None, send_email=True, allow_overbooking=False):
         from seating.models import SeatingCell
         from configuration.cache import invalidate_event_capacity_cache
 
@@ -108,13 +112,26 @@ class PaymentService:
 
         # Lock registration first to establish lock hierarchy: EventRegistration -> SeatingCell
         reg = EventRegistration.objects.select_for_update().get(pk=registration.pk)
+
+        # Überbuchungsschutz: Reaktivierung einer stornierten Anmeldung prüft Kapazität
+        if reg.payment_status == EventRegistration.PaymentStatus.CANCELLED and reg.event_id:
+            event = Event.objects.select_for_update().get(pk=reg.event_id)
+            if event.is_full and not allow_overbooking:
+                raise EventFullError(
+                    f"Die Veranstaltung '{event.title}' ist mit {event.max_guests} Teilnehmern bereits ausgebucht. "
+                    f"Die stornierte Anmeldung von {reg.user.username} kann nicht als bezahlt reaktiviert werden."
+                )
+
         reg.payment_status = EventRegistration.PaymentStatus.PAID
         if not reg.paid_at:
             reg.paid_at = timezone.now()
         if amount is not None:
             reg.paid_amount = amount
-        elif (not reg.paid_amount or reg.paid_amount == 0) and reg.ticket_type:
-            reg.paid_amount = reg.ticket_type.price
+        elif not reg.paid_amount or reg.paid_amount == 0:
+            if reg.booking_price is not None:
+                reg.paid_amount = reg.booking_price
+            elif reg.ticket_type:
+                reg.paid_amount = reg.ticket_type.price
         reg.cancelled_at = None
         reg.save()
 
@@ -170,5 +187,38 @@ class PaymentService:
         if reg.event_id:
             invalidate_event_capacity_cache(reg.event_id)
 
+        return reg
+
+
+class CheckInService:
+    """
+    Zentraler Service für Einlass und Check-in.
+    Schützt durch transaktionale Row-Locks (select_for_update) vor Race Conditions
+    zwischen gleichzeitigem Check-in und Stornierungen.
+    """
+
+    @staticmethod
+    @transaction.atomic
+    def check_in(registration_id: int, target_event=None, actor=None):
+        from django.core.exceptions import ValidationError
+        reg = EventRegistration.objects.select_for_update().select_related('event', 'user').get(pk=registration_id)
+        result = reg.can_check_in(target_event=target_event, actor=actor)
+        if not result.allowed:
+            raise ValidationError(result.reason)
+
+        if not reg.is_checked_in:
+            reg.is_checked_in = True
+            reg.checked_in_at = timezone.now()
+            reg.save(update_fields=['is_checked_in', 'checked_in_at'])
+        return reg
+
+    @staticmethod
+    @transaction.atomic
+    def check_out(registration_id: int):
+        reg = EventRegistration.objects.select_for_update().get(pk=registration_id)
+        if reg.is_checked_in:
+            reg.is_checked_in = False
+            reg.checked_in_at = None
+            reg.save(update_fields=['is_checked_in', 'checked_in_at'])
         return reg
 

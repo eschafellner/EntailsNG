@@ -52,9 +52,10 @@ class SeatingPlan(models.Model):
         super().clean()
         if self.is_template and self.event_id is not None:
             raise ValidationError({
-                'is_template': 'Ein Sitzplan mit zugewiesenem Event kann nicht als Vorlage markiert sein. '
-                               'Um einen Plan als Vorlage zu verwenden, darf kein Event ausgewählt sein.'
+                'event': 'Ein Sitzplan mit zugewiesenem Event kann nicht als Vorlage markiert sein. '
+                         'Um einen Plan als Vorlage zu verwenden, darf kein Event ausgewählt sein.'
             })
+
         if self.pk:
             old_plan = SeatingPlan.objects.filter(pk=self.pk).first()
             if old_plan and old_plan.event_id and self.event_id != old_plan.event_id:
@@ -68,9 +69,33 @@ class SeatingPlan(models.Model):
                         )
                     })
 
+            # P6: Schutz vor dem Abschneiden belegter Plätze beim Verkleinern des Rasters
+            cutoff_seats = self.cells.filter(
+                models.Q(x__gt=self.columns) | models.Q(y__gt=self.rows),
+                registration__isnull=False
+            ).select_related('registration__user')
+            if cutoff_seats.exists():
+                seat_labels = [c.seat_label or f"Pos ({c.x},{c.y})" for c in cutoff_seats[:5]]
+                labels_str = ", ".join(seat_labels)
+                total = cutoff_seats.count()
+                suffix = f" (und {total - 5} weitere)" if total > 5 else ""
+                error_msg = (
+                    f"Die Rastergröße kann nicht verkleinert werden, da {total} bereits belegte Plätze "
+                    f"außerhalb des neuen Rasters liegen würden: {labels_str}{suffix}. "
+                    f"Bitte gib diese Plätze zuerst frei oder wähle eine größere Dimension."
+                )
+                errors = {}
+                if self.cells.filter(x__gt=self.columns, registration__isnull=False).exists():
+                    errors['columns'] = error_msg
+                if self.cells.filter(y__gt=self.rows, registration__isnull=False).exists():
+                    errors['rows'] = error_msg
+                raise ValidationError(errors)
+
     def save(self, *args, **kwargs):
         if self.event_id is None:
             self.is_template = True
+        else:
+            self.is_template = False
         super().save(*args, **kwargs)
 
 

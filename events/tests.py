@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -1982,6 +1983,121 @@ class GuestListAndPaymentCheckTests(TestCase):
 
         self.event.refresh_from_db()
         self.assertIsNotNone(self.event.last_payment_check)
+
+
+class EventFeedbackRegressionTests(TestCase):
+    """
+    Regressionstests für Check-in Race Conditions, Überbuchungsschutz bei Stornierungs-Reaktivierung,
+    effective_status Rangfolge und Festschreiben des Ticketpreises (booking_price).
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.now = timezone.now()
+        self.event = Event.objects.create(
+            title="Cap Event",
+            slug="cap-event",
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            max_guests=1,  # Max 1 Teilnehmer!
+            start_date=self.now + timedelta(days=2),
+            end_date=self.now + timedelta(days=4),
+        )
+        self.ticket = TicketType.objects.create(
+            event=self.event,
+            name="Standard Ticket",
+            price=Decimal("25.00"),
+            is_active=True,
+        )
+        self.user_a = User.objects.create_user(username="user_a", email="a@test.com", password="password")
+        self.user_b = User.objects.create_user(username="user_b", email="b@test.com", password="password")
+
+    def test_p2_checkin_service_rejects_cancelled_registration(self):
+        """P2: CheckInService weist stornierte Anmeldungen atomar ab."""
+        from events.services import CheckInService
+        from django.core.exceptions import ValidationError
+
+        reg = EventRegistration.objects.create(
+            user=self.user_a,
+            event=self.event,
+            ticket_type=self.ticket,
+            payment_status=EventRegistration.PaymentStatus.CANCELLED,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            CheckInService.check_in(reg.id, target_event=self.event)
+        self.assertIn("NICHT BEZAHLT", str(ctx.exception))
+
+    def test_p3_mark_paid_cancelled_registration_checks_event_capacity(self):
+        """P3: mark_paid auf stornierte Registrierung wirft EventFullError bei vollem Event."""
+        from events.services import PaymentService
+        from events.exceptions import EventFullError
+
+        # User A registriert sich und wird bezahlt
+        reg_a = EventRegistration.objects.create(
+            user=self.user_a,
+            event=self.event,
+            ticket_type=self.ticket,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+        # User A wird storniert -> Kapazität wird wieder 1 frei
+        PaymentService.mark_cancelled(reg_a)
+        self.assertEqual(reg_a.payment_status, EventRegistration.PaymentStatus.CANCELLED)
+        self.assertFalse(self.event.is_full)
+
+        # User B bucht den letzten freien Platz und bezahlt
+        reg_b = EventRegistration.objects.create(
+            user=self.user_b,
+            event=self.event,
+            ticket_type=self.ticket,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+        )
+        self.assertTrue(self.event.is_full)
+
+        # Versuch, die stornierte Anmeldung von User A wieder auf PAID zu setzen -> muss an Kapazität scheitern!
+        with self.assertRaises(EventFullError):
+            PaymentService.mark_paid(reg_a)
+
+        # Mit expliziter Erlaubnis zur administrativen Überbuchung geht es durch
+        PaymentService.mark_paid(reg_a, allow_overbooking=True)
+        reg_a.refresh_from_db()
+        self.assertEqual(reg_a.payment_status, EventRegistration.PaymentStatus.PAID)
+
+    def test_p8_effective_status_respects_finished_during_event_dates(self):
+        """P8: Ein manuell auf FINISHED gesetztes Event behält FINISHED auch während des Datumsbereichs."""
+        self.event.status = Event.Status.FINISHED
+        self.event.start_date = self.now - timedelta(days=1)
+        self.event.end_date = self.now + timedelta(days=1)
+        self.event.save()
+
+        # Jetzt ist start_date <= now <= end_date, aber status ist explizit FINISHED
+        self.assertEqual(self.event.effective_status, Event.Status.FINISHED)
+        self.assertEqual(self.event.get_effective_status_display(), "Beendet")
+
+    def test_p10_freeze_ticket_price_at_registration_and_in_qr(self):
+        """P10: booking_price friert den Preis ein, spätere Preisänderungen verändern QR-Code nicht."""
+        from events.services import RegistrationService
+        from events.payment_qr import generate_epc_qr_payload
+
+        reg, created, _ = RegistrationService.register_user(
+            user=self.user_a, event_id=self.event.id, ticket_type_id=self.ticket.id
+        )
+        self.assertEqual(reg.booking_price, Decimal("25.00"))
+        self.assertEqual(reg.effective_price, Decimal("25.00"))
+
+        # Veranstalter erhöht Ticketpreis auf 35.00 €
+        self.ticket.price = Decimal("35.00")
+        self.ticket.save()
+
+        reg.refresh_from_db()
+        # Registrierung behält ihren vereinbarten Buchungspreis!
+        self.assertEqual(reg.booking_price, Decimal("25.00"))
+        self.assertEqual(reg.effective_price, Decimal("25.00"))
+
+        # GiroCode / EPC QR enthält weiterhin EUR25.00
+        payload = generate_epc_qr_payload(reg)
+        self.assertIn("EUR25.00", payload)
+        self.assertNotIn("EUR35.00", payload)
 
 
 

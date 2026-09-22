@@ -545,7 +545,9 @@
 
         <span style="color: #6b7280;">{% t "dash_payment_amount_label" "Betrag:" %}</span>
         <strong style="color: #16a34a;">
-          {% if registration.ticket_type %}
+          {% if registration.effective_price is not None %}
+            {{ registration.effective_price }} €
+          {% elif registration.ticket_type %}
             {{ registration.ticket_type.price }} €
           {% else %}
             {% t "dash_payment_amount_open" "Frei wählbar" %}

@@ -6,7 +6,7 @@
     {% for row in grid_rows %}
       {% for cell_data in row %}
         <div class="preview-cell" 
-             {% if cell_data.click_handler %}{{ cell_data.click_handler|safe }}{% endif %} 
+             {% if cell_data.action %}data-action="{{ cell_data.action }}" data-event-id="{{ event_id }}" data-x="{{ cell_data.x }}" data-y="{{ cell_data.y }}" {% if cell_data.action == 'release' %}data-username="{{ cell_data.username }}" data-seat-label="{{ cell_data.seat_label }}"{% endif %}{% endif %}
              style="background: {{ cell_data.bg_color }}; cursor: {{ cell_data.cursor }}; {% if cell_data.is_blocked %}border: 1px solid #ef4444;{% endif %}">
           {{ cell_data.content }}
           {% if cell_data.tooltip %}

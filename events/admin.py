@@ -6,6 +6,7 @@ from django.utils.safestring import mark_safe
 from configuration.cache import invalidate_active_event_cache
 from seating.models import SeatingCell, SeatingPlan
 from .models import Event, EventRegistration, TicketType
+from .exceptions import EventFullError
 
 
 class EventAdminForm(forms.ModelForm):
@@ -155,6 +156,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         'short_code',
         'event',
         'ticket_type',
+        'booking_price',
         'payment_status_badge',
         'check_in_badge',  # <-- NEU: Badge für Check-in
         'assigned_seat',
@@ -269,12 +271,15 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
         if became_paid:
-            obj.mark_as_paid(amount=obj.paid_amount or None, send_email=True)
-            self.message_user(
-                request,
-                f"Zahlungsbestätigung für '{obj.user.username}' wurde erfolgreich verbucht und per E-Mail versendet.",
-                level=messages.SUCCESS,
-            )
+            try:
+                obj.mark_as_paid(amount=obj.paid_amount or None, send_email=True)
+                self.message_user(
+                    request,
+                    f"Zahlungsbestätigung für '{obj.user.username}' wurde erfolgreich verbucht und per E-Mail versendet.",
+                    level=messages.SUCCESS,
+                )
+            except EventFullError as e:
+                self.message_user(request, str(e), level=messages.ERROR)
         elif became_cancelled:
             obj.mark_as_cancelled()
         else:
@@ -284,17 +289,22 @@ class EventRegistrationAdmin(admin.ModelAdmin):
     @admin.action(description="💶 Ausgewählte Anmeldungen als BEZAHLT markieren (inkl. E-Mail)")
     def action_mark_as_paid(self, request, queryset):
         success_count = 0
+        skipped_count = 0
         for reg in queryset:
             if reg.payment_status != EventRegistration.PaymentStatus.PAID:
-                reg.mark_as_paid(send_email=True)
-                success_count += 1
+                try:
+                    reg.mark_as_paid(send_email=True)
+                    success_count += 1
+                except EventFullError as e:
+                    skipped_count += 1
+                    self.message_user(request, str(e), level=messages.ERROR)
         if success_count > 0:
             self.message_user(
                 request,
                 f"{success_count} Anmeldung(en) erfolgreich als bezahlt markiert und Zahlungsbestätigung per E-Mail versendet.",
                 level=messages.SUCCESS,
             )
-        else:
+        elif skipped_count == 0:
             self.message_user(
                 request,
                 "Alle ausgewählten Anmeldungen waren bereits als bezahlt markiert.",

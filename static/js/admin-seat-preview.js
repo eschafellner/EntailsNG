@@ -61,3 +61,26 @@ function releaseOccupiedSeat(eventId, x, y, username, seatLabel) {
     alert("Netzwerkfehler: " + err);
   });
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const grid = document.querySelector('.seat-grid');
+  if (!grid) return;
+
+  grid.addEventListener('click', (e) => {
+    const cell = e.target.closest('.preview-cell[data-action]');
+    if (!cell) return;
+
+    const action = cell.dataset.action;
+    const eventId = parseInt(cell.dataset.eventId, 10);
+    const x = parseInt(cell.dataset.x, 10);
+    const y = parseInt(cell.dataset.y, 10);
+
+    if (action === 'release') {
+      const username = cell.dataset.username || '';
+      const seatLabel = cell.dataset.seatLabel || 'P';
+      releaseOccupiedSeat(eventId, x, y, username, seatLabel);
+    } else if (action === 'toggle_block') {
+      toggleBlockSeat(eventId, x, y);
+    }
+  });
+});

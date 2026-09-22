@@ -1,8 +1,28 @@
+from django import forms
 from django.contrib import admin
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import SeatingPlan, SeatingCell
+
+
+class SeatingPlanAdminForm(forms.ModelForm):
+    class Meta:
+        model = SeatingPlan
+        fields = (
+            'event',
+            'name',
+            'columns',
+            'rows',
+            'location_info',
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        event = cleaned_data.get('event')
+        if event and self.instance.is_template:
+            self.instance.is_template = False
+        return cleaned_data
 
 
 class SeatingCellInline(admin.TabularInline):
@@ -21,6 +41,7 @@ class SeatingCellInline(admin.TabularInline):
 
 @admin.register(SeatingPlan)
 class SeatingPlanAdmin(admin.ModelAdmin):
+    form = SeatingPlanAdminForm
     list_display = (
         'name',
         'plan_type_badge',
@@ -32,10 +53,11 @@ class SeatingPlanAdmin(admin.ModelAdmin):
     )
     list_filter = ('is_template', 'event')
     search_fields = ('name', 'event__title')
-    readonly_fields = ('live_occupancy_preview',)
+    readonly_fields = ('live_occupancy_preview', 'is_template')
     fields = (
         'event',
         'name',
+        'is_template',
         'columns',
         'rows',
         'location_info',
@@ -97,9 +119,10 @@ class SeatingPlanAdmin(admin.ModelAdmin):
                 bg_color = "#334155"
                 content = ""
                 tooltip = None
-                click_handler = ""
+                action = None
                 cursor = "default"
                 is_blocked = False
+                username_clean = ""
 
                 if cell:
                     if cell.cell_type == SeatingCell.CellType.WALL:
@@ -113,18 +136,14 @@ class SeatingPlanAdmin(admin.ModelAdmin):
                         content = cell.seat_label or "S"
                         cursor = "pointer"
                         status_info = cell.get_reservation_status_display()
-                        user_info = "<i>Niemand</i>"
-                        username_clean = ""
+                        user_info = mark_safe("<i>Niemand</i>")
 
                         if cell.registration and cell.registration.user:
                             u = cell.registration.user
                             username_clean = u.username
-                            user_info = f"<b>{u.username}</b> ({u.get_full_name()})"
+                            user_info = format_html("<b>{}</b> ({})", u.username, u.get_full_name())
 
-                        if cell.registration:
-                            click_handler = f'onclick="releaseOccupiedSeat({event_id}, {x}, {y}, \'{username_clean}\', \'{cell.seat_label or "P"}\')"'
-                        else:
-                            click_handler = f'onclick="toggleBlockSeat({event_id}, {x}, {y})"'
+                        action = "release" if cell.registration else "toggle_block"
 
                         if cell.reservation_status == SeatingCell.ReservationStatus.RESERVED:
                             if cell.registration and cell.registration.is_checked_in:
@@ -151,7 +170,11 @@ class SeatingPlanAdmin(admin.ModelAdmin):
                     'bg_color': bg_color,
                     'cursor': cursor,
                     'content': content,
-                    'click_handler': click_handler,
+                    'action': action,
+                    'x': x,
+                    'y': y,
+                    'username': username_clean,
+                    'seat_label': cell.seat_label or "P" if cell else "",
                     'tooltip': tooltip,
                     'is_blocked': is_blocked,
                 })
@@ -159,6 +182,7 @@ class SeatingPlanAdmin(admin.ModelAdmin):
 
         context = {
             'plan': obj,
+            'event_id': event_id,
             'grid_rows': grid_rows,
         }
         return mark_safe(render_to_string('admin/seating/live_preview.html', context))

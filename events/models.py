@@ -168,10 +168,8 @@ class Event(models.Model):
     def effective_status(self):
         """Berechnet den fachlich korrekten Status basierend auf Zeitstempeln und Admin-Status."""
         now = timezone.now()
-        if self.status == self.Status.CANCELLED:
-            return self.Status.CANCELLED
-        if self.status == self.Status.DRAFT:
-            return self.Status.DRAFT
+        if self.status in (self.Status.CANCELLED, self.Status.DRAFT, self.Status.FINISHED):
+            return self.status
 
         if self.end_date and now > self.end_date:
             return self.Status.FINISHED
@@ -335,6 +333,14 @@ class EventRegistration(models.Model):
         blank=True,
         verbose_name="Gewähltes Ticket",
     )
+    booking_price = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Vereinbarter Ticketpreis (€)",
+        help_text="Der zum Zeitpunkt der Buchung gültige Preis, unbeeinflusst von späteren Preisänderungen.",
+    )
 
     payment_status = models.CharField(
         max_length=20,
@@ -417,27 +423,45 @@ class EventRegistration(models.Model):
             )
         return CheckInResult(True, "", code="ok")
 
+    @transaction.atomic
     def check_in(self, target_event=None, actor=None):
         """
         Zentrale Methode zum Einchecken des Gastes (Single Source of Truth).
         Prüft zwingend den Bezahlstatus und die Gültigkeit der Anmeldung vor der Zustandsänderung.
+        Nutzt select_for_update() für Concurrency-Schutz gegen Race Conditions mit Stornierungen.
         """
-        result = self.can_check_in(target_event=target_event)
+        locked_reg = EventRegistration.objects.select_for_update().select_related('event', 'user').get(pk=self.pk)
+        result = locked_reg.can_check_in(target_event=target_event, actor=actor)
         if not result.allowed:
             raise ValidationError(result.reason)
 
-        if not self.is_checked_in:
+        if not locked_reg.is_checked_in:
+            locked_reg.is_checked_in = True
+            locked_reg.checked_in_at = timezone.now()
+            locked_reg.save(update_fields=['is_checked_in', 'checked_in_at'])
             self.is_checked_in = True
-            self.checked_in_at = timezone.now()
-            self.save(update_fields=['is_checked_in', 'checked_in_at'])
+            self.checked_in_at = locked_reg.checked_in_at
         return True
 
+    @transaction.atomic
     def check_out(self):
-        """Hilfsmethode: Macht den Check-in wieder rückgängig"""
-        if self.is_checked_in:
+        """Hilfsmethode: Macht den Check-in wieder rückgängig mit Zeilensperre."""
+        locked_reg = EventRegistration.objects.select_for_update().get(pk=self.pk)
+        if locked_reg.is_checked_in:
+            locked_reg.is_checked_in = False
+            locked_reg.checked_in_at = None
+            locked_reg.save(update_fields=['is_checked_in', 'checked_in_at'])
             self.is_checked_in = False
             self.checked_in_at = None
-            self.save(update_fields=['is_checked_in', 'checked_in_at'])
+
+    @property
+    def effective_price(self):
+        """Liefert den vereinbarten Buchungspreis oder den aktuellen Ticketpreis als Fallback."""
+        if self.booking_price is not None:
+            return self.booking_price
+        if self.ticket_type:
+            return self.ticket_type.price
+        return None
 
     @property
     def status_step(self):
@@ -465,8 +489,8 @@ class EventRegistration(models.Model):
         config = GeneralConfiguration.load()
         if not config.has_payment_details:
             return False
-        ticket_price = self.ticket_type.price if self.ticket_type else None
-        return ticket_price is None or ticket_price > 0
+        price = self.effective_price
+        return price is None or price > 0
 
     created_at = models.DateTimeField(
         auto_now_add=True, verbose_name="Angemeldet am"
@@ -496,10 +520,10 @@ class EventRegistration(models.Model):
         if self.ticket_type and not self.ticket_type.is_active:
             raise ValidationError({'ticket_type': "Die ausgewählte Ticketkategorie ist inaktiv."})
 
-    def mark_as_paid(self, amount=None, send_email=True):
+    def mark_as_paid(self, amount=None, send_email=True, allow_overbooking=False):
         """Delegiert an PaymentService zur Entkopplung von Persistenz und Seiteneffekten."""
         from .services import PaymentService
-        return PaymentService.mark_paid(self, amount=amount, send_email=send_email)
+        return PaymentService.mark_paid(self, amount=amount, send_email=send_email, allow_overbooking=allow_overbooking)
 
     def mark_as_cancelled(self):
         """Delegiert an PaymentService zur Entkopplung von Persistenz und Seiteneffekten."""

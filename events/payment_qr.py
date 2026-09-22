@@ -31,8 +31,9 @@ def generate_epc_qr_payload(registration, config=None):
     # Betrag: 'EUR' gefolgt von Betrag mit 2 Dezimalstellen (z.B. EUR15.00)
     # Ist kein Ticket verknüpft, bleibt das Feld leer (Banking-App fragt Betrag ab)
     amount = ''
-    if registration.ticket_type and registration.ticket_type.price is not None:
-        amount = f"EUR{registration.ticket_type.price:.2f}"
+    price = registration.effective_price
+    if price is not None:
+        amount = f"EUR{price:.2f}"
 
     purpose_code = ''  # Verwendungszweck-Code (z.B. CHAR, leer lassen)
     structured_ref = ''  # Strukturierte Referenz (z.B. ISO 11649 RF-Creditor-Reference, leer lassen)
