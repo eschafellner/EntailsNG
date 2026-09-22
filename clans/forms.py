@@ -63,12 +63,25 @@ class ClanForm(forms.ModelForm):
 
     class Meta:
         model = Clan
-        fields = ("name", "website", "logo", "password")
+        fields = ("name", "tag", "website", "logo", "password")
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. Team Alternate"}),
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. Team Alternate", "maxlength": "32"}),
+            "tag": forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. HNX", "maxlength": "5"}),
             "website": forms.URLInput(attrs={"class": "form-control", "placeholder": "https://clan.de"}),
             "logo": forms.FileInput(attrs={"class": "form-control", "accept": ".jpg,.jpeg,.png"}),
         }
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name', '').strip()
+        if len(name) > 32:
+            raise ValidationError("Der Clanname darf maximal 32 Zeichen lang sein.")
+        return name
+
+    def clean_tag(self):
+        tag = self.cleaned_data.get('tag', '').strip().upper()
+        if len(tag) > 5:
+            raise ValidationError("Der Clan-Tag darf maximal 5 Zeichen lang sein.")
+        return tag
 
     def clean_logo(self):
         logo = self.cleaned_data.get('logo')

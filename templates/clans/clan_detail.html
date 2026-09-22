@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ clan.name }} – {% t "clan_profile_title" "Clanprofil" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
+{% block title %}{% if clan.tag %}[{{ clan.tag }}] {% endif %}{{ clan.name }} – {% t "clan_profile_title" "Clanprofil" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
 <div style="display: flex; flex-direction: column; gap: 24px;">
@@ -20,7 +20,7 @@
         <div>
           <p class="eyebrow" style="margin-bottom: 4px;">{% t "clan_profile_title" "Clanprofil" %}</p>
           <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px;">
-            {{ clan.name }}
+            {% if clan.tag %}[{{ clan.tag }}] {% endif %}{{ clan.name }}
           </h1>
           {% if clan.website %}
             <p style="margin: 4px 0 0 0; font-family: 'JetBrains Mono', monospace; font-size: 13px;">

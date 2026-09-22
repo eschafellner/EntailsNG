@@ -2,6 +2,47 @@
 
 {% block title %}{{ team.name }} – {% t "team_manager_title" "Teammanager" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  .team-invite-code-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    border-radius: 8px;
+  }
+  .team-invite-code-box #copyCodeBtn {
+    margin-left: auto;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  @media (max-width: 860px) {
+    .team-invite-code-box {
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+  }
+  @media (max-width: 480px) {
+    .team-invite-card {
+      padding: 14px 16px !important;
+    }
+    .team-invite-code-box {
+      padding: 6px 10px !important;
+    }
+    .team-invite-code-box #inviteCodeText {
+      font-size: 16px !important;
+    }
+    .team-invite-code-box #copyCodeBtn {
+      padding: 8px 10px !important;
+      font-size: 11px !important;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div style="display: flex; flex-direction: column; gap: 24px;">
 
@@ -38,11 +79,6 @@
               ● {% t "team_active_badge" "AKTIV" %}
             </span>
           {% endif %}
-          {% if team.tag %}
-            <span style="background: var(--navy); color: var(--signal); padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold;">
-              [{{ team.tag }}]
-            </span>
-          {% endif %}
           {% if team.game %}
             <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink); font-weight: 600;">
               🎮 {{ team.game.name }} ({{ team.game.team_size }}er)
@@ -59,7 +95,7 @@
           {% endif %}
         </div>
         <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; color: var(--ink); display: flex; align-items: center; gap: 8px;">
-          {{ team.name }}
+          {% if team.tag %}[{{ team.tag }}] {% endif %}{{ team.name }}
           {% if is_captain and pending_members %}
             <span class="badge-pending-indicator" title="{{ pending_members|length }} offene Beitrittsanfrage(n)">🔴 {{ pending_members|length }}</span>
           {% endif %}
@@ -117,9 +153,9 @@
 
   <!-- EINLADUNGSCODE WIDGET (mit Kopier-Button) -->
   {% if is_member %}
-  <div class="card" style="padding: 20px; border-radius: 12px; background: var(--panel); border: 2px solid var(--signal);">
+  <div class="card team-invite-card" style="padding: 20px; border-radius: 12px; background: var(--panel); border: 2px solid var(--signal);">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-      <div>
+      <div style="flex: 1; min-width: 260px;">
         <h3 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; color: var(--ink);">
           🔑 {% t "team_invite_code_title" "Einladungscode für Teammitglieder" %}
         </h3>
@@ -132,13 +168,13 @@
         </p>
       </div>
 
-      <div style="display: flex; align-items: center; gap: 10px; background: var(--paper); border: 1px solid var(--line); padding: 6px 12px; border-radius: 8px;">
-        <span id="inviteCodeText" style="font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: bold; letter-spacing: 2px; color: var(--navy);">
+      <div class="team-invite-code-box">
+        <span id="inviteCodeText" style="font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: bold; letter-spacing: 2px; color: var(--navy); white-space: nowrap;">
           {{ team.invite_code }}
         </span>
 
         <!-- BUTTON "In die Zwischenablage kopieren" -->
-        <button type="button" id="copyCodeBtn" onclick="copyInviteCode()" style="background: var(--signal); color: var(--navy); border: none; padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+        <button type="button" id="copyCodeBtn" onclick="copyInviteCode()" style="background: var(--signal); color: var(--navy); border: none; padding: 8px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0; margin-left: auto;">
           📋 <span>{% t "team_copy_invite_code" "In Zwischenablage kopieren" %}</span>
         </button>
       </div>

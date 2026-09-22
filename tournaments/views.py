@@ -86,6 +86,7 @@ def tournament_detail(request, slug):
     user_team = None
     is_registered = False
     my_user_teams = []
+    user_member_team = None
 
     if request.user.is_authenticated:
         is_admin = tournament.is_managed_by(request.user)
@@ -120,6 +121,19 @@ def tournament_detail(request, slug):
         ).filter(
             models.Q(event=tournament.event) | models.Q(event__isnull=True)
         ).distinct()
+
+        # Team, in dem der User einfaches Mitglied ist (nicht Kapitän), für dieses Spiel und Event
+        user_member_team = Team.objects.filter(
+            memberships__user=request.user,
+            memberships__status=TeamMember.Status.ACCEPTED,
+            is_archived=False,
+            is_solo=False,
+            game=tournament.game,
+        ).exclude(
+            captain=request.user
+        ).filter(
+            models.Q(event=tournament.event) | models.Q(event__isnull=True)
+        ).select_related('captain').first()
 
     registrations = tournament.registrations.select_related('team', 'team__captain').all()
     matches = tournament.matches.select_related('team1', 'team2', 'winner', 'loser').order_by('bracket_type', 'round_number', 'match_number')
@@ -224,6 +238,7 @@ def tournament_detail(request, slug):
         'podium': podium,
         'preview_data': preview_data,
         'my_user_teams': my_user_teams,
+        'user_member_team': user_member_team,
         'tournament_is_full': tournament_is_full,
         'registration_not_started_yet': registration_not_started_yet,
         'registration_ended': registration_ended,
@@ -539,6 +554,16 @@ def team_create(request):
     if not name:
         messages.error(request, get_translation('msg_team_name_required', 'Bitte gib einen Teamnamen ein.'))
         return redirect('team_list')
+
+    if len(name) > 32:
+        messages.error(request, get_translation('msg_team_name_too_long', 'Der Teamname darf maximal 32 Zeichen lang sein.'))
+        return redirect('team_list')
+
+    if len(tag) > 5:
+        messages.error(request, get_translation('msg_team_tag_too_long', 'Der Team-Tag darf maximal 5 Zeichen lang sein.'))
+        return redirect('team_list')
+
+    tag = tag.upper()
 
     if not game_id:
         messages.error(request, get_translation('msg_team_game_required', 'Bitte wähle ein Spiel für das Team aus.'))

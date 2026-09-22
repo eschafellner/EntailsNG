@@ -266,9 +266,9 @@ def generate_invite_code():
 
 
 class Team(models.Model):
-    name = models.CharField(max_length=100, verbose_name="Teamname")
+    name = models.CharField(max_length=32, verbose_name="Teamname")
     slug = models.SlugField(max_length=100, unique=True, blank=True, verbose_name="URL-Slug")
-    tag = models.CharField(max_length=10, blank=True, verbose_name="Clan-/Team-Tag")
+    tag = models.CharField(max_length=5, blank=True, verbose_name="Clan-/Team-Tag")
     game = models.ForeignKey(
         Game,
         null=True,
@@ -325,6 +325,8 @@ class Team(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
+        if self.tag:
+            self.tag = self.tag.strip().upper()
         if not self.slug:
             base_slug = slugify(self.name) or "team"
             slug = base_slug

@@ -8,7 +8,10 @@ from django.utils.text import slugify
 
 class Clan(models.Model):
     name = models.CharField(
-        max_length=100, unique=True, verbose_name="Clanname"
+        max_length=32, unique=True, verbose_name="Clanname"
+    )
+    tag = models.CharField(
+        max_length=5, blank=True, default="", verbose_name="Clan-Tag"
     )
     slug = models.SlugField(
         max_length=100, unique=True, blank=True, verbose_name="URL-Slug"
@@ -39,6 +42,8 @@ class Clan(models.Model):
         ordering = ["name"]
 
     def __str__(self):
+        if self.tag:
+            return f"[{self.tag}] {self.name}"
         return self.name
 
     def set_password(self, raw_password):
@@ -53,6 +58,8 @@ class Clan(models.Model):
         return check_password(raw_password, self.password)
 
     def save(self, *args, **kwargs):
+        if self.tag:
+            self.tag = self.tag.strip().upper()
         if not self.slug:
             base_slug = slugify(self.name) or "clan"
             slug = base_slug

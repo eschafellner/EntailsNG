@@ -491,5 +491,66 @@ class ClanModuleTests(TestCase):
 
         self.assertLessEqual(len(ctx), 8)
 
+    def test_clan_tag_creation_and_auto_uppercase(self):
+        self.client.login(username='leader', password='password')
+        response = self.client.post(
+            reverse('clan_create'),
+            {
+                'name': 'Haag-networX',
+                'tag': 'hnx',
+                'website': 'https://haag-networx.at',
+                'password': 'secretpassword',
+            },
+        )
+        self.assertTrue(Clan.objects.filter(name='Haag-networX').exists())
+        clan = Clan.objects.get(name='Haag-networX')
+        self.assertEqual(clan.tag, 'HNX')
+        self.assertEqual(str(clan), '[HNX] Haag-networX')
+
+    def test_clan_name_and_tag_length_validation(self):
+        from clans.forms import ClanForm
+        # 1. Name > 32 characters
+        form_bad_name = ClanForm(data={
+            'name': 'A' * 33,
+            'tag': 'HNX',
+            'password': 'secretpassword',
+        })
+        self.assertFalse(form_bad_name.is_valid())
+        self.assertIn('name', form_bad_name.errors)
+
+        # 2. Tag > 5 characters
+        form_bad_tag = ClanForm(data={
+            'name': 'Valid Clan',
+            'tag': 'ABCDEF',
+            'password': 'secretpassword',
+        })
+        self.assertFalse(form_bad_tag.is_valid())
+        self.assertIn('tag', form_bad_tag.errors)
+
+        # 3. Valid name (<= 32) and tag (<= 5)
+        form_valid = ClanForm(data={
+            'name': 'Valid Clan',
+            'tag': 'tag1',
+            'password': 'secretpassword',
+        })
+        self.assertTrue(form_valid.is_valid())
+        clan = form_valid.save()
+        self.assertEqual(clan.tag, 'TAG1')
+
+    def test_clan_tag_rendering_in_clan_views(self):
+        clan = Clan.objects.create(name='Alternate', tag='ATT', password='pass')
+        ClanMembership.objects.create(user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED)
+
+        # 1. Detail page rendering
+        res_detail = self.client.get(reverse('clan_detail', kwargs={'slug': clan.slug}))
+        self.assertEqual(res_detail.status_code, 200)
+        self.assertContains(res_detail, '[ATT] Alternate')
+
+        # 2. List page rendering
+        res_list = self.client.get(reverse('clan_list'))
+        self.assertEqual(res_list.status_code, 200)
+        self.assertContains(res_list, '[ATT] Alternate')
+
+
 
 

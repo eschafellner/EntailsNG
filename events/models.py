@@ -127,6 +127,13 @@ class Event(models.Model):
         help_text="Legt fest, ob zahlende Gäste vorgemerkte Plätze unbezahlter Teilnehmer übernehmen dürfen.",
     )
 
+    last_payment_check = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Letzter Kontocheck",
+        help_text="Zeitpunkt, an dem die Banküberweisungen zuletzt mit den Anmeldungen abgeglichen wurden.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Zuletzt geändert")
 
@@ -136,6 +143,9 @@ class Event(models.Model):
         verbose_name = "Veranstaltung"
         verbose_name_plural = "Veranstaltungen"
         ordering = ['-start_date']
+        permissions = [
+            ('can_update_payment_check', 'Kann Zeitpunkt des letzten Kontochecks aktualisieren'),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=['is_active'],

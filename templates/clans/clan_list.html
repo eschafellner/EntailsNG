@@ -47,7 +47,7 @@
             {% endif %}
             <div>
               <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
-                {{ item.clan.name }}
+                {% if item.clan.tag %}[{{ item.clan.tag }}] {% endif %}{{ item.clan.name }}
               </h3>
               {% if item.clan.website %}
                 <a href="{{ item.clan.website }}" target="_blank" rel="noopener" style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--signal-deep); text-decoration: underline;">

@@ -1101,6 +1101,26 @@ class TournamentFrontendRegistrationFlowTests(TestCase):
         self.assertContains(response, "Team anmelden")
         self.assertContains(response, "Zur Teamsuche")
 
+    def test_checked_in_user_as_member_sees_captain_must_register_notice(self):
+        """Eingecheckte Benutzer, die Mitglied (aber nicht Kapitän) eines passenden Teams sind, sehen den Kapitänshinweis."""
+        EventRegistration.objects.create(user=self.user, event=self.event, is_checked_in=True)
+        captain_user = User.objects.create_user(username="team_captain", email="cap@example.com", password="password")
+        team = Team.objects.create(name="CyberWolves", tag="CW", captain=captain_user, game=self.game_team, event=self.event)
+        TeamMember.objects.create(team=team, user=captain_user, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        TeamMember.objects.create(team=team, user=self.user, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="test_guest", password="password")
+        response = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament_team.slug}))
+        self.assertEqual(response.status_code, 200)
+
+        # 1. Muss den Hinweis enthalten, dass er im Team ist und der Kapitän anmelden muss
+        self.assertContains(response, "Du bist Mitglied im Team &quot;[CW] CyberWolves&quot;")
+        self.assertContains(response, "team_captain")
+        self.assertContains(response, reverse('team_detail', kwargs={'slug': team.slug}))
+
+        # 2. Darf NICHT die irreführende Meldung 'Du bist aktuell in keinem Team' enthalten
+        self.assertNotContains(response, "Du bist aktuell in keinem Team für Valorant 5v5")
+
     def test_checked_in_user_solo_game_sees_one_click_register(self):
         """In 1v1-Turnieren sieht der eingecheckte Benutzer den 1-Click-Anmeldebutton."""
         EventRegistration.objects.create(user=self.user, event=self.event, is_checked_in=True)
@@ -3088,6 +3108,68 @@ class FeedbackFeaturesTests(TestCase):
         archived_team.refresh_from_db()
         self.assertFalse(archived_team.is_archived)
         self.assertEqual(archived_team.game, self.game2)
+
+    def test_team_name_and_tag_length_limits(self):
+        self.client.login(username="alice", password="password")
+
+        # 1. Team name longer than 32 characters is rejected
+        long_name = "A" * 33
+        resp = self.client.post(reverse('team_create'), {
+            'name': long_name,
+            'tag': 'ABC',
+            'game_id': self.game2.id,
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(Team.objects.filter(name=long_name).exists())
+
+        # 2. Team tag longer than 5 characters is rejected
+        long_tag = "ABCDEF"
+        resp2 = self.client.post(reverse('team_create'), {
+            'name': 'Valid Name',
+            'tag': long_tag,
+            'game_id': self.game2.id,
+        })
+        self.assertEqual(resp2.status_code, 302)
+        self.assertFalse(Team.objects.filter(name='Valid Name').exists())
+
+        # 3. Valid name (<= 32) and tag (<= 5) succeeds, and tag is automatically uppercased
+        resp3 = self.client.post(reverse('team_create'), {
+            'name': 'Valid Name',
+            'tag': 'phx',
+            'game_id': self.game2.id,
+        })
+        self.assertEqual(resp3.status_code, 302)
+        team = Team.objects.get(name='Valid Name')
+        self.assertEqual(team.tag, 'PHX')
+        self.assertEqual(str(team), '[PHX] Valid Name')
+
+    def test_team_tag_rendering_in_team_detail_title(self):
+        team = Team.objects.create(name="CyberWolves", tag="CW", captain=self.user1, game=self.game2, event=self.event)
+        TeamMember.objects.create(team=team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="alice", password="password")
+        response = self.client.get(reverse('team_detail', kwargs={'slug': team.slug}))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+
+        # Tag is rendered directly before the team name inside the h1
+        self.assertIn('[CW] CyberWolves', content)
+
+    def test_team_invite_code_copy_button_responsive_layout(self):
+        team = Team.objects.create(name="CyberWolves", tag="CW", captain=self.user1, game=self.game2, event=self.event)
+        TeamMember.objects.create(team=team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+
+        self.client.login(username="alice", password="password")
+        response = self.client.get(reverse('team_detail', kwargs={'slug': team.slug}))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+
+        # Invite code container and copy button classes and styles
+        self.assertIn('team-invite-code-box', content)
+        self.assertIn('id="copyCodeBtn"', content)
+        self.assertIn('margin-left: auto', content)
+        self.assertIn('@media (max-width: 860px)', content)
+
 
 
 

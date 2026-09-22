@@ -5,10 +5,15 @@ urlpatterns = [
     # Die Startseite/Hauptansicht (Dashboard)
     path('', views.dashboard_view, name='dashboard'),
 
+    # Gästeliste
+    path('guests/', views.guest_list_view, name='guest_list'),
+    path('guests/<slug:slug>/', views.guest_list_view, name='guest_list_slug'),
+
     # Helfer Scanner & Einlass-Tool (Nur Staff)
     path('checkin/scanner/', views.checkin_scanner_view, name='checkin_scanner'),
 
     # API / Interaktionen
+    path('api/event/<int:event_id>/update-payment-check/', views.update_payment_check_api, name='api_update_payment_check'),
     path('api/check-in/toggle/', views.toggle_check_in_api, name='api_toggle_check_in'),
     path('api/check-in/scan/', views.scan_qr_api, name='api_scan_qr'),
     path('register/<int:event_id>/', views.register_for_event, name='register_for_event'),

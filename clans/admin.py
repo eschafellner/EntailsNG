@@ -10,8 +10,8 @@ class ClanMembershipInline(admin.TabularInline):
 
 @admin.register(Clan)
 class ClanAdmin(admin.ModelAdmin):
-    list_display = ('name', 'website', 'member_count', 'created_at')
-    search_fields = ('name', 'website')
+    list_display = ('name', 'tag', 'website', 'member_count', 'created_at')
+    search_fields = ('name', 'tag', 'website')
     prepopulated_fields = {'slug': ('name',)}
     inlines = [ClanMembershipInline]
 

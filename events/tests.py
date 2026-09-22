@@ -1746,6 +1746,213 @@ class ActiveEventCachingTests(TestCase):
         self.assertIsNone(active_after)
 
 
+class GuestListAndPaymentCheckTests(TestCase):
+    """Tests für die Gästeliste, Such- und Clanfilter, sowie die Kontocheck-Aktualisierung und Berechtigungen."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Permission
+        from clans.models import Clan, ClanMembership
+        from seating.models import SeatingPlan, SeatingCell
+
+        self.event = Event.objects.create(
+            title="NorthLAN 2026",
+            slug="northlan-2026",
+            is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=timezone.now() + timedelta(days=14),
+            end_date=timezone.now() + timedelta(days=16),
+            max_guests=100,
+        )
+
+        self.user1 = User.objects.create_user(username="alice", email="alice@example.com", password="password")
+        self.user2 = User.objects.create_user(username="bob", email="bob@example.com", password="password")
+        self.user3 = User.objects.create_user(username="charlie", email="charlie@example.com", password="password")
+        self.user4 = User.objects.create_user(username="dave_cancelled", email="dave@example.com", password="password")
+
+        # Orga-User mit expliziter Berechtigung can_update_payment_check
+        self.orga_user = User.objects.create_user(username="orga_officer", email="orga@example.com", password="password")
+        perm = Permission.objects.get(codename="can_update_payment_check")
+        self.orga_user.user_permissions.add(perm)
+
+        # Staff Admin
+        self.staff_admin = User.objects.create_superuser(username="sadmin", email="admin@example.com", password="password")
+
+        # Clan anlegen & User1 zuweisen
+        self.clan = Clan.objects.create(name="Team Apex", tag="APX", slug="team-apex")
+        ClanMembership.objects.create(user=self.user1, clan=self.clan, status=ClanMembership.Status.ACCEPTED)
+
+        # Sitzplan anlegen
+        self.plan = SeatingPlan.objects.create(event=self.event, name="Halle 1", columns=10, rows=10)
+
+        # Anmeldungen anlegen
+        self.reg1 = EventRegistration.objects.create(
+            user=self.user1,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+            paid_amount=35.00,
+        )
+        self.seat1 = SeatingCell.objects.create(
+            plan=self.plan,
+            x=1,
+            y=1,
+            cell_type=SeatingCell.CellType.SEAT,
+            seat_label="A-01",
+            registration=self.reg1,
+            reservation_status=SeatingCell.ReservationStatus.RESERVED,
+        )
+
+        self.reg2 = EventRegistration.objects.create(
+            user=self.user2,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.UNPAID,
+        )
+
+        self.reg3 = EventRegistration.objects.create(
+            user=self.user3,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.PAID,
+            paid_amount=35.00,
+        )
+
+        self.reg4_cancelled = EventRegistration.objects.create(
+            user=self.user4,
+            event=self.event,
+            payment_status=EventRegistration.PaymentStatus.CANCELLED,
+        )
+
+    def test_guest_list_view_renders_correctly(self):
+        """Gästeliste ist öffentlich aufrufbar, listet Teilnehmer auf und schließt Stornierte aus."""
+        response = self.client.get(reverse('guest_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['event'], self.event)
+        self.assertEqual(response.context['total_count'], 3)
+        self.assertEqual(response.context['paid_count'], 2)
+        self.assertEqual(response.context['unpaid_count'], 1)
+
+        content = response.content.decode('utf-8')
+        self.assertIn("alice", content)
+        self.assertIn("bob", content)
+        self.assertIn("charlie", content)
+        self.assertNotIn("dave_cancelled", content)
+        self.assertIn("[APX] Team Apex", content)
+        self.assertIn("A-01", content)
+        self.assertIn("?seat=A-01", content)
+
+    def test_guest_list_search_by_username(self):
+        """Suchfilter filtert Teilnehmer nach Benutzernamen."""
+        response = self.client.get(reverse('guest_list'), {'q': 'ali'})
+        self.assertEqual(response.status_code, 200)
+        regs = response.context['registrations']
+        self.assertEqual(len(regs), 1)
+        self.assertEqual(regs[0].user.username, "alice")
+
+    def test_guest_list_filter_by_clan(self):
+        """Clan-Filter liefert nur Mitglieder des gewählten Clans oder Teilnehmer ohne Clan."""
+        # 1. Filter nach spezifischem Clan
+        resp_clan = self.client.get(reverse('guest_list'), {'clan': 'team-apex'})
+        regs_clan = resp_clan.context['registrations']
+        self.assertEqual(len(regs_clan), 1)
+        self.assertEqual(regs_clan[0].user.username, "alice")
+
+        # 2. Filter nach "none" (ohne Clan)
+        resp_none = self.client.get(reverse('guest_list'), {'clan': 'none'})
+        regs_none = resp_none.context['registrations']
+        self.assertEqual(len(regs_none), 2)
+        usernames = {r.user.username for r in regs_none}
+        self.assertEqual(usernames, {"bob", "charlie"})
+
+    def test_guest_list_filter_by_payment_status(self):
+        """Statusfilter trennt nach bezahlt und unbezahlt."""
+        resp_paid = self.client.get(reverse('guest_list'), {'status': 'paid'})
+        self.assertEqual(len(resp_paid.context['registrations']), 2)
+
+        resp_unpaid = self.client.get(reverse('guest_list'), {'status': 'unpaid'})
+        self.assertEqual(len(resp_unpaid.context['registrations']), 1)
+        self.assertEqual(resp_unpaid.context['registrations'][0].user.username, "bob")
+
+    def test_guest_list_without_active_event(self):
+        """Wenn kein Event aktiv ist, rendert die Gästeliste sauber ohne Exception."""
+        self.event.is_active = False
+        self.event.save()
+        response = self.client.get(reverse('guest_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['event'])
+
+    def test_update_payment_check_api_permissions(self):
+        """Nur Benutzer mit can_update_payment_check oder Staff dürfen den Kontocheck aktualisieren."""
+        url = reverse('api_update_payment_check', kwargs={'event_id': self.event.id})
+
+        # 1. Anonymer User -> Login Redirect
+        resp_anon = self.client.post(url)
+        self.assertEqual(resp_anon.status_code, 302)
+
+        # 2. Normaler User ohne Permission -> 403 Forbidden
+        self.client.login(username="alice", password="password")
+        resp_user_ajax = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(resp_user_ajax.status_code, 403)
+        self.client.logout()
+
+        # 3. Orga-User mit Permission -> 200 OK
+        self.client.login(username="orga_officer", password="password")
+        self.assertIsNone(self.event.last_payment_check)
+
+        resp_orga = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(resp_orga.status_code, 200)
+        data = resp_orga.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertIn('formatted_time', data)
+
+        self.event.refresh_from_db()
+        self.assertIsNotNone(self.event.last_payment_check)
+        self.client.logout()
+
+        # 4. Staff-Admin -> 200 OK
+        self.client.login(username="sadmin", password="password")
+        resp_staff = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(resp_staff.status_code, 200)
+
+    def test_update_payment_check_api_custom_datetime(self):
+        """Manuelle Angabe eines Datetime-Werts wird korrekt übernommen."""
+        self.client.login(username="orga_officer", password="password")
+        url = reverse('api_update_payment_check', kwargs={'event_id': self.event.id})
+
+        target_time_str = "2026-09-20T14:30:00"
+        resp = self.client.post(
+            url,
+            data=json.dumps({'custom_date': target_time_str}),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        self.event.refresh_from_db()
+        local_time = timezone.localtime(self.event.last_payment_check)
+        self.assertEqual(local_time.year, 2026)
+        self.assertEqual(local_time.month, 9)
+        self.assertEqual(local_time.day, 20)
+        self.assertEqual(local_time.hour, 14)
+        self.assertEqual(local_time.minute, 30)
+
+    def test_event_admin_action_set_payment_check_now(self):
+        """Admin-Aktion 'action_set_payment_check_now' aktualisiert Events im Admin."""
+        from events.admin import EventAdmin
+        from django.contrib.admin.sites import site
+
+        admin_instance = EventAdmin(Event, site)
+        self.assertIsNone(self.event.last_payment_check)
+
+        request = self.client.get('/').wsgi_request
+        request.user = self.staff_admin
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        setattr(request, '_messages', FallbackStorage(request))
+
+        admin_instance.action_set_payment_check_now(request, Event.objects.filter(pk=self.event.pk))
+
+        self.event.refresh_from_db()
+        self.assertIsNotNone(self.event.last_payment_check)
+
+
+
 
 
 

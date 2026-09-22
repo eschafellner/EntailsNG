@@ -116,6 +116,22 @@
 
     const fragment = document.createDocumentFragment();
 
+    const searchStr = (typeof window !== 'undefined' && window.location && window.location.search) ? window.location.search : '';
+    const urlParams = new URLSearchParams(searchStr);
+    const highlightSeat = (urlParams.get('seat') || '').trim();
+
+    if (highlightSeat && document.head && !document.getElementById('seat-pulse-style')) {
+      const style = document.createElement('style');
+      style.id = 'seat-pulse-style';
+      style.textContent = `
+        @keyframes seatPulseHighlight {
+          0%, 100% { transform: scale(1.15); box-shadow: 0 0 16px var(--signal, #f8ab2d); }
+          50% { transform: scale(1.02); box-shadow: 0 0 6px var(--signal, #f8ab2d); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         const cellData = cellMap[`${x}_${y}`];
@@ -142,6 +158,11 @@
           const seatLabel = cellData.seat_label || `${x},${y}`;
           let tooltipText = "";
           let statusIconHtml = "";
+
+          const isTargetHighlight = highlightSeat && (
+            (cellData.seat_label && cellData.seat_label.toLowerCase() === highlightSeat.toLowerCase()) ||
+            (`${x},${y}` === highlightSeat)
+          );
 
           if (cellData.status === 'FREE') {
             cellEl.style.background = 'rgba(34, 197, 94, 0.12)';
@@ -217,6 +238,14 @@
 
           if (tooltipText) {
             cellEl.title = tooltipText;
+          }
+
+          if (isTargetHighlight) {
+            cellEl.classList.add('seat-target-highlight');
+            cellEl.style.outline = '2.5px solid var(--signal, #f8ab2d)';
+            cellEl.style.outlineOffset = '2px';
+            cellEl.style.zIndex = '20';
+            cellEl.style.animation = 'seatPulseHighlight 1.5s ease-in-out infinite';
           }
 
         } else if (cellData.cell_type === 'DOOR') {
@@ -399,6 +428,28 @@
       const totalRows = (maxY - minY) + 1;
       const gridWidth = (totalCols * 41) + 48;
       const gridHeight = (totalRows * 41) + 48;
+
+      const searchStr = (typeof window !== 'undefined' && window.location && window.location.search) ? window.location.search : '';
+      const urlParams = new URLSearchParams(searchStr);
+      const highlightSeat = (urlParams.get('seat') || '').trim();
+      let targetCell = null;
+      if (highlightSeat && currentData.cells) {
+        targetCell = currentData.cells.find(c => 
+          (c.seat_label && c.seat_label.toLowerCase() === highlightSeat.toLowerCase()) ||
+          (`${c.x},${c.y}` === highlightSeat)
+        );
+      }
+
+      if (targetCell) {
+        currentScale = Math.max(1.1, Math.min(Math.min(viewportWidth / gridWidth, viewportHeight / gridHeight) * 1.5, 1.4));
+        const seatPosX = ((targetCell.x - minX) * 41) + 24 + 18;
+        const seatPosY = ((targetCell.y - minY) * 41) + 24 + 18;
+        pointX = (viewportWidth / 2) - (seatPosX * currentScale);
+        pointY = (viewportHeight / 2) - (seatPosY * currentScale);
+        updateTransform();
+        showSeatingToast("Sitzplatz " + (targetCell.seat_label || highlightSeat) + " hervorgehoben", false);
+        return;
+      }
 
       if (isDesktop) {
         const fitScale = Math.min(viewportWidth / gridWidth, viewportHeight / gridHeight);

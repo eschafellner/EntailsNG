@@ -3,6 +3,7 @@ from django.contrib import admin, messages
 from django.db import transaction
 from django.utils import timezone
 from django.utils.safestring import mark_safe
+from configuration.cache import invalidate_active_event_cache
 from seating.models import SeatingCell, SeatingPlan
 from .models import Event, EventRegistration, TicketType
 
@@ -69,11 +70,24 @@ class EventAdmin(admin.ModelAdmin):
         'location',
         'max_guests',
         'registered_count',
+        'last_payment_check',
         'is_active',
     )
     list_filter = ('is_active', 'start_date')
     search_fields = ('title', 'location')
     inlines = [TicketTypeInline]
+    actions = ['action_set_payment_check_now']
+
+    @admin.action(description="🏦 Letzten Kontocheck für ausgewählte Events auf JETZT setzen")
+    def action_set_payment_check_now(self, request, queryset):
+        now = timezone.now()
+        updated = queryset.update(last_payment_check=now)
+        invalidate_active_event_cache()
+        self.message_user(
+            request,
+            f"Zeitpunkt des letzten Kontochecks für {updated} Event(s) auf {now.strftime('%d.%m.%Y, %H:%M Uhr')} gesetzt.",
+            level=messages.SUCCESS,
+        )
 
     @admin.display(description="Ang. Teilnehmer")
     def registered_count(self, obj):

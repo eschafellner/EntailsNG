@@ -56,10 +56,23 @@ DEFAULT_NAV_ITEMS = [
         ),
     },
     {
+        'title': 'Gäste',
+        'url_name': 'guest_list',
+        'icon_name': 'guests',
+        'order': 5,
+        'icon_svg': (
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+            'stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>'
+            '<circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>'
+            '<path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'
+        ),
+    },
+    {
         'title': 'Infos',
         'url_name': 'event_info_detail',
         'icon_name': 'info',
-        'order': 5,
+        'order': 6,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
@@ -72,7 +85,7 @@ DEFAULT_NAV_ITEMS = [
         'title': 'News',
         'url_name': 'news_list',
         'icon_name': 'news',
-        'order': 6,
+        'order': 7,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
@@ -84,7 +97,7 @@ DEFAULT_NAV_ITEMS = [
         'title': 'Clans',
         'url_name': 'clan_list',
         'icon_name': 'clans',
-        'order': 7,
+        'order': 8,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
@@ -95,7 +108,7 @@ DEFAULT_NAV_ITEMS = [
         'title': 'Sponsoren',
         'url_name': 'sponsor_list',
         'icon_name': 'sponsors',
-        'order': 8,
+        'order': 9,
         'icon_svg': (
             '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
             'stroke="currentColor" stroke-width="2" stroke-linecap="round" '

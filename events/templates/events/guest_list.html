@@ -1,0 +1,479 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% t "guest_list_title" "Gästeliste" %} – {{ event.title|default:site_customization.site_name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  {% if event %}
+    <!-- ======================================================================
+         1. HEADER & STATUS-ÜBERSICHT
+         ====================================================================== -->
+    <div class="card" style="padding: 24px; border-radius: var(--radius, 16px); background: var(--paper); border: 1px solid var(--line);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
+        <div>
+          <p class="eyebrow" style="margin-bottom: 4px;">{% t "guest_list_eyebrow" "Teilnehmer & Anmeldungen" %} – {{ event.title }}</p>
+          <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: var(--font-3xl, 32px); color: var(--ink);">
+            {% t "guest_list_title" "Gästeliste" %}
+          </h1>
+          <p style="margin: 6px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: var(--font-sm, 13px);">
+            📅 {{ event.start_date|date:"d.m.Y, H:i" }} – {{ event.end_date|date:"d.m.Y, H:i" }} Uhr
+            {% if event.location %} • 📍 {{ event.location }}{% endif %}
+          </p>
+        </div>
+
+        <!-- Mini-Statistiken -->
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <div style="background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); border-radius: 10px; padding: 8px 14px; text-align: center;">
+            <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #38bdf8; text-transform: uppercase;">{% t "guest_list_stat_total" "Angemeldet" %}</div>
+            <div style="font-size: 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: bold; color: var(--ink);">{{ total_count }} / {{ event.max_guests }}</div>
+          </div>
+          <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 10px; padding: 8px 14px; text-align: center;">
+            <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #22c55e; text-transform: uppercase;">{% t "guest_list_stat_paid" "Bezahlt" %}</div>
+            <div style="font-size: 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: bold; color: #22c55e;">{{ paid_count }} ({{ paid_percent }}%)</div>
+          </div>
+          <div style="background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: 10px; padding: 8px 14px; text-align: center;">
+            <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #eab308; text-transform: uppercase;">{% t "guest_list_stat_unpaid" "Offen" %}</div>
+            <div style="font-size: 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: bold; color: #eab308;">{{ unpaid_count }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================================
+           2. BEREICH: LETZTER KONTOCHECK
+           ====================================================================== -->
+      <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; background: rgba(0, 0, 0, 0.12); padding: 12px 16px; border-radius: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+              <line x1="2" y1="10" x2="22" y2="10"></line>
+            </svg>
+          </span>
+          <div>
+            <span style="font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+              {% t "guest_list_last_payment_check" "Letzter Kontocheck:" %}
+            </span>
+            <div id="payment-check-timestamp-container" style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: bold; color: var(--ink);">
+              {% if last_payment_check %}
+                🕒 <span id="payment-check-timestamp-display">{{ last_payment_check|date:"d.m.Y, H:i" }} Uhr</span>
+              {% else %}
+                <span id="payment-check-timestamp-display" style="color: var(--muted); font-style: italic;">
+                  {% t "guest_list_no_payment_check" "Noch kein Kontocheck dokumentiert" %}
+                </span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if can_update_payment_check %}
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button type="button" id="btn-update-check-now" onclick="updatePaymentCheck('now')" style="background: var(--signal, #f8ab2d); color: var(--navy, #332719); border: none; padding: 8px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(248, 171, 45, 0.25); transition: opacity 0.2s;">
+              🔄 {% t "guest_list_btn_update_payment_check" "Kontocheck auf Jetzt setzen" %}
+            </button>
+            <button type="button" onclick="openManualCheckModal()" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 8px 12px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;" title="{% t 'guest_list_btn_manual_payment_check' 'Datum/Uhrzeit anpassen' %}">
+              ⏱️
+            </button>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         3. FILTER- UND SUCHLEISTE
+         ====================================================================== -->
+    <div class="card" style="padding: 16px 20px; border-radius: var(--radius, 16px); background: var(--paper); border: 1px solid var(--line);">
+      <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
+        
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; flex: 1; min-width: 280px;">
+          <!-- Suchfeld Username -->
+          <div style="position: relative; flex: 1; min-width: 200px;">
+            <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none;">
+              🔍
+            </span>
+            <input type="text" id="guest-search-input" value="{{ search_query }}"
+                   placeholder="{% t 'guest_list_search_placeholder' 'Benutzername suchen...' %}"
+                   style="width: 100%; box-sizing: border-box; background: var(--bg, #0b0c10); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px 10px 36px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+          </div>
+
+          <!-- Clan-Filter -->
+          <div style="min-width: 170px;">
+            <select id="clan-filter-select" style="width: 100%; background: var(--bg, #0b0c10); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px; cursor: pointer;">
+              <option value="">🛡️ {% t "guest_list_clan_filter_all" "Alle Clans" %}</option>
+              <option value="none" {% if selected_clan == 'none' %}selected{% endif %}>🚫 {% t "guest_list_clan_filter_none" "Ohne Clan" %}</option>
+              {% for c in clans %}
+                <option value="{{ c.slug }}" {% if selected_clan == c.slug or selected_clan == c.name %}selected{% endif %}>
+                  {% if c.tag %}[{{ c.tag }}] {% endif %}{{ c.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Status-Filter -->
+          <div style="min-width: 160px;">
+            <select id="status-filter-select" style="width: 100%; background: var(--bg, #0b0c10); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px; cursor: pointer;">
+              <option value="">💳 {% t "guest_list_status_filter_all" "Alle Bezahlstatus" %}</option>
+              <option value="paid" {% if selected_status == 'paid' %}selected{% endif %}>✓ {% t "guest_list_status_filter_paid" "Nur bezahlt" %}</option>
+              <option value="unpaid" {% if selected_status == 'unpaid' %}selected{% endif %}>⏳ {% t "guest_list_status_filter_unpaid" "Zahlung offen" %}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Treffer-Zähler Badge -->
+        <div>
+          <span id="filtered-count-badge" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); background: var(--bg, #0b0c10); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);">
+            {{ registrations|length }} Teilnehmer
+          </span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         4. GÄSTELISTEN-TABELLE
+         ====================================================================== -->
+    <div class="card" style="padding: 0; border-radius: var(--radius, 16px); background: var(--paper); border: 1px solid var(--line); overflow: hidden;">
+      
+      <div style="overflow-x: auto;">
+        <table id="guest-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="background: rgba(0, 0, 0, 0.2); border-bottom: 2px solid var(--line); font-family: 'Barlow Condensed', sans-serif; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);">
+              <th style="padding: 14px 18px; width: 50px;">{% t "guest_list_th_number" "#" %}</th>
+              <th style="padding: 14px 18px;">{% t "guest_list_th_user" "Benutzername" %}</th>
+              <th style="padding: 14px 18px;">{% t "guest_list_th_clan" "Clan" %}</th>
+              <th style="padding: 14px 18px;">{% t "guest_list_th_seat" "Sitzplatz" %}</th>
+              <th style="padding: 14px 18px; text-align: right;">{% t "guest_list_th_payment" "Bezahlt" %}</th>
+            </tr>
+          </thead>
+          <tbody id="guest-table-body">
+            {% for reg in registrations %}
+              <tr class="guest-row" 
+                  data-username="{{ reg.user.username|lower }}" 
+                  data-clan="{% if reg.cached_clan %}{{ reg.cached_clan.slug|lower }}{% else %}none{% endif %}" 
+                  data-clan-name="{% if reg.cached_clan %}{{ reg.cached_clan.name|lower }}{% endif %}"
+                  data-paid="{% if reg.payment_status == 'PAID' %}paid{% else %}unpaid{% endif %}"
+                  style="border-bottom: 1px solid var(--line); transition: background 0.15s ease; {% if user.is_authenticated and reg.user_id == user.id %}background: rgba(248, 171, 45, 0.05);{% endif %}">
+                
+                <!-- 1. Index -->
+                <td class="row-index" style="padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+                  {{ forloop.counter }}
+                </td>
+
+                <!-- 2. Username -->
+                <td style="padding: 14px 18px;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg, #0b0c10); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: bold; font-size: 15px; color: var(--signal);">
+                      {{ reg.user.username|slice:":1"|upper }}
+                    </div>
+                    <div>
+                      <span style="font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--ink);">
+                        {{ reg.user.username }}
+                      </span>
+                      {% if user.is_authenticated and reg.user_id == user.id %}
+                        <span style="display: inline-block; background: var(--signal, #f8ab2d); color: var(--navy, #332719); font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-family: 'JetBrains Mono', monospace;">
+                          {% t "guest_list_you_badge" "Du" %}
+                        </span>
+                      {% endif %}
+                    </div>
+                  </div>
+                </td>
+
+                <!-- 3. Clan -->
+                <td style="padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+                  {% if reg.cached_clan %}
+                    <a href="{% url 'clan_detail' slug=reg.cached_clan.slug %}" style="display: inline-flex; align-items: center; gap: 6px; color: #38bdf8; text-decoration: none; font-weight: bold;" title="{{ reg.cached_clan.name }}">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                      </svg>
+                      {% if reg.cached_clan.tag %}[{{ reg.cached_clan.tag }}] {% endif %}{{ reg.cached_clan.name }}
+                    </a>
+                  {% else %}
+                    <span style="color: var(--muted); opacity: 0.6;">–</span>
+                  {% endif %}
+                </td>
+
+                <!-- 4. Sitzplatz -->
+                <td style="padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+                  {% if reg.seat_label %}
+                    <a href="{% url 'seating_plan' %}?seat={{ reg.seat_label|urlencode }}" 
+                       class="seat-badge-link"
+                       title="Platz {{ reg.seat_label }} im Saalplan anzeigen"
+                       style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; color: #38bdf8; font-weight: bold; text-decoration: none; transition: transform 0.15s ease, background 0.15s ease;">
+                      🪑 {{ reg.seat_label }}
+                    </a>
+                  {% else %}
+                    {% if user.is_authenticated and reg.user_id == user.id %}
+                      <a href="{% url 'seating_plan' %}" style="color: var(--signal, #f8ab2d); font-size: 12px; font-weight: bold; text-decoration: underline;">
+                        {% t "guest_list_choose_seat" "👉 Platz wählen" %}
+                      </a>
+                    {% else %}
+                      <span style="color: var(--muted); opacity: 0.6; font-size: 12px;">
+                        {% t "guest_list_no_seat" "Kein Sitzplatz" %}
+                      </span>
+                    {% endif %}
+                  {% endif %}
+                </td>
+
+                <!-- 5. Bezahlstatus -->
+                <td style="padding: 14px 18px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+                  {% if reg.payment_status == 'PAID' %}
+                    <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: bold;" title="Bezahlt">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      {% t "guest_list_payment_paid" "Bezahlt" %}
+                    </span>
+                  {% else %}
+                    <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: bold;" title="Zahlung offen">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                      </svg>
+                      {% t "guest_list_payment_unpaid" "Offen" %}
+                    </span>
+                  {% endif %}
+                </td>
+
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 48px 20px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+                  {% t "guest_list_empty" "Für diese Veranstaltung liegen noch keine Anmeldungen vor." %}
+                </td>
+              </tr>
+            {% endfor %}
+
+            <!-- Platzhalter für keine Suchergebnisse im Client-Filter -->
+            <tr id="no-filter-results-row" style="display: none;">
+              <td colspan="5" style="text-align: center; padding: 40px 20px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 14px;">
+                🔍 {% t "guest_list_no_filter_results" "Keine Teilnehmer entsprechen den Filterkriterien." %}
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+  {% else %}
+    <!-- Kein aktives Event vorhanden -->
+    <div class="card" style="text-align: center; padding: 60px 24px; border-radius: var(--radius, 16px); background: var(--paper); border: 1px solid var(--line);">
+      <p class="eyebrow" style="margin-bottom: 8px;">{% t "guest_list_eyebrow" "Teilnehmer" %}</p>
+      <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 32px; margin: 0 0 16px 0; color: var(--ink);">
+        {% t "seating_no_event_title" "Derzeit gibt es kein aktives Event" %}
+      </h2>
+      <p style="color: var(--muted); font-size: 15px; max-width: 480px; margin: 0 auto; line-height: 1.6;">
+        {% t "guest_list_empty" "Für diese Veranstaltung liegen noch keine Anmeldungen vor." %}
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+
+<!-- ======================================================================
+     MODAL FÜR MANUELLE KONTOCHECK-EINGABE (NUR MIT BERECHTIGUNG)
+     ====================================================================== -->
+{% if can_update_payment_check and event %}
+<div id="manual-check-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px;">
+  <div style="position: relative; background: var(--paper, #1a1c23); padding: 24px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); width: 100%; max-width: 400px; border: 1px solid var(--line);">
+    
+    <button type="button" onclick="closeManualCheckModal()" style="position: absolute; top: 12px; right: 12px; background: transparent; color: var(--muted); border: none; font-size: 20px; cursor: pointer;">
+      ✕
+    </button>
+
+    <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
+      {% t "guest_list_modal_payment_check_title" "Kontocheck-Zeitpunkt anpassen" %}
+    </h3>
+
+    <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--muted); font-family: 'JetBrains Mono', monospace; line-height: 1.5;">
+      Wähle den genauen Zeitpunkt, an dem die Bankauszüge zuletzt abgeglichen wurden.
+    </p>
+
+    <div style="margin-bottom: 20px;">
+      <input type="datetime-local" id="manual-datetime-input" style="width: 100%; box-sizing: border-box; background: var(--bg, #0b0c10); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+    </div>
+
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <button type="button" onclick="closeManualCheckModal()" style="background: transparent; color: var(--ink); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;">
+        {% t "btn_cancel" "Abbrechen" %}
+      </button>
+      <button type="button" onclick="submitManualPaymentCheck()" style="background: var(--signal, #f8ab2d); color: var(--navy, #332719); border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+        {% t "guest_list_modal_payment_check_btn" "Zeitpunkt speichern" %}
+      </button>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
+<!-- Toast Container für AJAX Rückmeldungen -->
+<div id="guest-toast" style="display: none; position: fixed; bottom: 24px; right: 24px; z-index: 999999; padding: 14px 20px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; box-shadow: 0 16px 42px rgba(0,0,0,0.35); transition: opacity 0.3s ease, transform 0.3s ease; color: white;"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // --- 1. Client-Side Instant Filter ---
+  const searchInput = document.getElementById('guest-search-input');
+  const clanSelect = document.getElementById('clan-filter-select');
+  const statusSelect = document.getElementById('status-filter-select');
+  const countBadge = document.getElementById('filtered-count-badge');
+  const rows = document.querySelectorAll('.guest-row');
+  const noResultsRow = document.getElementById('no-filter-results-row');
+
+  function applyFilters() {
+    if (!rows || rows.length === 0) return;
+    const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const selectedClan = (clanSelect ? clanSelect.value : '').toLowerCase().trim();
+    const selectedStatus = (statusSelect ? statusSelect.value : '').toLowerCase().trim();
+
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const username = row.getAttribute('data-username') || '';
+      const clan = row.getAttribute('data-clan') || '';
+      const clanName = row.getAttribute('data-clan-name') || '';
+      const paidStatus = row.getAttribute('data-paid') || '';
+
+      const matchesSearch = !query || username.includes(query) || clanName.includes(query);
+      let matchesClan = true;
+      if (selectedClan === 'none') {
+        matchesClan = (clan === 'none');
+      } else if (selectedClan) {
+        matchesClan = (clan === selectedClan || clanName === selectedClan);
+      }
+
+      let matchesStatus = true;
+      if (selectedStatus) {
+        matchesStatus = (paidStatus === selectedStatus);
+      }
+
+      if (matchesSearch && matchesClan && matchesStatus) {
+        row.style.display = '';
+        visibleCount++;
+        // Index-Nummerierung live anpassen
+        const idxCell = row.querySelector('.row-index');
+        if (idxCell) idxCell.textContent = visibleCount;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    if (countBadge) {
+      countBadge.textContent = `${visibleCount} Teilnehmer`;
+    }
+
+    if (noResultsRow) {
+      noResultsRow.style.display = (visibleCount === 0) ? '' : 'none';
+    }
+  }
+
+  if (searchInput) searchInput.addEventListener('input', applyFilters);
+  if (clanSelect) clanSelect.addEventListener('change', applyFilters);
+  if (statusSelect) statusSelect.addEventListener('change', applyFilters);
+
+  // --- 2. Toast Funktion ---
+  function showToast(message, isError) {
+    const toast = document.getElementById('guest-toast');
+    if (!toast) return;
+    toast.style.background = isError ? '#991b1b' : '#166534';
+    toast.style.border = isError ? '1px solid #ef4444' : '1px solid #22c55e';
+    toast.innerHTML = (isError ? '⚠️ ' : '✓ ') + message;
+    toast.style.display = 'flex';
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      setTimeout(() => { toast.style.display = 'none'; }, 300);
+    }, 4500);
+  }
+
+  // --- 3. Kontocheck Aktualisierung via API ---
+  {% if event and can_update_payment_check %}
+  const eventId = {{ event.id }};
+  const csrfToken = '{{ csrf_token }}';
+
+  window.updatePaymentCheck = function(mode, customDate) {
+    const btn = document.getElementById('btn-update-check-now');
+    if (btn) btn.style.opacity = '0.6';
+
+    const payload = {};
+    if (mode === 'custom' && customDate) {
+      payload.custom_date = customDate;
+    }
+
+    fetch(`/events/api/event/${eventId}/update-payment-check/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(res => {
+      if (!res.ok) {
+        return res.json().then(d => { throw new Error(d.message || 'Fehler beim Aktualisieren'); });
+      }
+      return res.json();
+    })
+    .then(data => {
+      if (btn) btn.style.opacity = '1';
+      const displayEl = document.getElementById('payment-check-timestamp-display');
+      if (displayEl && data.formatted_time) {
+        displayEl.textContent = data.formatted_time;
+        displayEl.style.color = 'var(--ink)';
+        displayEl.style.fontStyle = 'normal';
+      }
+      showToast(data.message || 'Kontocheck erfolgreich aktualisiert!', false);
+      if (typeof closeManualCheckModal === 'function') closeManualCheckModal();
+    })
+    .catch(err => {
+      if (btn) btn.style.opacity = '1';
+      showToast(err.message || 'Netzwerkfehler beim Aktualisieren', true);
+    });
+  };
+
+  window.openManualCheckModal = function() {
+    const modal = document.getElementById('manual-check-modal');
+    const input = document.getElementById('manual-datetime-input');
+    if (input) {
+      // Aktuelles Datum/Uhrzeit als ISO-Wert vorbefüllen (YYYY-MM-DDTHH:mm)
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      input.value = now.toISOString().slice(0, 16);
+    }
+    if (modal) modal.style.display = 'flex';
+  };
+
+  window.closeManualCheckModal = function() {
+    const modal = document.getElementById('manual-check-modal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.submitManualPaymentCheck = function() {
+    const input = document.getElementById('manual-datetime-input');
+    if (!input || !input.value) return;
+    updatePaymentCheck('custom', input.value);
+  };
+  {% endif %}
+
+})();
+</script>
+
+<style>
+.seat-badge-link:hover {
+  transform: scale(1.06);
+  background: rgba(56, 189, 248, 0.25) !important;
+  border-color: #38bdf8 !important;
+}
+.guest-row:hover {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+</style>
+{% endblock %}

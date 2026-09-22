@@ -269,12 +269,12 @@
       <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
         <div>
           <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">{% t "team_create_modal_name_label" "Teamname *" %}</label>
-          <input type="text" name="name" required placeholder="z. B. Phoenix Esports" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; box-sizing: border-box;">
+          <input type="text" name="name" maxlength="32" required placeholder="z. B. Phoenix Esports" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; box-sizing: border-box;">
         </div>
 
         <div>
           <label style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 4px;">{% t "team_create_modal_tag_label" "Team-Tag (optional)" %}</label>
-          <input type="text" name="tag" maxlength="10" placeholder="z. B. PHX" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; box-sizing: border-box;">
+          <input type="text" name="tag" maxlength="5" placeholder="z. B. PHX" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; box-sizing: border-box;">
         </div>
 
         <div>

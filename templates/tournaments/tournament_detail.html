@@ -218,6 +218,15 @@
                     {% t "tournament_detail_find_team_btn" "🔍 Zur Teamsuche" %}
                   </a>
                 </div>
+              {% elif user_member_team %}
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 440px;">
+                  <div style="background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); padding: 10px 14px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink); line-height: 1.4; text-align: right;">
+                    🛡️ {% t "tournament_detail_member_team_notice" "Du bist Mitglied im Team '{team_name}'. Die Turnieranmeldung kann nur dein Kapitän ({captain_name}) vornehmen." team_name=user_member_team captain_name=user_member_team.captain.username %}
+                  </div>
+                  <a href="{% url 'team_detail' slug=user_member_team.slug %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none; background: var(--paper); color: var(--ink); border: 1px solid var(--line);">
+                    👥 {% t "tournament_detail_view_team_btn" "Team ansehen →" %}
+                  </a>
+                </div>
               {% else %}
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
                   <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
