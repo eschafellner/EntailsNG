@@ -91,13 +91,21 @@ class DynamicDebugMiddleware:
 
             # 3. Unter DEBUG=True: Strikte Autorisierungsprüfung für technische Debug-Details
             user = getattr(request, 'user', None)
-            if not user or not user.is_authenticated or not (user.is_staff or user.is_superuser):
-                return None
+            is_staff_or_super = bool(user and user.is_authenticated and (user.is_staff or user.is_superuser))
 
-            conf = GeneralConfiguration.load()
-            if conf.debug_mode:
-                return technical_500_response(request, *sys.exc_info())
+            if is_staff_or_super:
+                conf = GeneralConfiguration.load()
+                if conf.debug_mode:
+                    return technical_500_response(request, *sys.exc_info())
+
+            # Nicht autorisierte Besucher oder debug_mode=False:
+            # Neutrale Fehlerantwort rendern, um die Offenlegung von Traceback und Secrets bei DEBUG=True zu verhindern
+            from django.views.defaults import server_error
+            return server_error(request)
         except Exception as e:
             logger.error("Fehler in DynamicDebugMiddleware: %s", e, exc_info=True)
-
-        return None
+            from django.views.defaults import server_error
+            try:
+                return server_error(request)
+            except Exception:
+                return None

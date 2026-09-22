@@ -56,3 +56,20 @@ def validate_bic(value):
         raise ValidationError(
             "Ungültiger BIC / SWIFT-Code: Muss aus 8 oder 11 alphanumerischen Zeichen bestehen (z. B. GENODEF1S01)."
         )
+
+
+HEX_COLOR_REGEX = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
+
+
+def validate_hex_color(value):
+    """
+    Validiert einen Hexadezimal-Farbcode (z. B. #fff, #f8ab2d, #332719ff).
+    """
+    if not value:
+        return
+    clean_val = str(value).strip()
+    if not HEX_COLOR_REGEX.match(clean_val):
+        raise ValidationError(
+            f"'{value}' ist kein gültiger Hex-Farbcode. Erwartet wird ein Format wie '#fff', '#f8ab2d' oder '#ffffff'."
+        )
+

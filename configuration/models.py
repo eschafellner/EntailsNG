@@ -1,262 +1,34 @@
 import re
-import xml.etree.ElementTree as ET
-from html.parser import HTMLParser
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.urls import NoReverseMatch, reverse
 
-from .validators import validate_bic, validate_iban
-
-
+from .validators import validate_bic, validate_iban, validate_hex_color
+from .default_data import DEFAULT_DATENSCHUTZ_CONTENT, SYSTEM_ICONS
+from .themes import THEME_PRESETS, SCALE_MAP, build_css_variables
+from .sanitizer import (
+    ALLOWED_SVG_TAGS,
+    DANGEROUS_CSS_PATTERNS,
+    DANGEROUS_PROTOCOLS_REGEX,
+    DISALLOWED_ATTRIBUTES_REGEX,
+    SafeHTMLSanitizer,
+    sanitize_html,
+    validate_custom_css,
+    sanitize_and_validate_svg,
+)
 from configuration.cache import (
     safe_cache_delete,
     safe_cache_delete_many,
     safe_cache_get_or_set,
+    invalidate_event_capacity_cache,
+    invalidate_general_configuration_cache,
+    invalidate_navigation_cache,
+    invalidate_site_customization_cache,
+    invalidate_system_translations_cache,
 )
-
-ALLOWED_SVG_TAGS = {
-    'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
-    'text', 'tspan', 'defs', 'clippath', 'mask', 'use', 'title', 'desc'
-}
-DISALLOWED_ATTRIBUTES_REGEX = re.compile(r'^(on|data-|formaction)', re.IGNORECASE)
-DANGEROUS_PROTOCOLS_REGEX = re.compile(r'^\s*(javascript|data|vbscript):', re.IGNORECASE)
-DANGEROUS_CSS_PATTERNS = re.compile(
-    r'(javascript:|expression\(|@import|<script|</style|behavior:|\bdata:)',
-    re.IGNORECASE
-)
-
-SYSTEM_ICONS = {
-    'dashboard': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>'
-        '<polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
-    ),
-    'tournaments': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>'
-        '<path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>'
-        '<path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>'
-        '<path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>'
-        '<path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>'
-    ),
-    'teams': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>'
-        '<circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>'
-        '<path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'
-    ),
-    'seating': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>'
-        '<line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>'
-    ),
-    'guests': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>'
-        '<circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>'
-        '<path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'
-    ),
-    'info': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle>'
-        '<line x1="12" y1="16" x2="12" y2="12"></line>'
-        '<line x1="12" y1="8" x2="12.01" y2="8"></line></svg>'
-    ),
-    'news': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>'
-        '<path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8V6Z"></path></svg>'
-    ),
-    'clans': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>'
-    ),
-    'rules': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>'
-        '<path d="M6 6h10"></path><path d="M6 10h10"></path></svg>'
-    ),
-    'support': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle>'
-        '<path d="m4.93 4.93 4.24 4.24"></path><path d="m14.83 14.83 4.24 4.24"></path>'
-        '<path d="m14.83 9.17 4.24-4.24"></path><path d="m4.93 19.07 4.24-4.24"></path></svg>'
-    ),
-    'shop': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle>'
-        '<path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>'
-    ),
-    'settings': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>'
-        '<circle cx="12" cy="12" r="3"></circle></svg>'
-    ),
-    'sponsors': (
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>'
-    ),
-}
-
-
-class SafeHTMLSanitizer(HTMLParser):
-    """
-    Sicherer HTML-Sanitizer mit strikter Tag- und Attribut-Whitelist.
-    Entfernt alle <script>, <iframe>, Inline-Event-Handler (on*) und bösartige URLs.
-    """
-    ALLOWED_TAGS = {
-        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
-        'strong', 'b', 'em', 'i', 'u', 's', 'small', 'sub', 'sup',
-        'ul', 'ol', 'li', 'blockquote', 'a',
-        'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div', 'span',
-        'code'
-    }
-    DROP_CONTENT_TAGS = {'script', 'style', 'noscript', 'iframe'}
-    ALLOWED_ATTRS = {'href', 'title', 'target', 'rel', 'class', 'id', 'align'}
-    VOID_TAGS = {'br', 'hr', 'img'}
-    DISALLOWED_PROTOCOLS = re.compile(r'^\s*(javascript|data|vbscript):', re.IGNORECASE)
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.result = []
-        self.tag_stack = []
-        self.drop_depth = 0
-
-    def handle_starttag(self, tag, attrs):
-        tag = tag.lower()
-        if tag in self.DROP_CONTENT_TAGS:
-            self.drop_depth += 1
-            return
-        if self.drop_depth > 0:
-            return
-        if tag not in self.ALLOWED_TAGS:
-            return
-
-        cleaned_attrs = []
-        for name, value in attrs:
-            name = name.lower()
-            if name.startswith('on') or name.startswith('data-'):
-                continue
-            if name not in self.ALLOWED_ATTRS:
-                continue
-            if name in ('href', 'src'):
-                if self.DISALLOWED_PROTOCOLS.match(str(value)):
-                    value = '#'
-            val_escaped = str(value).replace('"', '&quot;')
-            cleaned_attrs.append(f'{name}="{val_escaped}"')
-
-        attr_str = f" {' '.join(cleaned_attrs)}" if cleaned_attrs else ""
-        self.result.append(f"<{tag}{attr_str}>")
-        if tag not in self.VOID_TAGS:
-            self.tag_stack.append(tag)
-
-    def handle_endtag(self, tag):
-        tag = tag.lower()
-        if tag in self.DROP_CONTENT_TAGS:
-            if self.drop_depth > 0:
-                self.drop_depth -= 1
-            return
-        if self.drop_depth > 0:
-            return
-        if tag in self.tag_stack:
-            while self.tag_stack:
-                popped = self.tag_stack.pop()
-                self.result.append(f"</{popped}>")
-                if popped == tag:
-                    break
-
-    def handle_data(self, data):
-        if self.drop_depth > 0:
-            return
-        self.result.append(data)
-
-    def handle_entityref(self, name):
-        self.result.append(f"&{name};")
-
-    def handle_charref(self, name):
-        self.result.append(f"&#{name};")
-
-    def get_clean_html(self):
-        while self.tag_stack:
-            self.result.append(f"</{self.tag_stack.pop()}>")
-        return "".join(self.result)
-
-
-def sanitize_html(html_code: str) -> str:
-    """Bereinigt HTML-Texte (wie Impressum/Datenschutz) strikt vor XSS und Script-Injections."""
-    if not html_code or not html_code.strip():
-        return ""
-    sanitizer = SafeHTMLSanitizer()
-    sanitizer.feed(html_code)
-    return sanitizer.get_clean_html()
-
-
-def validate_custom_css(css_code: str):
-    """Validiert benutzerdefiniertes CSS auf bösartige Injection-Konstrukte."""
-    if not css_code or not css_code.strip():
-        return
-    if DANGEROUS_CSS_PATTERNS.search(css_code):
-        raise ValidationError({
-            'custom_css': "CSS enthält nicht erlaubte Ausdrücke (z. B. JavaScript, @import oder Script-Tags)."
-        })
-
-
-def sanitize_and_validate_svg(svg_code: str) -> str:
-    """
-    Validiert und bereinigt SVG-Code vor dem Speichern.
-    Verhindert Stored-XSS, Script-Injections und gefährliche Attribute im Template (|safe).
-    """
-    if not svg_code or not svg_code.strip():
-        return ""
-
-    raw = svg_code.strip()
-
-    # Schutz vor XXE / DTD Injections
-    if '<!DOCTYPE' in raw.upper() or '<!ENTITY' in raw.upper():
-        raise ValidationError({'icon_svg': "SVG darf keine DOCTYPE- oder ENTITY-Deklarationen enthalten."})
-
-    try:
-        root = ET.fromstring(raw)
-    except ET.ParseError as e:
-        raise ValidationError({'icon_svg': f"Ungültiger SVG/XML-Code: {e}"})
-
-    def clean_tag(tag):
-        if '}' in tag:
-            return tag.split('}', 1)[1].lower()
-        return tag.lower()
-
-    if clean_tag(root.tag) != 'svg':
-        raise ValidationError({'icon_svg': "Wurzelelement muss ein <svg>-Tag sein."})
-
-    for elem in root.iter():
-        tag_name = clean_tag(elem.tag)
-        if tag_name not in ALLOWED_SVG_TAGS:
-            raise ValidationError({'icon_svg': f"Nicht erlaubtes SVG-Tag '<{tag_name}>' im Icon-Code gefunden."})
-
-        for attr, val in list(elem.attrib.items()):
-            attr_clean = clean_tag(attr)
-            if DISALLOWED_ATTRIBUTES_REGEX.match(attr_clean):
-                raise ValidationError({'icon_svg': f"Nicht erlaubtes Attribut '{attr}' im SVG gefunden."})
-            if attr_clean in ('href', 'xlink:href', 'src') and DANGEROUS_PROTOCOLS_REGEX.match(str(val)):
-                raise ValidationError({'icon_svg': f"Gefährliche URI im Attribut '{attr}' gefunden."})
-
-    return raw
 
 
 class NavigationItem(models.Model):
@@ -368,16 +140,11 @@ class NavigationItem(models.Model):
         elif not self.icon_svg:
             self.icon_svg = SYSTEM_ICONS.get('dashboard', '')
         super().save(*args, **kwargs)
-        safe_cache_delete('navigation_items')
+        invalidate_navigation_cache()
 
     def delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)
-        safe_cache_delete('navigation_items')
-
-
-@receiver(post_delete, sender=NavigationItem)
-def invalidate_navigation_cache_on_item_delete(sender, **kwargs):
-    safe_cache_delete('navigation_items')
+        invalidate_navigation_cache()
 
 
 class SystemTranslation(models.Model):
@@ -402,11 +169,11 @@ class SystemTranslation(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        safe_cache_delete('system_translations')
+        invalidate_system_translations_cache()
 
     def delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)
-        safe_cache_delete('system_translations')
+        invalidate_system_translations_cache()
 
 
 class GeneralConfiguration(models.Model):
@@ -515,6 +282,7 @@ class GeneralConfiguration(models.Model):
             self.kontoinhaber = self.kontoinhaber.strip()
         super().save(*args, **kwargs)
         safe_cache_delete('general_configuration')
+        invalidate_general_configuration_cache()
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Die Systemeinstellungen können nicht gelöscht werden.")
@@ -527,45 +295,6 @@ class GeneralConfiguration(models.Model):
             300,
         )
 
-
-
-DEFAULT_DATENSCHUTZ_CONTENT = """<h3>Datenschutzerklärung</h3>
-<p>Wir nehmen den Schutz Ihrer persönlichen Daten sehr ernst. Nachfolgend informieren wir Sie über die Verarbeitung personenbezogener Daten bei der Nutzung unserer Plattform im Rahmen der Organisation und Durchführung von Veranstaltungen (LAN-Partys).</p>
-
-<h4>1. Verantwortlicher</h4>
-<p>Verantwortlich für die Datenverarbeitung auf dieser Website ist der jeweilige Veranstalter / Betreiber der Plattform (siehe Angaben im <a href="/impressum/">Impressum</a>).</p>
-
-<h4>2. Bereitstellung der Website und Server-Logfiles</h4>
-<p>Beim Aufruf unserer Website erfasst unser Webserver automatisch technische Informationen, die Ihr Browser an uns übermittelt (z.&nbsp;B. IP-Adresse, Datum und Uhrzeit des Zugriffs, aufgerufene Seite, Browsertyp und Betriebssystem). Die Erfassung dieser Daten erfolgt zur Gewährleistung eines reibungslosen Verbindungsaufbaus, der Systemsicherheit sowie zu administrativen Zwecken auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an der IT-Sicherheit und Fehleranalyse).</p>
-
-<h4>3. Einsatz von Cookies &amp; lokalem Speicher</h4>
-<p>Unsere Website verwendet ausschließlich <strong>technisch zwingend erforderliche Cookies</strong> (Erstanbieter-Cookies). Es werden <strong>keine</strong> Tracking-, Analyse- oder Marketing-Cookies (wie Google Analytics, Meta Pixel etc.) eingesetzt.</p>
-<ul>
-  <li><strong><code>sessionid</code>:</strong> Speichert die Sitzungskennung angemeldeter Benutzer, um die Authentifizierung über aufeinanderfolgende Seitenaufrufe hinweg aufrechtzuerhalten. Gültigkeit: Für die Dauer der Sitzung bzw. bis zum Logout.</li>
-  <li><strong><code>csrftoken</code>:</strong> Ein kryptografisches Sicherheits-Token, das Angriffe durch Cross-Site Request Forgery (CSRF) bei Formularübermittlungen und Datenänderungen (z.&nbsp;B. Platzreservierung, Teambeitritt) verhindert. Gültigkeit: 1 Jahr bzw. bis zum Sitzungsende.</li>
-</ul>
-<p>Die Speicherung dieser Cookies erfolgt auf Grundlage von § 25 Abs. 2 Nr. 2 TDDDG bzw. Art. 5 Abs. 3 ePrivacy-Richtlinie i.&nbsp;V.&nbsp;m. Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an einem sicheren und funktionierenden Betrieb der Plattform). Ein gesonderter Cookie-Banner / Consent-Banner ist für diese essenziellen Cookies gesetzlich nicht erforderlich.</p>
-<p>Zudem nutzt das System den clientseitigen Speicher Ihres Browsers (<code>sessionStorage</code>), um temporäre UI-Zustände (z.&nbsp;B. den aktiven Reiter in der Turnieransicht) während Ihres Besuchs zu speichern. Diese Daten verbleiben rein lokal auf Ihrem Endgerät und werden zu keinem Zeitpunkt an Dritte übermittelt.</p>
-
-<h4>4. Benutzerkonto, Registrierung und Stammdaten</h4>
-<p>Wenn Sie sich auf unserer Plattform registrieren, verarbeiten wir die von Ihnen eingegebenen Daten (Benutzername, E-Mail-Adresse und Passwort) zur Erstellung und Verwaltung Ihres Benutzerkontos sowie zur Authentifizierung (Art. 6 Abs. 1 lit. b DSGVO zur Vertragserfüllung bzw. Durchführung vorvertraglicher Maßnahmen). Passwörter werden ausschließlich als sichere, kryptografische Hashes gespeichert.</p>
-
-<h4>5. Event-Teilnahme, Ticketbuchung und Zahlungsstatus</h4>
-<p>Für die Teilnahme an einer Veranstaltung verarbeiten wir Ihre Event-Anmeldung, gewählte Ticket-Kategorien, Zahlungsstatus (z.&nbsp;B. Bezahlt / Ausstehend), den Zeitpunkt der Zahlungsprüfung sowie ggf. getätigte Sitzplatzreservierungen. Diese Datenverarbeitung dient der ordnungsgemäßen Abwicklung der Veranstaltung (Art. 6 Abs. 1 lit. b DSGVO).</p>
-
-<h4>6. Öffentliche Anzeige auf der Plattform (Gästeliste, Sitzplan &amp; Turniere)</h4>
-<p>Im Rahmen des interaktiven LAN-Party-Erlebnisses sind bestimmte Profildaten für andere Teilnehmer sichtbar:</p>
-<ul>
-  <li>Auf der <strong>Gästeliste</strong> und im <strong>Sitzplan</strong> werden Ihr Benutzername (Gamer-Tag), optionaler Clan und Ihr reservierter Sitzplatz öffentlich angezeigt.</li>
-  <li>In <strong>Turnieren</strong> werden Ihr Teamname sowie die beteiligten Teammitglieder zur Turnierorganisation und Anzeige von Paarungen und Ergebnissen dargestellt.</li>
-</ul>
-<p>Rechtsgrundlage hierfür ist die Erfüllung des Teilnahmevertrags (Art. 6 Abs. 1 lit. b DSGVO) sowie unser berechtigtes Interesse an einer transparenten und gemeinschaftlichen Durchführung der Veranstaltung (Art. 6 Abs. 1 lit. f DSGVO).</p>
-
-<h4>7. E-Mail-Benachrichtigungen</h4>
-<p>Wir versenden ausschließlich systemrelevante Transaktions-E-Mails (z.&nbsp;B. Verifizierungs-Codes zur E-Mail-Bestätigung, Links zum Zurücksetzen des Passworts oder Anmeldebestätigungen). Es erfolgt kein Versand von Werbe-Newslettern ohne gesonderte Einwilligung.</p>
-
-<h4>8. Ihre Rechte als betroffene Person</h4>
-<p>Sie haben nach der DSGVO jederzeit das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16 DSGVO), Löschung (Art. 17 DSGVO), Einschränkung der Verarbeitung (Art. 18 DSGVO), Datenübertragbarkeit (Art. 20 DSGVO) sowie Widerspruch (Art. 21 DSGVO). Zudem steht Ihnen ein Beschwerderecht bei der zuständigen Datenschutz-Aufsichtsbehörde zu.</p>"""
 
 
 class SiteCustomization(models.Model):
@@ -642,6 +371,7 @@ class SiteCustomization(models.Model):
     primary_color = models.CharField(
         max_length=20,
         blank=True,
+        validators=[validate_hex_color],
         verbose_name='Benutzerdefinierte Akzentfarbe (--signal)',
         help_text='Hex-Code (z. B. #f8ab2d). Überschreibt die Akzentfarbe des Presets.',
     )
@@ -657,12 +387,14 @@ class SiteCustomization(models.Model):
     secondary_color = models.CharField(
         max_length=20,
         blank=True,
+        validators=[validate_hex_color],
         verbose_name='Benutzerdefinierte Hauptfarbe (--navy)',
         help_text='Hex-Code (z. B. #332719). Überschreibt die Hauptfarbe der Sidebar/Header.',
     )
     background_color = models.CharField(
         max_length=20,
         blank=True,
+        validators=[validate_hex_color],
         verbose_name='Benutzerdefinierte Hintergrundfarbe (--paper)',
         help_text='Hex-Code (z. B. #fffaf2). Überschreibt die Hintergrundfarbe.',
     )
@@ -693,6 +425,12 @@ class SiteCustomization(models.Model):
         verbose_name_plural = 'Individualisierung & Branding'
 
     def clean(self):
+        if self.primary_color:
+            validate_hex_color(self.primary_color)
+        if self.secondary_color:
+            validate_hex_color(self.secondary_color)
+        if self.background_color:
+            validate_hex_color(self.background_color)
         if self.impressum_content:
             self.impressum_content = sanitize_html(self.impressum_content)
         if self.datenschutz_content:
@@ -704,379 +442,36 @@ class SiteCustomization(models.Model):
         self.clean()
         self.pk = 1
         super().save(*args, **kwargs)
-        safe_cache_delete_many(['site_customization', 'system_translations', 'navigation_items'])
+        invalidate_site_customization_cache()
+        invalidate_system_translations_cache()
+        invalidate_navigation_cache()
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Die Individualisierungs-Einstellungen können nicht gelöscht werden.")
 
     @classmethod
     def load(cls):
-        def _get_or_create_customization():
-            obj, _ = cls.objects.get_or_create(pk=1)
-            # Falls noch der alte Einzeiler-Platzhalter oder ein leerer String vorliegt, mit dem vollständigen Default initialisieren
-            if not obj.datenschutz_content or obj.datenschutz_content.strip() in (
-                '<h3>Datenschutzerklärung</h3><p>Informationen zum Datenschutz...</p>',
-                '<h3>Datenschutzerklärung</h3><p>Informationen zum Datenschutz...</p>'.strip(),
-            ):
-                obj.datenschutz_content = DEFAULT_DATENSCHUTZ_CONTENT
-                obj.save(update_fields=['datenschutz_content'])
+        def _get_customization():
+            obj = cls.objects.filter(pk=1).first()
+            if not obj:
+                obj = cls(pk=1)
             return obj
 
         return safe_cache_get_or_set(
             'site_customization',
-            _get_or_create_customization,
+            _get_customization,
             300,
         )
 
     def get_css_variables(self):
         """Liefert ein Dictionary mit CSS-Variablen basierend auf Preset, Farben & UI-Skalierung."""
-        presets = {
-            self.ThemePreset.WARM_AMBER: {
-                '--ink': '#2b2115',
-                '--muted': '#6f6252',
-                '--line': '#e7dac8',
-                '--paper': '#fffaf2',
-                '--panel': '#ffffff',
-                '--navy': '#332719',
-                '--signal': '#f8ab2d',
-                '--signal-deep': '#8a4d00',
-                '--signal-soft': '#fff0d2',
-                '--amber': '#d97817',
-                '--amber-soft': '#ffead0',
-                '--sidebar-text': '#fffaf2',
-                '--sidebar-nav-text': '#eadfce',
-                '--sidebar-nav-hover-bg': 'rgba(255, 255, 255, 0.08)',
-                '--sidebar-nav-hover-text': '#ffffff',
-                '--sidebar-nav-active-bg': '#ffffff',
-                '--sidebar-nav-active-text': '#332719',
-                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
-            },
-            self.ThemePreset.CYBERPUNK: {
-                '--ink': '#e2e8f0',
-                '--muted': '#94a3b8',
-                '--line': '#2a2d3d',
-                '--paper': '#0f111a',
-                '--panel': '#181b29',
-                '--navy': '#0b0d14',
-                '--signal': '#00f0ff',
-                '--signal-deep': '#ff0055',
-                '--signal-soft': 'rgba(0, 240, 255, 0.15)',
-                '--amber': '#ff0055',
-                '--amber-soft': 'rgba(255, 0, 85, 0.15)',
-                '--sidebar-text': '#e2e8f0',
-                '--sidebar-nav-text': '#94a3b8',
-                '--sidebar-nav-hover-bg': 'rgba(0, 240, 255, 0.12)',
-                '--sidebar-nav-hover-text': '#00f0ff',
-                '--sidebar-nav-active-bg': '#00f0ff',
-                '--sidebar-nav-active-text': '#0b0d14',
-                '--sidebar-border': 'rgba(42, 45, 61, 0.6)',
-            },
-            self.ThemePreset.SLATE_BLUE: {
-                '--ink': '#1e293b',
-                '--muted': '#64748b',
-                '--line': '#cbd5e1',
-                '--paper': '#f8fafc',
-                '--panel': '#ffffff',
-                '--navy': '#0f172a',
-                '--signal': '#3b82f6',
-                '--signal-deep': '#1d4ed8',
-                '--signal-soft': '#dbeafe',
-                '--amber': '#2563eb',
-                '--amber-soft': '#eff6ff',
-                '--sidebar-text': '#f8fafc',
-                '--sidebar-nav-text': '#cbd5e1',
-                '--sidebar-nav-hover-bg': 'rgba(59, 130, 246, 0.15)',
-                '--sidebar-nav-hover-text': '#ffffff',
-                '--sidebar-nav-active-bg': '#3b82f6',
-                '--sidebar-nav-active-text': '#ffffff',
-                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
-            },
-            self.ThemePreset.EMERALD: {
-                '--ink': '#111827',
-                '--muted': '#4b5563',
-                '--line': '#d1d5db',
-                '--paper': '#f3f4f6',
-                '--panel': '#ffffff',
-                '--navy': '#064e3b',
-                '--signal': '#10b981',
-                '--signal-deep': '#047857',
-                '--signal-soft': '#d1fae5',
-                '--amber': '#059669',
-                '--amber-soft': '#ecfdf5',
-                '--sidebar-text': '#f3f4f6',
-                '--sidebar-nav-text': '#a7f3d0',
-                '--sidebar-nav-hover-bg': 'rgba(16, 185, 129, 0.15)',
-                '--sidebar-nav-hover-text': '#ffffff',
-                '--sidebar-nav-active-bg': '#10b981',
-                '--sidebar-nav-active-text': '#064e3b',
-                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
-            },
-            self.ThemePreset.QUAKE_99: {
-                '--ink': '#E4E4E7',
-                '--muted': '#A1A1AA',
-                '--line': '#3F3F46',
-                '--paper': '#18181B',
-                '--panel': '#27272A',
-                '--navy': '#121215',
-                '--signal': '#EA580C',
-                '--signal-deep': '#C2410C',
-                '--signal-soft': 'rgba(234, 88, 12, 0.15)',
-                '--amber': '#CA8A04',
-                '--amber-soft': 'rgba(202, 138, 4, 0.15)',
-                '--sidebar-text': '#E4E4E7',
-                '--sidebar-nav-text': '#A1A1AA',
-                '--sidebar-nav-hover-bg': 'rgba(234, 88, 12, 0.15)',
-                '--sidebar-nav-hover-text': '#ffffff',
-                '--sidebar-nav-active-bg': '#EA580C',
-                '--sidebar-nav-active-text': '#ffffff',
-                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
-            },
-            self.ThemePreset.ARENA_PRO: {
-                '--ink': '#FFFFFF',
-                '--muted': '#8892B0',
-                '--line': '#222836',
-                '--paper': '#0B0E14',
-                '--panel': '#151922',
-                '--navy': '#070A0F',
-                '--signal': '#FF4655',
-                '--signal-deep': '#E02B3B',
-                '--signal-soft': 'rgba(255, 70, 85, 0.15)',
-                '--amber': '#00E599',
-                '--amber-soft': 'rgba(0, 229, 153, 0.15)',
-                '--sidebar-text': '#FFFFFF',
-                '--sidebar-nav-text': '#8892B0',
-                '--sidebar-nav-hover-bg': 'rgba(255, 70, 85, 0.15)',
-                '--sidebar-nav-hover-text': '#ffffff',
-                '--sidebar-nav-active-bg': '#FF4655',
-                '--sidebar-nav-active-text': '#ffffff',
-                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
-            },
-            self.ThemePreset.CYBERDECK: {
-                '--ink': '#E0E7FF',
-                '--muted': '#94A3B8',
-                '--line': '#2A244D',
-                '--paper': '#0A0915',
-                '--panel': '#121024',
-                '--navy': '#06050D',
-                '--signal': '#00F0FF',
-                '--signal-deep': '#00B4D8',
-                '--signal-soft': 'rgba(0, 240, 255, 0.15)',
-                '--amber': '#FF007F',
-                '--amber-soft': 'rgba(255, 0, 127, 0.15)',
-                '--sidebar-text': '#E0E7FF',
-                '--sidebar-nav-text': '#94A3B8',
-                '--sidebar-nav-hover-bg': 'rgba(0, 240, 255, 0.12)',
-                '--sidebar-nav-hover-text': '#00F0FF',
-                '--sidebar-nav-active-bg': '#FF007F',
-                '--sidebar-nav-active-text': '#ffffff',
-                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
-            },
-            self.ThemePreset.MAINFRAME: {
-                '--ink': '#86EFAC',
-                '--muted': '#4ADE80',
-                '--line': '#1A2E1C',
-                '--paper': '#050805',
-                '--panel': '#0C130D',
-                '--navy': '#020402',
-                '--signal': '#22C55E',
-                '--signal-deep': '#16A34A',
-                '--signal-soft': 'rgba(34, 197, 94, 0.15)',
-                '--amber': '#FACC15',
-                '--amber-soft': 'rgba(250, 204, 21, 0.15)',
-                '--sidebar-text': '#86EFAC',
-                '--sidebar-nav-text': '#4ADE80',
-                '--sidebar-nav-hover-bg': 'rgba(34, 197, 94, 0.12)',
-                '--sidebar-nav-hover-text': '#86EFAC',
-                '--sidebar-nav-active-bg': '#22C55E',
-                '--sidebar-nav-active-text': '#020402',
-                '--sidebar-border': 'rgba(34, 197, 94, 0.2)',
-            },
-            self.ThemePreset.DAYLIGHT: {
-                '--ink': '#0F172A',
-                '--muted': '#64748B',
-                '--line': '#E2E8F0',
-                '--paper': '#F8FAFC',
-                '--panel': '#FFFFFF',
-                '--navy': '#0F172A',
-                '--signal': '#1D4ED8',
-                '--signal-deep': '#1E40AF',
-                '--signal-soft': '#DBEAFE',
-                '--amber': '#0284C7',
-                '--amber-soft': '#E0F2FE',
-                '--sidebar-text': '#F8FAFC',
-                '--sidebar-nav-text': '#94A3B8',
-                '--sidebar-nav-hover-bg': 'rgba(255, 255, 255, 0.08)',
-                '--sidebar-nav-hover-text': '#ffffff',
-                '--sidebar-nav-active-bg': '#ffffff',
-                '--sidebar-nav-active-text': '#0F172A',
-                '--sidebar-border': 'rgba(255, 255, 255, 0.1)',
-            },
-        }
-
-
-        base_vars = presets.get(self.theme_preset, presets[self.ThemePreset.WARM_AMBER]).copy()
-
-        if self.primary_color:
-            base_vars['--signal'] = self.primary_color
-            base_vars['--amber'] = self.primary_color
-        if self.secondary_color:
-            base_vars['--navy'] = self.secondary_color
-        if self.background_color:
-            base_vars['--paper'] = self.background_color
-
-        scale_map = {
-            self.UIScale.VERY_SMALL: {
-                '--font-base': '13px',
-                '--font-xs': '10px',
-                '--font-sm': '11px',
-                '--font-md': '13px',
-                '--font-lg': '15px',
-                '--font-xl': '18px',
-                '--font-2xl': '22px',
-                '--font-3xl': '28px',
-                '--sidebar': '220px',
-                '--card-padding': '16px',
-                '--btn-height': '34px',
-                '--input-height': '36px',
-                '--radius': '14px',
-                '--nav-item-height': '36px',
-                '--nav-font-size': '12px',
-                '--nav-icon-size': '16px',
-                '--nav-badge-font-size': '9px',
-                '--nav-padding': '0 10px',
-                '--foot-font-size': '11px',
-                '--mobile-item-height': '52px',
-                '--mobile-font-size': '10px',
-                '--mobile-icon-size': '18px',
-            },
-            self.UIScale.SMALL: {
-                '--font-base': '14px',
-                '--font-xs': '10.5px',
-                '--font-sm': '12px',
-                '--font-md': '14px',
-                '--font-lg': '16.5px',
-                '--font-xl': '20px',
-                '--font-2xl': '25px',
-                '--font-3xl': '31px',
-                '--sidebar': '235px',
-                '--card-padding': '20px',
-                '--btn-height': '38px',
-                '--input-height': '39px',
-                '--radius': '16px',
-                '--nav-item-height': '39px',
-                '--nav-font-size': '13px',
-                '--nav-icon-size': '18px',
-                '--nav-badge-font-size': '10px',
-                '--nav-padding': '0 12px',
-                '--foot-font-size': '12px',
-                '--mobile-item-height': '57px',
-                '--mobile-font-size': '10.5px',
-                '--mobile-icon-size': '20px',
-            },
-            self.UIScale.MEDIUM: {
-                '--font-base': '15px',
-                '--font-xs': '11px',
-                '--font-sm': '13px',
-                '--font-md': '15px',
-                '--font-lg': '18px',
-                '--font-xl': '22px',
-                '--font-2xl': '28px',
-                '--font-3xl': '35px',
-                '--sidebar': '246px',
-                '--card-padding': '24px',
-                '--btn-height': '42px',
-                '--input-height': '42px',
-                '--radius': '18px',
-                '--nav-item-height': '42px',
-                '--nav-font-size': '14px',
-                '--nav-icon-size': '19px',
-                '--nav-badge-font-size': '10px',
-                '--nav-padding': '0 13px',
-                '--foot-font-size': '13px',
-                '--mobile-item-height': '62px',
-                '--mobile-font-size': '11px',
-                '--mobile-icon-size': '21px',
-            },
-            self.UIScale.LARGE: {
-                '--font-base': '16px',
-                '--font-xs': '12px',
-                '--font-sm': '14px',
-                '--font-md': '16px',
-                '--font-lg': '19.5px',
-                '--font-xl': '24px',
-                '--font-2xl': '31px',
-                '--font-3xl': '39px',
-                '--sidebar': '260px',
-                '--card-padding': '28px',
-                '--btn-height': '46px',
-                '--input-height': '45px',
-                '--radius': '20px',
-                '--nav-item-height': '46px',
-                '--nav-font-size': '15px',
-                '--nav-icon-size': '21px',
-                '--nav-badge-font-size': '11px',
-                '--nav-padding': '0 14px',
-                '--foot-font-size': '14px',
-                '--mobile-item-height': '68px',
-                '--mobile-font-size': '12px',
-                '--mobile-icon-size': '23px',
-            },
-            self.UIScale.VERY_LARGE: {
-                '--font-base': '17px',
-                '--font-xs': '13px',
-                '--font-sm': '15px',
-                '--font-md': '17px',
-                '--font-lg': '21px',
-                '--font-xl': '26px',
-                '--font-2xl': '34px',
-                '--font-3xl': '43px',
-                '--sidebar': '275px',
-                '--card-padding': '32px',
-                '--btn-height': '50px',
-                '--input-height': '48px',
-                '--radius': '22px',
-                '--nav-item-height': '50px',
-                '--nav-font-size': '16px',
-                '--nav-icon-size': '23px',
-                '--nav-badge-font-size': '12px',
-                '--nav-padding': '0 16px',
-                '--foot-font-size': '15px',
-                '--mobile-item-height': '74px',
-                '--mobile-font-size': '13px',
-                '--mobile-icon-size': '25px',
-            },
-        }
-
-        scale_vars = scale_map.get(self.ui_scale, scale_map[self.UIScale.MEDIUM])
-        base_vars.update(scale_vars)
-
-        # Farbliche Statusvariablen (theme-abhängig für optimale Lesbarkeit und Kontrast)
-        paper_hex = base_vars.get('--paper', '#fffaf2').lstrip('#')
-        is_dark = False
-        try:
-            if len(paper_hex) == 6:
-                r, g, b = int(paper_hex[0:2], 16), int(paper_hex[2:4], 16), int(paper_hex[4:6], 16)
-                luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-                is_dark = luminance < 0.5
-        except Exception:
-            pass
-
-        if is_dark:
-            base_vars['--warning-text'] = '#facc15'
-            base_vars['--warning-bg'] = 'rgba(234, 179, 8, 0.15)'
-            base_vars['--warning-border'] = 'rgba(234, 179, 8, 0.35)'
-            base_vars['--info-text'] = '#38bdf8'
-            base_vars['--info-bg'] = 'rgba(56, 189, 248, 0.12)'
-            base_vars['--info-border'] = 'rgba(56, 189, 248, 0.3)'
-        else:
-            base_vars['--warning-text'] = '#b45309'
-            base_vars['--warning-bg'] = 'rgba(245, 158, 11, 0.12)'
-            base_vars['--warning-border'] = 'rgba(245, 158, 11, 0.35)'
-            base_vars['--info-text'] = '#0369a1'
-            base_vars['--info-bg'] = 'rgba(2, 132, 199, 0.08)'
-            base_vars['--info-border'] = 'rgba(2, 132, 199, 0.25)'
-
-        return base_vars
+        return build_css_variables(
+            theme_preset=self.theme_preset,
+            ui_scale=self.ui_scale,
+            primary_color=self.primary_color,
+            secondary_color=self.secondary_color,
+            background_color=self.background_color,
+        )
 
 
 class SystemErrorLog(models.Model):
@@ -1103,6 +498,35 @@ class SystemErrorLog(models.Model):
     def __str__(self):
         time_str = self.timestamp.strftime('%d.%m.%Y %H:%M') if self.timestamp else 'Neu'
         return f"#{self.pk} [{time_str}] {self.exception_type} an {self.path}"
+
+
+@receiver(post_save, sender=SystemTranslation)
+@receiver(post_delete, sender=SystemTranslation)
+def _on_translation_change(sender, **kwargs):
+    safe_cache_delete('system_translations')
+    invalidate_system_translations_cache()
+
+
+@receiver(post_save, sender=NavigationItem)
+@receiver(post_delete, sender=NavigationItem)
+def _on_navigation_change(sender, **kwargs):
+    safe_cache_delete('navigation_items')
+    invalidate_navigation_cache()
+
+
+@receiver(post_save, sender=GeneralConfiguration)
+@receiver(post_delete, sender=GeneralConfiguration)
+def _on_general_config_change(sender, **kwargs):
+    safe_cache_delete('general_configuration')
+    invalidate_general_configuration_cache()
+
+
+@receiver(post_save, sender=SiteCustomization)
+@receiver(post_delete, sender=SiteCustomization)
+def _on_site_customization_change(sender, **kwargs):
+    safe_cache_delete('site_customization')
+    invalidate_site_customization_cache()
+
 
 
 

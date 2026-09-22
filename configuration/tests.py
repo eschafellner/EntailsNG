@@ -78,10 +78,11 @@ class ConfigurationModelTests(TestCase):
         msg = get_translation('msg_team_created', team_name='Alpha', invite_code='1234')
         self.assertEqual(msg, 'Team "Alpha" erfolgreich gegründet! Einladungscode: 1234')
         # Test database override
-        SystemTranslation.objects.update_or_create(
-            key='msg_team_created',
-            defaults={'text': 'Team {team_name} gegründet! Code: {invite_code}'}
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            SystemTranslation.objects.update_or_create(
+                key='msg_team_created',
+                defaults={'text': 'Team {team_name} gegründet! Code: {invite_code}'}
+            )
         msg_custom = get_translation('msg_team_created', team_name='Alpha', invite_code='1234')
         self.assertEqual(msg_custom, 'Team Alpha gegründet! Code: 1234')
 
@@ -141,12 +142,14 @@ class ConfigurationModelTests(TestCase):
         config.ticket_days_before_event = 0
         config.ticket_requires_login = False
         config.ticket_requires_payment = False
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
 
         self.assertFalse(should_show_onboarding_ticket(upcoming_event=event))
 
         config.ticket_enabled = True
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
         self.assertTrue(should_show_onboarding_ticket(upcoming_event=event))
 
     def test_general_configuration_days_before_event(self):
@@ -158,7 +161,8 @@ class ConfigurationModelTests(TestCase):
 
         config = GeneralConfiguration.load()
         config.ticket_days_before_event = 1  # Nur 1 Tag vor Event
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
 
         # Event startet in 2 Tagen und 17 Stunden (65 Stunden)
         future_event = Event(
@@ -194,7 +198,8 @@ class ConfigurationModelTests(TestCase):
         config.ticket_days_before_event = 0
         config.ticket_requires_login = True
         config.ticket_requires_payment = False
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
 
         # 1. Anonymer User darf das Ticket nicht sehen
         self.assertFalse(should_show_onboarding_ticket(user=None, upcoming_event=event))
@@ -235,7 +240,8 @@ class ConfigurationModelTests(TestCase):
         config.ticket_days_before_event = 0
         config.ticket_requires_login = False
         config.ticket_requires_payment = True
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
 
         # 1. Anonym -> False
         self.assertFalse(should_show_onboarding_ticket(user=None, upcoming_event=event))
@@ -346,7 +352,8 @@ class ConfigurationModelTests(TestCase):
         custom = SiteCustomization.load()
         custom.impressum_content = '<p>Test Impressum Content</p>'
         custom.datenschutz_content = '<p>Test Datenschutz Content</p>'
-        custom.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            custom.save()
 
         resp_imp = self.client.get(reverse('impressum'))
         self.assertEqual(resp_imp.status_code, 200)
@@ -362,7 +369,8 @@ class ConfigurationModelTests(TestCase):
 
         custom = SiteCustomization.load()
         custom.datenschutz_content = DEFAULT_DATENSCHUTZ_CONTENT
-        custom.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            custom.save()
 
         resp = self.client.get(reverse('datenschutz'))
         self.assertEqual(resp.status_code, 200)
@@ -397,12 +405,14 @@ class ConfigurationModelTests(TestCase):
         
         # Test MODE WORN: Ticket soll angezeigt werden
         config.expired_ticket_mode = GeneralConfiguration.ExpiredTicketMode.WORN
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
         self.assertTrue(should_show_onboarding_ticket(upcoming_event=past_event))
 
         # Test MODE HIDE: Ticket soll verborgen werden
         config.expired_ticket_mode = GeneralConfiguration.ExpiredTicketMode.HIDE
-        config.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            config.save()
         self.assertFalse(should_show_onboarding_ticket(upcoming_event=past_event))
 
     def test_event_capacity_stats_smart_caching_and_invalidation(self):
@@ -471,7 +481,8 @@ class ConfigurationModelTests(TestCase):
 
         conf = GeneralConfiguration.load()
         conf.debug_mode = False
-        conf.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            conf.save()
 
         rf = RequestFactory()
         request = rf.get('/some-error-endpoint/')
@@ -493,7 +504,8 @@ class ConfigurationModelTests(TestCase):
 
         # 2. In Produktion (settings.DEBUG=False): selbst bei debug_mode=True und Staff-User -> KEIN Leak (liefert None)
         conf.debug_mode = True
-        conf.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            conf.save()
         with override_settings(DEBUG=False):
             request.user = staff_user
             try:
@@ -502,22 +514,24 @@ class ConfigurationModelTests(TestCase):
                 res_prod = middleware.process_exception(request, e)
                 self.assertIsNone(res_prod)
 
-        # 3. Unter DEBUG=True, aber ANONYMEM User: Schutz vor Information Leakage (liefert None)
+        # 3. Unter DEBUG=True, aber ANONYMEM User: Schutz vor Information Leakage (liefert neutrale 500-Response)
         with override_settings(DEBUG=True):
             request.user = AnonymousUser()
             try:
                 raising_view(request)
             except Exception as e:
                 res_anon = middleware.process_exception(request, e)
-                self.assertIsNone(res_anon)
+                self.assertIsNotNone(res_anon)
+                self.assertEqual(res_anon.status_code, 500)
 
-            # 4. Unter DEBUG=True, aber NORMALEM User: Schutz vor Information Leakage (liefert None)
+            # 4. Unter DEBUG=True, aber NORMALEM User: Schutz vor Information Leakage (liefert neutrale 500-Response)
             request.user = regular_user
             try:
                 raising_view(request)
             except Exception as e:
                 res_user = middleware.process_exception(request, e)
-                self.assertIsNone(res_user)
+                self.assertIsNotNone(res_user)
+                self.assertEqual(res_user.status_code, 500)
 
             # 5. Unter DEBUG=True UND debug_mode=True UND STAFF-User: liefert technische Debug-Response
             request.user = staff_user
@@ -687,12 +701,14 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(t_fallback.render(Context({})), 'Mein Fallback')
 
         # 2. DB-Override über SystemTranslation
-        SystemTranslation.objects.update_or_create(key='test_override_key', defaults={'text': 'INDIVIDUELLE RESERVIERUNG'})
+        with self.captureOnCommitCallbacks(execute=True):
+            SystemTranslation.objects.update_or_create(key='test_override_key', defaults={'text': 'INDIVIDUELLE RESERVIERUNG'})
         t_override = Template('{% t "test_override_key" %}')
         self.assertEqual(t_override.render(Context({})), 'INDIVIDUELLE RESERVIERUNG')
 
         # 3. Default-Text aus DEFAULT_TEXTS (wenn kein DB Eintrag vorhanden)
-        SystemTranslation.objects.filter(key='seat_card_title').delete()
+        with self.captureOnCommitCallbacks(execute=True):
+            SystemTranslation.objects.filter(key='seat_card_title').delete()
         t_default = Template('{% t "seat_card_title" %}')
         self.assertEqual(t_default.render(Context({})), 'SITZPLATZBUCHUNG')
 
@@ -1046,6 +1062,310 @@ class RequestLevelTranslationCacheTests(TestCase):
             self.assertEqual(cache_get_count, 1)
         finally:
             clear_request_cache()
+
+
+class ConfigurationFeedbackHardeningTests(TestCase):
+    """
+    Tests zur Verifikation aller 7 Audit-Punkte und strukturellen Verbesserungen:
+    - P1: Demo-Reset Berechtigung nur für Superuser
+    - P2: Sichere HTML-Bereinigung gegen Entity-Decoding-Bypasses und Idempotenz
+    - P3: DynamicDebugMiddleware schützt anonyme & normale Besucher bei DEBUG=True vor Traceback-Leaks
+    - P4: Cache-Konsistenz bei Rollback und Bulk-Löschung via Signals & on_commit
+    - P5: reset_demo_data Transaktionssicherheit & Fehlerbehandlung
+    - P6: seed_features überschreibt keine angepassten Menüpunkte und verhindert Duplikate
+    - P7: delete_resolved_logs im Admin löscht nur die übergebene Queryset-Auswahl
+    - S2: SiteCustomization.load() ist read-only (keine DB-Writes bei Aufruf)
+    - S3: Hex-Farbvalidierung lehnt fehlerhafte Werte ab
+    """
+
+    def tearDown(self):
+        from django.core.cache import cache
+        from configuration.translations import clear_request_cache
+        cache.clear()
+        clear_request_cache()
+        super().tearDown()
+
+    def test_p1_demo_reset_forbidden_for_non_superuser_staff(self):
+        """P1: Ein aktiver Mitarbeiter ohne Superuser-Status erhält beim Demo-Reset HTTP 403."""
+        from django.contrib.auth import get_user_model
+        from unittest.mock import patch
+
+        User = get_user_model()
+        staff_user = User.objects.create_user(
+            username="staff_only",
+            email="staff@example.com",
+            password="password",
+            is_staff=True,
+            is_superuser=False,
+        )
+        superuser = User.objects.create_superuser(
+            username="admin_super",
+            email="super@example.com",
+            password="password",
+        )
+
+        reset_url = reverse('admin:reset_demo_data_admin')
+
+        # 1. Mitarbeiter ohne Superuser-Status: HTTP 403 Forbidden
+        self.client.login(username="staff_only", password="password")
+        resp_staff = self.client.post(reset_url)
+        self.assertEqual(resp_staff.status_code, 403)
+
+        # 2. Superuser darf den Reset ausführen
+        self.client.login(username="admin_super", password="password")
+        with patch('configuration.admin.call_command') as mock_cmd:
+            resp_super = self.client.post(reset_url)
+            self.assertEqual(resp_super.status_code, 302)
+            mock_cmd.assert_called_once_with('reset_demo_data')
+
+    def test_p2_html_sanitizer_entity_decoding_and_idempotence(self):
+        """P2: HTMLSanitizer verhindert Entity-Decoding-Bypasses und arbeitet idempotent."""
+        from configuration.sanitizer import sanitize_html
+
+        # 1. Entity-Decoding-Bypass Test: &lt;img ...&gt; darf NICHT in echtes <img> gewandelt werden
+        xss_payload = '&lt;img src=x onerror=alert(1)&gt;'
+        sanitized = sanitize_html(xss_payload)
+        self.assertNotIn('<img', sanitized)
+        self.assertIn('&lt;img', sanitized)
+
+        # 2. Idempotenz: Mehrfaches Bereinigen verändert den String nicht erneut
+        complex_html = (
+            '<h3>Überschrift</h3>\n'
+            '<p>Ein Absatz mit <strong>fettem Text</strong>, <em>kursivem Text</em> '
+            'und einem <a href="https://example.com" target="_blank" rel="noopener">sicheren Link</a>.</p>'
+        )
+        first_pass = sanitize_html(complex_html)
+        second_pass = sanitize_html(first_pass)
+        self.assertEqual(first_pass, second_pass)
+
+        # 3. Gefährliche URL-Schemata werden auf '#' neutralisiert
+        bad_links = (
+            '<a href="javascript:alert(document.cookie)">JS</a>'
+            '<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">Data</a>'
+            '<a href="vbscript:msgbox(1)">VBS</a>'
+        )
+        sanitized_links = sanitize_html(bad_links)
+        self.assertNotIn('javascript:', sanitized_links)
+        self.assertNotIn('data:', sanitized_links)
+        self.assertNotIn('vbscript:', sanitized_links)
+        self.assertIn('href="#"', sanitized_links)
+
+    def test_p3_dynamic_debug_middleware_prevents_leaks_on_debug_true(self):
+        """P3: Bei DEBUG=True rendert die Middleware für Nicht-Staff neutrale 500-Seiten ohne Traceback-Leaks."""
+        from django.test import RequestFactory, override_settings
+        from django.contrib.auth.models import AnonymousUser
+        from django.contrib.auth import get_user_model
+        from configuration.middleware import DynamicDebugMiddleware
+        from configuration.models import GeneralConfiguration
+
+        User = get_user_model()
+        staff_user = User.objects.create_user(username="dbg_staff", password="password", is_staff=True)
+        regular_user = User.objects.create_user(username="dbg_regular", password="password")
+
+        secret_marker = "SUPER_SECRET_INTERNAL_KEY_98765"
+
+        def leaking_view(request):
+            raise RuntimeError(f"Database crash with secret {secret_marker}")
+
+        middleware = DynamicDebugMiddleware(leaking_view)
+        rf = RequestFactory()
+        request = rf.get('/critical-operation/')
+
+        conf = GeneralConfiguration.load()
+        conf.debug_mode = True
+        with self.captureOnCommitCallbacks(execute=True):
+            conf.save()
+
+        with override_settings(DEBUG=True):
+            # Anonymer Besucher: Neutrale 500-Seite ohne Secrets
+            request.user = AnonymousUser()
+            try:
+                leaking_view(request)
+            except Exception as e:
+                resp_anon = middleware.process_exception(request, e)
+                self.assertIsNotNone(resp_anon)
+                self.assertEqual(resp_anon.status_code, 500)
+                self.assertNotIn(secret_marker.encode(), resp_anon.content)
+
+            # Normaler Benutzer: Neutrale 500-Seite ohne Secrets
+            request.user = regular_user
+            try:
+                leaking_view(request)
+            except Exception as e:
+                resp_reg = middleware.process_exception(request, e)
+                self.assertIsNotNone(resp_reg)
+                self.assertEqual(resp_reg.status_code, 500)
+                self.assertNotIn(secret_marker.encode(), resp_reg.content)
+
+            # Staff-Benutzer mit aktiviertem debug_mode: Technische Debug-Ausgabe mit Traceback
+            request.user = staff_user
+            try:
+                leaking_view(request)
+            except Exception as e:
+                resp_staff = middleware.process_exception(request, e)
+                self.assertIsNotNone(resp_staff)
+                self.assertEqual(resp_staff.status_code, 500)
+                self.assertIn(secret_marker.encode(), resp_staff.content)
+
+    def test_p4_cache_rollback_and_bulk_delete_invalidation(self):
+        """P4: Cache-Invalidierung feuert erst nach Commit und Bulk-Löschungen invalidieren zuverlässig."""
+        from django.db import transaction
+        from configuration.models import SystemTranslation, NavigationItem
+        from configuration.translations import get_translation
+
+        # 1. Rollback-Test: Transaktionsabbruch darf keine unbestätigten Daten im Cache hinterlassen
+        try:
+            with transaction.atomic():
+                SystemTranslation.objects.create(key='test_rollback_key', text='Uncommitted Text')
+                # Vor Commit wird ein Rollback provoziert
+                raise ValueError("Simulation eines DB-Fehlers")
+        except ValueError:
+            pass
+
+        # Der unbestätigte Text darf weder in der DB noch im Translation-Cache existieren
+        self.assertFalse(SystemTranslation.objects.filter(key='test_rollback_key').exists())
+        self.assertEqual(get_translation('test_rollback_key', default='Default Value'), 'Default Value')
+
+        # 2. Bulk-Delete Test: Queryset.delete() invalidiert den Cache über Signals
+        with self.captureOnCommitCallbacks(execute=True):
+            SystemTranslation.objects.create(key='bulk_target_key', text='Vorheriger Wert')
+
+        # Cache befüllen
+        self.assertEqual(get_translation('bulk_target_key'), 'Vorheriger Wert')
+
+        # Massenlöschung durchführen
+        with self.captureOnCommitCallbacks(execute=True):
+            SystemTranslation.objects.filter(key='bulk_target_key').delete()
+
+        # Cache muss geleert sein -> Liefert Default-Wert
+        self.assertEqual(get_translation('bulk_target_key', default='Bereinigt'), 'Bereinigt')
+
+    def test_p5_demo_reset_command_failure_handling(self):
+        """P5: Fehler beim Demo-Reset werfen CommandError und Admin meldet Fehler statt Scheinerfolg."""
+        from io import StringIO
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+        from unittest.mock import patch
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        superuser = User.objects.create_superuser(
+            username="admin_p5",
+            email="p5@example.com",
+            password="password",
+        )
+
+        # 1. Command wirft CommandError bei Fixture-Fehlern
+        with patch('configuration.management.commands.reset_demo_data.call_command', side_effect=Exception("Fixture fehlt")):
+            with self.assertRaises(CommandError) as ctx:
+                call_command('reset_demo_data', stdout=StringIO())
+            self.assertIn("Demo-Reset fehlgeschlagen", str(ctx.exception))
+
+        # 2. Admin-Endpunkt fängt den Fehler ab und sendet messages.error
+        self.client.login(username="admin_p5", password="password")
+        with patch('configuration.admin.call_command', side_effect=Exception("DB-Verbindung unterbrochen")):
+            resp = self.client.post(reverse('admin:reset_demo_data_admin'), follow=True)
+            self.assertEqual(resp.status_code, 200)
+            messages_list = [str(m) for m in resp.context['messages']]
+            self.assertTrue(any("Fehler beim Zurücksetzen der Demo-Daten" in m for m in messages_list))
+
+    def test_p6_seed_features_preserves_customizations_without_reset(self):
+        """P6: seed_features behält benutzerdefinierte Titel, Reihenfolgen und Status bei, wenn kein --reset übergeben wird."""
+        from io import StringIO
+        from django.core.management import call_command
+        from configuration.models import NavigationItem
+
+        # Initiales Seeding
+        call_command('seed_features', stdout=StringIO())
+
+        # Administrator passt Menüpunkt an (z. B. Turniere)
+        item = NavigationItem.objects.get(url_name='tournament_list')
+        item.title = 'LAN Meisterschaften 2026'
+        item.order = 99
+        item.is_active = False
+        with self.captureOnCommitCallbacks(execute=True):
+            item.save()
+
+        # Erneuter Lauf von seed_features ohne --reset
+        call_command('seed_features', stdout=StringIO())
+
+        # Anpassungen dürfen nicht überschrieben worden sein
+        item.refresh_from_db()
+        self.assertEqual(item.title, 'LAN Meisterschaften 2026')
+        self.assertEqual(item.order, 99)
+        self.assertFalse(item.is_active)
+        # Es darf kein Duplikat mit dem alten Namen angelegt worden sein
+        self.assertEqual(NavigationItem.objects.filter(url_name='tournament_list').count(), 1)
+
+        # Lauf mit --reset setzt auf Standardwerte zurück
+        call_command('seed_features', reset=True, stdout=StringIO())
+        item.refresh_from_db()
+        self.assertEqual(item.title, 'Turniere')
+        self.assertEqual(item.order, 2)
+        self.assertTrue(item.is_active)
+
+    def test_p7_delete_resolved_logs_admin_action_scope(self):
+        """P7: delete_resolved_logs löscht nur die im Admin ausgewählten gelösten Logs."""
+        from configuration.models import SystemErrorLog
+        from configuration.admin import SystemErrorLogAdmin
+        from django.contrib.admin.sites import AdminSite
+        from unittest.mock import Mock
+
+        log1 = SystemErrorLog.objects.create(path="/test1", exception_type="Error", error_message="msg1", resolved=True)
+        log2 = SystemErrorLog.objects.create(path="/test2", exception_type="Error", error_message="msg2", resolved=True)
+        log3 = SystemErrorLog.objects.create(path="/test3", exception_type="Error", error_message="msg3", resolved=False)
+
+        admin = SystemErrorLogAdmin(SystemErrorLog, AdminSite())
+        request = Mock()
+
+        # Nur log1 zur Löschung übergeben
+        queryset = SystemErrorLog.objects.filter(id=log1.id)
+        admin.delete_resolved_logs(request, queryset)
+
+        # log1 ist gelöscht
+        self.assertFalse(SystemErrorLog.objects.filter(id=log1.id).exists())
+        # log2 (obwohl resolved) darf NICHT gelöscht worden sein!
+        self.assertTrue(SystemErrorLog.objects.filter(id=log2.id).exists())
+        # log3 (unresolved) darf NICHT gelöscht worden sein
+        self.assertTrue(SystemErrorLog.objects.filter(id=log3.id).exists())
+
+    def test_s2_site_customization_load_is_read_only(self):
+        """S2: SiteCustomization.load() führt keine schreibenden DB-Operationen aus."""
+        from configuration.models import SiteCustomization
+
+        SiteCustomization.objects.all().delete()
+        self.assertEqual(SiteCustomization.objects.count(), 0)
+
+        # Erster Aufruf ohne DB-Datensatz: Liefert In-Memory-Default ohne DB-Speicherung
+        custom = SiteCustomization.load()
+        self.assertIsNotNone(custom)
+        self.assertEqual(SiteCustomization.objects.count(), 0)
+
+        # Nach regulärem Speichern: load() lädt das Objekt unverändert
+        with self.captureOnCommitCallbacks(execute=True):
+            SiteCustomization.objects.create(primary_color="#123456")
+        self.assertEqual(SiteCustomization.objects.count(), 1)
+        loaded = SiteCustomization.load()
+        self.assertEqual(loaded.primary_color, "#123456")
+        self.assertEqual(SiteCustomization.objects.count(), 1)
+
+    def test_s3_validate_hex_color(self):
+        """S3: validate_hex_color akzeptiert valide Hex-Codes und weist ungültige Strings ab."""
+        from configuration.validators import validate_hex_color
+        from django.core.exceptions import ValidationError
+
+        valid_colors = ['#fff', '#FFF', '#123456', '#a1b2c3', '#00000000', '#ffffffff']
+        for color in valid_colors:
+            try:
+                validate_hex_color(color)
+            except ValidationError:
+                self.fail(f"Gültige Farbe '{color}' wurde fälschlicherweise abgelehnt.")
+
+        invalid_colors = ['red', '123456', '#12', '#1234', '#12345', '#1234567', '#gggggg', 'rgba(0,0,0,1)']
+        for color in invalid_colors:
+            with self.assertRaises(ValidationError, msg=f"Ungültige Farbe '{color}' wurde nicht abgewiesen"):
+                validate_hex_color(color)
+
 
 
 

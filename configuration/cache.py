@@ -45,6 +45,7 @@ def safe_cache_get_or_set(key, default_callable, timeout=None):
     # Wert aus Callback (z. B. Datenbankabfrage) ermitteln
     computed = default_callable() if callable(default_callable) else default_callable
 
+
     try:
         cache.set(key, computed, timeout)
     except Exception as e:
@@ -87,8 +88,14 @@ def invalidate_site_customization_cache():
 
 
 def invalidate_system_translations_cache():
-    """Invalidiert den Cache für System-Übersetzungen."""
-    transaction.on_commit(lambda: safe_cache_delete('system_translations'))
+    """Invalidiert den Cache für System-Übersetzungen und leert den Request-Cache."""
+    def _do_invalidate():
+        safe_cache_delete('system_translations')
+        try:
+            clear_request_cache()
+        except Exception:
+            pass
+    transaction.on_commit(_do_invalidate)
 
 
 def invalidate_feature_flags_cache():

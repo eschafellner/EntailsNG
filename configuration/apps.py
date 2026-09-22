@@ -1,5 +1,8 @@
+import logging
 from django.apps import AppConfig
 from django.db.models.signals import post_migrate
+
+logger = logging.getLogger(__name__)
 
 
 def seed_default_system_translations(sender, **kwargs):
@@ -11,8 +14,8 @@ def seed_default_system_translations(sender, **kwargs):
             SystemTranslation.objects.get_or_create(
                 key=key, defaults={'text': text}
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("Failed to seed default system translations: %s", e, exc_info=True)
 
 
 class ConfigurationConfig(AppConfig):

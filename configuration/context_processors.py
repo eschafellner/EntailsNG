@@ -1,4 +1,3 @@
-from django.core.cache import cache
 from django.utils.functional import SimpleLazyObject
 
 from configuration.cache import safe_cache_get_or_set
@@ -16,7 +15,6 @@ from .translations import (
     get_translation,
 )
 
-FEATURE_FLAGS_CACHE_KEY = 'feature_flags_dict'
 NAV_CACHE_KEY = 'navigation_items'
 CACHE_SECONDS = 300
 

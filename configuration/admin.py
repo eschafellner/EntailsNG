@@ -1,8 +1,12 @@
+import logging
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import NavigationItem, SystemTranslation, SystemErrorLog
+
+logger = logging.getLogger(__name__)
 
 
 @admin.register(SystemTranslation)
@@ -195,9 +199,15 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def reset_demo_data_view(self, request):
+        if not request.user.is_superuser:
+            raise PermissionDenied("Nur Superuser dürfen die Demo-Daten zurücksetzen.")
         if request.method == 'POST':
-            call_command('reset_demo_data')
-            messages.success(request, '🎉 Demo-Daten und System-Einstellungen wurden erfolgreich zurückgesetzt!')
+            try:
+                call_command('reset_demo_data')
+                messages.success(request, '🎉 Demo-Daten und System-Einstellungen wurden erfolgreich zurückgesetzt!')
+            except Exception as e:
+                logger.error("Fehler beim Zurücksetzen der Demo-Daten: %s", e, exc_info=True)
+                messages.error(request, f"Fehler beim Zurücksetzen der Demo-Daten: {e}")
             return redirect('/admin/configuration/sitecustomization/1/change/')
         return render(request, 'admin/reset_demo_data_confirm.html')
 
@@ -313,10 +323,13 @@ class SystemErrorLogAdmin(admin.ModelAdmin):
         count = queryset.update(resolved=False, resolved_at=None)
         self.message_user(request, f"{count} Fehlerprotokoll(e) wieder auf offen gesetzt.")
 
-    @admin.action(description="Alle behobenen Fehlerprotokolle unwiderruflich löschen")
+    @admin.action(
+        description="Ausgewählte behobene Fehlerprotokolle unwiderruflich löschen",
+        permissions=['delete'],
+    )
     def delete_resolved_logs(self, request, queryset):
-        deleted, _ = SystemErrorLog.objects.filter(resolved=True).delete()
-        self.message_user(request, f"{deleted} behobene(s) Fehlerprotokoll(e) erfolgreich gelöscht.")
+        deleted, _ = queryset.filter(resolved=True).delete()
+        self.message_user(request, f"{deleted} ausgewählte behobene(s) Fehlerprotokoll(e) erfolgreich gelöscht.")
 
 
 

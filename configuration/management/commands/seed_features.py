@@ -119,34 +119,50 @@ DEFAULT_NAV_ITEMS = [
 
 
 class Command(BaseCommand):
-    help = 'Erstellt/Aktualisiert die Hauptnavigation mit SVG-Icons.'
+    help = 'Erstellt fehlende Hauptnavigationspunkte mit Standard-SVG-Icons. Mit --reset können bestehende Punkte auf Standardwerte zurückgesetzt werden.'
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--reset',
+            action='store_true',
+            help='Setzt auch bereits vorhandene Menüpunkte auf Standardwerte (Titel, Reihenfolge, aktiv) zurück.',
+        )
 
     def handle(self, *args, **options):
+        reset_mode = options.get('reset', False)
+
         for nav_data in DEFAULT_NAV_ITEMS:
+            # Zuordnung über den stabilen technischen Schlüssel (url_name)
             item, created = NavigationItem.objects.get_or_create(
-                title=nav_data['title'],
+                url_name=nav_data['url_name'],
                 defaults={
-                    'url_name': nav_data['url_name'],
+                    'title': nav_data['title'],
                     'icon_name': nav_data.get('icon_name', 'dashboard'),
                     'order': nav_data['order'],
                     'icon_svg': nav_data['icon_svg'],
                     'is_active': True,
                 },
             )
-            if not created:
-                item.url_name = nav_data['url_name']
+            if not created and reset_mode:
+                item.title = nav_data['title']
                 item.icon_name = nav_data.get('icon_name', 'dashboard')
                 item.icon_svg = nav_data['icon_svg']
                 item.order = nav_data['order']
                 item.is_active = True
                 item.save()
+            elif not created:
+                # Im normalen Lauf nur fehlende Icons/SVGs nachrüsten, falls leer, aber keine Nutzereinstellungen überschreiben
+                if not item.icon_svg:
+                    item.icon_svg = nav_data['icon_svg']
+                    item.save(update_fields=['icon_svg'])
 
-        # Auch veraltete NavigationItems mit alten URL-Namen bereinigen, falls vorhanden
+        # Veraltete NavigationItems mit alten URL-Namen bereinigen, falls vorhanden
         NavigationItem.objects.filter(url_name='seating').update(url_name='seating_plan')
         NavigationItem.objects.filter(url_name='info').update(url_name='event_info_detail')
         NavigationItem.objects.filter(url_name='news').update(url_name='news_list')
 
-        from configuration.models import safe_cache_delete
-        safe_cache_delete('navigation_items')
+        from configuration.cache import invalidate_navigation_cache
+        invalidate_navigation_cache()
 
         self.stdout.write(self.style.SUCCESS('Menüpunkte und Icons erfolgreich eingerichtet.'))
+
