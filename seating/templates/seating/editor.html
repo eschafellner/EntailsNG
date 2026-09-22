@@ -133,10 +133,13 @@
         btn.classList.add('active');
     }
 
-    function openLabelModal(initialText, callback) {
+    function openLabelModal(initialText, callback, title = "Beschriftung bearbeiten", placeholder = "z. B. Bühne, Bar, Notausgang...") {
         isPromptOpen = true;
         const modal = document.getElementById('label-modal');
         const input = document.getElementById('label-modal-input');
+        const heading = modal.querySelector('h3');
+        if (heading) heading.innerText = title;
+        input.placeholder = placeholder;
         const btnSave = document.getElementById('label-modal-save');
         const btnCancel = document.getElementById('label-modal-cancel');
 
@@ -206,9 +209,19 @@
 
         // 1. GESPERRT-Werkzeug (BLOCKED)
         if (currentTool === 'BLOCKED') {
+            const wasBlocked = item.cell_type === 'SEAT' && item.reservation_status === 'BLOCKED';
             item.cell_type = 'SEAT';
             item.reservation_status = 'BLOCKED';
-            if (!item.seat_label) item.seat_label = `R${y}-P${x}`;
+            if (!item.seat_label) {
+                item.seat_label = `R${y}-P${x}`;
+            } else if (wasBlocked && isDirectClick) {
+                isMouseDown = false;
+                openLabelModal(item.seat_label, (newLabel) => {
+                    item.seat_label = newLabel;
+                    el.innerText = newLabel;
+                }, "Gesperrter Sitzplatz: Bezeichnung bearbeiten", "z. B. R1-P1 oder VIP-1...");
+                return;
+            }
             el.className = `cell BLOCKED`;
             el.innerText = item.seat_label;
             return;
@@ -221,29 +234,72 @@
             openLabelModal(item.text_label || "Bühne", (txt) => {
                 item.cell_type = 'LABEL';
                 item.text_label = txt;
+                item.seat_label = '';
                 item.reservation_status = 'FREE';
                 el.className = `cell LABEL`;
                 el.innerText = txt;
-            });
+            }, "Beschriftung bearbeiten", "z. B. Bühne, Bar, Notausgang...");
             return;
         }
 
-        // 3. Normale Werkzeuge (Sitzplatz, Wand, Tür, Löschen)
-        item.cell_type = currentTool;
-        item.reservation_status = 'FREE'; // Zurücksetzen falls vorher gesperrt war
-
-        if (currentTool === 'SEAT') {
-            if (!item.seat_label) item.seat_label = `R${y}-P${x}`;
+        // 3. Löschen / Leeren (EMPTY)
+        if (currentTool === 'EMPTY') {
+            item.cell_type = 'EMPTY';
+            item.seat_label = '';
+            item.text_label = '';
+            item.reservation_status = 'FREE';
+            el.className = 'cell EMPTY';
+            el.innerText = '';
+            return;
         }
 
-        el.className = `cell ${currentTool}`;
-        if (currentTool === 'SEAT') el.innerText = item.seat_label;
-        if (currentTool === 'LABEL') el.innerText = item.text_label || 'T';
-        if (currentTool === 'EMPTY' || currentTool === 'WALL' || currentTool === 'DOOR') el.innerText = '';
+        // 4. Wand & Tür (WALL, DOOR)
+        if (currentTool === 'WALL' || currentTool === 'DOOR') {
+            item.cell_type = currentTool;
+            item.seat_label = '';
+            item.text_label = '';
+            item.reservation_status = 'FREE';
+            el.className = `cell ${currentTool}`;
+            el.innerText = '';
+            return;
+        }
+
+        // 5. Sitzplatz (SEAT)
+        if (currentTool === 'SEAT') {
+            const wasSeat = item.cell_type === 'SEAT' && item.reservation_status !== 'BLOCKED';
+            item.cell_type = 'SEAT';
+            item.reservation_status = 'FREE';
+            if (!item.seat_label) {
+                item.seat_label = `R${y}-P${x}`;
+            } else if (wasSeat && isDirectClick) {
+                isMouseDown = false;
+                openLabelModal(item.seat_label, (newLabel) => {
+                    item.seat_label = newLabel;
+                    el.innerText = newLabel;
+                }, "Sitzplatz-Bezeichnung bearbeiten", "z. B. R1-P1 oder VIP-1...");
+                return;
+            }
+            el.className = 'cell SEAT';
+            el.innerText = item.seat_label;
+            return;
+        }
     }
 
     function savePlan() {
         const cellsArray = Object.values(gridData).filter(c => c.cell_type !== 'EMPTY');
+
+        // Client-seitige Prüfung auf doppelte Sitzplatzbezeichnungen
+        const seenLabels = new Map();
+        for (const c of cellsArray) {
+            if (c.cell_type === 'SEAT' && c.seat_label) {
+                if (seenLabels.has(c.seat_label)) {
+                    const prev = seenLabels.get(c.seat_label);
+                    showToast(`Doppelte Sitzplatzbezeichnung "${c.seat_label}" an (${c.x},${c.y}) und (${prev.x},${prev.y})!`, 'error');
+                    return;
+                }
+                seenLabels.set(c.seat_label, { x: c.x, y: c.y });
+            }
+        }
 
         fetch(`/seating/editor/${planId}/save/`, {
             method: 'POST',

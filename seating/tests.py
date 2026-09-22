@@ -1655,6 +1655,65 @@ class SeatingFeedbackRegressionTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('gesperrt', response.json()['message'])
 
+    def test_initial_data_fixture_seating_cells_unique_labels(self):
+        """Stellt sicher, dass die Demodaten-Fixture (initial_data.json) keine doppelten Sitzplatzbezeichnungen enthält."""
+        import os
+        from django.conf import settings
+
+        fixture_path = os.path.join(settings.BASE_DIR, 'initial_data.json')
+        if not os.path.exists(fixture_path):
+            self.skipTest('initial_data.json nicht vorhanden.')
+
+        with open(fixture_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        plan_seats = {}
+        for entry in data:
+            if entry.get('model') == 'seating.seatingcell':
+                fields = entry.get('fields', {})
+                plan_id = fields.get('plan')
+                cell_type = fields.get('cell_type')
+                seat_label = fields.get('seat_label', '').strip()
+                if cell_type == SeatingCell.CellType.SEAT and seat_label:
+                    plan_seats.setdefault(plan_id, []).append(seat_label)
+
+        for plan_id, labels in plan_seats.items():
+            duplicates = [lbl for lbl in set(labels) if labels.count(lbl) > 1]
+            self.assertEqual(
+                duplicates,
+                [],
+                f"Sitzplan {plan_id} in initial_data.json enthält doppelte Sitzplatzbezeichnungen: {duplicates}",
+            )
+
+    def test_cleanup_duplicate_seats_command(self):
+        """Testet den Management-Befehl cleanup_duplicate_seats inkl. --dry-run."""
+        from django.core.management import call_command
+        import io
+
+        # 2 Zellen mit identischem seat_label 'P2' anlegen
+        c1 = SeatingCell.objects.create(
+            plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.SEAT, seat_label='P2'
+        )
+        c2 = SeatingCell.objects.create(
+            plan=self.plan, x=5, y=5, cell_type=SeatingCell.CellType.SEAT, seat_label='P2'
+        )
+
+        # 1. Dry Run ausführen -> keine DB-Änderung
+        out_dry = io.StringIO()
+        call_command('cleanup_duplicate_seats', '--dry-run', stdout=out_dry)
+        c2.refresh_from_db()
+        self.assertEqual(c2.seat_label, 'P2')
+        self.assertIn('DRY-RUN', out_dry.getvalue())
+
+        # 2. Reale Bereinigung ausführen -> c2 erhält R5-P5
+        out_real = io.StringIO()
+        call_command('cleanup_duplicate_seats', stdout=out_real)
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        self.assertEqual(c1.seat_label, 'P2')
+        self.assertEqual(c2.seat_label, 'R5-P5')
+        self.assertIn('Bereinigung abgeschlossen', out_real.getvalue())
+
 
 
 

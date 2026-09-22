@@ -545,7 +545,7 @@
       "title": "Haag-networX 2027",
       "slug": "haag-networx-2027",
       "is_active": false,
-      "description": "Lan für 2026",
+      "description": "Lan f\u00fcr 2026",
       "location": "",
       "start_date": "2026-08-03T06:00:00Z",
       "end_date": "2026-08-05T06:00:00Z",
@@ -948,8 +948,8 @@
       "plan": 2,
       "x": 2,
       "y": 4,
-      "cell_type": "SEAT",
-      "seat_label": "Reihe 1",
+      "cell_type": "LABEL",
+      "seat_label": "",
       "text_label": "Reihe 1",
       "registration": null,
       "reservation_status": "FREE"
@@ -1216,7 +1216,7 @@
       "y": 1,
       "cell_type": "LABEL",
       "seat_label": "",
-      "text_label": "Bühne",
+      "text_label": "B\u00fchne",
       "registration": null,
       "reservation_status": "FREE"
     }
@@ -4112,8 +4112,8 @@
       "plan": 3,
       "x": 2,
       "y": 4,
-      "cell_type": "SEAT",
-      "seat_label": "Reihe 1",
+      "cell_type": "LABEL",
+      "seat_label": "",
       "text_label": "Reihe 1",
       "registration": null,
       "reservation_status": "FREE"
@@ -4380,7 +4380,7 @@
       "y": 1,
       "cell_type": "LABEL",
       "seat_label": "",
-      "text_label": "Bühne",
+      "text_label": "B\u00fchne",
       "registration": null,
       "reservation_status": "FREE"
     }
@@ -4562,7 +4562,7 @@
       "y": 3,
       "cell_type": "LABEL",
       "seat_label": "",
-      "text_label": "Bühne",
+      "text_label": "B\u00fchne",
       "registration": null,
       "reservation_status": "FREE"
     }
@@ -7291,7 +7291,7 @@
       "x": 12,
       "y": 9,
       "cell_type": "SEAT",
-      "seat_label": "P1",
+      "seat_label": "P61",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7305,7 +7305,7 @@
       "x": 13,
       "y": 9,
       "cell_type": "SEAT",
-      "seat_label": "P16",
+      "seat_label": "P76",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7319,7 +7319,7 @@
       "x": 12,
       "y": 10,
       "cell_type": "SEAT",
-      "seat_label": "P2",
+      "seat_label": "P62",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7333,7 +7333,7 @@
       "x": 13,
       "y": 10,
       "cell_type": "SEAT",
-      "seat_label": "P17",
+      "seat_label": "P77",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7347,7 +7347,7 @@
       "x": 12,
       "y": 11,
       "cell_type": "SEAT",
-      "seat_label": "P3",
+      "seat_label": "P63",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7361,7 +7361,7 @@
       "x": 13,
       "y": 11,
       "cell_type": "SEAT",
-      "seat_label": "P18",
+      "seat_label": "P78",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7375,7 +7375,7 @@
       "x": 12,
       "y": 12,
       "cell_type": "SEAT",
-      "seat_label": "P4",
+      "seat_label": "P64",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7389,7 +7389,7 @@
       "x": 13,
       "y": 12,
       "cell_type": "SEAT",
-      "seat_label": "P19",
+      "seat_label": "P79",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7403,7 +7403,7 @@
       "x": 12,
       "y": 13,
       "cell_type": "SEAT",
-      "seat_label": "P5",
+      "seat_label": "P65",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7417,7 +7417,7 @@
       "x": 13,
       "y": 13,
       "cell_type": "SEAT",
-      "seat_label": "P20",
+      "seat_label": "P80",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7431,7 +7431,7 @@
       "x": 12,
       "y": 14,
       "cell_type": "SEAT",
-      "seat_label": "P6",
+      "seat_label": "P66",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7445,7 +7445,7 @@
       "x": 13,
       "y": 14,
       "cell_type": "SEAT",
-      "seat_label": "P21",
+      "seat_label": "P81",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7459,7 +7459,7 @@
       "x": 12,
       "y": 15,
       "cell_type": "SEAT",
-      "seat_label": "P7",
+      "seat_label": "P67",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7473,7 +7473,7 @@
       "x": 13,
       "y": 15,
       "cell_type": "SEAT",
-      "seat_label": "P22",
+      "seat_label": "P82",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7487,7 +7487,7 @@
       "x": 12,
       "y": 16,
       "cell_type": "SEAT",
-      "seat_label": "P8",
+      "seat_label": "P68",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7501,7 +7501,7 @@
       "x": 13,
       "y": 16,
       "cell_type": "SEAT",
-      "seat_label": "P23",
+      "seat_label": "P83",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7515,7 +7515,7 @@
       "x": 12,
       "y": 17,
       "cell_type": "SEAT",
-      "seat_label": "P9",
+      "seat_label": "P69",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7529,7 +7529,7 @@
       "x": 13,
       "y": 17,
       "cell_type": "SEAT",
-      "seat_label": "P24",
+      "seat_label": "P84",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7543,7 +7543,7 @@
       "x": 12,
       "y": 18,
       "cell_type": "SEAT",
-      "seat_label": "P10",
+      "seat_label": "P70",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7557,7 +7557,7 @@
       "x": 13,
       "y": 18,
       "cell_type": "SEAT",
-      "seat_label": "P25",
+      "seat_label": "P85",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7571,7 +7571,7 @@
       "x": 12,
       "y": 19,
       "cell_type": "SEAT",
-      "seat_label": "P11",
+      "seat_label": "P71",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7585,7 +7585,7 @@
       "x": 13,
       "y": 19,
       "cell_type": "SEAT",
-      "seat_label": "P26",
+      "seat_label": "P86",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7599,7 +7599,7 @@
       "x": 12,
       "y": 20,
       "cell_type": "SEAT",
-      "seat_label": "P12",
+      "seat_label": "P72",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7613,7 +7613,7 @@
       "x": 13,
       "y": 20,
       "cell_type": "SEAT",
-      "seat_label": "P32",
+      "seat_label": "P87",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7627,7 +7627,7 @@
       "x": 12,
       "y": 21,
       "cell_type": "SEAT",
-      "seat_label": "P13",
+      "seat_label": "P73",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7641,7 +7641,7 @@
       "x": 13,
       "y": 21,
       "cell_type": "SEAT",
-      "seat_label": "P33",
+      "seat_label": "P88",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7655,7 +7655,7 @@
       "x": 12,
       "y": 22,
       "cell_type": "SEAT",
-      "seat_label": "P14",
+      "seat_label": "P74",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7669,7 +7669,7 @@
       "x": 13,
       "y": 22,
       "cell_type": "SEAT",
-      "seat_label": "P30",
+      "seat_label": "P89",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7683,7 +7683,7 @@
       "x": 12,
       "y": 23,
       "cell_type": "SEAT",
-      "seat_label": "P15",
+      "seat_label": "P75",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7697,7 +7697,7 @@
       "x": 13,
       "y": 23,
       "cell_type": "SEAT",
-      "seat_label": "P31",
+      "seat_label": "P90",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7725,7 +7725,7 @@
       "x": 12,
       "y": 9,
       "cell_type": "SEAT",
-      "seat_label": "P1",
+      "seat_label": "P61",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7739,7 +7739,7 @@
       "x": 13,
       "y": 9,
       "cell_type": "SEAT",
-      "seat_label": "P16",
+      "seat_label": "P76",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7753,7 +7753,7 @@
       "x": 16,
       "y": 9,
       "cell_type": "SEAT",
-      "seat_label": "P31",
+      "seat_label": "P91",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7767,7 +7767,7 @@
       "x": 17,
       "y": 9,
       "cell_type": "SEAT",
-      "seat_label": "P60",
+      "seat_label": "P106",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7795,7 +7795,7 @@
       "x": 12,
       "y": 10,
       "cell_type": "SEAT",
-      "seat_label": "P2",
+      "seat_label": "P62",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7809,7 +7809,7 @@
       "x": 13,
       "y": 10,
       "cell_type": "SEAT",
-      "seat_label": "P17",
+      "seat_label": "P77",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7823,7 +7823,7 @@
       "x": 16,
       "y": 10,
       "cell_type": "SEAT",
-      "seat_label": "P32",
+      "seat_label": "P92",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7837,7 +7837,7 @@
       "x": 17,
       "y": 10,
       "cell_type": "SEAT",
-      "seat_label": "P59",
+      "seat_label": "P107",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7865,7 +7865,7 @@
       "x": 12,
       "y": 11,
       "cell_type": "SEAT",
-      "seat_label": "P3",
+      "seat_label": "P63",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7879,7 +7879,7 @@
       "x": 13,
       "y": 11,
       "cell_type": "SEAT",
-      "seat_label": "P18",
+      "seat_label": "P78",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7893,7 +7893,7 @@
       "x": 16,
       "y": 11,
       "cell_type": "SEAT",
-      "seat_label": "P33",
+      "seat_label": "P93",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7907,7 +7907,7 @@
       "x": 17,
       "y": 11,
       "cell_type": "SEAT",
-      "seat_label": "P58",
+      "seat_label": "P108",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7935,7 +7935,7 @@
       "x": 12,
       "y": 12,
       "cell_type": "SEAT",
-      "seat_label": "P4",
+      "seat_label": "P64",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7949,7 +7949,7 @@
       "x": 13,
       "y": 12,
       "cell_type": "SEAT",
-      "seat_label": "P19",
+      "seat_label": "P79",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7963,7 +7963,7 @@
       "x": 16,
       "y": 12,
       "cell_type": "SEAT",
-      "seat_label": "P34",
+      "seat_label": "P94",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -7977,7 +7977,7 @@
       "x": 17,
       "y": 12,
       "cell_type": "SEAT",
-      "seat_label": "P57",
+      "seat_label": "P109",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8005,7 +8005,7 @@
       "x": 12,
       "y": 13,
       "cell_type": "SEAT",
-      "seat_label": "P5",
+      "seat_label": "P65",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8019,7 +8019,7 @@
       "x": 13,
       "y": 13,
       "cell_type": "SEAT",
-      "seat_label": "P20",
+      "seat_label": "P80",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8033,7 +8033,7 @@
       "x": 16,
       "y": 13,
       "cell_type": "SEAT",
-      "seat_label": "P35",
+      "seat_label": "P95",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8047,7 +8047,7 @@
       "x": 17,
       "y": 13,
       "cell_type": "SEAT",
-      "seat_label": "P56",
+      "seat_label": "P110",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8075,7 +8075,7 @@
       "x": 12,
       "y": 14,
       "cell_type": "SEAT",
-      "seat_label": "P6",
+      "seat_label": "P66",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8089,7 +8089,7 @@
       "x": 13,
       "y": 14,
       "cell_type": "SEAT",
-      "seat_label": "P21",
+      "seat_label": "P81",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8103,7 +8103,7 @@
       "x": 16,
       "y": 14,
       "cell_type": "SEAT",
-      "seat_label": "P36",
+      "seat_label": "P96",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8117,7 +8117,7 @@
       "x": 17,
       "y": 14,
       "cell_type": "SEAT",
-      "seat_label": "P55",
+      "seat_label": "P111",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8145,7 +8145,7 @@
       "x": 12,
       "y": 15,
       "cell_type": "SEAT",
-      "seat_label": "P7",
+      "seat_label": "P67",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8159,7 +8159,7 @@
       "x": 13,
       "y": 15,
       "cell_type": "SEAT",
-      "seat_label": "P22",
+      "seat_label": "P82",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8173,7 +8173,7 @@
       "x": 16,
       "y": 15,
       "cell_type": "SEAT",
-      "seat_label": "P37",
+      "seat_label": "P97",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8187,7 +8187,7 @@
       "x": 17,
       "y": 15,
       "cell_type": "SEAT",
-      "seat_label": "P54",
+      "seat_label": "P112",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8215,7 +8215,7 @@
       "x": 12,
       "y": 16,
       "cell_type": "SEAT",
-      "seat_label": "P8",
+      "seat_label": "P68",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8229,7 +8229,7 @@
       "x": 13,
       "y": 16,
       "cell_type": "SEAT",
-      "seat_label": "P23",
+      "seat_label": "P83",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8243,7 +8243,7 @@
       "x": 16,
       "y": 16,
       "cell_type": "SEAT",
-      "seat_label": "P51",
+      "seat_label": "P98",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8257,7 +8257,7 @@
       "x": 17,
       "y": 16,
       "cell_type": "SEAT",
-      "seat_label": "P53",
+      "seat_label": "P113",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8341,7 +8341,7 @@
       "x": 12,
       "y": 17,
       "cell_type": "SEAT",
-      "seat_label": "P9",
+      "seat_label": "P69",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8355,7 +8355,7 @@
       "x": 13,
       "y": 17,
       "cell_type": "SEAT",
-      "seat_label": "P24",
+      "seat_label": "P84",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8369,7 +8369,7 @@
       "x": 16,
       "y": 17,
       "cell_type": "SEAT",
-      "seat_label": "P50",
+      "seat_label": "P99",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8383,7 +8383,7 @@
       "x": 17,
       "y": 17,
       "cell_type": "SEAT",
-      "seat_label": "P52",
+      "seat_label": "P114",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8397,7 +8397,7 @@
       "x": 12,
       "y": 18,
       "cell_type": "SEAT",
-      "seat_label": "P10",
+      "seat_label": "P70",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8411,7 +8411,7 @@
       "x": 13,
       "y": 18,
       "cell_type": "SEAT",
-      "seat_label": "P25",
+      "seat_label": "P85",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8425,7 +8425,7 @@
       "x": 16,
       "y": 18,
       "cell_type": "SEAT",
-      "seat_label": "P49",
+      "seat_label": "P100",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8439,7 +8439,7 @@
       "x": 17,
       "y": 18,
       "cell_type": "SEAT",
-      "seat_label": "P38",
+      "seat_label": "P115",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8453,7 +8453,7 @@
       "x": 12,
       "y": 19,
       "cell_type": "SEAT",
-      "seat_label": "P11",
+      "seat_label": "P71",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8467,7 +8467,7 @@
       "x": 13,
       "y": 19,
       "cell_type": "SEAT",
-      "seat_label": "P26",
+      "seat_label": "P86",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8481,7 +8481,7 @@
       "x": 16,
       "y": 19,
       "cell_type": "SEAT",
-      "seat_label": "P48",
+      "seat_label": "P101",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8495,7 +8495,7 @@
       "x": 17,
       "y": 19,
       "cell_type": "SEAT",
-      "seat_label": "P39",
+      "seat_label": "P116",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8509,7 +8509,7 @@
       "x": 12,
       "y": 20,
       "cell_type": "SEAT",
-      "seat_label": "P12",
+      "seat_label": "P72",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8523,7 +8523,7 @@
       "x": 13,
       "y": 20,
       "cell_type": "SEAT",
-      "seat_label": "P27",
+      "seat_label": "P87",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8537,7 +8537,7 @@
       "x": 16,
       "y": 20,
       "cell_type": "SEAT",
-      "seat_label": "P47",
+      "seat_label": "P102",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8551,7 +8551,7 @@
       "x": 17,
       "y": 20,
       "cell_type": "SEAT",
-      "seat_label": "P40",
+      "seat_label": "P117",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8565,7 +8565,7 @@
       "x": 12,
       "y": 21,
       "cell_type": "SEAT",
-      "seat_label": "P13",
+      "seat_label": "P73",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8579,7 +8579,7 @@
       "x": 13,
       "y": 21,
       "cell_type": "SEAT",
-      "seat_label": "P28",
+      "seat_label": "P88",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8593,7 +8593,7 @@
       "x": 16,
       "y": 21,
       "cell_type": "SEAT",
-      "seat_label": "P46",
+      "seat_label": "P103",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8607,7 +8607,7 @@
       "x": 17,
       "y": 21,
       "cell_type": "SEAT",
-      "seat_label": "P41",
+      "seat_label": "P118",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8621,7 +8621,7 @@
       "x": 12,
       "y": 22,
       "cell_type": "SEAT",
-      "seat_label": "P14",
+      "seat_label": "P74",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8635,7 +8635,7 @@
       "x": 13,
       "y": 22,
       "cell_type": "SEAT",
-      "seat_label": "P29",
+      "seat_label": "P89",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8649,7 +8649,7 @@
       "x": 16,
       "y": 22,
       "cell_type": "SEAT",
-      "seat_label": "P45",
+      "seat_label": "P104",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8663,7 +8663,7 @@
       "x": 17,
       "y": 22,
       "cell_type": "SEAT",
-      "seat_label": "P42",
+      "seat_label": "P119",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8677,7 +8677,7 @@
       "x": 12,
       "y": 23,
       "cell_type": "SEAT",
-      "seat_label": "P15",
+      "seat_label": "P75",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8691,7 +8691,7 @@
       "x": 13,
       "y": 23,
       "cell_type": "SEAT",
-      "seat_label": "P30",
+      "seat_label": "P90",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8705,7 +8705,7 @@
       "x": 16,
       "y": 23,
       "cell_type": "SEAT",
-      "seat_label": "P44",
+      "seat_label": "P105",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8719,7 +8719,7 @@
       "x": 17,
       "y": 23,
       "cell_type": "SEAT",
-      "seat_label": "P43",
+      "seat_label": "P120",
       "text_label": "",
       "registration": null,
       "reservation_status": "FREE"
@@ -8885,7 +8885,7 @@
     "fields": {
       "title": "Veranstaltungsinfos",
       "slug": "allgemein",
-      "subtitle": "Alle Fakten zur LAN im Überblick",
+      "subtitle": "Alle Fakten zur LAN im \u00dcberblick",
       "content": "<p>Einlass: 07.08.2026 16:00 Uhr<br>Ende: 09.08.2026<br><br>Ort: Sporthalle Haag, H&ouml;llriglstra&szlig;e 17, 3350 Haag<br>Teilnehmerzahl: ca 200<br>Full Gigabit Cisco Netzwerk<br>LIWEST-Internet: 2 mal 1000 Mbit<br>Mindestalter: 16 Jahre (Du ben&ouml;tigst eine&nbsp;<a href=\"https://www.nextcloud.hnx.at/index.php/s/YgBb8kqMyTmCnZ7\" target=\"_blank\" rel=\"noopener\">Einverst&auml;ndniserkl&auml;rung</a>&nbsp;wenn du unter 18 bist)<br><br><strong>Unkostenbeitr&auml;ge:</strong><br>38 &euro; Vorauskasse<br>45 &euro; Abendkasse<br>35 &euro; f&uuml;r Clans ab 5 Gamer (nur bei Sammel&uuml;berweisung)<br>32 &euro; f&uuml;r Clans ab 8 Gamer (nur bei Sammel&uuml;berweisung)<br><strong><br>Kontodaten f&uuml;r die &Uuml;berweisung:</strong><br><br>Inhaber: Haag-networX<br>Bank: Allgemeine Sparkasse Ober&ouml;sterreich<br>IBAN: AT392032026102092943<br>BIC: ASPKAT2LXXX<br><br>Verwendungszweck: Bitte gebt hier sowohl euren Nick-, als auch euren Vor- und Nachnamen an, mit dem ihr im System registriert seid. Bei Clangruppen bitte alle Mitglieder anf&uuml;hren !</p>\r\n<p><strong>Kontakt</strong><br>Discord:&nbsp;<a href=\"https://discord.gg/yCw4UsGZGc\" target=\"_blank\" rel=\"noopener\">https://discord.gg/yCw4UsGZGc</a><br>E-Mail: haag-networx[at]haag-networx.at</p>\r\n<hr>\r\n<p>Unsere LAN-Party findet in der Sporthalle in Stadt Haag statt.</p>\r\n<p><strong>Adresse</strong><br>Sporthalle Haag<br>H&ouml;llriglstra&szlig;e 17<br>3350 Stadt Haag</p>\r\n<p><a href=\"https://www.google.at/maps\" target=\"_blank\" rel=\"noopener\"><strong>Routenplaner</strong></a></p>\r\n<p>&nbsp;</p>\r\n<p>&nbsp;</p>\r\n<hr>\r\n<p><strong>Allgemeine Gesch&auml;ftsbedingungen (AGB)<br><br></strong>Liebe Teilnehmerinnen und Teilnehmer,<br><br>bitte beachten Sie die nachfolgenden Ausf&uuml;hrungen zum Datenschutz.<br>Zweck der Verarbeitung: Wir nutzen die Plattform Twitch.tv, ein Streaming-Dienst der Amazon.com, Inc., um die Veranstaltung (&bdquo;Online-Stream&ldquo;) online durchzuf&uuml;hren.<br>Der Zugang ist dabei grunds&auml;tzlich f&uuml;r jede Person, auch f&uuml;r Personen, die nicht selbst an der Veranstaltung teilnehmen, m&ouml;glich.<br>Rechtsgrundlage der Datenverarbeitung: &sect; 4 LDSG i. V. m Art. 6 Abs. 1 lit. e DSGVO und &sect;&sect; 2 und 12 LHG, soweit benutzergenerierte Daten nicht auf der Grundlage einer Einwilligung<br>des Teilnehmers/der Teilnehmerin nach Art. 6 Abs. 1 lit. a DSGVO durch den Teilnehmer/die Teilnehmerin selbst eingegeben werden.<br><br>Verarbeitete personenbezogene Daten: W&auml;hrend der Veranstaltung werden auf dem Stream folgende Daten der Teilnehmer/Teilnehmerinnen gezeigt,<br>der Spielername (&bdquo;Nickname&ldquo;), das Profilbild (&bdquo;Avatar&ldquo;) sowie Spielerstatistiken. Dies gilt nur f&uuml;r Teilnehmer/Teilnehmerinnen, die an der Spielrunde teilnehmen,<br>welche auch im Stream online &uuml;bertragen wird. Generell wird der Veranstaltungsort von einer Kamera abgefilmt und im Online-Stream &uuml;bertragen.<br>Au&szlig;erdem werden Teilnehmer/Teilnehmerinnen als auch der Veranstaltungsort fotografiert. Diese Fotos sind &ouml;ffentlich zug&auml;nglich.<br>Weitere Details zu den Angaben nach Art. 13 DSGVO (inkl. der Auflistung Ihrer Rechte als betroffene Person) finden Sie&nbsp;<a href=\"https://www.haag-networx.at/ls/index.php?mod=info2&amp;action=show_info2&amp;id=26\" target=\"_blank\" rel=\"noopener\">hier</a>.<br>Mit der Teilnahme an der Veranstaltung erkl&auml;ren sich die Teilnehmer/Teilnehmerinnen bereit, die Datenschutzerkl&auml;rungen gelesen zu haben und zu akzeptieren.<br>F&uuml;r R&uuml;ckfragen stehen wir gerne zur Verf&uuml;gung.<br><br><strong><br>1. Anmeldung</strong><br>1.1<br>Der Teilnehmer muss das 16. Lebensjahr vollendet haben, um an der LAN teilnehmen zu k&ouml;nnen. (Alle unter 18 m&uuml;ssen eine Einverst&auml;ndniserkl&auml;rung der Eltern vorweisen k&ouml;nnen). Es bleibt uns vorbehalten, die Vorlage eines Lichtbildausweises zu verlangen.<br><br>1.2<br>Der Teilnehmer muss eine Kopie des &Uuml;berweisungstr&auml;gers zum Start der LAN mitbringen um zu best&auml;tigen, dass er den Betrag vollst&auml;ndig bezahlt hat.<br><br>1.3<br>Teilzahlungen des Eintrittspreises k&ouml;nnen nicht akzeptiert werden.<br><br>1.4<br>Auf dem Zahlschein muss klar ersichtlich sein, wer gezahlt hat oder sonst wird die Zahlung einbehalten und nicht als gezahlt gewertet. Der Organisator ist nicht verpflichtet das Geld r&uuml;ckzuerstatten.<br><br>1.5<br>Durch die Abgabe der Anmeldung wird der Teilnehmer lediglich vorgemerkt, es besteht seitens der Veranstalter keine Erf&uuml;llungspflicht. Diese Regel wird z.B. dann angewendet, wenn die minimale Teilnehmerzahl nicht erreicht wird, der Veranstalter wird versuchen eine f&uuml;r alle Seiten akzeptable L&ouml;sung zu finden.<br><br>1.6<br>Mit der erfolgreichen Anmeldung zur LAN akzeptiert der Teilnehmer in einer Liste von Teilnehmenden im Internet ver&ouml;ffentlicht zu werden (Name, Nick und Clan, E-Mail, ICQ-Nr., Wohnort (Stadt) oder Internetadressen). Weitere personenbezogene Daten werden streng vertraulich behandelt und Dritten nicht zur Verf&uuml;gung gestellt, es sei denn, dass der User dies explizit w&uuml;nscht. Die Organisatoren behaltenen sich das Recht vor, Daten die auf dieser Website dargestellt werden zu &auml;ndern oder zu l&ouml;schen, falls ihnen diese als nicht geeignet oder Ruf sch&auml;digend erscheinen.<br><br>1.7<br>Der Teilnehmer muss sich mit den korrekten und vollst&auml;ndigen Daten anmelden. Es sind keine Initialien beim Vornamen, Nachnamen erlaubt.<br><br><strong>2. Allgemeine Regeln</strong><br>2.1<br>Den Anweisungen der Organisatoren bzw. deren Helfern ist Folge zu leisten.<br>Jegliche Art der Softwarepiraterie ist untersagt, dies beinhaltet auch die Verbreitung von anderen urheberrechtlich gesch&uuml;tzten Dokumenten (Mp3s, Videos etc.). Das Rauchen ist ausschlie&szlig;lich au&szlig;erhalb der Location erlaubt.<br><br>2.2<br>Jeder Teilnehmer ist f&uuml;r den Schutz und die Sicherheit seines Besitzes pers&ouml;nlich verantwortlich.<br><br>2.4<br>Der Teilnehmer verpflichtet sich nach Abschluss der Veranstaltung seinen Sitzplatz frei von M&uuml;ll oder anderen pers&ouml;nlichen Gegenst&auml;nden dem Veranstalter geordnet zu &uuml;bergeben, bei Zuwiderhandlung kann der entsprechende Teilnehmer des Platzes zu einem Reinigungsentgelt herangezogen werden. Es wird aber mehrere Pl&auml;tze zur M&uuml;llentsorgung geben.<br><br>2.5<br>Das M&uuml;llentsorgen ist Pflicht. Der Teilnehmer oder der Besucher ist gegebenenfalls verpflichtet Sch&auml;den oder Reinigungskosten durch nicht einhalten der M&uuml;lltrennung zu zahlen, ebenfalls k&ouml;nnen die Teilnehmer bei mehrmaligen Nichteinhalten der Regel von der LAN verwiesen werden.<br><br>2.6<br>Das Parken vor der Halle ist erlaubt. Der Veranstalter wird keine Verantwortung f&uuml;r unsachgem&auml;&szlig; abgestellte Fahrzeuge &uuml;bernehmen.<br><br>2.7<br>Gen&uuml;gend Parkm&ouml;glichkeiten gibt es vor der Sporthalle.<br><br>2.8<br>Sp&auml;testens mit dem Anmelden wird dieses Regelwerk verbindlich anerkannt.<br><br>2.9<br>Die Einbringung von Waffen jeglicher Art ist strikt untersagt.<br><br>2.10<br>Der Konsum von Alkohol w&auml;hrend der Veranstaltung ist in geringen Mengen erlaubt. (Keine Abgabe von Alkohol an Personen unter 16 Jahren.)<br><br>2.11<br>Der Konsum oder Verkauf von Drogen ist ausnahmslos verboten und wird mit einer Anzeige und dem Verweis von der LAN geahndet.<br><br>2.12<br>Indizierte Spiele sind auf der LAN ausnahmslos verboten.<br><br>2.13<br>K&ouml;rperverletzung, falls nicht grobfahrl&auml;ssig von Organisatoren verursacht, unterliegen nicht der Schadensersatzanspruchpflicht der Organisatoren. Falls es zu einem Streit mit den Securities kommt, wegen nicht Einhalten der Regeln, ist es dem Organisator freigestellt Schadenersatz zu zahlen oder nicht. Die bei der Unruhe entstandenen Sch&auml;den gehen auf Kosten der/des Unruhestifter(s).<br><br>2.14<br>Bei Turnieren m&uuml;ssen die Alterbeschr&auml;nkungen eingehalten werden. Dies wird vom Veranstalter kontrolliert. Es unterliegt jedoch nicht der Aufsichtspflicht der Organisatoren, die Alterbeschr&auml;nkungen w&auml;hrend der restlichen LAN zu kontrollieren. Eltern haften f&uuml;r Ihre Kinder.<br><br>2.15<br>Bestellungen beim Catering sind verpflichtend.<br><br><strong>3. Hardwarem&auml;&szlig;ige Voraussetzungen des Teilnehmers</strong><br>3.1<br>Der Einsatz von K&ouml;pfh&ouml;rern ist zwingend, der Einsatz von Boxen wird in keiner Weise gestattet<br><br>3.2<br>Die Hardwarebedingungen: Netzwerkf&auml;higer PC mit Twisted Pair Anschluss, sowie eine Patchleitung von min. 10 m L&auml;nge (mindestens Cat5), Mehrfachsteckdosenleiste(n) ohne Schalter.<br><strong><br>4.Haftungsausschluss</strong><br>4.1<br>Haftungsausschluss aus Haftungsverzicht und Handeln auf eigene Gefahr der/ die Teilnehmer(in) an der Netzwerkparty gegen&uuml;ber den Veranstaltern der Netzwerkparty erkl&auml;rt.<br><br>4.2<br>Zum Einsatz kommt nur lizenzierte Software.<br>Die Nutzung der eingesetzten Software erfolgt nach Ma&szlig;gabe des jeweiligen Lizenzvertrages. Die Pr&uuml;fung, ob die Software nur durch eine Person auf einem Rechner, nicht jedoch gleichzeitig auf zwei oder mehreren Rechnern - gleich ob durch dieselbe oder verschiedene Personen - genutzt werden, erfolgt ausschlie&szlig;lich durch den / die Teilnehmer(in).<br><br>4.3<br>Software wird Teilnehmern weder unentgeltlich noch entgeltlich &uuml;berlassen.<br><br>4.4<br>Es wird zustimmend Kenntnis genommen, dass Rechner, Zubeh&ouml;r und Software w&auml;hrend der Netzwerkparty unter Einschluss des Weges zum Ort der Veranstaltung bzw. R&uuml;ckkehr vom Ort der Veranstaltung nicht durch die Veranstalter versichert sind. Die Veranstalter empfehlen daher den Abschluss einer geeigneten Versicherung.<br><br>4.5<br>Die Veranstalter k&ouml;nnen eine ununterbrochene Stromversorgung der Netzwerkparty nicht zusichern und sind somit nicht haftbar f&uuml;r daraus resultierende Datenverluste und Hardwaresch&auml;den. Eine regelm&auml;&szlig;ige Datensicherung wird empfohlen. Zur Vermeidung von Spannungsspitzen wird dem Teilnehmer empfohlen, geeignete Schutzma&szlig;nahmen zu ergreifen.<br><br>4.6<br>Der / die Teilnehmer(in) stellen die Veranstalter bzw. Vertretern oder Erf&uuml;llungsgehilfen von allen Ersatzanspr&uuml;chen frei, soweit diese nicht vors&auml;tzlich oder grob fahrl&auml;ssig verursacht wurden.<br><br>4.7<br>Die Veranstalter versuchen die Nutzung von Filesharingprogramme mit denen ihnen zur Verf&uuml;gung stehenden Mitteln zu unterbinden.<br><br>4.8<br>Jeder Schaden den ein Besucher verursacht, muss er selbst begleichen und von sich selbst aus, Verbindung mit den Betroffen (z.B. Hallenbetreiber) aufnehmen und die Sache kl&auml;ren. Der Veranstalter &uuml;bernimmt keine Haftung f&uuml;r entstandene Sch&auml;den/Folgesch&auml;den.<br><br><strong>5. Regeln bei Beeintr&auml;chtigung</strong><br>5.1 Netzwerkprobleme<br>Wenn es trotz aller Bem&uuml;hungen, die Stabilit&auml;t des Netzwerkes zu garantieren, zu einem Ausfall kommt, dann informiert uns bitte umgehend dar&uuml;ber, da wir das Netzwerk nicht st&auml;ndig auf seine Integrit&auml;t pr&uuml;fen. Bitte informiert uns auch mehrfach, falls kein Organisator bei euch in der N&auml;he sein sollte. F&uuml;r solche F&auml;lle bitten wir euch euer Anliegen an der Orgab&uuml;hne vorzutragen, da findet ihr sicherlich einen kompetenten, freundlichen Ansprechpartner, wenn ihr ihm euer Problem ruhig und h&ouml;flich vortragt. Wir werden uns dann umgehend eurem Problem annehmen, versucht bitte nicht eigenwillig das Problem zu l&ouml;sen. Und ganz wichtig, bleibt ruhig.<br><br>5.2 Stromausfall<br>Eigentlich sollte dieser Fall nicht eintreten, aber wenn es doch passieren sollte, dann meldet uns bitte den Ausfall (auch mehrfach falls keine Besserung eintritt), unsere Techniker/Helfer werden sich dann dem Problem annehmen. Bitte versucht keinesfalls das Problem selbst zul&ouml;sen! Bei unsachgem&auml;&szlig;er Handhabung unserer Hardware besteht LEBENSGEFAHR, &uuml;berlasst es aus diesem Grund unseren Technikern/Helfern Probleme zu beheben. Falls ihr eine L&ouml;sung vermutet, dann teilt es uns doch bitte mit. Bitte geduldet euch ein wenig, es kann u.U. etwas dauern, bis der Fehler bzw. das defekte Ger&auml;te gefunden ist.<br><br>5.3<br>Sollte herausgefunden werden, dass ein Teilnehmer das Stromnetz oder das Netzwerk vors&auml;tzlich sabotiert verursacht, wird dieser ausnahmslos von der LAN verwiesen und hat die verursachten Sch&auml;den und/oder Schadensersatzanspr&uuml;che der Organisatoren/Teilnehmer zu zahlen.<br><br><strong>6. Regeln bei der LAN</strong><br>6.1<br>Wenn ein(e) Teilnehmer(in) bei den Spielen/Turnieren sich einen unfairen Vorteil durch Programme/Gamehacks/Kommandozeilenparameter oder sonstiges verschafft, wird dieser ausnahmslos von der LAN verwiesen.<br><br>6.2<br>Es wird niemand verpflichtet bei den Turnieren mitzumachen.</p>",
       "updated_at": "2026-07-24T18:45:10.159Z"
     }
@@ -8910,7 +8910,7 @@
     "pk": 2,
     "fields": {
       "title": "Laufenden Weiterentwicklung",
-      "content": "Es gibt ständig was zu tun. Hier teste ich beispielsweise wie der Text angezeigt wird, wenn dieser länger als 32 Zeichen lang ist um zu sehen wie es sich verhält wenn der Text länger ist",
+      "content": "Es gibt st\u00e4ndig was zu tun. Hier teste ich beispielsweise wie der Text angezeigt wird, wenn dieser l\u00e4nger als 32 Zeichen lang ist um zu sehen wie es sich verh\u00e4lt wenn der Text l\u00e4nger ist",
       "author": [
         "sadmin"
       ],
@@ -8924,7 +8924,7 @@
     "model": "news.newsarticle",
     "pk": 3,
     "fields": {
-      "title": "Pause benötigt!",
+      "title": "Pause ben\u00f6tigt!",
       "content": "Bereits die Dritte News in Folge und dennoch geht die Entwicklung laufend weiter. Ich freue mich auf die LAN Party! Das wird mega",
       "author": [
         "sadmin"
@@ -8940,7 +8940,7 @@
     "pk": 4,
     "fields": {
       "title": "Neuer Newsbeitrag",
-      "content": "Zusätzliche Tests sind immer gut!\r\n\r\nLG",
+      "content": "Zus\u00e4tzliche Tests sind immer gut!\r\n\r\nLG",
       "author": [
         "sadmin"
       ],
@@ -9016,11 +9016,11 @@
     "pk": 1,
     "fields": {
       "key": "payment_confirmation",
-      "name": "Zahlungsbestätigung",
-      "subject": "Zahlungseingang bestätigt für {event_title}",
-      "content": "<h2>Zahlungsbestätigung</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>vielen Dank! Deine Zahlung für die Veranstaltung <strong>{event_title}</strong> wurde erfolgreich verbucht.</p>\n<div style=\"background: #1e293b; color: #ffffff; padding: 16px; border-radius: 8px; margin: 16px 0;\">\n  <p><strong>Veranstaltung:</strong> {event_title}</p>\n  <p><strong>Ticket:</strong> {ticket_type}</p>\n  <p><strong>Verwendungszweck / Referenz:</strong> {payment_reference}</p>\n  <p><strong>Sitzplatz:</strong> {seat_label}</p>\n  <p><strong>Bezahlter Betrag:</strong> {amount} €</p>\n</div>\n<p>Dein Sitzplatz ist nun fest für dich reserviert. Wir freuen uns auf dich auf der LAN-Party!</p>\n<p>Viele Grüße,<br>Dein EntailsNG Event Team</p>",
+      "name": "Zahlungsbest\u00e4tigung",
+      "subject": "Zahlungseingang best\u00e4tigt f\u00fcr {event_title}",
+      "content": "<h2>Zahlungsbest\u00e4tigung</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>vielen Dank! Deine Zahlung f\u00fcr die Veranstaltung <strong>{event_title}</strong> wurde erfolgreich verbucht.</p>\n<div style=\"background: #1e293b; color: #ffffff; padding: 16px; border-radius: 8px; margin: 16px 0;\">\n  <p><strong>Veranstaltung:</strong> {event_title}</p>\n  <p><strong>Ticket:</strong> {ticket_type}</p>\n  <p><strong>Verwendungszweck / Referenz:</strong> {payment_reference}</p>\n  <p><strong>Sitzplatz:</strong> {seat_label}</p>\n  <p><strong>Bezahlter Betrag:</strong> {amount} \u20ac</p>\n</div>\n<p>Dein Sitzplatz ist nun fest f\u00fcr dich reserviert. Wir freuen uns auf dich auf der LAN-Party!</p>\n<p>Viele Gr\u00fc\u00dfe,<br>Dein EntailsNG Event Team</p>",
       "is_active": true,
-      "placeholder_info": "Verfügbare Platzhalter für diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {event_title}: Name der Veranstaltung\n- {amount}: Bezahlter Betrag in Euro\n- {payment_reference}: Zahlungs-Referenzcode\n- {seat_label}: Zugewiesene Sitzplatznummer\n- {ticket_type}: Name der gewählten Ticket-Kategorie",
+      "placeholder_info": "Verf\u00fcgbare Platzhalter f\u00fcr diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {event_title}: Name der Veranstaltung\n- {amount}: Bezahlter Betrag in Euro\n- {payment_reference}: Zahlungs-Referenzcode\n- {seat_label}: Zugewiesene Sitzplatznummer\n- {ticket_type}: Name der gew\u00e4hlten Ticket-Kategorie",
       "updated_at": "2026-08-03T21:38:37.331Z"
     }
   },
@@ -9030,10 +9030,10 @@
     "fields": {
       "key": "email_verification",
       "name": "Double Opt-In E-Mail Verifizierung",
-      "subject": "Dein Bestätigungscode für EntailsNG: {code}",
-      "content": "<h2>Willkommen bei EntailsNG!</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>vielen Dank für deine Registrierung! Um deinen Account zu aktivieren, verwende bitte den folgenden 6-stelligen Bestätigungscode:</p>\n<div style=\"background: #111827; border: 2px solid #0284c7; color: #38bdf8; padding: 20px; border-radius: 12px; font-size: 32px; font-weight: bold; font-family: monospace; letter-spacing: 8px; text-align: center; margin: 20px 0;\">\n  {code}\n</div>\n<p>Dieser Code ist <strong>{valid_minutes} Minuten</strong> lang gültig.</p>\n<p>Falls du dieses Konto nicht erstellt hast, kannst du diese E-Mail einfach ignorieren.</p>\n<p>Viele Grüße,<br>Dein EntailsNG Team</p>",
+      "subject": "Dein Best\u00e4tigungscode f\u00fcr EntailsNG: {code}",
+      "content": "<h2>Willkommen bei EntailsNG!</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>vielen Dank f\u00fcr deine Registrierung! Um deinen Account zu aktivieren, verwende bitte den folgenden 6-stelligen Best\u00e4tigungscode:</p>\n<div style=\"background: #111827; border: 2px solid #0284c7; color: #38bdf8; padding: 20px; border-radius: 12px; font-size: 32px; font-weight: bold; font-family: monospace; letter-spacing: 8px; text-align: center; margin: 20px 0;\">\n  {code}\n</div>\n<p>Dieser Code ist <strong>{valid_minutes} Minuten</strong> lang g\u00fcltig.</p>\n<p>Falls du dieses Konto nicht erstellt hast, kannst du diese E-Mail einfach ignorieren.</p>\n<p>Viele Gr\u00fc\u00dfe,<br>Dein EntailsNG Team</p>",
       "is_active": true,
-      "placeholder_info": "Verfügbare Platzhalter für diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {code}: 6-stelliger numerischer Verifizierungscode (z. B. 849201)\n- {valid_minutes}: Gültigkeitsdauer in Minuten (z. B. 15)",
+      "placeholder_info": "Verf\u00fcgbare Platzhalter f\u00fcr diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {code}: 6-stelliger numerischer Verifizierungscode (z. B. 849201)\n- {valid_minutes}: G\u00fcltigkeitsdauer in Minuten (z. B. 15)",
       "updated_at": "2026-08-04T19:57:32.799Z"
     }
   },
@@ -9042,11 +9042,11 @@
     "pk": 3,
     "fields": {
       "key": "password_reset",
-      "name": "Passwort zurücksetzen",
-      "subject": "Passwort zurücksetzen für EntailsNG",
-      "content": "<h2>Passwort zurücksetzen</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>du hast das Zurücksetzen deines Passworts für deinen EntailsNG Account angefordert.</p>\n<p>Klicke auf den folgenden Button, um ein neues Passwort festzulegen:</p>\n<div style=\"text-align: center; margin: 24px 0;\">\n  <a href=\"{reset_link}\" style=\"background: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;\">\n    🔑 Neues Passwort festlegen\n  </a>\n</div>\n<p style=\"font-size: 12px; color: #9ca3af;\">Oder kopiere diesen Link in deinen Browser:<br><a href=\"{reset_link}\" style=\"color: #38bdf8;\">{reset_link}</a></p>\n<p>Falls du kein neues Passwort angefordert hast, kannst du diese E-Mail ignorieren. Dein Passwort bleibt unverändert.</p>\n<p>Viele Grüße,<br>Dein EntailsNG Team</p>",
+      "name": "Passwort zur\u00fccksetzen",
+      "subject": "Passwort zur\u00fccksetzen f\u00fcr EntailsNG",
+      "content": "<h2>Passwort zur\u00fccksetzen</h2>\n<p>Hallo <strong>{full_name}</strong>,</p>\n<p>du hast das Zur\u00fccksetzen deines Passworts f\u00fcr deinen EntailsNG Account angefordert.</p>\n<p>Klicke auf den folgenden Button, um ein neues Passwort festzulegen:</p>\n<div style=\"text-align: center; margin: 24px 0;\">\n  <a href=\"{reset_link}\" style=\"background: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;\">\n    \ud83d\udd11 Neues Passwort festlegen\n  </a>\n</div>\n<p style=\"font-size: 12px; color: #9ca3af;\">Oder kopiere diesen Link in deinen Browser:<br><a href=\"{reset_link}\" style=\"color: #38bdf8;\">{reset_link}</a></p>\n<p>Falls du kein neues Passwort angefordert hast, kannst du diese E-Mail ignorieren. Dein Passwort bleibt unver\u00e4ndert.</p>\n<p>Viele Gr\u00fc\u00dfe,<br>Dein EntailsNG Team</p>",
       "is_active": true,
-      "placeholder_info": "Verfügbare Platzhalter für diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {reset_link}: Vollständiger Link zum Festlegen des neuen Passworts",
+      "placeholder_info": "Verf\u00fcgbare Platzhalter f\u00fcr diese Vorlage:\n- {username}: Benutzername des Teilnehmers\n- {full_name}: Vor- und Nachname (oder Benutzername)\n- {reset_link}: Vollst\u00e4ndiger Link zum Festlegen des neuen Passworts",
       "updated_at": "2026-08-04T19:57:32.801Z"
     }
   }
