@@ -708,12 +708,28 @@ def update_payment_check_api(request, event_id):
         custom_date_str = request.POST.get('custom_date')
 
     new_time = timezone.now()
-    if custom_date_str:
-        parsed_dt = parse_datetime(custom_date_str)
-        if parsed_dt:
-            if timezone.is_naive(parsed_dt):
-                parsed_dt = timezone.make_aware(parsed_dt)
-            new_time = parsed_dt
+    if custom_date_str and str(custom_date_str).strip():
+        date_str_clean = str(custom_date_str).strip()
+        parsed_dt = parse_datetime(date_str_clean)
+        if not parsed_dt:
+            try:
+                from datetime import datetime
+                parsed_dt = datetime.fromisoformat(date_str_clean)
+            except (ValueError, TypeError):
+                pass
+        if not parsed_dt:
+            error_msg = get_translation(
+                'msg_payment_check_invalid_date',
+                'Ungültiges Datumsformat übergeben.'
+            )
+            if _wants_json(request) or request.content_type == 'application/json':
+                return JsonResponse({'status': 'error', 'message': error_msg}, status=400)
+            messages.error(request, error_msg)
+            return redirect(request.META.get('HTTP_REFERER') or 'guest_list')
+
+        if timezone.is_naive(parsed_dt):
+            parsed_dt = timezone.make_aware(parsed_dt)
+        new_time = parsed_dt
 
     event.last_payment_check = new_time
     event.save(update_fields=['last_payment_check', 'updated_at'])

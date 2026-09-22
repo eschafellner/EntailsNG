@@ -1912,11 +1912,12 @@ class GuestListAndPaymentCheckTests(TestCase):
         self.assertEqual(resp_staff.status_code, 200)
 
     def test_update_payment_check_api_custom_datetime(self):
-        """Manuelle Angabe eines Datetime-Werts wird korrekt übernommen."""
+        """Manuelle Angabe eines Datetime-Werts (auch HTML5 datetime-local ohne Sekunden) wird korrekt übernommen."""
         self.client.login(username="orga_officer", password="password")
         url = reverse('api_update_payment_check', kwargs={'event_id': self.event.id})
 
-        target_time_str = "2026-09-20T14:30:00"
+        # Test mit ISO-String ohne Sekunden (HTML5 input type="datetime-local")
+        target_time_str = "2026-09-20T14:30"
         resp = self.client.post(
             url,
             data=json.dumps({'custom_date': target_time_str}),
@@ -1932,6 +1933,37 @@ class GuestListAndPaymentCheckTests(TestCase):
         self.assertEqual(local_time.day, 20)
         self.assertEqual(local_time.hour, 14)
         self.assertEqual(local_time.minute, 30)
+
+        # Route-Alias /events/api/event/<id>/update-payment-check/ testen
+        alias_url = f"/events/api/event/{self.event.id}/update-payment-check/"
+        resp_alias = self.client.post(
+            alias_url,
+            data=json.dumps({'custom_date': "2026-09-21T16:45:00"}),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(resp_alias.status_code, 200)
+        self.event.refresh_from_db()
+        local_time2 = timezone.localtime(self.event.last_payment_check)
+        self.assertEqual(local_time2.day, 21)
+        self.assertEqual(local_time2.hour, 16)
+        self.assertEqual(local_time2.minute, 45)
+
+    def test_update_payment_check_api_invalid_date(self):
+        """Ungültiger Datumswert liefert HTTP 400 Bad Request."""
+        self.client.login(username="orga_officer", password="password")
+        url = reverse('api_update_payment_check', kwargs={'event_id': self.event.id})
+
+        resp = self.client.post(
+            url,
+            data=json.dumps({'custom_date': "ungueltiges-datum"}),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(resp.status_code, 400)
+        data = resp.json()
+        self.assertEqual(data['status'], 'error')
+        self.assertIn('message', data)
 
     def test_event_admin_action_set_payment_check_now(self):
         """Admin-Aktion 'action_set_payment_check_now' aktualisiert Events im Admin."""

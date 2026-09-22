@@ -755,6 +755,7 @@ DEFAULT_TEXTS = {
     'guest_list_stat_unpaid': 'Offen',
     'msg_payment_check_updated': 'Zeitpunkt des letzten Kontochecks erfolgreich auf {time} gesetzt.',
     'msg_payment_check_forbidden': 'Du hast keine Berechtigung, den Kontocheck zu aktualisieren.',
+    'msg_payment_check_invalid_date': 'Ungültiges Datumsformat übergeben.',
 }
 
 

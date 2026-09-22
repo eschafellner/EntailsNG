@@ -43,16 +43,16 @@
       <!-- ======================================================================
            2. BEREICH: LETZTER KONTOCHECK
            ====================================================================== -->
-      <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; background: rgba(0, 0, 0, 0.12); padding: 12px 16px; border-radius: 10px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8;">
+      <div class="payment-check-banner">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #0284c7;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="5" width="20" height="14" rx="2"></rect>
               <line x1="2" y1="10" x2="22" y2="10"></line>
             </svg>
           </span>
           <div>
-            <span style="font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">
+            <span style="font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px;">
               {% t "guest_list_last_payment_check" "Letzter Kontocheck:" %}
             </span>
             <div id="payment-check-timestamp-container" style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: bold; color: var(--ink);">
@@ -68,11 +68,12 @@
         </div>
 
         {% if can_update_payment_check %}
+          {% csrf_token %}
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <button type="button" id="btn-update-check-now" onclick="updatePaymentCheck('now')" style="background: var(--signal, #f8ab2d); color: var(--navy, #332719); border: none; padding: 8px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(248, 171, 45, 0.25); transition: opacity 0.2s;">
+            <button type="button" id="btn-update-check-now" onclick="updatePaymentCheck('now')" style="background: var(--signal, #f8ab2d); color: var(--navy, #332719); border: none; padding: 9px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(248, 171, 45, 0.25); transition: opacity 0.2s;">
               🔄 {% t "guest_list_btn_update_payment_check" "Kontocheck auf Jetzt setzen" %}
             </button>
-            <button type="button" onclick="openManualCheckModal()" style="background: var(--paper); color: var(--ink); border: 1px solid var(--line); padding: 8px 12px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;" title="{% t 'guest_list_btn_manual_payment_check' 'Datum/Uhrzeit anpassen' %}">
+            <button type="button" onclick="openManualCheckModal()" style="background: var(--panel, #ffffff); color: var(--ink); border: 1px solid var(--line); padding: 9px 12px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;" title="{% t 'guest_list_btn_manual_payment_check' 'Datum/Uhrzeit anpassen' %}">
               ⏱️
             </button>
           </div>
@@ -83,23 +84,20 @@
     <!-- ======================================================================
          3. FILTER- UND SUCHLEISTE
          ====================================================================== -->
-    <div class="card" style="padding: 16px 20px; border-radius: var(--radius, 16px); background: var(--paper); border: 1px solid var(--line);">
-      <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
+    <div class="card guest-filter-card" style="padding: 16px 20px; border-radius: var(--radius, 16px); background: var(--paper); border: 1px solid var(--line);">
+      <div class="guest-filter-wrapper">
         
-        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; flex: 1; min-width: 280px;">
+        <div class="guest-filter-controls">
           <!-- Suchfeld Username -->
-          <div style="position: relative; flex: 1; min-width: 200px;">
-            <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none;">
-              🔍
-            </span>
-            <input type="text" id="guest-search-input" value="{{ search_query }}"
-                   placeholder="{% t 'guest_list_search_placeholder' 'Benutzername suchen...' %}"
-                   style="width: 100%; box-sizing: border-box; background: var(--bg, #0b0c10); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px 10px 36px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+          <div class="guest-search-box">
+            <span class="guest-search-icon">🔍</span>
+            <input type="text" id="guest-search-input" class="guest-input-field guest-search-input" value="{{ search_query }}"
+                   placeholder="{% t 'guest_list_search_placeholder' 'Benutzername suchen...' %}">
           </div>
 
           <!-- Clan-Filter -->
-          <div style="min-width: 170px;">
-            <select id="clan-filter-select" style="width: 100%; background: var(--bg, #0b0c10); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px; cursor: pointer;">
+          <div class="guest-select-box">
+            <select id="clan-filter-select" class="guest-input-field guest-select-field">
               <option value="">🛡️ {% t "guest_list_clan_filter_all" "Alle Clans" %}</option>
               <option value="none" {% if selected_clan == 'none' %}selected{% endif %}>🚫 {% t "guest_list_clan_filter_none" "Ohne Clan" %}</option>
               {% for c in clans %}
@@ -111,8 +109,8 @@
           </div>
 
           <!-- Status-Filter -->
-          <div style="min-width: 160px;">
-            <select id="status-filter-select" style="width: 100%; background: var(--bg, #0b0c10); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px; cursor: pointer;">
+          <div class="guest-select-box">
+            <select id="status-filter-select" class="guest-input-field guest-select-field">
               <option value="">💳 {% t "guest_list_status_filter_all" "Alle Bezahlstatus" %}</option>
               <option value="paid" {% if selected_status == 'paid' %}selected{% endif %}>✓ {% t "guest_list_status_filter_paid" "Nur bezahlt" %}</option>
               <option value="unpaid" {% if selected_status == 'unpaid' %}selected{% endif %}>⏳ {% t "guest_list_status_filter_unpaid" "Zahlung offen" %}</option>
@@ -122,7 +120,7 @@
 
         <!-- Treffer-Zähler Badge -->
         <div>
-          <span id="filtered-count-badge" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); background: var(--bg, #0b0c10); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);">
+          <span id="filtered-count-badge" class="guest-count-badge">
             {{ registrations|length }} Teilnehmer
           </span>
         </div>
@@ -138,12 +136,12 @@
       <div style="overflow-x: auto;">
         <table id="guest-table" style="width: 100%; border-collapse: collapse; text-align: left;">
           <thead>
-            <tr style="background: rgba(0, 0, 0, 0.2); border-bottom: 2px solid var(--line); font-family: 'Barlow Condensed', sans-serif; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);">
-              <th style="padding: 14px 18px; width: 50px;">{% t "guest_list_th_number" "#" %}</th>
-              <th style="padding: 14px 18px;">{% t "guest_list_th_user" "Benutzername" %}</th>
-              <th style="padding: 14px 18px;">{% t "guest_list_th_clan" "Clan" %}</th>
-              <th style="padding: 14px 18px;">{% t "guest_list_th_seat" "Sitzplatz" %}</th>
-              <th style="padding: 14px 18px; text-align: right;">{% t "guest_list_th_payment" "Bezahlt" %}</th>
+            <tr style="background: rgba(110, 72, 24, 0.05); border-bottom: 2px solid var(--line); font-family: 'Barlow Condensed', sans-serif; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);">
+              <th class="col-index" style="padding: 14px 16px; width: 44px; text-align: center;">{% t "guest_list_th_number" "#" %}</th>
+              <th class="col-user" style="padding: 14px 16px;">{% t "guest_list_th_user" "Benutzername" %}</th>
+              <th class="col-clan" style="padding: 14px 16px;">{% t "guest_list_th_clan" "Clan" %}</th>
+              <th class="col-seat" style="padding: 14px 16px;">{% t "guest_list_th_seat" "Sitzplatz" %}</th>
+              <th class="col-payment" style="padding: 14px 16px; text-align: right;">{% t "guest_list_th_payment" "Bezahlt" %}</th>
             </tr>
           </thead>
           <tbody id="guest-table-body">
@@ -156,33 +154,28 @@
                   style="border-bottom: 1px solid var(--line); transition: background 0.15s ease; {% if user.is_authenticated and reg.user_id == user.id %}background: rgba(248, 171, 45, 0.05);{% endif %}">
                 
                 <!-- 1. Index -->
-                <td class="row-index" style="padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted);">
+                <td class="row-index col-index" style="padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); text-align: center;">
                   {{ forloop.counter }}
                 </td>
 
                 <!-- 2. Username -->
-                <td style="padding: 14px 18px;">
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg, #0b0c10); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: bold; font-size: 15px; color: var(--signal);">
-                      {{ reg.user.username|slice:":1"|upper }}
-                    </div>
-                    <div>
-                      <span style="font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--ink);">
-                        {{ reg.user.username }}
+                <td class="col-user" style="padding: 14px 16px;">
+                  <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px;">
+                    <span class="guest-username-text" style="font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--ink);">
+                      {{ reg.user.username }}
+                    </span>
+                    {% if user.is_authenticated and reg.user_id == user.id %}
+                      <span class="guest-you-badge" style="display: inline-block; background: var(--signal, #f8ab2d); color: var(--navy, #332719); font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; white-space: nowrap;">
+                        {% t "guest_list_you_badge" "Du" %}
                       </span>
-                      {% if user.is_authenticated and reg.user_id == user.id %}
-                        <span style="display: inline-block; background: var(--signal, #f8ab2d); color: var(--navy, #332719); font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-family: 'JetBrains Mono', monospace;">
-                          {% t "guest_list_you_badge" "Du" %}
-                        </span>
-                      {% endif %}
-                    </div>
+                    {% endif %}
                   </div>
                 </td>
 
                 <!-- 3. Clan -->
-                <td style="padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+                <td class="col-clan" style="padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
                   {% if reg.cached_clan %}
-                    <a href="{% url 'clan_detail' slug=reg.cached_clan.slug %}" style="display: inline-flex; align-items: center; gap: 6px; color: #38bdf8; text-decoration: none; font-weight: bold;" title="{{ reg.cached_clan.name }}">
+                    <a href="{% url 'clan_detail' slug=reg.cached_clan.slug %}" class="clan-badge-link" style="display: inline-flex; align-items: center; gap: 6px; color: #0284c7; text-decoration: none; font-weight: bold; white-space: nowrap;" title="{{ reg.cached_clan.name }}">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                       </svg>
@@ -194,21 +187,21 @@
                 </td>
 
                 <!-- 4. Sitzplatz -->
-                <td style="padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+                <td class="col-seat" style="padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
                   {% if reg.seat_label %}
                     <a href="{% url 'seating_plan' %}?seat={{ reg.seat_label|urlencode }}" 
                        class="seat-badge-link"
                        title="Platz {{ reg.seat_label }} im Saalplan anzeigen"
-                       style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; color: #38bdf8; font-weight: bold; text-decoration: none; transition: transform 0.15s ease, background 0.15s ease;">
+                       style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; color: #0284c7; font-weight: bold; text-decoration: none; white-space: nowrap; transition: transform 0.15s ease, background 0.15s ease;">
                       🪑 {{ reg.seat_label }}
                     </a>
                   {% else %}
                     {% if user.is_authenticated and reg.user_id == user.id %}
-                      <a href="{% url 'seating_plan' %}" style="color: var(--signal, #f8ab2d); font-size: 12px; font-weight: bold; text-decoration: underline;">
+                      <a href="{% url 'seating_plan' %}" style="color: var(--signal, #f8ab2d); font-size: 12px; font-weight: bold; text-decoration: underline; white-space: nowrap;">
                         {% t "guest_list_choose_seat" "👉 Platz wählen" %}
                       </a>
                     {% else %}
-                      <span style="color: var(--muted); opacity: 0.6; font-size: 12px;">
+                      <span style="color: var(--muted); opacity: 0.6; font-size: 12px; white-space: nowrap;">
                         {% t "guest_list_no_seat" "Kein Sitzplatz" %}
                       </span>
                     {% endif %}
@@ -216,17 +209,17 @@
                 </td>
 
                 <!-- 5. Bezahlstatus -->
-                <td style="padding: 14px 18px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+                <td class="col-payment" style="padding: 14px 16px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
                   {% if reg.payment_status == 'PAID' %}
-                    <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: bold;" title="Bezahlt">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <span class="payment-badge payment-paid" style="display: inline-flex; align-items: center; gap: 5px; background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: bold; white-space: nowrap;" title="Bezahlt">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="20 6 9 17 4 12"></polyline>
                       </svg>
                       {% t "guest_list_payment_paid" "Bezahlt" %}
                     </span>
                   {% else %}
-                    <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: bold;" title="Zahlung offen">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <span class="payment-badge payment-unpaid" style="display: inline-flex; align-items: center; gap: 5px; background: rgba(234, 179, 8, 0.15); color: #ca8a04; border: 1px solid rgba(234, 179, 8, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: bold; white-space: nowrap;" title="Zahlung offen">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <polyline points="12 6 12 12 16 14"></polyline>
                       </svg>
@@ -274,16 +267,18 @@
 
 <!-- ======================================================================
      MODAL FÜR MANUELLE KONTOCHECK-EINGABE (NUR MIT BERECHTIGUNG)
+<!-- ======================================================================
+     MODAL FÜR MANUELLE KONTOCHECK-EINGABE (NUR MIT BERECHTIGUNG)
      ====================================================================== -->
 {% if can_update_payment_check and event %}
-<div id="manual-check-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px;">
-  <div style="position: relative; background: var(--paper, #1a1c23); padding: 24px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); width: 100%; max-width: 400px; border: 1px solid var(--line);">
+<div id="manual-check-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px;">
+  <div style="position: relative; background: var(--paper, #fffaf2); padding: 24px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); width: 100%; max-width: 420px; border: 1px solid var(--line);">
     
-    <button type="button" onclick="closeManualCheckModal()" style="position: absolute; top: 12px; right: 12px; background: transparent; color: var(--muted); border: none; font-size: 20px; cursor: pointer;">
+    <button type="button" onclick="closeManualCheckModal()" style="position: absolute; top: 14px; right: 14px; background: transparent; color: var(--muted); border: none; font-size: 20px; cursor: pointer; line-height: 1;">
       ✕
     </button>
 
-    <h3 style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
+    <h3 style="margin: 0 0 12px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
       {% t "guest_list_modal_payment_check_title" "Kontocheck-Zeitpunkt anpassen" %}
     </h3>
 
@@ -292,7 +287,7 @@
     </p>
 
     <div style="margin-bottom: 20px;">
-      <input type="datetime-local" id="manual-datetime-input" style="width: 100%; box-sizing: border-box; background: var(--bg, #0b0c10); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+      <input type="datetime-local" id="manual-datetime-input" class="guest-input-field" style="width: 100%; box-sizing: border-box; background: var(--panel, #ffffff); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 14px; color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 14px;">
     </div>
 
     <div style="display: flex; gap: 10px; justify-content: flex-end;">
@@ -353,7 +348,6 @@
       if (matchesSearch && matchesClan && matchesStatus) {
         row.style.display = '';
         visibleCount++;
-        // Index-Nummerierung live anpassen
         const idxCell = row.querySelector('.row-index');
         if (idxCell) idxCell.textContent = visibleCount;
       } else {
@@ -395,8 +389,15 @@
 
   // --- 3. Kontocheck Aktualisierung via API ---
   {% if event and can_update_payment_check %}
-  const eventId = {{ event.id }};
-  const csrfToken = '{{ csrf_token }}';
+  const updatePaymentCheckUrl = "{% url 'api_update_payment_check' event.id %}";
+
+  function getCsrfToken() {
+    const cookieMatch = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    if (cookieMatch) return decodeURIComponent(cookieMatch[1]);
+    const input = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (input) return input.value;
+    return '{{ csrf_token }}';
+  }
 
   window.updatePaymentCheck = function(mode, customDate) {
     const btn = document.getElementById('btn-update-check-now');
@@ -407,20 +408,22 @@
       payload.custom_date = customDate;
     }
 
-    fetch(`/events/api/event/${eventId}/update-payment-check/`, {
+    fetch(updatePaymentCheckUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRFToken': csrfToken,
+        'X-CSRFToken': getCsrfToken(),
         'X-Requested-With': 'XMLHttpRequest'
       },
       body: JSON.stringify(payload)
     })
-    .then(res => {
+    .then(async res => {
+      const isJson = (res.headers.get('content-type') || '').includes('application/json');
+      const data = isJson ? await res.json() : {};
       if (!res.ok) {
-        return res.json().then(d => { throw new Error(d.message || 'Fehler beim Aktualisieren'); });
+        throw new Error(data.message || `Fehler beim Aktualisieren (HTTP ${res.status})`);
       }
-      return res.json();
+      return data;
     })
     .then(data => {
       if (btn) btn.style.opacity = '1';
@@ -443,7 +446,6 @@
     const modal = document.getElementById('manual-check-modal');
     const input = document.getElementById('manual-datetime-input');
     if (input) {
-      // Aktuelles Datum/Uhrzeit als ISO-Wert vorbefüllen (YYYY-MM-DDTHH:mm)
       const now = new Date();
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
       input.value = now.toISOString().slice(0, 16);
@@ -467,13 +469,170 @@
 </script>
 
 <style>
-.seat-badge-link:hover {
-  transform: scale(1.06);
-  background: rgba(56, 189, 248, 0.25) !important;
-  border-color: #38bdf8 !important;
+.payment-check-banner {
+  margin-top: 20px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #e7dac8);
+  background: rgba(110, 72, 24, 0.04);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
 }
+
+.guest-filter-wrapper {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.guest-filter-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 280px;
+}
+
+.guest-search-box {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.guest-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+  font-size: 14px;
+}
+
+.guest-select-box {
+  min-width: 160px;
+}
+
+.guest-input-field {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel, #ffffff);
+  border: 1.5px solid var(--line, #e7dac8);
+  border-radius: 10px;
+  padding: 10px 14px 10px 38px;
+  color: var(--ink, #2b2115);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.guest-input-field::placeholder {
+  color: var(--muted, #6f6252);
+  opacity: 0.7;
+}
+
+.guest-input-field:focus {
+  border-color: var(--amber, #d97817);
+  box-shadow: 0 0 0 3px rgba(217, 120, 23, 0.15);
+}
+
+.guest-select-field {
+  padding-left: 14px;
+  cursor: pointer;
+}
+
+.guest-count-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink, #2b2115);
+  background: var(--panel, #ffffff);
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #e7dac8);
+  display: inline-block;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.seat-badge-link:hover {
+  transform: scale(1.04);
+  background: rgba(56, 189, 248, 0.22) !important;
+  border-color: #0284c7 !important;
+}
+
 .guest-row:hover {
-  background: rgba(255, 255, 255, 0.03) !important;
+  background: rgba(110, 72, 24, 0.03) !important;
+}
+
+@media (max-width: 768px) {
+  /* Mobile Filter Controls Full-Width */
+  .guest-filter-wrapper {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  .guest-filter-controls {
+    flex-direction: column;
+    min-width: 0 !important;
+  }
+  .guest-search-box,
+  .guest-select-box {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .guest-count-badge {
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  /* Mobile Table Optimizations */
+  #guest-table {
+    min-width: 480px;
+  }
+  #guest-table th,
+  #guest-table td {
+    padding: 10px 8px !important;
+    font-size: 12px !important;
+  }
+  #guest-table th.col-index,
+  #guest-table td.col-index {
+    padding: 10px 4px !important;
+    width: 24px !important;
+  }
+  #guest-table th:first-child,
+  #guest-table td:first-child {
+    padding-left: 10px !important;
+  }
+  #guest-table th:last-child,
+  #guest-table td:last-child {
+    padding-right: 10px !important;
+  }
+  .guest-username-text {
+    font-size: 13px !important;
+    word-break: break-word;
+  }
+  .payment-badge {
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  .seat-badge-link {
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  .col-clan a {
+    white-space: nowrap !important;
+    font-size: 12px !important;
+  }
 }
 </style>
 {% endblock %}

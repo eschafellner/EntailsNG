@@ -14,6 +14,7 @@ urlpatterns = [
 
     # API / Interaktionen
     path('api/event/<int:event_id>/update-payment-check/', views.update_payment_check_api, name='api_update_payment_check'),
+    path('events/api/event/<int:event_id>/update-payment-check/', views.update_payment_check_api),
     path('api/check-in/toggle/', views.toggle_check_in_api, name='api_toggle_check_in'),
     path('api/check-in/scan/', views.scan_qr_api, name='api_scan_qr'),
     path('register/<int:event_id>/', views.register_for_event, name='register_for_event'),
