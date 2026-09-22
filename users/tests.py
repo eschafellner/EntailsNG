@@ -905,6 +905,25 @@ class ConcurrencyAndLockoutTests(TestCase):
         self.assertTrue(code_free.is_used)
 
 
+class AuthOfflineFontsTests(TestCase):
+    def test_auth_views_use_offline_fonts_without_external_cdns(self):
+        """Authentifizierungs-Seiten laden Schriftarten 100% lokal ohne Verbindungen zu Google Fonts."""
+        urls = [
+            reverse('login'),
+            reverse('register'),
+            reverse('password_reset'),
+            reverse('password_reset_done'),
+        ]
+        for url in urls:
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 200, f"Status code for {url} should be 200")
+            content = resp.content.decode('utf-8')
+            self.assertIn('static/css/fonts.css', content, f"{url} must include local static/css/fonts.css")
+            self.assertNotIn('fonts.googleapis.com', content, f"{url} must not load from fonts.googleapis.com")
+            self.assertNotIn('fonts.gstatic.com', content, f"{url} must not load from fonts.gstatic.com")
+
+
+
 
 
 

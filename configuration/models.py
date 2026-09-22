@@ -124,7 +124,8 @@ class SafeHTMLSanitizer(HTMLParser):
         'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
         'strong', 'b', 'em', 'i', 'u', 's', 'small', 'sub', 'sup',
         'ul', 'ol', 'li', 'blockquote', 'a',
-        'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div', 'span'
+        'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div', 'span',
+        'code'
     }
     DROP_CONTENT_TAGS = {'script', 'style', 'noscript', 'iframe'}
     ALLOWED_ATTRS = {'href', 'title', 'target', 'rel', 'class', 'id', 'align'}
@@ -528,6 +529,45 @@ class GeneralConfiguration(models.Model):
 
 
 
+DEFAULT_DATENSCHUTZ_CONTENT = """<h3>Datenschutzerklärung</h3>
+<p>Wir nehmen den Schutz Ihrer persönlichen Daten sehr ernst. Nachfolgend informieren wir Sie über die Verarbeitung personenbezogener Daten bei der Nutzung unserer Plattform im Rahmen der Organisation und Durchführung von Veranstaltungen (LAN-Partys).</p>
+
+<h4>1. Verantwortlicher</h4>
+<p>Verantwortlich für die Datenverarbeitung auf dieser Website ist der jeweilige Veranstalter / Betreiber der Plattform (siehe Angaben im <a href="/impressum/">Impressum</a>).</p>
+
+<h4>2. Bereitstellung der Website und Server-Logfiles</h4>
+<p>Beim Aufruf unserer Website erfasst unser Webserver automatisch technische Informationen, die Ihr Browser an uns übermittelt (z.&nbsp;B. IP-Adresse, Datum und Uhrzeit des Zugriffs, aufgerufene Seite, Browsertyp und Betriebssystem). Die Erfassung dieser Daten erfolgt zur Gewährleistung eines reibungslosen Verbindungsaufbaus, der Systemsicherheit sowie zu administrativen Zwecken auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an der IT-Sicherheit und Fehleranalyse).</p>
+
+<h4>3. Einsatz von Cookies &amp; lokalem Speicher</h4>
+<p>Unsere Website verwendet ausschließlich <strong>technisch zwingend erforderliche Cookies</strong> (Erstanbieter-Cookies). Es werden <strong>keine</strong> Tracking-, Analyse- oder Marketing-Cookies (wie Google Analytics, Meta Pixel etc.) eingesetzt.</p>
+<ul>
+  <li><strong><code>sessionid</code>:</strong> Speichert die Sitzungskennung angemeldeter Benutzer, um die Authentifizierung über aufeinanderfolgende Seitenaufrufe hinweg aufrechtzuerhalten. Gültigkeit: Für die Dauer der Sitzung bzw. bis zum Logout.</li>
+  <li><strong><code>csrftoken</code>:</strong> Ein kryptografisches Sicherheits-Token, das Angriffe durch Cross-Site Request Forgery (CSRF) bei Formularübermittlungen und Datenänderungen (z.&nbsp;B. Platzreservierung, Teambeitritt) verhindert. Gültigkeit: 1 Jahr bzw. bis zum Sitzungsende.</li>
+</ul>
+<p>Die Speicherung dieser Cookies erfolgt auf Grundlage von § 25 Abs. 2 Nr. 2 TDDDG bzw. Art. 5 Abs. 3 ePrivacy-Richtlinie i.&nbsp;V.&nbsp;m. Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an einem sicheren und funktionierenden Betrieb der Plattform). Ein gesonderter Cookie-Banner / Consent-Banner ist für diese essenziellen Cookies gesetzlich nicht erforderlich.</p>
+<p>Zudem nutzt das System den clientseitigen Speicher Ihres Browsers (<code>sessionStorage</code>), um temporäre UI-Zustände (z.&nbsp;B. den aktiven Reiter in der Turnieransicht) während Ihres Besuchs zu speichern. Diese Daten verbleiben rein lokal auf Ihrem Endgerät und werden zu keinem Zeitpunkt an Dritte übermittelt.</p>
+
+<h4>4. Benutzerkonto, Registrierung und Stammdaten</h4>
+<p>Wenn Sie sich auf unserer Plattform registrieren, verarbeiten wir die von Ihnen eingegebenen Daten (Benutzername, E-Mail-Adresse und Passwort) zur Erstellung und Verwaltung Ihres Benutzerkontos sowie zur Authentifizierung (Art. 6 Abs. 1 lit. b DSGVO zur Vertragserfüllung bzw. Durchführung vorvertraglicher Maßnahmen). Passwörter werden ausschließlich als sichere, kryptografische Hashes gespeichert.</p>
+
+<h4>5. Event-Teilnahme, Ticketbuchung und Zahlungsstatus</h4>
+<p>Für die Teilnahme an einer Veranstaltung verarbeiten wir Ihre Event-Anmeldung, gewählte Ticket-Kategorien, Zahlungsstatus (z.&nbsp;B. Bezahlt / Ausstehend), den Zeitpunkt der Zahlungsprüfung sowie ggf. getätigte Sitzplatzreservierungen. Diese Datenverarbeitung dient der ordnungsgemäßen Abwicklung der Veranstaltung (Art. 6 Abs. 1 lit. b DSGVO).</p>
+
+<h4>6. Öffentliche Anzeige auf der Plattform (Gästeliste, Sitzplan &amp; Turniere)</h4>
+<p>Im Rahmen des interaktiven LAN-Party-Erlebnisses sind bestimmte Profildaten für andere Teilnehmer sichtbar:</p>
+<ul>
+  <li>Auf der <strong>Gästeliste</strong> und im <strong>Sitzplan</strong> werden Ihr Benutzername (Gamer-Tag), optionaler Clan und Ihr reservierter Sitzplatz öffentlich angezeigt.</li>
+  <li>In <strong>Turnieren</strong> werden Ihr Teamname sowie die beteiligten Teammitglieder zur Turnierorganisation und Anzeige von Paarungen und Ergebnissen dargestellt.</li>
+</ul>
+<p>Rechtsgrundlage hierfür ist die Erfüllung des Teilnahmevertrags (Art. 6 Abs. 1 lit. b DSGVO) sowie unser berechtigtes Interesse an einer transparenten und gemeinschaftlichen Durchführung der Veranstaltung (Art. 6 Abs. 1 lit. f DSGVO).</p>
+
+<h4>7. E-Mail-Benachrichtigungen</h4>
+<p>Wir versenden ausschließlich systemrelevante Transaktions-E-Mails (z.&nbsp;B. Verifizierungs-Codes zur E-Mail-Bestätigung, Links zum Zurücksetzen des Passworts oder Anmeldebestätigungen). Es erfolgt kein Versand von Werbe-Newslettern ohne gesonderte Einwilligung.</p>
+
+<h4>8. Ihre Rechte als betroffene Person</h4>
+<p>Sie haben nach der DSGVO jederzeit das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16 DSGVO), Löschung (Art. 17 DSGVO), Einschränkung der Verarbeitung (Art. 18 DSGVO), Datenübertragbarkeit (Art. 20 DSGVO) sowie Widerspruch (Art. 21 DSGVO). Zudem steht Ihnen ein Beschwerderecht bei der zuständigen Datenschutz-Aufsichtsbehörde zu.</p>"""
+
+
 class SiteCustomization(models.Model):
     """
     Zentrale Individualisierung und Branding für das System.
@@ -636,7 +676,7 @@ class SiteCustomization(models.Model):
     )
     datenschutz_content = models.TextField(
         blank=True,
-        default='<h3>Datenschutzerklärung</h3><p>Informationen zum Datenschutz...</p>',
+        default=DEFAULT_DATENSCHUTZ_CONTENT,
         verbose_name='Datenschutzerklärung',
         help_text='Inhalt für die Datenschutz-Seite / Modal. Unterstützt HTML.',
     )
@@ -671,9 +711,20 @@ class SiteCustomization(models.Model):
 
     @classmethod
     def load(cls):
+        def _get_or_create_customization():
+            obj, _ = cls.objects.get_or_create(pk=1)
+            # Falls noch der alte Einzeiler-Platzhalter oder ein leerer String vorliegt, mit dem vollständigen Default initialisieren
+            if not obj.datenschutz_content or obj.datenschutz_content.strip() in (
+                '<h3>Datenschutzerklärung</h3><p>Informationen zum Datenschutz...</p>',
+                '<h3>Datenschutzerklärung</h3><p>Informationen zum Datenschutz...</p>'.strip(),
+            ):
+                obj.datenschutz_content = DEFAULT_DATENSCHUTZ_CONTENT
+                obj.save(update_fields=['datenschutz_content'])
+            return obj
+
         return safe_cache_get_or_set(
             'site_customization',
-            lambda: cls.objects.get_or_create(pk=1)[0],
+            _get_or_create_customization,
             300,
         )
 

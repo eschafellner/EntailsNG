@@ -356,6 +356,27 @@ class ConfigurationModelTests(TestCase):
         self.assertEqual(resp_dat.status_code, 200)
         self.assertContains(resp_dat, 'Test Datenschutz Content')
 
+    def test_default_datenschutz_content_and_cookie_disclosure(self):
+        """Standard-Datenschutzerklärung enthält alle Pflichtangaben inkl. technisch notwendiger Cookies."""
+        from configuration.models import SiteCustomization, DEFAULT_DATENSCHUTZ_CONTENT
+
+        custom = SiteCustomization.load()
+        custom.datenschutz_content = DEFAULT_DATENSCHUTZ_CONTENT
+        custom.save()
+
+        resp = self.client.get(reverse('datenschutz'))
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode('utf-8')
+
+        # Prüfe wesentliche rechtliche Inhalte
+        self.assertIn('Datenschutzerklärung', content)
+        self.assertIn('sessionid', content)
+        self.assertIn('csrftoken', content)
+        self.assertIn('sessionStorage', content)
+        self.assertIn('Verantwortlicher', content)
+        self.assertIn('TDDDG', content)
+        self.assertIn('Rechte als betroffene Person', content)
+
     def test_expired_ticket_modes(self):
         from datetime import timedelta
         from django.utils import timezone
