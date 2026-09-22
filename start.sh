@@ -20,7 +20,7 @@ fi
 source .venv/bin/activate
 
 # Prüfen ob Abhängigkeiten vollständig sind (z. B. nach git pull)
-if ! python3 -c "import whitenoise" 2>/dev/null; then
+if ! python3 -c "import whitenoise, qrcode, cryptography" 2>/dev/null; then
     echo -e "${YELLOW}📦 Aktualisiere Python-Pakete aus requirements.txt...${NC}"
     pip install -r requirements.txt --quiet 2>/dev/null || python3 -m pip install -r requirements.txt --quiet
 fi
@@ -44,9 +44,11 @@ if [ "$PG_RUNNING" = false ] && [ "${DB_ENGINE:-postgresql}" != "sqlite" ]; then
         echo -e "${YELLOW}🐘 PostgreSQL läuft nicht. Starte DB & Redis über Podman...${NC}"
         systemctl --user enable --now podman.socket 2>/dev/null || true
         podman compose up -d db redis 2>/dev/null || podman-compose up -d db redis 2>/dev/null || true
+        sleep 2
     elif command -v docker &> /dev/null; then
         echo -e "${YELLOW}🐘 PostgreSQL läuft nicht. Starte DB & Redis über Docker...${NC}"
         docker compose up -d db redis 2>/dev/null || true
+        sleep 2
     fi
 fi
 

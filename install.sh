@@ -52,6 +52,9 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     sed -i "s|DEBUG=False|DEBUG=True|" .env
     sed -i "s|ALLOWED_HOSTS=lan.meinedomain.de|ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0|" .env
     sed -i "s|CSRF_TRUSTED_ORIGINS=https://lan.meinedomain.de|CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000|" .env
+    sed -i "s|DB_HOST=db|DB_HOST=127.0.0.1|" .env
+    sed -i "s|REDIS_URL=redis://redis:6379/1|REDIS_URL=redis://127.0.0.1:6379/1|" .env
+    sed -i "s|BEHIND_PROXY=True|BEHIND_PROXY=False|" .env
     echo -e "${GREEN}✓ .env erfolgreich initialisiert.${NC}\n"
 fi
 
