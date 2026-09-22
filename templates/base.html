@@ -17,7 +17,7 @@
   {% block extra_head %}{% endblock %}
   <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 
 <a class="skip-link" href="#main-content">{% t "skip_to_content" "Zum Inhalt springen" %}</a>
 

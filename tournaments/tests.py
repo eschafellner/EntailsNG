@@ -25,6 +25,83 @@ from tournaments.services import (
 )
 
 
+class TournamentUXTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        now = timezone.now()
+        cls.event = Event.objects.create(title='UX LAN', slug='ux-lan', is_active=True,
+                                        start_date=now, end_date=now + timedelta(days=2))
+        cls.game = Game.objects.create(name='UX Game', team_size=2)
+        cls.captain = User.objects.create_user(username='ux-captain')
+        cls.member = User.objects.create_user(username='ux-member')
+        cls.team = Team.objects.create(name='UX Team', captain=cls.captain, game=cls.game, event=cls.event)
+        for user in (cls.captain, cls.member):
+            TeamMember.objects.create(team=cls.team, user=user, status=TeamMember.Status.ACCEPTED)
+        EventRegistration.objects.create(user=cls.captain, event=cls.event, is_checked_in=True)
+        cls.tournament = Tournament.objects.create(
+            title='UX Cup', event=cls.event, game=cls.game, status=Tournament.Status.REGISTRATION_OPEN,
+            registration_start=now - timedelta(hours=1), registration_end=now + timedelta(hours=1))
+
+    def test_readiness_counts_only_accepted_checked_in_members(self):
+        pending = User.objects.create_user(username='pending')
+        TeamMember.objects.create(team=self.team, user=pending, status=TeamMember.Status.PENDING)
+        EventRegistration.objects.create(user=pending, event=self.event, is_checked_in=True)
+        self.client.force_login(self.captain)
+        response = self.client.get(reverse('tournament_detail', args=[self.tournament.slug]))
+        self.assertEqual(response.status_code, 200)
+        row = response.context['team_readiness'][0]
+        self.assertEqual((row['count'], row['checked_in'], row['size_ok']), (2, 1, True))
+        self.assertFalse(row['ready'])
+        self.assertFalse(response.context['team_registration_ready'])
+        self.assertContains(response, 'Mitglieder eingecheckt')
+
+    def test_complete_team_is_ready_and_registration_still_requires_service_validation(self):
+        EventRegistration.objects.create(user=self.member, event=self.event, is_checked_in=True)
+        self.client.force_login(self.captain)
+        response = self.client.get(reverse('tournament_detail', args=[self.tournament.slug]))
+        self.assertTrue(response.context['team_registration_ready'])
+        self.assertEqual(response.context['team_readiness'][0]['checked_in'], 2)
+        # Viewing readiness must not create a registration.
+        self.assertFalse(self.tournament.registrations.exists())
+
+    def test_next_match_prefers_playable_match_and_preserves_zero_score(self):
+        self.tournament.status = Tournament.Status.IN_PROGRESS
+        self.tournament.is_generated = True
+        self.tournament.save()
+        TournamentRegistration.objects.create(tournament=self.tournament, team=self.team)
+        opponent = Team.objects.create(name='Other', captain=self.member, game=self.game)
+        TournamentMatch.objects.create(tournament=self.tournament, team1=self.team,
+                                       round_number=1, status=TournamentMatch.Status.COMPLETED)
+        match = TournamentMatch.objects.create(tournament=self.tournament, team1=self.team,
+                                              team2=opponent, round_number=2,
+                                              score_team1=0, score_team2=1,
+                                              status=TournamentMatch.Status.READY)
+        self.client.force_login(self.captain)
+        response = self.client.get(reverse('tournament_detail', args=[self.tournament.slug]))
+        self.assertEqual(response.context['next_match'], match)
+        self.assertEqual(response.context['match_list_cards'][0], match)
+        self.assertEqual(response.context['score_matches'][str(match.id)]['score1'], 0)
+        self.assertContains(response, '<strong>0</strong>', html=True)
+        self.assertContains(response, 'Dein nächstes Match')
+
+    def test_finished_tournament_has_no_next_match(self):
+        self.tournament.status = Tournament.Status.FINISHED
+        self.tournament.save()
+        TournamentRegistration.objects.create(tournament=self.tournament, team=self.team)
+        TournamentMatch.objects.create(tournament=self.tournament, team1=self.team)
+        self.client.force_login(self.captain)
+        response = self.client.get(reverse('tournament_detail', args=[self.tournament.slug]))
+        self.assertIsNone(response.context['next_match'])
+
+    def test_match_names_are_json_escaped(self):
+        self.team.name = '</script><script>alert(1)</script>'
+        self.team.save()
+        TournamentMatch.objects.create(tournament=self.tournament, team1=self.team)
+        response = self.client.get(reverse('tournament_detail', args=[self.tournament.slug]))
+        self.assertNotContains(response, '</script><script>alert(1)</script>')
+        self.assertContains(response, r'\u003C/script\u003E')
+
+
 class TournamentModelTests(TestCase):
     def setUp(self):
         self.event = Event.objects.create(
@@ -1672,7 +1749,8 @@ class TeamFeedbackAndIntegrityTests(TestCase):
         self.assertIn('toggleGenerateBracketConfirm', content)
         # Inline Fehleranzeige & Validierung für Matchergebnisse
         self.assertIn('id="scoreFormError"', content)
-        self.assertIn('checkTieWarning', content)
+        self.assertIn('id="score-summary"', content)
+        self.assertIn('js/tournaments.js', content)
         # Keine Browser-Dialoge
         self.assertNotIn('confirm(', content)
         self.assertNotIn('alert(', content)
@@ -3080,7 +3158,7 @@ class FeedbackFeaturesTests(TestCase):
         resp2 = self.client.get(reverse('tournament_list'))
         self.assertEqual(resp2.status_code, 200)
         self.assertIn(tournament.id, resp2.context['registered_tournament_ids'])
-        self.assertContains(resp2, 'btn-action-green')
+        self.assertContains(resp2, 'Zum Spielplan')
         self.assertContains(resp2, 'Angemeldet')
 
     def test_single_team_per_game_rule_team_reactivate(self):
@@ -3491,8 +3569,6 @@ class TournamentAndTeamHardeningTests(TestCase):
         annotated_t = qs.get(pk=tournament.pk)
         self.assertEqual(annotated_t.reg_count, 1)
         self.assertEqual(t_admin.registered_count(annotated_t), 1)
-
-
 
 
 

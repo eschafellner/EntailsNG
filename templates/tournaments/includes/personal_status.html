@@ -1,0 +1,33 @@
+{% if next_match %}
+<section class="ux-card ux-next-match" aria-labelledby="next-match-heading">
+  <h2 id="next-match-heading">{% t "ux_next_match" "Dein nächstes Match" %}</h2>
+  <p>{{ next_match.get_bracket_type_display }} · {% t "ux_round" "Runde" %} {{ next_match.round_number }}</p>
+  {% if not next_match.team1 or not next_match.team2 %}
+  <p>{% t "ux_waiting_opponent" "Dein Gegner steht noch nicht fest. Sobald das vorherige Match entschieden ist, erscheint er hier." %}</p>
+  {% endif %}
+  {% include "tournaments/includes/match_card.html" with match=next_match %}
+</section>
+{% endif %}
+{% if user.is_authenticated and not is_registered and tournament.is_registration_open %}
+<section class="ux-card" aria-labelledby="readiness-heading">
+  <h2 id="readiness-heading">{% t "ux_readiness" "Bereit für die Anmeldung?" %}</h2>
+  <ul class="ux-checklist">
+    <li>{% if has_event_ticket %}✓{% else %}○{% endif %} {% t "ux_ticket" "Event-Ticket vorhanden" %}</li>
+    <li>{% if user_checkin %}✓{% else %}○{% endif %} {% t "ux_checkin" "Check-in am Einlass" %}{% if is_admin %} ({% t "ux_admin_exception" "Orga-Freigabe" %}){% endif %}</li>
+  </ul>
+  {% for item in team_readiness %}
+  <div>
+    <h3>{{ item.team.name }}</h3>
+    <ul class="ux-checklist">
+      <li>{% if item.size_ok %}✓{% else %}○{% endif %} {% t "ux_roster" "Kader" %}: {{ item.count }}/{{ tournament.game.team_size }}</li>
+      <li>{% t "ux_checked_members" "Mitglieder eingecheckt" %}: {{ item.checked_in }}/{{ item.count }}</li>
+    </ul>
+    <a href="{% url 'team_detail' slug=item.team.slug %}">{% t "ux_prepare_team" "Team ansehen und Mitspieler einladen" %}</a>
+  </div>
+  {% empty %}
+    {% if tournament.game.team_size > 1 %}
+    <a href="{% url 'team_list' %}?game={{ tournament.game_id }}">{% t "ux_find_team" "Passendes Team finden oder gründen" %}</a>
+    {% endif %}
+  {% endfor %}
+</section>
+{% endif %}

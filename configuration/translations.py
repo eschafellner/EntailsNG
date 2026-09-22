@@ -6,6 +6,43 @@ TRANSLATION_CACHE_KEY = 'system_translations'
 CACHE_SECONDS = 300
 
 DEFAULT_TEXTS = {
+    'ux_team_not_ready': 'Kader oder Check-in unvollständig',
+    'ux_confirm_result': 'Ergebnis bestätigen',
+    # Tournament/team interaction and readiness labels.
+    'ux_admin_exception': 'Orga-Freigabe',
+    'ux_bracket_view': 'Turnierübersicht',
+    'ux_checked_members': 'Mitglieder eingecheckt',
+    'ux_checkin': 'Check-in am Einlass',
+    'ux_choose_team': 'Team auswählen',
+    'ux_competition_finished': 'Die Ergebnisse stehen fest',
+    'ux_competition_running': 'Das Turnier läuft',
+    'ux_defeat_note': 'Du bestätigst die Niederlage von {loser}. Als Sieger wird {winner} gespeichert.',
+    'ux_draw': 'Unentschieden',
+    'ux_enter_scores': 'Bitte beide Punktestände eingeben.',
+    'ux_find_team': 'Passendes Team finden oder gründen',
+    'ux_finished_hint': 'Sieh dir die Platzierungen und abgeschlossenen Matches an.',
+    'ux_match_list': 'Matchliste',
+    'ux_next_match': 'Dein nächstes Match',
+    'ux_draw_note': 'Du bestätigst ein Unentschieden. Beide Teams erhalten die entsprechende Wertung.',
+    'ux_draw_save': 'Unentschieden bestätigen & speichern',
+    'ux_prepare_team': 'Team ansehen und Mitspieler einladen',
+    'ux_readiness': 'Bereit für die Anmeldung?',
+    'ux_results': 'Ergebnisse ansehen',
+    'ux_roster': 'Kader',
+    'ux_round': 'Runde',
+    'ux_running_hint': 'Gegner, Runden und Ergebnisse findest du im Spielplan.',
+    'ux_save_unknown': 'Die Speicherung konnte nicht bestätigt werden. Prüfe den aktuellen Spielstand vor einem erneuten Versuch.',
+    'ux_saving': 'Wird gespeichert …',
+    'ux_schedule': 'Zum Spielplan',
+    'ux_score_discrepancy': 'Der Sieger widerspricht dem Punktestand. Bitte prüfe die Eingabe; als Orga kannst du eine begründete Entscheidung eintragen.',
+    'ux_score_summary': '{team1} {score1} : {score2} {team2} · Sieger: {winner}',
+    'ux_ticket': 'Event-Ticket vorhanden',
+    'ux_tie': 'In diesem KO-Match muss ein Sieger feststehen.',
+    'ux_tournament_sections': 'Turnierbereiche',
+    'ux_unregister_confirm': "Team '{team}' wirklich vom Turnier '{tournament}' abmelden?",
+    'ux_unregister_yes': 'Ja, Team abmelden',
+    'ux_waiting_opponent': 'Dein Gegner steht noch nicht fest. Sobald das vorherige Match entschieden ist, erscheint er hier.',
+
     # Allgemeine Schaltflächen & Aktionen
     'skip_to_content': 'Zum Inhalt springen',
     'btn_close': 'Schließen',
@@ -825,4 +862,3 @@ def get_translation(key: str, default: str = None, request=None, **kwargs) -> st
             return text
 
     return text
-

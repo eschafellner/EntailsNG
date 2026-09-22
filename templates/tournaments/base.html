@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block body_class %}tournaments-ui{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/tournaments.css' %}">
+{% endblock %}
+{% block extra_js %}
+  <script src="{% static 'js/tournaments.js' %}" defer></script>
+{% endblock %}

@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'tournaments/base.html' %}
 
 {% block title %}{% t "tournament_list_title" "Gaming Turniere" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
@@ -13,7 +13,7 @@
         <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 32px;">
           🏆 {% t "tournament_list_heading" "Turniere & Wettbewerbe" %}
         </h1>
-        <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px;">
+        <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 14px;">
           {% if active_event %}
             {% t "tournament_list_for_event" "Offizielle Turniere für" %} <strong>{{ active_event.title }}</strong>
           {% else %}
@@ -32,7 +32,7 @@
             ⚠️ {% t "tournament_checkin_needed" "Nicht eingecheckt (Check-in am Einlass nötig)" %}
           </span>
         {% endif %}
-        <a href="{% url 'team_list' %}" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-decoration: none;">
+        <a href="{% url 'team_list' %}" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; text-decoration: none;">
           👥 {% t "tournament_teammanager_btn" "Teammanager öffnen" %}
         </a>
       </div>
@@ -87,7 +87,7 @@
               <h2 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px; line-height: 1.15; color: var(--ink); word-break: break-word;">
                 {{ tournament.title }}
               </h2>
-              <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <p style="margin: 0; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <span>🎮 {{ tournament.game.name }}</span>
                 {% if tournament.game.mode %}
                   <span style="color: var(--line);">|</span>
@@ -97,10 +97,21 @@
             </div>
           </div>
 
+          {% if tournament.status == 'IN_PROGRESS' %}
+          <div class="tournament-stats-box">
+            <strong>{% t "ux_competition_running" "Das Turnier läuft" %}</strong>
+            <p>{% t "ux_running_hint" "Gegner, Runden und Ergebnisse findest du im Spielplan." %}</p>
+          </div>
+          {% elif tournament.status == 'FINISHED' %}
+          <div class="tournament-stats-box">
+            <strong>{% t "ux_competition_finished" "Die Ergebnisse stehen fest" %}</strong>
+            <p>{% t "ux_finished_hint" "Sieh dir die Platzierungen und abgeschlossenen Matches an." %}</p>
+          </div>
+          {% else %}
           <!-- Structured Key Stats Card -->
           <div class="tournament-stats-box">
             <div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); margin-bottom: 6px;">
                 <span>👥 {% t "tournament_teams_label" "Angemeldete Teams" %}</span>
                 <strong>{{ tournament.registered_teams_count }} / {{ tournament.max_teams }}</strong>
               </div>
@@ -109,7 +120,7 @@
               </div>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line);">
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line);">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <span>📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong>{{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr</strong></span>
                 <span>👤 {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_admin_default" "Orga-Team" %}{% endif %}</span>
@@ -119,17 +130,18 @@
               </div>
             </div>
           </div>
+          {% endif %}
         </div>
 
         <!-- Card Footer Actions -->
         <div style="padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-          <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
-            ID: #{{ tournament.id }}
-          </span>
           {% if tournament.id in registered_tournament_ids %}
-            <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="btn-action-green">
-              ✓ {% t "tournament_already_registered" "Angemeldet" %}
-            </a>
+            <span>✓ {% t "tournament_already_registered" "Angemeldet" %}</span>
+          {% endif %}
+          {% if tournament.status == 'FINISHED' %}
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="btn-action-primary">{% t "ux_results" "Ergebnisse ansehen" %}</a>
+          {% elif tournament.id in registered_tournament_ids or tournament.status == 'IN_PROGRESS' %}
+            <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="btn-action-primary">{% t "ux_schedule" "Zum Spielplan" %}</a>
           {% elif tournament.is_registration_open %}
             <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="btn-action-primary">
               {% t "tournament_register_btn" "🎮 Jetzt anmelden →" %}
@@ -142,7 +154,7 @@
         </div>
       </div>
     {% empty %}
-      <div class="card" style="grid-column: 1 / -1; padding: 48px; text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace; border-radius: 14px;">
+      <div class="card" style="grid-column: 1 / -1; padding: 48px; text-align: center; color: var(--muted); font-family: 'DM Sans', sans-serif; border-radius: 14px;">
         {% t "tournament_empty_list" "🕹️ Aktuell sind keine Turniere für diese Veranstaltung angelegt." %}
       </div>
     {% endfor %}

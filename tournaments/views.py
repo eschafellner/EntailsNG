@@ -222,7 +222,66 @@ def tournament_detail(request, slug):
                 if len(ranked) >= 3:
                     podium['third'] = ranked[2].team
 
+    # Read-only presentation data; registration services remain authoritative.
+    candidate_teams = list(my_user_teams)
+    readiness_teams = candidate_teams or ([user_member_team] if user_member_team else [])
+    memberships = list(TeamMember.objects.filter(
+        team__in=readiness_teams, status=TeamMember.Status.ACCEPTED,
+    ).values('team_id', 'user_id'))
+    checked_in_ids = set(EventRegistration.objects.filter(
+        event=tournament.event,
+        user_id__in=[m['user_id'] for m in memberships], is_checked_in=True,
+    ).values_list('user_id', flat=True)) if memberships else set()
+    team_readiness = []
+    for team in readiness_teams:
+        ids = [m['user_id'] for m in memberships if m['team_id'] == team.id]
+        team_readiness.append({
+            'team': team, 'count': len(ids),
+            'checked_in': sum(uid in checked_in_ids for uid in ids),
+            'size_ok': len(ids) == tournament.game.team_size,
+            'ready': len(ids) == tournament.game.team_size and (is_admin or all(uid in checked_in_ids for uid in ids)),
+        })
+
+    match_list = list(matches)
+    next_match = None
+    if user_team and tournament.status == Tournament.Status.IN_PROGRESS:
+        personal_matches = [m for m in match_list if not m.is_bye
+                            and m.status != TournamentMatch.Status.COMPLETED
+                            and user_team.id in (m.team1_id, m.team2_id)]
+        personal_matches.sort(key=lambda m: (
+            m.status != TournamentMatch.Status.IN_PROGRESS,
+            m.status != TournamentMatch.Status.READY, m.round_number, m.match_number,
+        ))
+        next_match = next(iter(personal_matches), None)
+
+    score_matches = {}
+    for match in match_list:
+        role = 1 if user_team and user_team.id == match.team1_id else 2 if user_team and user_team.id == match.team2_id else 0
+        score_matches[str(match.id)] = {
+            'id': match.id, 'team1': match.team1.name if match.team1 else '',
+            'team2': match.team2.name if match.team2 else '',
+            'team1Id': match.team1_id, 'team2Id': match.team2_id,
+            'score1': match.score_team1, 'score2': match.score_team2,
+            'winner': match.winner_id, 'reason': match.decision_reason,
+            'isAdmin': is_admin, 'role': role,
+            'allowsDraw': tournament.mode == Tournament.Mode.LEAGUE or match.bracket_type == TournamentMatch.BracketType.GROUP,
+        }
+
     context = {
+        'next_match': next_match,
+        'team_readiness': team_readiness,
+        'team_registration_ready': any(row['ready'] for row in team_readiness),
+        'match_list_cards': sorted(match_list, key=lambda m: (
+            {TournamentMatch.Status.IN_PROGRESS: 0, TournamentMatch.Status.READY: 1,
+             TournamentMatch.Status.PENDING: 2, TournamentMatch.Status.COMPLETED: 3}.get(m.status, 4),
+            m.round_number,
+            {TournamentMatch.BracketType.GROUP: 0, TournamentMatch.BracketType.WINNERS: 1,
+             TournamentMatch.BracketType.LOSERS: 2, TournamentMatch.BracketType.FINAL: 3,
+             TournamentMatch.BracketType.GRAND_FINAL: 4,
+             TournamentMatch.BracketType.GRAND_FINAL_RESET: 5}.get(m.bracket_type, 6),
+            m.match_number,
+        )),
+        'score_matches': score_matches,
         'tournament': tournament,
         'user_checkin': user_checkin,
         'has_event_ticket': has_event_ticket,
