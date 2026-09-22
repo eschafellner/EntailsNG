@@ -2,26 +2,25 @@ import logging
 import secrets
 from datetime import timedelta
 from django.contrib import messages
-
-logger = logging.getLogger(__name__)
 from django.contrib.auth import get_user_model, login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth.views import PasswordResetConfirmView
 from django.core.cache import cache
 from django.db import transaction
+from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from emails.models import GeneralEmailSettings
-from emails.services import send_system_email
 from events.models import EventRegistration
 from configuration.translations import get_translation
 from .auth_backends import get_client_ip
 from .exceptions import VerificationCodeCooldownError, VerificationCodeLimitError
 from .forms import CustomUserCreationForm, UserProfileForm
 from .models import EmailVerificationCode
+from .services import UserService
 
-from django.contrib.auth.views import PasswordResetConfirmView
-
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
@@ -29,9 +28,10 @@ class CustomPasswordResetConfirmView(PasswordResetConfirmView):
     template_name = 'auth/password_reset_confirm.html'
 
     def form_valid(self, form):
+        # form.save() nur einmal aufrufen (kein zweiter Aufruf via super().form_valid)
         user = form.save()
         user.reset_lockout()
-        return super().form_valid(form)
+        return HttpResponseRedirect(self.get_success_url())
 
 
 def register_view(request):
@@ -49,25 +49,7 @@ def register_view(request):
     if request.method == "POST":
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            with transaction.atomic():
-                user = form.save(commit=False)
-                user.is_active = False  # Account ist inaktiv bis zur Double Opt-In Verifizierung!
-                user.save()
-
-                # Kryptografisch sicheren 6-stelligen Zufallscode generieren
-                code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
-
-                context_data = {
-                    'username': user.username,
-                    'full_name': user.get_full_name() or user.username,
-                    'code': code_obj.code,
-                    'valid_minutes': 15,
-                }
-                # E-Mail-Versand erst NACH erfolgreichem DB-Commit (kein SMTP-Blocker in Transaktion, keine Phantom-Mails bei Rollback)
-                transaction.on_commit(
-                    lambda: send_system_email('email_verification', user.email, context_data)
-                )
-
+            user, code_obj = UserService.register_user(form)
             # Session merken & zur Verifizierungsmaske umleiten
             request.session['pending_verification_user_id'] = user.id
             return redirect("verify_email")
@@ -80,6 +62,10 @@ def register_view(request):
 def verify_email_view(request):
     user_id = request.session.get('pending_verification_user_id')
     if not user_id:
+        messages.info(
+            request,
+            "Bitte melde dich an oder fordere einen Bestätigungscode an."
+        )
         return redirect("login")
 
     try:
@@ -119,17 +105,15 @@ def verify_email_view(request):
             )
             return render(request, "auth/verify_email.html", {'user_email': user.email, 'user_id': user.id})
 
-
         # Einzelnen Code-String aus Formular oder den 6 Ziffernfeldern zusammenbauen
         code_input = request.POST.get('code', '').strip()
         if not code_input:
             digits = [request.POST.get(f'digit{i}', '').strip() for i in range(1, 7)]
             code_input = "".join(digits)
 
-        status, code_obj, remaining = EmailVerificationCode.verify_and_consume(
+        status, code_obj, remaining = UserService.verify_registration_code(
             user=user,
             code_input=code_input,
-            is_email_change=False,
         )
 
         if status == 'success':
@@ -149,12 +133,19 @@ def verify_email_view(request):
         elif status == 'wrong_code':
             messages.error(
                 request,
-                f"Ungültiger Verifizierungscode. Noch {remaining} Versuch(e) verbleibend.",
+                get_translation(
+                    'msg_verification_code_wrong',
+                    'Ungültiger Bestätigungscode. Noch {remaining} Versuch(e) verbleibend.',
+                    remaining=remaining,
+                ),
             )
         elif status == 'locked':
             messages.error(
                 request,
-                "Zu viele Fehlversuche. Dieser Bestätigungscode wurde gesperrt. Bitte fordere einen neuen Code an.",
+                get_translation(
+                    'verify_code_locked',
+                    'Dieser Code wurde wegen zu vieler Fehlversuche gesperrt. Bitte fordere einen neuen Code an.',
+                ),
             )
         else:
             messages.error(
@@ -183,36 +174,70 @@ def resend_verification_code_view(request):
         return redirect("login")
 
     try:
-        with transaction.atomic():
-            # Neuen Code generieren & E-Mail erst nach Commit senden
-            code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
-
-            context_data = {
-                'username': user.username,
-                'full_name': user.get_full_name() or user.username,
-                'code': code_obj.code,
-                'valid_minutes': 15,
-            }
-            transaction.on_commit(
-                lambda: send_system_email('email_verification', user.email, context_data)
-            )
+        UserService.resend_registration_code(user)
+        messages.success(request, "Ein neuer Bestätigungscode wurde an deine E-Mail-Adresse gesendet.")
     except VerificationCodeCooldownError as e:
         messages.warning(request, str(e))
-        return redirect("verify_email")
     except VerificationCodeLimitError as e:
         messages.error(request, str(e))
-        return redirect("verify_email")
 
-    messages.info(
-        request,
-        get_translation(
-            'msg_verification_code_sent',
-            'Ein neuer Bestätigungscode wurde an {email} gesendet.',
-            email=user.email,
-        ),
-    )
     return redirect("verify_email")
 
+
+def request_activation_code_view(request):
+    """
+    Erlaubt es unbestätigten Nutzern, die ihre Session verloren haben,
+    einen neuen Bestätigungscode per E-Mail anzufordern.
+    Schutz gegen Enumeration: Gibt immer dieselbe neutrale Erfolgsmeldung aus.
+    """
+    if request.method == "POST":
+        client_ip = get_client_ip(request)
+        rate_key = f"rate_limit_request_activation_{client_ip}"
+        count = cache.get(rate_key, 0)
+        if count >= 5:
+            messages.error(
+                request,
+                "Zu viele Anfragen von deiner IP-Adresse. Bitte warte einige Minuten."
+            )
+            return render(request, "auth/request_activation.html")
+
+        try:
+            cache.set(rate_key, count + 1, 600)
+        except Exception:
+            pass
+
+        email_input = request.POST.get("email", "").strip().lower()
+        if email_input:
+            user = User.objects.filter(email__iexact=email_input, is_active=False).first()
+            if not user:
+                user = User.objects.filter(username__iexact=email_input, is_active=False).first()
+
+            if user:
+                has_code = user.verification_codes.filter(new_email__isnull=True).exists()
+                if has_code:
+                    try:
+                        UserService.resend_registration_code(user)
+                        request.session['pending_verification_user_id'] = user.id
+                        messages.success(
+                            request,
+                            "Ein neuer Bestätigungscode wurde gesendet. Bitte prüfe dein Postfach."
+                        )
+                        return redirect("verify_email")
+                    except VerificationCodeCooldownError as e:
+                        request.session['pending_verification_user_id'] = user.id
+                        messages.warning(request, str(e))
+                        return redirect("verify_email")
+                    except VerificationCodeLimitError as e:
+                        messages.error(request, str(e))
+                        return redirect("login")
+
+        messages.success(
+            request,
+            "Falls für diese Angabe ein unbestätigtes Benutzerkonto existiert, wurde ein neuer Code versendet."
+        )
+        return redirect("login")
+
+    return render(request, "auth/request_activation.html")
 
 
 @login_required
@@ -231,9 +256,8 @@ def profile_view(request):
     profile_form = UserProfileForm(instance=user)
     password_form = PasswordChangeForm(user=user)
 
-    pending_email_code = EmailVerificationCode.objects.filter(
-        user=user, is_used=False, new_email__isnull=False, expires_at__gt=timezone.now()
-    ).order_by('-created_at').first()
+    pending_email_info = UserService.get_pending_email_change(user)
+    pending_email_code = pending_email_info['code_obj'] if pending_email_info else None
 
     if request.method == "POST":
         if "update_profile" in request.POST:
@@ -253,30 +277,24 @@ def profile_view(request):
                     else:
                         target_email = profile_form.pending_new_email
                         try:
-                            with transaction.atomic():
-                                code_obj = EmailVerificationCode.generate_for_user(
-                                    user, valid_minutes=15, new_email=target_email
+                            code_obj, status = UserService.request_email_change(user, target_email)
+                            if status == 'email_taken':
+                                messages.error(
+                                    request,
+                                    get_translation(
+                                        'msg_email_taken',
+                                        'Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.',
+                                    ),
                                 )
-                                context_data = {
-                                    'username': user.username,
-                                    'full_name': user.get_full_name() or user.username,
-                                    'code': code_obj.code,
-                                    'valid_minutes': 15,
-                                    'new_email': target_email,
-                                }
-                                transaction.on_commit(
-                                    lambda: send_system_email(
-                                        'email_change_verification', target_email, context_data
-                                    )
+                            else:
+                                messages.info(
+                                    request,
+                                    get_translation(
+                                        'msg_email_change_initiated',
+                                        'Ein Bestätigungscode wurde an "{new_email}" gesendet. Bitte gib den Code ein, um die Änderung abzuschließen.',
+                                        new_email=target_email,
+                                    ),
                                 )
-                            messages.info(
-                                request,
-                                get_translation(
-                                    'msg_email_change_initiated',
-                                    'Ein Bestätigungscode wurde an "{new_email}" gesendet. Bitte gib den Code ein, um die Änderung abzuschließen.',
-                                    new_email=target_email,
-                                ),
-                            )
                         except VerificationCodeCooldownError as e:
                             messages.warning(request, str(e))
                         except VerificationCodeLimitError as e:
@@ -305,10 +323,9 @@ def profile_view(request):
                 digits = [request.POST.get(f'digit{i}', '').strip() for i in range(1, 7)]
                 code_input = "".join(digits)
 
-            status, code_obj, remaining = EmailVerificationCode.verify_and_consume(
+            status, code_obj, remaining = UserService.confirm_email_change(
                 user=user,
                 code_input=code_input,
-                is_email_change=True,
             )
 
             if status == 'success':
@@ -356,35 +373,21 @@ def profile_view(request):
             return redirect("profile")
 
         elif "resend_email_change_code" in request.POST:
-            if not pending_email_code:
-                return redirect("profile")
-
-            target_email = pending_email_code.new_email
             try:
-                with transaction.atomic():
-                    new_code = EmailVerificationCode.generate_for_user(
-                        user, valid_minutes=15, new_email=target_email
+                code_obj, status = UserService.resend_email_change_code(user)
+                if status == 'no_pending_change':
+                    messages.error(request, "Keine offene E-Mail-Änderung vorhanden.")
+                elif status == 'email_taken':
+                    messages.error(request, "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.")
+                else:
+                    messages.info(
+                        request,
+                        get_translation(
+                            'msg_email_change_resend',
+                            'Ein neuer Bestätigungscode wurde an "{new_email}" gesendet.',
+                            new_email=code_obj.new_email,
+                        ),
                     )
-                    context_data = {
-                        'username': user.username,
-                        'full_name': user.get_full_name() or user.username,
-                        'code': new_code.code,
-                        'valid_minutes': 15,
-                        'new_email': target_email,
-                    }
-                    transaction.on_commit(
-                        lambda: send_system_email(
-                            'email_change_verification', target_email, context_data
-                        )
-                    )
-                messages.info(
-                    request,
-                    get_translation(
-                        'msg_email_change_resend',
-                        'Ein neuer Bestätigungscode wurde an "{new_email}" gesendet.',
-                        new_email=target_email,
-                    ),
-                )
             except VerificationCodeCooldownError as e:
                 messages.warning(request, str(e))
             except VerificationCodeLimitError as e:
@@ -392,23 +395,21 @@ def profile_view(request):
             return redirect("profile")
 
         elif "cancel_email_change" in request.POST:
-            if pending_email_code:
-                pending_email_code.is_used = True
-                pending_email_code.save(update_fields=['is_used'])
-                messages.info(
-                    request,
-                    get_translation(
-                        'msg_email_change_cancelled',
-                        'Die E-Mail-Änderung wurde abgebrochen.',
-                    ),
-                )
+            UserService.cancel_email_change(user)
+            messages.info(
+                request,
+                get_translation(
+                    'msg_email_change_cancelled',
+                    'Die E-Mail-Änderung wurde abgebrochen.',
+                ),
+            )
             return redirect("profile")
 
         elif "change_password" in request.POST:
             password_form = PasswordChangeForm(user=user, data=request.POST)
             if password_form.is_valid():
                 user = password_form.save()
-                update_session_auth_hash(request, user)  # Verhindert Ausloggen
+                update_session_auth_hash(request, user)
                 messages.success(
                     request,
                     get_translation(
@@ -431,6 +432,7 @@ def profile_view(request):
         'password_form': password_form,
         'registrations': registrations,
         'pending_email_code': pending_email_code,
+        'pending_email_info': pending_email_info,
         'clan_membership': clan_membership,
     }
     return render(request, "users/profile.html", context)

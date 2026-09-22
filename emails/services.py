@@ -97,6 +97,9 @@ def queue_system_email(template_key, recipient_email, context_data, trigger_work
 
 def trigger_queue_processing():
     """Startet die Hintergrundverarbeitung der E-Mail-Queue (nach DB-Commit)."""
+    if 'test' in sys.argv or getattr(settings, 'IS_TESTING', False):
+        return
+
     def _run_worker():
         thread = threading.Thread(target=process_email_queue, kwargs={'limit': 25}, daemon=True)
         thread.start()

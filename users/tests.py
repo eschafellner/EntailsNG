@@ -1,9 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from emails.models import GeneralEmailSettings
-from users.forms import CustomUserCreationForm
+from users.forms import CustomAuthenticationForm, CustomUserCreationForm, UserProfileForm
+from users.models import EmailVerificationCode
 
 User = get_user_model()
 
@@ -921,6 +924,270 @@ class AuthOfflineFontsTests(TestCase):
             self.assertIn('static/css/fonts.css', content, f"{url} must include local static/css/fonts.css")
             self.assertNotIn('fonts.googleapis.com', content, f"{url} must not load from fonts.googleapis.com")
             self.assertNotIn('fonts.gstatic.com', content, f"{url} must not load from fonts.gstatic.com")
+
+
+class UserFeedbackHardeningRegressionTests(TestCase):
+    """Spezifische Regressionstests für die 12 Punkte aus dem User-Modul Audit."""
+
+    def setUp(self):
+        self.email_settings = GeneralEmailSettings.load()
+        self.email_settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        self.email_settings.sender_email = 'noreply@example.com'
+        self.email_settings.is_enabled = True
+        self.email_settings.save()
+
+    def test_p1_login_username_email_collision_does_not_block_email_login(self):
+        """Punkt 1: Ein Benutzername in E-Mail-Form blockiert den E-Mail-Login des echten Inhabers nicht."""
+        user_victim = User.objects.create_user(
+            username='victim_gamer',
+            email='victim@example.com',
+            password='Password123!',
+        )
+        # Zweiter Nutzer mit Benutzername = victim@example.com
+        user_attacker = User.objects.create_user(
+            username='victim@example.com',
+            email='attacker@example.com',
+            password='AttackerPass123!',
+        )
+
+        from users.auth_backends import EmailOrUsernameBackend
+        backend = EmailOrUsernameBackend()
+
+        # Login mit 'victim@example.com' und Passwort von user_victim muss user_victim liefern!
+        auth_user = backend.authenticate(
+            request=None,
+            username='victim@example.com',
+            password='Password123!',
+        )
+        self.assertIsNotNone(auth_user)
+        self.assertEqual(auth_user.pk, user_victim.pk)
+
+    def test_p2_profile_update_does_not_overwrite_administrative_security_fields(self):
+        """Punkt 2: UserProfileForm.save() überschreibt keine zwischenzeitlich geänderten Sicherheitsfelder."""
+        user = User.objects.create_user(
+            username='profuser_p2',
+            email='p2@example.com',
+            password='Password123!',
+            birthday='1995-01-01',
+        )
+        # Formular wird mit dem initialen User-Objekt geladen
+        form = UserProfileForm(instance=user, data={'email': 'p2@example.com', 'birthday': '1996-02-02'})
+        self.assertTrue(form.is_valid())
+
+        # Zwischenzeitlich ändert der Administrator Sicherheitsfelder in der DB
+        User.objects.filter(pk=user.pk).update(
+            is_active=False,
+            failed_login_attempts=4,
+            locked_until=timezone.now() + timedelta(minutes=15),
+        )
+
+        # Nutzer speichert Formular
+        saved_user = form.save()
+        user.refresh_from_db()
+
+        # Geburtstag wurde aktualisiert
+        self.assertEqual(user.birthday, date(1996, 2, 2))
+        # Sicherheitsfelder aus der DB wurden NICHT überschrieben!
+        self.assertFalse(user.is_active)
+        self.assertEqual(user.failed_login_attempts, 4)
+        self.assertIsNotNone(user.locked_until)
+
+    def test_p3_is_locked_does_not_wipe_fresh_lockout_from_database(self):
+        """Punkt 3: Ein veraltetes In-Memory-Objekt löscht keine frisch in der DB gesetzte Sperre."""
+        user = User.objects.create_user(
+            username='lockuser_p3',
+            email='p3@example.com',
+            password='Password123!',
+        )
+        # Veralteter In-Memory-Zustand: Vorherige Sperre war vor 5 Minuten abgelaufen
+        user.locked_until = timezone.now() - timedelta(minutes=5)
+
+        # In der DB wird durch Brute-Force-Versuche parallel eine neue Sperre bis in 15 Minuten gesetzt
+        fresh_lock_time = timezone.now() + timedelta(minutes=15)
+        User.objects.filter(pk=user.pk).update(
+            failed_login_attempts=5,
+            locked_until=fresh_lock_time,
+        )
+
+        # Aufruf von is_locked() auf dem veralteten Objekt
+        is_locked_result = user.is_locked()
+
+        # Muss True liefern und darf die DB-Sperre NICHT gelöscht haben!
+        self.assertTrue(is_locked_result)
+        user.refresh_from_db()
+        self.assertIsNotNone(user.locked_until)
+        self.assertGreater(user.locked_until, timezone.now())
+        self.assertEqual(user.failed_login_attempts, 5)
+
+    def test_p4_case_insensitive_email_unique_constraint(self):
+        """Punkt 4: Case-Insensitive E-Mail-Eindeutigkeit wird auf DB-Ebene durchgesetzt."""
+        from django.db import IntegrityError
+        User.objects.create_user(username='u1', email='case@example.com', password='pw')
+
+        # Versuch mit Großschreibung muss fehlschlagen
+        with self.assertRaises(IntegrityError):
+            User.objects.create_user(username='u2', email='CASE@EXAMPLE.COM', password='pw')
+
+    def test_p5_code_generation_locking(self):
+        """Punkt 5: generate_for_user läuft atomar mit Zeilensperre."""
+        user = User.objects.create_user(username='lockcode_user', email='lcu@example.com', password='pw')
+        code = EmailVerificationCode.generate_for_user(user, valid_minutes=15)
+        self.assertIsNotNone(code)
+        self.assertEqual(len(code.code), 6)
+
+    def test_p6_verify_code_non_ascii_unicode_does_not_crash(self):
+        """Punkt 6: Nicht-ASCII Zeichenketten wie Vollbreiten-Ziffern führen nicht zum Server-Crash."""
+        user = User.objects.create_user(
+            username='unicode_user', email='uu@example.com', password='pw', is_active=False
+        )
+        EmailVerificationCode.generate_for_user(user, valid_minutes=15)
+
+        # Vollbreiten-Ziffern １２３４５６ eingeben (hätte zuvor TypeError in compare_digest ausgelöst)
+        status, code_obj, remaining = EmailVerificationCode.verify_and_consume(
+            user=user,
+            code_input='１２３４５６',
+        )
+        self.assertEqual(status, 'wrong_code')
+        self.assertEqual(remaining, 4)
+
+    def test_p7_unverified_account_login_recovers_verification_session(self):
+        """Punkt 7: Login eines unbestätigten Kontos stellt die Verifizierungs-Session wieder her."""
+        user = User.objects.create_user(
+            username='unverified_gamer',
+            email='unv@example.com',
+            password='ValidPassword123!',
+            is_active=False,
+        )
+        EmailVerificationCode.generate_for_user(user, valid_minutes=15)
+
+        # Login-Versuch mit korrekten Anmeldedaten
+        form = CustomAuthenticationForm(
+            data={'username': 'unverified_gamer', 'password': 'ValidPassword123!'}
+        )
+        # Dummy-Request anhängen
+        from django.test.client import RequestFactory
+        factory = RequestFactory()
+        req = factory.post('/login/')
+        from django.contrib.sessions.backends.db import SessionStore
+        req.session = SessionStore()
+        form.request = req
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('pending_verification_user_id', req.session)
+        self.assertEqual(req.session['pending_verification_user_id'], user.id)
+
+    def test_p7_request_activation_code_view_resends_code(self):
+        """Punkt 7b: request_activation_code_view sendet unbestätigten Konten neuen Code."""
+        user = User.objects.create_user(
+            username='resend_act_user',
+            email='act@example.com',
+            password='pw',
+            is_active=False,
+        )
+        EmailVerificationCode.generate_for_user(user, valid_minutes=15)
+
+        resp = self.client.post(
+            reverse('request_activation_code'),
+            {'email': 'act@example.com'},
+        )
+        self.assertRedirects(resp, reverse('verify_email'))
+        self.assertEqual(self.client.session.get('pending_verification_user_id'), user.id)
+
+    def test_p8_profile_expired_email_change_shows_expired_and_allows_resend(self):
+        """Punkt 8: Nach Ablauf des E-Mail-Codes bleibt die Änderung sichtbar und erlaubt Resend."""
+        user = User.objects.create_user(
+            username='p8_user', email='p8@example.com', password='Password123!'
+        )
+        self.client.login(username='p8_user', password='Password123!')
+
+        # E-Mail-Änderung auf target@example.com anfordern
+        code = EmailVerificationCode.generate_for_user(
+            user, valid_minutes=15, new_email='target@example.com'
+        )
+        # Ablauf künstlich in die Vergangenheit setzen
+        code.expires_at = timezone.now() - timedelta(minutes=1)
+        code.save()
+
+        # Profil aufrufen -> offene E-Mail-Änderung muss im Status weiterhin existieren
+        resp = self.client.get(reverse('profile'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('pending_email_info', resp.context)
+        self.assertTrue(resp.context['pending_email_info']['is_expired'])
+        self.assertContains(resp, 'target@example.com')
+        self.assertContains(resp, 'Neuen Code anfordern')
+
+    def test_p9_password_reset_confirm_only_saves_once(self):
+        """Punkt 9: CustomPasswordResetConfirmView speichert das Formular nur einmal."""
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+
+        user = User.objects.create_user(username='resetuser_p9', email='p9@example.com', password='old')
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+
+        # Initialer GET-Request auf den Link validiert den Token, setzt die Session und leitet auf set-password weiter
+        get_resp = self.client.get(
+            reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+        )
+        self.assertEqual(get_resp.status_code, 302)
+        post_url = get_resp.url
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(
+                post_url,
+                {'new_password1': 'BrandNewPass123!', 'new_password2': 'BrandNewPass123!'},
+            )
+        self.assertRedirects(resp, reverse('password_reset_complete'))
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('BrandNewPass123!'))
+
+    def test_p10_password_reset_rate_limiting(self):
+        """Punkt 10: Passwort-Reset besitzt Rate-Limiting gegen Flooding."""
+        from users.forms import CustomPasswordResetForm
+        form = CustomPasswordResetForm(data={'email': 'flood@example.com'})
+        self.assertTrue(form.is_valid())
+
+        # Bis zu 5x möglich
+        for _ in range(5):
+            form.save(request=None)
+
+        # 6. Request überschreitet Limit
+        cache_key = 'rate_limit_pwd_reset_ip_127.0.0.1'
+        self.assertGreaterEqual(cache.get(cache_key, 0), 5)
+
+    def test_p11_birthday_validation_rejects_future_dates(self):
+        """Punkt 11: Zukünftige Geburtsdaten werden in Formularen abgelehnt."""
+        tomorrow = (timezone.now().date() + timedelta(days=1)).isoformat()
+
+        # In CustomUserCreationForm
+        form1 = CustomUserCreationForm(data={
+            'username': 'futureboy',
+            'email': 'future@example.com',
+            'birthday': tomorrow,
+            'password1': 'StrongPass123!',
+            'password2': 'StrongPass123!',
+        })
+        self.assertFalse(form1.is_valid())
+        self.assertIn('Geburtsdatum darf nicht in der Zukunft liegen', str(form1.errors))
+
+        # In UserProfileForm
+        user = User.objects.create_user(username='fb_prof', email='fb@test.com', password='pw')
+        form2 = UserProfileForm(instance=user, data={'email': 'fb@test.com', 'birthday': tomorrow})
+        self.assertFalse(form2.is_valid())
+        self.assertIn('Geburtsdatum darf nicht in der Zukunft liegen', str(form2.errors))
+
+    def test_p12_username_cannot_contain_at_sign(self):
+        """Punkt 12: Benutzernamen mit @ werden bei Registrierung abgelehnt."""
+        form = CustomUserCreationForm(data={
+            'username': 'bad@user',
+            'email': 'good@example.com',
+            'birthday': '2000-01-01',
+            'password1': 'StrongPass123!',
+            'password2': 'StrongPass123!',
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn('kein @-Zeichen', str(form.errors))
 
 
 

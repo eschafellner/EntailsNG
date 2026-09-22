@@ -116,22 +116,42 @@ class EmailOrUsernameBackend(ModelBackend):
                 setattr(request, 'ip_rate_limited', True)
             return None
 
-        # 2. Suche nach Benutzername ODER E-Mail-Adresse (case-insensitive)
-        try:
-            user = User.objects.get(
-                Q(username__iexact=username) | Q(email__iexact=username)
-            )
-        except (User.DoesNotExist, User.MultipleObjectsReturned):
+        # 2. Suche nach Benutzer:
+        # Falls Eingabe ein '@' enthält, suchen wir primär nach E-Mail-Adresse.
+        # Falls kein '@' enthalten ist, suchen wir primär nach Benutzername, Fallback auf E-Mail.
+        user = None
+        clean_input = username.strip()
+        if '@' in clean_input:
+            user = User.objects.filter(email__iexact=clean_input).first()
+            if not user:
+                user = User.objects.filter(username__iexact=clean_input).first()
+        else:
+            user = User.objects.filter(username__iexact=clean_input).first()
+            if not user:
+                user = User.objects.filter(email__iexact=clean_input).first()
+
+        if not user:
             # Timing-Attack Mitigation: Konstante Laufzeit sicherstellen (Dummy-Hashing)
             User().set_password(password)
             _record_ip_failed_attempt(client_ip)
             return None
 
-        # 3. Inaktive Konten (z. B. vor Double Opt-In E-Mail-Verifizierung) dürfen sich nicht anmelden
+        # 3. Inaktive Konten (z. B. vor Double Opt-In E-Mail-Verifizierung)
         if not user.is_active:
+            if user.check_password(password):
+                # Wenn Passswort stimmt: Prüfen, ob Konto noch unbestätigt ist (Session-Wiederaufnahme)
+                has_pending_verification = user.verification_codes.filter(
+                    new_email__isnull=True, is_used=False
+                ).exists()
+                if has_pending_verification and request:
+                    setattr(request, 'unverified_user', user)
             return None
 
         # 4. Prüfe, ob Konto aktuell temporär gesperrt ist (15 Minuten Sperre)
+        # Abgelaufene Sperren atomar unter Zeilensperre zurücksetzen
+        if user.locked_until:
+            user.reset_expired_lockout()
+
         if user.is_locked():
             if request:
                 setattr(request, 'account_locked', True)
@@ -142,6 +162,8 @@ class EmailOrUsernameBackend(ModelBackend):
         if user.check_password(password):
             # Vor erfolgreichem Login prüfen, ob zwischenzeitlich durch parallele Requests gesperrt wurde
             user.refresh_from_db(fields=['locked_until', 'failed_login_attempts'])
+            if user.locked_until:
+                user.reset_expired_lockout()
             if user.is_locked():
                 if request:
                     setattr(request, 'account_locked', True)

@@ -1,0 +1,46 @@
+{% load static %}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aktivierungscode anfordern – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="brand-mark">{{ site_customization.brand_accent_text|default:"HNX" }}</div>
+        <h1>Aktivierungscode anfordern</h1>
+        <p style="color: var(--muted); font-size: 14px;">Gib deine E-Mail-Adresse oder deinen Benutzernamen ein, um einen neuen Aktivierungscode zu erhalten.</p>
+      </div>
+
+      {% if messages %}
+        <div style="margin-bottom: 16px;">
+          {% for message in messages %}
+            <div style="padding: 12px; border-radius: 8px; font-size: 13px; line-height: 1.4; {% if message.tags == 'error' %}background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5;{% else %}background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #86efac;{% endif %}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" action="{% url 'request_activation_code' %}">
+        {% csrf_token %}
+        <div class="form-group">
+          <label for="id_email">E-Mail-Adresse oder Benutzername:</label>
+          <input type="text" name="email" id="id_email" class="form-control" placeholder="name@beispiel.de" required autofocus>
+        </div>
+
+        <button type="submit" class="primary-btn auth-btn">Neuen Aktivierungscode senden</button>
+      </form>
+
+      <div class="auth-footer">
+        <a href="{% url 'login' %}">← Zurück zur Anmeldung</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

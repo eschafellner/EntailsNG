@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractUser, UserManager as BaseUserManager
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower
 from .exceptions import VerificationCodeCooldownError, VerificationCodeLimitError
 
 
@@ -7,7 +9,7 @@ class UserManager(BaseUserManager):
     def _create_user(self, username, email, password, **extra_fields):
         if not email:
             email = f"{str(username).lower()}@entailsng.local"
-        email = self.normalize_email(email)
+        email = self.normalize_email(email).strip().lower()
         return super()._create_user(username, email, password, **extra_fields)
 
 
@@ -19,6 +21,17 @@ class User(AbstractUser):
         USER = 'USER', 'Normaler User'
 
     objects = UserManager()
+
+    class Meta:
+        verbose_name = "Benutzer"
+        verbose_name_plural = "Benutzer"
+        ordering = ["username"]
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                name='unique_lower_email',
+            ),
+        ]
 
     # Standard-Rolle für neu registrierte Benutzer ist 'USER'
     role = models.CharField(
@@ -50,8 +63,15 @@ class User(AbstractUser):
         null=True, blank=True, verbose_name="Gesperrt bis"
     )
 
+    def clean(self):
+        super().clean()
+        if self.username and '@' in self.username:
+            raise ValidationError({'username': 'Der Benutzername darf kein @-Zeichen enthalten.'})
+
     def save(self, *args, **kwargs):
-        if not self.email:
+        if self.email:
+            self.email = self.email.strip().lower()
+        else:
             self.email = f"{str(self.username).lower()}@entailsng.local"
         super().save(*args, **kwargs)
 
@@ -60,13 +80,42 @@ class User(AbstractUser):
         return f"{self.username} ({self.get_role_display()})"
 
     def is_locked(self):
+        """Prüft, ob das Konto aktuell temporär gesperrt ist.
+        Setzt abgelaufene Sperren atomar zurück, schützt aber frisch in der DB gesetzte Sperren.
+        """
         from django.utils import timezone
         if self.locked_until:
             if timezone.now() < self.locked_until:
                 return True
-            # Sperrzeit ist abgelaufen -> Zähler & Sperre automatisch zurücksetzen!
-            self.reset_lockout()
+            self.reset_expired_lockout()
+            if self.locked_until and timezone.now() < self.locked_until:
+                return True
         return False
+
+    def reset_expired_lockout(self):
+        """Prüft und setzt eine abgelaufene Sperre atomar unter Zeilensperre zurück.
+        WICHTIG: Setzt nur zurück, wenn locked_until in der DATENBANK tatsächlich in der Vergangenheit liegt.
+        Verhindert das versehentliche Löschen frisch gesetzter Sperren durch veraltete In-Memory-Objekte.
+        """
+        from django.db import transaction
+        from django.utils import timezone
+
+        if not self.pk:
+            return False
+
+        with transaction.atomic():
+            locked_user = type(self).objects.select_for_update().get(pk=self.pk)
+            now = timezone.now()
+            if locked_user.locked_until and now >= locked_user.locked_until:
+                locked_user.failed_login_attempts = 0
+                locked_user.locked_until = None
+                locked_user.save(update_fields=['failed_login_attempts', 'locked_until'])
+                self.failed_login_attempts = 0
+                self.locked_until = None
+                return True
+            self.failed_login_attempts = locked_user.failed_login_attempts
+            self.locked_until = locked_user.locked_until
+            return False
 
     def register_failed_login(self):
         """Atomare Erfassung eines Fehlversuchs mit Zeilensperre.
@@ -159,57 +208,62 @@ class EmailVerificationCode(models.Model):
     def generate_for_user(cls, user, valid_minutes=15, new_email=None, enforce_cooldown=True):
         """Erstellt einen neuen kryptografisch sicheren 6-stelligen Code und invalidiert alte unbenutzte Codes.
         Prüft zentral Cooldown und Stundenlimit, um Mail-Spamming und vorzeitige Code-Invalidierung zu verhindern.
+        Atomar mit Zeilensperre auf den Benutzer gegen Race-Conditions bei parallelen Requests geschützt.
         """
         import secrets
         from datetime import timedelta
+        from django.db import transaction
         from django.utils import timezone
 
         now = timezone.now()
 
-        # 1. Zentraler Cooldown-Schutz & Stundenlimit
-        if enforce_cooldown:
-            scope_query = cls.objects.filter(user=user)
-            if new_email:
-                scope_query = scope_query.filter(new_email__isnull=False)
-            else:
-                scope_query = scope_query.filter(new_email__isnull=True)
+        with transaction.atomic():
+            locked_user = User.objects.select_for_update().get(pk=user.pk)
 
-            last_code = scope_query.order_by('-created_at').first()
-            if last_code:
-                elapsed = (now - last_code.created_at).total_seconds()
-                if elapsed < cls.COOLDOWN_SECONDS:
-                    remaining = int(cls.COOLDOWN_SECONDS - elapsed)
-                    if remaining <= 0:
-                        remaining = 1
-                    raise VerificationCodeCooldownError(
-                        f"Bitte warte noch {remaining} Sekunde(n), bevor du einen neuen Code anforderst.",
-                        retry_after=remaining,
+            # 1. Zentraler Cooldown-Schutz & Stundenlimit
+            if enforce_cooldown:
+                scope_query = cls.objects.select_for_update().filter(user=locked_user)
+                if new_email:
+                    scope_query = scope_query.filter(new_email__isnull=False)
+                else:
+                    scope_query = scope_query.filter(new_email__isnull=True)
+
+                last_code = scope_query.order_by('-created_at').first()
+                if last_code:
+                    elapsed = (now - last_code.created_at).total_seconds()
+                    if elapsed < cls.COOLDOWN_SECONDS:
+                        remaining = int(cls.COOLDOWN_SECONDS - elapsed)
+                        if remaining <= 0:
+                            remaining = 1
+                        raise VerificationCodeCooldownError(
+                            f"Bitte warte noch {remaining} Sekunde(n), bevor du einen neuen Code anforderst.",
+                            retry_after=remaining,
+                        )
+
+                one_hour_ago = now - timedelta(hours=1)
+                recent_count = scope_query.filter(created_at__gte=one_hour_ago).count()
+                if recent_count >= cls.MAX_CODES_PER_HOUR:
+                    raise VerificationCodeLimitError(
+                        "Du hast das Limit für Bestätigungscodes erreicht (maximal 5 pro Stunde). Bitte versuche es später erneut."
                     )
 
-            one_hour_ago = now - timedelta(hours=1)
-            recent_count = scope_query.filter(created_at__gte=one_hour_ago).count()
-            if recent_count >= cls.MAX_CODES_PER_HOUR:
-                raise VerificationCodeLimitError(
-                    "Du hast das Limit für Bestätigungscodes erreicht (maximal 5 pro Stunde). Bitte versuche es später erneut."
-                )
+            # 2. Vorherige unbenutzte Codes für diesen Benutzer und diesen Zweck entwerten
+            query = cls.objects.filter(user=locked_user, is_used=False)
+            if new_email:
+                query = query.filter(new_email__isnull=False)
+            else:
+                query = query.filter(new_email__isnull=True)
+            query.update(is_used=True)
 
-        # 2. Vorherige unbenutzte Codes für diesen Benutzer und diesen Zweck entwerten
-        query = cls.objects.filter(user=user, is_used=False)
-        if new_email:
-            query = query.filter(new_email__isnull=False)
-        else:
-            query = query.filter(new_email__isnull=True)
-        query.update(is_used=True)
-
-        # 3. Neuen Code erzeugen
-        secure_code = f"{secrets.randbelow(900000) + 100000:06d}"
-        expires_at = now + timedelta(minutes=valid_minutes)
-        return cls.objects.create(
-            user=user,
-            code=secure_code,
-            expires_at=expires_at,
-            new_email=new_email,
-        )
+            # 3. Neuen Code erzeugen
+            secure_code = f"{secrets.randbelow(900000) + 100000:06d}"
+            expires_at = now + timedelta(minutes=valid_minutes)
+            return cls.objects.create(
+                user=locked_user,
+                code=secure_code,
+                expires_at=expires_at,
+                new_email=new_email,
+            )
 
     def is_valid(self):
         from django.utils import timezone
@@ -254,12 +308,16 @@ class EmailVerificationCode(models.Model):
               - 'locked': Code wurde durch 5 Fehlversuche gesperrt.
               - 'invalid_or_expired': Kein aktiver Code vorhanden oder abgelaufen/bereits verbraucht.
         """
+        import re
         import secrets
         from django.db import transaction
 
         code_input = (code_input or "").strip()
         if not code_input:
             return ('invalid_or_expired', None, 0)
+
+        # Prüfe, ob Eingabe exakt 6 ASCII-Ziffern entspricht
+        is_valid_format = bool(code_input.isascii() and re.fullmatch(r'^[0-9]{6}$', code_input))
 
         with transaction.atomic():
             query = cls.objects.select_for_update().filter(user=user, is_used=False)
@@ -272,7 +330,7 @@ class EmailVerificationCode(models.Model):
             if not code_obj or not code_obj.is_valid():
                 return ('invalid_or_expired', code_obj, 0)
 
-            if secrets.compare_digest(code_obj.code, code_input):
+            if is_valid_format and secrets.compare_digest(code_obj.code, code_input):
                 if is_email_change:
                     # Prüfen, ob die neue Adresse inzwischen anderweitig vergeben wurde
                     if User.objects.filter(email__iexact=code_obj.new_email).exclude(pk=user.pk).exists():
