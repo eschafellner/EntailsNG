@@ -272,9 +272,13 @@ EntailsNG versendet E-Mail-Verifizierungscodes, Buchungsbestätigungen, Tickets 
 
 ### 3. Asynchrone Warteschlange (E-Mail Queue):
 Um Seitenladezeiten im Browser zu minimieren, werden E-Mails standardmäßig asynchron in eine Datenbank-Warteschlange eingereiht (`EMAIL_ASYNC_QUEUE=True`) und im Hintergrund versendet.
+Im Docker-Compose-Setup wird dafür automatisch ein eigener Hintergrund-Worker (`email_worker`) betrieben, der die Queue kontinuierlich (`process_email_queue --daemon`) abarbeitet.
 ```bash
 # Warteschlange manuell anstoßen / abarbeiten:
-docker compose exec web python manage.py process_mail_queue
+docker compose exec web python manage.py process_email_queue
+
+# Manuell als Daemon im Hintergrund laufen lassen (z. B. ohne Docker):
+python manage.py process_email_queue --daemon --interval 5
 ```
 
 ### 4. Diagnose-Tool ausführen:
@@ -395,7 +399,8 @@ docker compose up -d --build
 | **System-Seeds einspielen** | `docker compose exec web python manage.py seed_translations` | `python manage.py seed_translations` |
 | **Feature-Flags seeden** | `docker compose exec web python manage.py seed_features` | `python manage.py seed_features` |
 | **Mail-Vorlagen seeden** | `docker compose exec web python manage.py seed_email_templates` | `python manage.py seed_email_templates` |
-| **Mail-Queue abarbeiten** | `docker compose exec web python manage.py process_mail_queue` | `python manage.py process_mail_queue` |
+| **Mail-Queue abarbeiten** | `docker compose exec web python manage.py process_email_queue` | `python manage.py process_email_queue` |
+| **Mail-Queue Worker-Logs** | `docker compose logs -f email_worker` | `python manage.py process_email_queue --daemon` |
 | **E-Mail-Diagnose / Test** | `docker compose exec web python manage.py email_doctor` | `python manage.py email_doctor` |
 | **Sicherheits-Check** | `docker compose exec web python manage.py check --deploy` | `python manage.py check --deploy` |
 | **Server neu starten** | `docker compose restart` | `./start.sh` neu ausführen |

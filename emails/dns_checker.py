@@ -6,7 +6,10 @@ logger = logging.getLogger(__name__)
 
 
 def query_dns_json(domain, record_type='TXT'):
-    """Fragt DNS-Records über die Google DNS REST API ab (zuverlässig & ohne externe Pip-Pakete)."""
+    """
+    Fragt DNS-Records über die Google DNS REST API ab (zuverlässig & ohne externe Pip-Pakete).
+    Gibt die Liste der Datensätze zurück, oder None bei Netzwerk-/Verbindungsfehlern.
+    """
     url = f"https://dns.google/resolve?name={domain}&type={record_type}"
     req = urllib.request.Request(
         url,
@@ -24,6 +27,7 @@ def query_dns_json(domain, record_type='TXT'):
                 return results
     except Exception as e:
         logger.warning(f"DNS query error for {domain} ({record_type}): {e}")
+        return None
     return []
 
 
@@ -43,6 +47,16 @@ def check_domain_dns_health(domain_name):
 
     # 1. TXT Records für SPF & DKIM abfragen
     txt_records = query_dns_json(domain_clean, 'TXT')
+    if txt_records is None:
+        return {
+            'status': 'unreachable',
+            'domain': domain_clean,
+            'message': 'Externe DNS-Prüfung nicht möglich: Google DNS (dns.google) konnte nicht erreicht werden (Offline-Betrieb, keine ausgehende Internetverbindung oder Firewall-Blockade).',
+            'spf': {'valid': False, 'record': 'Nicht prüfbar (Offline)', 'details': 'DNS-Server nicht erreichbar.', 'recommended': 'v=spf1 mx ~all'},
+            'dmarc': {'valid': False, 'record': 'Nicht prüfbar (Offline)', 'details': 'DNS-Server nicht erreichbar.', 'recommended': f'v=DMARC1; p=none; rua=mailto:postmaster@{domain_clean}'},
+            'mx': {'valid': False, 'records': ['Nicht prüfbar (Offline)'], 'details': 'DNS-Server nicht erreichbar.'},
+            'dkim': {'valid': False, 'details': 'DNS-Server nicht erreichbar.'},
+        }
 
     spf_record = None
     for r in txt_records:
@@ -53,13 +67,14 @@ def check_domain_dns_health(domain_name):
     # 2. DMARC Abfragen (_dmarc.domain)
     dmarc_records = query_dns_json(f"_dmarc.{domain_clean}", 'TXT')
     dmarc_record = None
-    for r in dmarc_records:
-        if 'v=dmarc1' in r.lower():
-            dmarc_record = r
-            break
+    if dmarc_records:
+        for r in dmarc_records:
+            if 'v=dmarc1' in r.lower():
+                dmarc_record = r
+                break
 
     # 3. MX Records Abfragen
-    mx_records = query_dns_json(domain_clean, 'MX')
+    mx_records = query_dns_json(domain_clean, 'MX') or []
 
     # 4. Häufige DKIM-Selektoren prüfen
     dkim_found = False
@@ -67,11 +82,12 @@ def check_domain_dns_health(domain_name):
     common_selectors = ['default', 'mail', 'google', 'k1', 'smtp', 'mandrill']
     for sel in common_selectors:
         res = query_dns_json(f"{sel}._domainkey.{domain_clean}", 'TXT')
-        for r in res:
-            if 'v=dkim1' in r.lower() or 'p=' in r.lower():
-                dkim_found = True
-                dkim_selector = f"{sel}._domainkey.{domain_clean}"
-                break
+        if res:
+            for r in res:
+                if 'v=dkim1' in r.lower() or 'p=' in r.lower():
+                    dkim_found = True
+                    dkim_selector = f"{sel}._domainkey.{domain_clean}"
+                    break
         if dkim_found:
             break
 

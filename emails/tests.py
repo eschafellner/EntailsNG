@@ -181,6 +181,30 @@ class GeneralEmailSettingsModelTests(TestCase):
         self.settings.refresh_from_db()
         self.assertTrue(self.settings.credentials_broken)
 
+    def test_is_operational_env_mode_ignores_broken_custom_credentials(self):
+        """Wenn transport_mode=ENV aktiv ist, blockieren defekte Custom-SMTP-Zugangsdaten nicht."""
+        self.settings.transport_mode = GeneralEmailSettings.TransportMode.ENV
+        self.settings.credentials_broken = True
+        self.settings.save()
+        self.assertTrue(self.settings.is_operational)
+        self.assertIsNone(self.settings.blocking_reason)
+
+        # Im CUSTOM_SMTP-Modus blockieren defekte Zugangsdaten dagegen
+        self.settings.transport_mode = GeneralEmailSettings.TransportMode.CUSTOM_SMTP
+        self.settings.smtp_host = "mail.example.com"
+        self.settings.save()
+        self.assertFalse(self.settings.is_operational)
+        self.assertIn("SMTP-Passwort kann nicht gelesen werden", self.settings.blocking_reason)
+
+    def test_long_smtp_password_stored_in_text_field(self):
+        """Passwörter > 200 Zeichen erzeugen Ciphertexte > 255 Zeichen und werden im TextField ohne Truncation gespeichert."""
+        long_pwd = "A" * 200
+        self.settings.set_smtp_password(long_pwd)
+        self.assertGreater(len(self.settings.smtp_password), 255)
+        self.settings.save()
+        self.settings.refresh_from_db()
+        self.assertEqual(self.settings.get_smtp_password(), long_pwd)
+
 
 class ConfiguredSMTPBackendTests(TestCase):
     """Testet das E-Mail-Backend ConfiguredSMTPBackend."""
@@ -383,6 +407,18 @@ class EmailServicesTests(TestCase):
         res_plain = safe_format(text, {'username': '<script>alert(1)</script>'}, escape_html=False)
         self.assertEqual(res_plain, "<p>User: <script>alert(1)</script></p>")
 
+    def test_safe_format_single_pass_no_cascading_injection(self):
+        """Single-Pass Ersetzung verhindert rekursive/kaskadierende Platzhalter-Injektion."""
+        text = "Hello {first_name}, status: {status}"
+        context = {
+            'first_name': '{secret_code}',
+            'secret_code': 'EXPLOIT_LEAK',
+            'status': 'active',
+        }
+        res = safe_format(text, context)
+        # {first_name} wird zu {secret_code}, darf aber im selben Durchlauf NICHT zu EXPLOIT_LEAK aufgelöst werden
+        self.assertEqual(res, "Hello {secret_code}, status: active")
+
     @override_settings(EMAIL_BACKEND='emails.backends.ConfiguredSMTPBackend')
     @patch('emails.backends.SMTPBackend')
     def test_send_system_email_success(self, mock_smtp_cls):
@@ -427,6 +463,23 @@ class EmailServicesTests(TestCase):
         self.settings.refresh_from_db()
         self.assertTrue(self.settings.last_test_ok)
         self.assertIsNotNone(self.settings.last_test_at)
+
+    @patch('emails.backends.SMTPBackend.send_messages')
+    def test_send_test_email_zero_messages_fails(self, mock_smtp_send):
+        """Wenn backend.send_messages 0 zurückliefert, schlägt der Testversand fehl."""
+        mock_smtp_send.return_value = 0
+        success, msg = send_test_email('admin@example.com')
+        self.assertFalse(success)
+        self.assertIn("0 Nachrichten gesendet", msg)
+
+    def test_send_test_email_sandbox_without_redirect_fails(self):
+        """Sandbox-Modus ohne hinterlegte Weiterleitungsadresse verweigert Test-Mails."""
+        self.settings.is_sandbox = True
+        self.settings.sandbox_redirect_email = ""
+        self.settings.save()
+        success, msg = send_test_email('admin@example.com')
+        self.assertFalse(success)
+        self.assertIn("Testmodus (Sandbox) ist aktiv", msg)
 
 
 class AdminAndContextProcessorTests(TestCase):
@@ -531,6 +584,40 @@ class AdminAndContextProcessorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Anmeldung vorübergehend pausiert")
         self.assertContains(response, "E-Mail-Versand")
+
+    def test_admin_views_permission_denied_for_unprivileged_staff(self):
+        """Staff-Benutzer ohne change_generalemailsettings-Berechtigung erhalten 403 Forbidden."""
+        staff_user = User.objects.create_user(
+            username='staff_noperm', email='staffnoperm@example.com', password='password', is_staff=True
+        )
+        self.client.login(username='staff_noperm', password='password')
+
+        resp_test = self.client.get(reverse('admin:emails_send_test_email'))
+        self.assertEqual(resp_test.status_code, 403)
+
+        resp_post = self.client.post(reverse('admin:emails_send_test_email'), {'target_email': 'test@example.com'})
+        self.assertEqual(resp_post.status_code, 403)
+
+        resp_dns = self.client.get(reverse('admin:emails_check_dns_health'))
+        self.assertEqual(resp_dns.status_code, 403)
+
+    def test_admin_views_allowed_for_superuser_and_permitted_staff(self):
+        """Superuser und Staff mit change_generalemailsettings-Berechtigung dürfen die Endpunkte aufrufen."""
+        from django.contrib.auth.models import Permission
+        staff_user = User.objects.create_user(
+            username='staff_with_perm', email='staffperm@example.com', password='password', is_staff=True
+        )
+        perm = Permission.objects.get(codename='change_generalemailsettings')
+        staff_user.user_permissions.add(perm)
+
+        self.client.login(username='staff_with_perm', password='password')
+        resp_test = self.client.get(reverse('admin:emails_send_test_email'))
+        self.assertEqual(resp_test.status_code, 200)
+
+        with patch('emails.admin.check_domain_dns_health') as mock_dns:
+            mock_dns.return_value = {'status': 'ok', 'spf': {}, 'dmarc': {}, 'mx': {}, 'dkim': {}}
+            resp_dns = self.client.get(reverse('admin:emails_check_dns_health'))
+            self.assertEqual(resp_dns.status_code, 200)
 
 
 class OutgoingEmailQueueTests(TestCase):
@@ -820,3 +907,218 @@ class OutgoingEmailQueueTests(TestCase):
         self.assertFalse(OutgoingEmail.objects.filter(recipient_email='sync_default@example.com').exists())
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['sync_default@example.com'])
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_process_email_queue_filters_by_email_ids(self):
+        """process_email_queue mit email_ids verarbeitet ausschließlich die angegebenen IDs."""
+        e1 = queue_system_email('queue_test_tpl', 'filter1@example.com', {'username': 'U1'}, trigger_worker=False)
+        e2 = queue_system_email('queue_test_tpl', 'filter2@example.com', {'username': 'U2'}, trigger_worker=False)
+        e3 = queue_system_email('queue_test_tpl', 'filter3@example.com', {'username': 'U3'}, trigger_worker=False)
+
+        sent, failed = process_email_queue(email_ids=[e1.pk, e3.pk])
+        self.assertEqual(sent, 2)
+        self.assertEqual(failed, 0)
+
+        e1.refresh_from_db()
+        e2.refresh_from_db()
+        e3.refresh_from_db()
+        self.assertEqual(e1.status, OutgoingEmail.Status.SENT)
+        self.assertEqual(e2.status, OutgoingEmail.Status.PENDING)
+        self.assertEqual(e3.status, OutgoingEmail.Status.SENT)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_admin_action_process_now_respects_selected_ids(self):
+        """Admin-Aktion 'Ausgewählte E-Mails jetzt sofort versenden' versendet nur selektierte IDs."""
+        from django.contrib.admin.sites import AdminSite
+        from emails.admin import OutgoingEmailAdmin, process_outgoing_emails_now
+
+        admin_instance = OutgoingEmailAdmin(OutgoingEmail, AdminSite())
+        e1 = queue_system_email('queue_test_tpl', 'sel1@example.com', {'username': 'U1'}, trigger_worker=False)
+        e2 = queue_system_email('queue_test_tpl', 'sel2@example.com', {'username': 'U2'}, trigger_worker=False)
+
+        rf = RequestFactory()
+        req = rf.post('/admin/emails/outgoingemail/')
+        from django.contrib.messages.middleware import MessageMiddleware
+        from django.contrib.sessions.middleware import SessionMiddleware
+        SessionMiddleware(lambda r: None).process_request(req)
+        MessageMiddleware(lambda r: None).process_request(req)
+
+        process_outgoing_emails_now(admin_instance, req, OutgoingEmail.objects.filter(pk=e1.pk))
+
+        e1.refresh_from_db()
+        e2.refresh_from_db()
+        self.assertEqual(e1.status, OutgoingEmail.Status.SENT)
+        self.assertEqual(e2.status, OutgoingEmail.Status.PENDING)
+
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_admin_action_retry_outgoing_emails_respects_selected_ids(self):
+        """Admin-Aktion 'Ausgewählte E-Mails erneut in Warteschlange einreihen' verarbeitet nur selektierte IDs."""
+        from django.contrib.admin.sites import AdminSite
+        from emails.admin import OutgoingEmailAdmin, retry_outgoing_emails
+
+        admin_instance = OutgoingEmailAdmin(OutgoingEmail, AdminSite())
+        e1 = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='retry1@example.com',
+            subject='Retry 1',
+            body_text='Retry 1',
+            status=OutgoingEmail.Status.FAILED,
+            attempts=5,
+            max_attempts=5,
+        )
+        e2 = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='retry2@example.com',
+            subject='Retry 2',
+            body_text='Retry 2',
+            status=OutgoingEmail.Status.FAILED,
+            attempts=5,
+            max_attempts=5,
+        )
+
+        rf = RequestFactory()
+        req = rf.post('/admin/emails/outgoingemail/')
+        from django.contrib.messages.middleware import MessageMiddleware
+        from django.contrib.sessions.middleware import SessionMiddleware
+        SessionMiddleware(lambda r: None).process_request(req)
+        MessageMiddleware(lambda r: None).process_request(req)
+
+        retry_outgoing_emails(admin_instance, req, OutgoingEmail.objects.filter(pk=e1.pk))
+
+        e1.refresh_from_db()
+        e2.refresh_from_db()
+        self.assertEqual(e1.status, OutgoingEmail.Status.PENDING)
+        self.assertEqual(e1.attempts, 0)
+        self.assertEqual(e2.status, OutgoingEmail.Status.FAILED)
+        self.assertEqual(e2.attempts, 5)
+
+    def test_process_email_queue_marks_expired(self):
+        """E-Mails, deren expires_at in der Vergangenheit liegt, werden als EXPIRED markiert und nicht gesendet."""
+        e = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='expired@example.com',
+            subject='Expired Test',
+            body_text='Expired Body',
+            status=OutgoingEmail.Status.PENDING,
+            expires_at=timezone.now() - timedelta(minutes=5),
+        )
+
+        sent, failed = process_email_queue()
+        self.assertEqual(sent, 0)
+        self.assertEqual(failed, 0)
+
+        e.refresh_from_db()
+        self.assertEqual(e.status, OutgoingEmail.Status.EXPIRED)
+        self.assertIn("abgelaufen", e.last_error)
+        self.assertEqual(e.attempts, 0)
+
+    def test_recover_stale_processing_emails_does_not_overwrite_already_sent(self):
+        """Wenn eine E-Mail bereits als gesendet markiert ist (sent_at gesetzt), darf Stale Recovery sie nicht auf PENDING zurücksetzen."""
+        from emails.services import recover_stale_processing_emails
+
+        outgoing = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='alreadysent@example.com',
+            subject='Already Sent',
+            body_text='Already Sent',
+            status=OutgoingEmail.Status.PROCESSING,
+            sent_at=timezone.now(),
+            attempts=1,
+            max_attempts=3,
+        )
+        OutgoingEmail.objects.filter(pk=outgoing.pk).update(
+            updated_at=timezone.now() - timedelta(seconds=600)
+        )
+
+        recovered = recover_stale_processing_emails(timeout_seconds=300)
+        self.assertEqual(recovered, 0)
+
+        outgoing.refresh_from_db()
+        self.assertIsNotNone(outgoing.sent_at)
+
+    def test_mark_sent_rejects_mismatched_worker_or_missing_lease(self):
+        """mark_sent verweigert das Update, wenn ein anderer Worker den Lease übernommen hat."""
+        outgoing = OutgoingEmail.objects.create(
+            template_key='queue_test_tpl',
+            recipient_email='workerlease@example.com',
+            subject='Lease Test',
+            body_text='Lease',
+            status=OutgoingEmail.Status.PENDING,
+        )
+        outgoing.mark_processing(worker_id="worker-A", lease_seconds=60)
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.PROCESSING)
+        self.assertEqual(outgoing.worker_id, "worker-A")
+
+        # Worker B versucht mark_sent auszuführen -> Fehlschlag
+        res_b = outgoing.mark_sent(worker_id="worker-B")
+        self.assertFalse(res_b)
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.PROCESSING)
+
+        # Worker A führt mark_sent aus -> Erfolg
+        res_a = outgoing.mark_sent(worker_id="worker-A")
+        self.assertTrue(res_a)
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.status, OutgoingEmail.Status.SENT)
+
+    def test_process_email_queue_paused_when_not_operational(self):
+        """Wenn das E-Mail-System pausiert/deaktiviert ist, bricht process_email_queue ab ohne attempts zu erhöhen."""
+        self.settings.is_enabled = False
+        self.settings.save()
+
+        e = queue_system_email('queue_test_tpl', 'paused@example.com', {'username': 'P'}, trigger_worker=False)
+        # Normaler Durchlauf bricht sofort ab, E-Mail bleibt PENDING und unberührt
+        sent, failed = process_email_queue()
+        self.assertEqual(sent, 0)
+        self.assertEqual(failed, 0)
+
+        e.refresh_from_db()
+        self.assertEqual(e.status, OutgoingEmail.Status.PENDING)
+        self.assertEqual(e.attempts, 0)
+
+        # Gezielter Durchlauf mit expliziten email_ids markiert die E-Mail als pausiert
+        sent, failed = process_email_queue(email_ids=[e.pk])
+        self.assertEqual(sent, 0)
+        self.assertEqual(failed, 0)
+        e.refresh_from_db()
+        self.assertEqual(e.status, OutgoingEmail.Status.PENDING)
+        self.assertEqual(e.attempts, 0)
+        self.assertIn("pausiert", e.last_error)
+
+
+class DNSHealthCheckerTests(TestCase):
+    """Testet die DNS-Gesundheitsprüfung in emails/dns_checker.py."""
+
+    @patch('emails.dns_checker.query_dns_json')
+    def test_dns_checker_unreachable_status_on_network_error(self, mock_query):
+        from emails.dns_checker import check_domain_dns_health
+
+        mock_query.return_value = None
+        result = check_domain_dns_health('lanparty.de')
+        self.assertEqual(result['status'], 'unreachable')
+        self.assertIn('Offline-Betrieb', result['message'])
+        self.assertIn('Nicht prüfbar', result['spf']['record'])
+
+    @patch('emails.dns_checker.query_dns_json')
+    def test_dns_checker_healthy_records(self, mock_query):
+        from emails.dns_checker import check_domain_dns_health
+
+        def query_side_effect(domain, rtype):
+            if rtype == 'TXT' and domain == 'lanparty.de':
+                return ['v=spf1 mx ~all']
+            if rtype == 'TXT' and domain == '_dmarc.lanparty.de':
+                return ['v=DMARC1; p=reject;']
+            if rtype == 'MX':
+                return ['10 mail.lanparty.de']
+            if rtype == 'TXT' and 'default._domainkey' in domain:
+                return ['v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GN...']
+            return []
+
+        mock_query.side_effect = query_side_effect
+        result = check_domain_dns_health('lanparty.de')
+        self.assertEqual(result['status'], 'ok')
+        self.assertTrue(result['spf']['valid'])
+        self.assertTrue(result['dmarc']['valid'])
+        self.assertTrue(result['mx']['valid'])
+        self.assertTrue(result['dkim']['valid'])

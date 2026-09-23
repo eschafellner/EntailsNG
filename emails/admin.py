@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib import admin, messages
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html
@@ -199,6 +200,9 @@ class GeneralEmailSettingsAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def check_dns_health_view(self, request):
+        if not (request.user.is_superuser or request.user.has_perm('emails.change_generalemailsettings')):
+            raise PermissionDenied("Keine Berechtigung zur DNS-Diagnose.")
+
         settings = GeneralEmailSettings.load()
         domain = settings.domain_name or (settings.sender_email.split('@')[-1] if '@' in settings.sender_email else '')
         dns_result = check_domain_dns_health(domain)
@@ -212,6 +216,9 @@ class GeneralEmailSettingsAdmin(admin.ModelAdmin):
         return render(request, 'emails/admin_dns_check.html', context)
 
     def send_test_email_view(self, request):
+        if not (request.user.is_superuser or request.user.has_perm('emails.change_generalemailsettings')):
+            raise PermissionDenied("Keine Berechtigung zum E-Mail-Testversand.")
+
         settings = GeneralEmailSettings.load()
         target = settings.sandbox_redirect_email or settings.sender_email or (request.user.email if request.user.email else '')
 
@@ -277,8 +284,13 @@ class EmailTemplateAdmin(admin.ModelAdmin):
 
 @admin.action(description="Ausgewählte E-Mails erneut zur Warteschlange hinzufügen")
 def retry_outgoing_emails(modeladmin, request, queryset):
+    retryable = queryset.filter(status__in=[
+        OutgoingEmail.Status.PENDING,
+        OutgoingEmail.Status.FAILED,
+        OutgoingEmail.Status.EXPIRED,
+    ])
     count = 0
-    for email_obj in queryset:
+    for email_obj in retryable:
         email_obj.reset_for_retry()
         count += 1
     messages.success(request, f"{count} E-Mail(s) wurden für erneuten Versand vorgemerkt.")
@@ -287,10 +299,22 @@ def retry_outgoing_emails(modeladmin, request, queryset):
 @admin.action(description="Ausgewählte E-Mails jetzt sofort versenden")
 def process_outgoing_emails_now(modeladmin, request, queryset):
     from .services import process_email_queue
-    for email_obj in queryset:
+    retryable = queryset.filter(status__in=[
+        OutgoingEmail.Status.PENDING,
+        OutgoingEmail.Status.FAILED,
+        OutgoingEmail.Status.EXPIRED,
+    ])
+    selected_ids = []
+    for email_obj in retryable:
         email_obj.reset_for_retry()
-    sent, failed = process_email_queue(limit=len(queryset))
-    messages.info(request, f"Verarbeitung abgeschlossen: {sent} gesendet, {failed} fehlgeschlagen.")
+        selected_ids.append(email_obj.id)
+
+    if not selected_ids:
+        messages.warning(request, "Keine geeigneten (ausstehenden oder fehlgeschlagenen) E-Mails ausgewählt.")
+        return
+
+    sent, failed = process_email_queue(limit=len(selected_ids), email_ids=selected_ids)
+    messages.info(request, f"Verarbeitung von {len(selected_ids)} ausgewählten E-Mail(s) abgeschlossen: {sent} gesendet, {failed} fehlgeschlagen.")
 
 
 @admin.register(OutgoingEmail)
@@ -300,10 +324,11 @@ class OutgoingEmailAdmin(admin.ModelAdmin):
         'subject', 'attempts_display', 'scheduled_at', 'sent_at', 'created_at'
     )
     list_filter = ('status', 'template_key', 'created_at')
-    search_fields = ('recipient_email', 'subject', 'last_error', 'template_key')
+    search_fields = ('recipient_email', 'subject', 'last_error', 'template_key', 'worker_id')
     readonly_fields = (
         'created_at', 'sent_at', 'status', 'attempts',
-        'last_error', 'body_text', 'body_html', 'scheduled_at'
+        'last_error', 'body_text', 'body_html', 'scheduled_at',
+        'expires_at', 'worker_id', 'lease_expires_at'
     )
     actions = [retry_outgoing_emails, process_outgoing_emails_now]
 
@@ -311,7 +336,8 @@ class OutgoingEmailAdmin(admin.ModelAdmin):
         ('Status & Metadaten', {
             'fields': (
                 'status', 'template_key', 'recipient_email',
-                'attempts', 'max_attempts', 'scheduled_at', 'sent_at', 'created_at'
+                'attempts', 'max_attempts', 'scheduled_at', 'expires_at',
+                'worker_id', 'lease_expires_at', 'sent_at', 'created_at'
             )
         }),
         ('Fehlerprotokoll', {
@@ -333,6 +359,7 @@ class OutgoingEmailAdmin(admin.ModelAdmin):
             OutgoingEmail.Status.PROCESSING: ('#1e40af', '#dbeafe'),   # blue
             OutgoingEmail.Status.SENT: ('#166534', '#dcfce7'),         # green
             OutgoingEmail.Status.FAILED: ('#991b1b', '#fee2e2'),       # red
+            OutgoingEmail.Status.EXPIRED: ('#4b5563', '#f3f4f6'),      # gray
         }
         color, bg = colors.get(obj.status, ('#374151', '#f3f4f6'))
         return format_html(

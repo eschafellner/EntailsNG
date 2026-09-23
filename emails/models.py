@@ -1,3 +1,4 @@
+from datetime import timedelta
 import logging
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -93,8 +94,7 @@ class GeneralEmailSettings(models.Model):
     smtp_username = models.CharField(
         max_length=150, blank=True, default='', verbose_name="SMTP Benutzername"
     )
-    smtp_password = models.CharField(
-        max_length=255,
+    smtp_password = models.TextField(
         blank=True,
         default='',
         verbose_name="SMTP Passwort",
@@ -182,11 +182,16 @@ class GeneralEmailSettings(models.Model):
     @property
     def is_operational(self) -> bool:
         """True, wenn eine Konfiguration vorliegt, die Versand grundsätzlich erlaubt."""
+        broken_creds = (
+            self.credentials_broken
+            if self.transport_mode == self.TransportMode.CUSTOM_SMTP
+            else False
+        )
         return bool(
             self.is_enabled
             and self.transport_mode != self.TransportMode.UNCONFIGURED
             and self.sender_email
-            and not self.credentials_broken
+            and not broken_creds
         )
 
     @property
@@ -198,7 +203,7 @@ class GeneralEmailSettings(models.Model):
             return "Der E-Mail-Versand ist ausgeschaltet. Gäste können sich nicht registrieren."
         if not self.sender_email:
             return "Es ist keine Absenderadresse hinterlegt."
-        if self.credentials_broken:
+        if self.transport_mode == self.TransportMode.CUSTOM_SMTP and self.credentials_broken:
             return "Das gespeicherte SMTP-Passwort kann nicht gelesen werden. Bitte neu eingeben."
         if self.is_sandbox:
             return f"Testmodus aktiv: alle Mails gehen an {self.sandbox_redirect_email}."
@@ -309,6 +314,7 @@ class OutgoingEmail(models.Model):
         PROCESSING = 'PROCESSING', 'Wird gesendet'
         SENT = 'SENT', 'Erfolgreich gesendet'
         FAILED = 'FAILED', 'Fehlgeschlagen'
+        EXPIRED = 'EXPIRED', 'Abgelaufen'
 
     template_key = models.CharField(
         max_length=50,
@@ -357,6 +363,28 @@ class OutgoingEmail(models.Model):
         verbose_name="Geplanter Versandzeitpunkt",
         help_text="Zeitpunkt, ab dem die E-Mail zur Verarbeitung ansteht (für Backoff-Wiederholungen).",
     )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Gültig bis",
+        help_text="Optionales Ablaufdatum für zeitkritische Nachrichten (z. B. Verifizierungscodes).",
+    )
+    worker_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name="Worker-Kennung",
+        help_text="Eindeutige ID des verarbeitenden Worker-Prozesses.",
+    )
+    lease_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Lease läuft ab um",
+        help_text="Zeitpunkt, bis zu dem der Worker die exklusive Sperre besitzt.",
+    )
     sent_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -380,53 +408,126 @@ class OutgoingEmail(models.Model):
         indexes = [
             models.Index(fields=['status', 'scheduled_at'], name='email_queue_status_sched_idx'),
             models.Index(fields=['status', 'updated_at'], name='email_queue_status_upd_idx'),
+            models.Index(fields=['status', 'lease_expires_at'], name='email_queue_status_lease_idx'),
         ]
 
     def __str__(self):
         return f"[{self.get_status_display()}] {self.template_key} an {self.recipient_email} (#{self.pk})"
 
-    def mark_processing(self):
+    def mark_processing(self, worker_id='', lease_seconds=300):
+        now = timezone.now()
         self.status = self.Status.PROCESSING
-        self.updated_at = timezone.now()
-        self.save(update_fields=['status', 'updated_at'])
+        self.worker_id = worker_id
+        self.lease_expires_at = now + timedelta(seconds=lease_seconds)
+        self.updated_at = now
+        self.save(update_fields=['status', 'worker_id', 'lease_expires_at', 'updated_at'])
 
-    def mark_sent(self):
-        self.status = self.Status.SENT
-        self.sent_at = timezone.now()
-        self.last_error = ''
-        self.updated_at = timezone.now()
-        self.save(update_fields=['status', 'sent_at', 'last_error', 'updated_at'])
+    def mark_sent(self, worker_id=None):
+        now = timezone.now()
+        qs = OutgoingEmail.objects.filter(pk=self.pk, status=self.Status.PROCESSING)
+        if worker_id:
+            qs = qs.filter(worker_id=worker_id)
+        rows = qs.update(
+            status=self.Status.SENT,
+            sent_at=now,
+            last_error='',
+            worker_id='',
+            lease_expires_at=None,
+            updated_at=now,
+        )
+        if rows:
+            self.status = self.Status.SENT
+            self.sent_at = now
+            self.last_error = ''
+            self.worker_id = ''
+            self.lease_expires_at = None
+            self.updated_at = now
+        return bool(rows)
 
-    def mark_failed_attempt(self, error_message: str):
-        from datetime import timedelta
+    def mark_expired(self, reason="Nachricht vor Versand abgelaufen."):
+        now = timezone.now()
+        self.status = self.Status.EXPIRED
+        self.last_error = reason
+        self.worker_id = ''
+        self.lease_expires_at = None
+        self.updated_at = now
+        self.save(update_fields=['status', 'last_error', 'worker_id', 'lease_expires_at', 'updated_at'])
+
+    def mark_paused(self, reason="E-Mail-Versand ist vorübergehend deaktiviert.", delay_seconds=30):
+        """Pausiert den Sendeversuch ohne Fehlversuche (attempts) hochzuzählen."""
+        now = timezone.now()
+        self.status = self.Status.PENDING
+        self.last_error = reason[:2000]
+        self.scheduled_at = now + timedelta(seconds=delay_seconds)
+        self.worker_id = ''
+        self.lease_expires_at = None
+        self.updated_at = now
+        self.save(update_fields=['status', 'last_error', 'scheduled_at', 'worker_id', 'lease_expires_at', 'updated_at'])
+
+    def mark_failed_attempt(self, error_message: str, is_pause: bool = False):
+        if is_pause:
+            self.mark_paused(error_message)
+            return
+        now = timezone.now()
         self.attempts += 1
         self.last_error = error_message[:2000]
+        self.worker_id = ''
+        self.lease_expires_at = None
         if self.attempts >= self.max_attempts:
             self.status = self.Status.FAILED
         else:
             self.status = self.Status.PENDING
-            # Exponential backoff: 1 min, 2 min, 4 min, 8 min, ...
             backoff_seconds = 60 * (2 ** (self.attempts - 1))
-            self.scheduled_at = timezone.now() + timedelta(seconds=backoff_seconds)
-        self.updated_at = timezone.now()
-        self.save(update_fields=['attempts', 'last_error', 'status', 'scheduled_at', 'updated_at'])
+            self.scheduled_at = now + timedelta(seconds=backoff_seconds)
+        self.updated_at = now
+        self.save(update_fields=['attempts', 'last_error', 'status', 'scheduled_at', 'worker_id', 'lease_expires_at', 'updated_at'])
 
     def mark_stale_recovered(self, timeout_seconds: int):
-        """Setzt eine verwaiste PROCESSING-E-Mail zurück auf PENDING oder markiert sie als FAILED."""
-        self.attempts += 1
-        self.last_error = f"Timeout nach {timeout_seconds}s im Status PROCESSING (Worker abgebrochen/stale)."
-        if self.attempts >= self.max_attempts:
-            self.status = self.Status.FAILED
+        """Atomares Zurücksetzen auf PENDING oder FAILED, nur wenn noch PROCESSING und ungesendet."""
+        now = timezone.now()
+        new_attempts = self.attempts + 1
+        err = f"Timeout nach {timeout_seconds}s im Status PROCESSING (Worker abgebrochen/stale)."
+        if new_attempts >= self.max_attempts:
+            new_status = self.Status.FAILED
+            new_scheduled = self.scheduled_at
         else:
-            self.status = self.Status.PENDING
-            self.scheduled_at = timezone.now()
-        self.updated_at = timezone.now()
-        self.save(update_fields=['attempts', 'last_error', 'status', 'scheduled_at', 'updated_at'])
+            new_status = self.Status.PENDING
+            new_scheduled = now
 
-    def reset_for_retry(self):
+        rows = OutgoingEmail.objects.filter(
+            pk=self.pk,
+            status=self.Status.PROCESSING,
+            sent_at__isnull=True,
+        ).update(
+            attempts=new_attempts,
+            last_error=err,
+            status=new_status,
+            scheduled_at=new_scheduled,
+            worker_id='',
+            lease_expires_at=None,
+            updated_at=now,
+        )
+        if rows:
+            self.attempts = new_attempts
+            self.last_error = err
+            self.status = new_status
+            self.scheduled_at = new_scheduled
+            self.worker_id = ''
+            self.lease_expires_at = None
+            self.updated_at = now
+        return bool(rows)
+
+    def reset_for_retry(self, reset_attempts: bool = True):
         """Setzt die E-Mail für einen sofortigen erneuten Sendeversuch zurück."""
+        now = timezone.now()
         self.status = self.Status.PENDING
-        self.scheduled_at = timezone.now()
-        self.updated_at = timezone.now()
-        self.save(update_fields=['status', 'scheduled_at', 'updated_at'])
+        self.scheduled_at = now
+        self.worker_id = ''
+        self.lease_expires_at = None
+        self.updated_at = now
+        update_fields = ['status', 'scheduled_at', 'worker_id', 'lease_expires_at', 'updated_at']
+        if reset_attempts:
+            self.attempts = 0
+            update_fields.append('attempts')
+        self.save(update_fields=update_fields)
 

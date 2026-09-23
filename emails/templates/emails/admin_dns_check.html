@@ -15,6 +15,10 @@
     <div style="background: #ef444422; border: 1px solid #ef4444; color: #f87171; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
       ⚠️ {{ dns_result.message }} Bitte hinterlege eine Domain (z. B. <code>lan-party.de</code>) in den Einstellungen.
     </div>
+  {% elif dns_result.status == 'unreachable' %}
+    <div style="background: #eab30822; border: 1px solid #eab308; color: #facc15; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+      ℹ️ {{ dns_result.message }}
+    </div>
   {% else %}
 
   <!-- Status Dashboard Cards -->
