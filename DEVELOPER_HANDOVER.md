@@ -58,6 +58,12 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Helfer Check-in Scanner (`/checkin/scanner/`):** Vor-Ort-Kamera-QR-Scan für Helfer mit akustischem Feedback und Ausweis-Abgleich (`can_check_in()`).
 * **GiroCode (EPC-QR):** Generiert SEPA-Überweisungs-QRs mit vorbefülltem Betrag und Verwendungszweck.
 
+### 🖨️ `media_designer` (Vorlagen & Druckexport)
+* **Vorlagen:** Eventgebundene Badge- und Urkundenvorlagen mit optionalem JPG/PNG/WebP-Hintergrund und validierten Textfeldern in relativen Koordinaten (`schema_version=1`). Der Editor ist unter `/media-designer/` für Mitarbeiter erreichbar.
+* **Seriendruck:** Badges verwenden Anmeldungen, Urkunden angemeldete Teams abgeschlossener Turniere. Platzierungen kommen aus `TournamentPodiumService`; unbekannte Platzierungen bleiben leer. Die Orga kann pro Export eine frei benannte Auszeichnung vergeben.
+* **Druck:** Serverseitige PDF-Erzeugung mit Pillow bei 300 DPI. A6/A7/A8-Badges sind einzeln oder auf A4-Bögen mit 5 mm Rand, 4 mm Abstand und Schnittmarken exportierbar (A8: 9 pro Bogen). A4-Urkunden werden einzeln ausgegeben.
+* **Grenzen der ersten Version:** Eine Schriftfamilie, Hochformat, keine Druckbeschnittzugabe oder Filter auf der Empfängerliste. Hintergründe werden proportional zugeschnitten. Die Textvorschau verwendet Beispieldaten; der Export verkleinert lange Texte bis auf 1,5 mm und meldet danach einen Fehler.
+
 ### 🏆 `tournaments` (Turnier-Engine & Team-Management)
 * **Modi:** Single Elimination, Double Elimination, Liga (Round Robin), Gruppenphase + K.O., Free For All (FFA).
 * **Services:**

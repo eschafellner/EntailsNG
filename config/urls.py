@@ -68,6 +68,7 @@ urlpatterns = [
     path('seating/', include('seating.urls')),
     path('clans/', include('clans.urls')),
     path('tournaments/', include('tournaments.urls')),
+    path('media-designer/', include('media_designer.urls')),
     path('teams/', RedirectView.as_view(pattern_name='team_list', permanent=False), name='teams'),
     path('sponsoren/', include('sponsors.urls')),
     path('sponsors/', RedirectView.as_view(pattern_name='sponsor_list', permanent=False), name='sponsors'),
@@ -89,5 +90,4 @@ def custom_500_handler(request):
 
 
 handler500 = custom_500_handler
-
 

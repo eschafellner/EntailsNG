@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ template.name }} – {% t "media_title" "Mediendesigner" %}{% endblock %}
+
+{% block content %}
+<div class="card" style="padding:24px;margin-bottom:20px;">
+  <p class="eyebrow">{% t "media_title" "Mediendesigner" %}</p>
+  <h1>{{ template.name }}</h1>
+  <p><a href="{% url 'media_template_list' %}">{% t "media_back" "← Alle Vorlagen" %}</a> · <a href="{% url 'media_template_export' template.pk %}">{% t "media_export" "Exportieren" %}</a></p>
+  <p>{% t "media_edit_hint" "Textfelder auf der Vorschau verschieben; rechts Inhalt und Darstellung bearbeiten. Die Vorschau zeigt Beispieldaten." %}</p>
+</div>
+
+<form method="post" enctype="multipart/form-data" id="media-editor-form">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  <div class="card" style="padding:20px;margin-bottom:20px;">
+    <div class="media-form-grid">
+      {% for field in form %}
+        {% if field.name != 'elements' %}
+          <label>{{ field.label }} {{ field }} {{ field.errors }}</label>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {{ form.elements }}{{ form.elements.errors }}
+  </div>
+
+  <div class="media-editor-layout">
+    <div class="card" style="padding:20px;">
+      <h2>{% t "media_preview" "Vorschau" %}</h2>
+      <div id="media-canvas-wrap">
+        <div id="media-canvas" data-background="{% if template.background %}{{ template.background.url }}{% endif %}"
+             data-static-label="{% t 'media_static_text' 'Fester Text' %}"
+             data-sample-guest="{% t 'media_sample_guest' 'Gamer-Tag' %}"
+             data-sample-team="{% t 'media_sample_team' 'Teamname' %}"></div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:20px;">
+      <h2>{% t "media_fields" "Textfelder" %}</h2>
+      <div id="media-field-list"></div>
+      <button type="button" id="media-add-field">{% t "media_add_field" "+ Textfeld" %}</button>
+      <div id="media-field-controls" hidden>
+        <label>{% t "media_source" "Datenfeld" %}<select id="media-source"></select></label>
+        <label id="media-static-wrap">{% t "media_static_text" "Fester Text" %}<input id="media-static-text" maxlength="160"></label>
+        <div class="media-control-grid">
+          <label>X %<input id="media-x" type="number" min="0" max="100" step="0.1"></label>
+          <label>Y %<input id="media-y" type="number" min="0" max="100" step="0.1"></label>
+          <label>{% t "media_width" "Breite %" %}<input id="media-width" type="number" min="1" max="100" step="0.1"></label>
+          <label>{% t "media_font_size" "Schrift mm" %}<input id="media-font-size" type="number" min="1.5" max="20" step="0.5"></label>
+        </div>
+        <label>{% t "media_color" "Textfarbe" %}<input id="media-color" type="color"></label>
+        <label>{% t "media_align" "Ausrichtung" %}
+          <select id="media-align">
+            <option value="left">{% t "media_align_left" "Links" %}</option>
+            <option value="center">{% t "media_align_center" "Mittig" %}</option>
+            <option value="right">{% t "media_align_right" "Rechts" %}</option>
+          </select>
+        </label>
+        <button type="button" id="media-remove-field">{% t "media_remove_field" "Feld entfernen" %}</button>
+      </div>
+      <p>{% t "media_print_hint" "Hintergründe werden proportional gefüllt; Randbereiche können abgeschnitten werden. Lange Texte werden beim Export verkleinert, wenn sie ins Feld passen." %}</p>
+    </div>
+  </div>
+  <p style="margin-top:20px"><button type="submit" class="btn btn-primary">{% t "media_save" "Vorlage speichern" %}</button></p>
+</form>
+
+{{ template.elements|json_script:"media-elements" }}
+{{ field_labels|json_script:"media-field-labels" }}
+{{ paper_mm|json_script:"media-paper-mm" }}
+<script src="{% static 'js/media-designer.js' %}" defer></script>
+
+<style>
+.media-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
+.media-form-grid label,#media-field-controls label{display:grid;gap:6px;font-weight:600}
+.media-form-grid input,.media-form-grid select,#media-field-controls input,#media-field-controls select{width:100%;padding:9px;border:1px solid var(--line);border-radius:7px;background:var(--paper);color:var(--ink)}
+.media-editor-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:20px}
+#media-canvas-wrap{display:flex;justify-content:center;background:#d6d9dd;padding:20px;overflow:auto}
+#media-canvas{position:relative;width:min(100%,600px);background:white center/cover no-repeat;box-shadow:0 8px 25px #0003;touch-action:none}
+.media-element{position:absolute;min-height:20px;border:1px dashed #0284c7;background:transparent;cursor:move;white-space:nowrap;overflow:hidden;touch-action:none}
+.media-element.is-selected{outline:2px solid #0284c7}
+#media-field-list{display:grid;gap:6px;margin-bottom:10px}
+#media-field-list button{text-align:left;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
+#media-field-list button.is-selected{border-color:#0284c7}
+#media-field-controls{display:grid;gap:12px;margin-top:16px}
+#media-field-controls[hidden],#media-static-wrap[hidden]{display:none}
+.media-control-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:850px){.media-editor-layout{grid-template-columns:1fr}}
+</style>
+{% endblock %}

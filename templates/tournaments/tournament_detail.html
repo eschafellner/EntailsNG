@@ -128,6 +128,7 @@
       <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
         {% if is_admin %}
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            {% if request.user.is_staff %}<a href="{% url 'media_template_list' %}">{% t "media_certificate_link" "Urkunden gestalten und exportieren" %}</a>{% endif %}
             {% if not tournament.is_generated %}
               <div id="bracket-generate-container" style="display: inline-flex; align-items: center; gap: 8px;">
                 <button type="button" id="btn-show-generate-bracket" onclick="toggleGenerateBracketConfirm(true)" style="background: #047857; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; cursor: pointer;">

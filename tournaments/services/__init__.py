@@ -6,6 +6,7 @@ Modularisiert nach Verantwortlichkeiten:
 - brackets: Generierung von Turnierbäumen (Single, Double, League, Group, FFA)
 - matches: Match-Ergebnisverarbeitung, Weiterschaltung, FFA
 - standings: Tabellen- und Ranglistenberechnung (Liga, Gruppe)
+- podium: Sieger-Podium abgeschlossener Turniere
 - forfeits: Walkover & Disqualifikationen
 """
 
@@ -42,6 +43,7 @@ from tournaments.services.standings import (
 from tournaments.services.forfeits import (
     forfeit_team_in_active_tournaments,
 )
+from tournaments.services.podium import TournamentPodiumService
 
 __all__ = [
     # Registration
@@ -72,4 +74,5 @@ __all__ = [
     'check_and_advance_group_stage',
     # Forfeits
     'forfeit_team_in_active_tournaments',
+    'TournamentPodiumService',
 ]

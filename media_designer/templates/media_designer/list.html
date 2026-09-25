@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block title %}{% t "media_title" "Mediendesigner" %}{% endblock %}
+
+{% block content %}
+<div class="card" style="padding:24px; margin-bottom:24px;">
+  <p class="eyebrow">{% t "media_title" "Mediendesigner" %}</p>
+  <h1>{% t "media_templates" "Medienvorlagen" %}</h1>
+  <p>{% t "media_intro" "Erstelle Badges und Urkunden mit Hintergrundbild und Seriendruckfeldern." %}</p>
+</div>
+
+<div class="card" style="padding:24px; margin-bottom:24px;">
+  <h2>{% t "media_create" "Neue Vorlage" %}</h2>
+  <form method="post" action="{% url 'media_template_create' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="media-form-grid">
+      {% for field in form %}
+        <label>{{ field.label }} {{ field }} {{ field.errors }}</label>
+      {% endfor %}
+    </div>
+    <p>{% t "media_create_hint" "Urkunden verwenden A4; für Badges stehen A6, A7 und A8 bereit. JPG, PNG oder WebP bis 10 MB." %}</p>
+    <button type="submit" class="btn btn-primary">{% t "media_create_button" "Vorlage erstellen" %}</button>
+  </form>
+</div>
+
+<div class="card" style="padding:24px;">
+  <h2>{% t "media_existing" "Gespeicherte Vorlagen" %}</h2>
+  {% if templates %}
+    <div class="media-template-list">
+      {% for template in templates %}
+        <div class="media-template-row">
+          <div><strong>{{ template.name }}</strong><br><small>{{ template.event.title }} · {{ template.get_kind_display }} · {{ template.paper_size }}</small></div>
+          <div class="media-actions">
+            <a href="{% url 'media_template_edit' template.pk %}">{% t "media_edit" "Gestalten" %}</a>
+            <a href="{% url 'media_template_export' template.pk %}">{% t "media_export" "Exportieren" %}</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>{% t "media_empty" "Noch keine Vorlagen vorhanden." %}</p>
+  {% endif %}
+</div>
+
+<style>
+.media-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin:16px 0}
+.media-form-grid label{display:grid;gap:6px;font-weight:600}
+.media-form-grid input,.media-form-grid select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+.media-template-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--line)}
+.media-actions{display:flex;gap:14px;flex-wrap:wrap}
+</style>
+<script>
+const mediaKind = document.getElementById('id_kind');
+const mediaPaper = document.getElementById('id_paper_size');
+mediaKind?.addEventListener('change', () => {
+  if (mediaKind.value === 'CERTIFICATE') mediaPaper.value = 'A4';
+  else if (mediaKind.value === 'BADGE' && (!mediaPaper.value || mediaPaper.value === 'A4')) mediaPaper.value = 'A8';
+});
+</script>
+{% endblock %}

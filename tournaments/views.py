@@ -26,6 +26,7 @@ from tournaments.services import (
     LeagueStandingService,
     TournamentBracketService,
     TournamentMatchService,
+    TournamentPodiumService,
     TournamentRegistrationService,
     advance_match_winner,
     check_user_event_checkin,
@@ -158,7 +159,6 @@ def tournament_detail(request, slug):
     lb_matches = []
     grand_final_matches = []
     se_matches = []
-    podium = {'first': None, 'second': None, 'third': None}
 
     if tournament.is_generated:
         if tournament.mode == Tournament.Mode.DOUBLE_ELIMINATION:
@@ -183,44 +183,9 @@ def tournament_detail(request, slug):
             if ffa_match:
                 ffa_participants = list(ffa_match.participants.select_related('team').order_by('rank', '-score', 'id'))
 
-        # Ermittlung des Sieger-Podiums für abgeschlossene Turniere
-        if tournament.status == Tournament.Status.FINISHED:
-            if tournament.mode == Tournament.Mode.DOUBLE_ELIMINATION:
-                gf = matches.filter(bracket_type__in=[
-                    TournamentMatch.BracketType.GRAND_FINAL_RESET,
-                    TournamentMatch.BracketType.GRAND_FINAL
-                ]).filter(status=TournamentMatch.Status.COMPLETED).order_by('-round_number', '-id').first()
-                if gf and gf.winner:
-                    podium['first'] = gf.winner
-                    podium['second'] = gf.team2 if gf.winner == gf.team1 else gf.team1
-                lb_final = matches.filter(bracket_type=TournamentMatch.BracketType.LOSERS, status=TournamentMatch.Status.COMPLETED).order_by('-round_number', '-match_number').first()
-                if lb_final and lb_final.loser:
-                    podium['third'] = lb_final.loser
-            elif tournament.mode == Tournament.Mode.SINGLE_ELIMINATION:
-                final_m = matches.filter(bracket_type=TournamentMatch.BracketType.FINAL, status=TournamentMatch.Status.COMPLETED).first()
-                if final_m and final_m.winner:
-                    podium['first'] = final_m.winner
-                    podium['second'] = final_m.loser
-            elif tournament.mode == Tournament.Mode.LEAGUE and league_standings:
-                if len(league_standings) >= 1:
-                    podium['first'] = league_standings[0]['team']
-                if len(league_standings) >= 2:
-                    podium['second'] = league_standings[1]['team']
-                if len(league_standings) >= 3:
-                    podium['third'] = league_standings[2]['team']
-            elif tournament.mode == Tournament.Mode.GROUP_STAGE:
-                final_m = matches.filter(bracket_type=TournamentMatch.BracketType.FINAL, status=TournamentMatch.Status.COMPLETED).order_by('-round_number').first()
-                if final_m and final_m.winner:
-                    podium['first'] = final_m.winner
-                    podium['second'] = final_m.loser
-            elif tournament.mode == Tournament.Mode.FFA and ffa_participants:
-                ranked = [p for p in ffa_participants if p.rank]
-                if len(ranked) >= 1:
-                    podium['first'] = ranked[0].team
-                if len(ranked) >= 2:
-                    podium['second'] = ranked[1].team
-                if len(ranked) >= 3:
-                    podium['third'] = ranked[2].team
+    podium = TournamentPodiumService.calculate(
+        tournament, league_standings=league_standings, ffa_participants=ffa_participants,
+    )
 
     # Read-only presentation data; registration services remain authoritative.
     candidate_teams = list(my_user_teams)

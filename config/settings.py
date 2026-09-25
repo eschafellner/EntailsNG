@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'clans',
     'emails',
     'tournaments',
+    'media_designer',
     'sponsors',
 ]
 
@@ -350,6 +351,5 @@ LOGGING = {
         },
     },
 }
-
 
 
