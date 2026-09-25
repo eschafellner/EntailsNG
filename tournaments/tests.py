@@ -3371,21 +3371,58 @@ class TournamentAndTeamHardeningTests(TestCase):
         tournament.refresh_from_db()
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
 
-        # Re-evaluate with rank 1 disqualified -> winner reset to None, tournament status reset/not finished
-        tournament.status = Tournament.Status.IN_PROGRESS
-        tournament.save()
-        FFAMatchService.update_ffa_scores(
-            match.id,
-            [
-                {'participant_id': p1.id, 'rank': 1, 'score': 100, 'is_disqualified': True},
-                {'participant_id': p2.id, 'rank': 2, 'score': 80},
-            ],
-            actor=self.admin,
-        )
+        # A correction without a valid winner must not complete or erase a finished match.
+        with self.assertRaisesMessage(TournamentMatchError, 'Rang 1'):
+            FFAMatchService.update_ffa_scores(
+                match.id,
+                [
+                    {'participant_id': p1.id, 'rank': 1, 'score': 100, 'is_disqualified': True},
+                    {'participant_id': p2.id, 'rank': 2, 'score': 80},
+                ],
+                actor=self.admin,
+            )
         match.refresh_from_db()
-        self.assertIsNone(match.winner)
+        self.assertEqual(match.winner, team1)
         tournament.refresh_from_db()
+        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
+
+    def test_ffa_scores_without_rank_one_do_not_complete_match(self):
+        tournament = self._create_tournament(
+            title='FFA No Rank', event=self.event, game=self.game_ffa,
+            mode=Tournament.Mode.FFA, status=Tournament.Status.IN_PROGRESS,
+            is_generated=True, max_teams=4,
+        )
+        teams = [
+            Team.objects.create(name=f'FFA No Rank {number}', captain=user,
+                                game=self.game_ffa, event=self.event)
+            for number, user in enumerate((self.u1, self.u2), 1)
+        ]
+        match = TournamentMatch.objects.create(
+            tournament=tournament, bracket_type=TournamentMatch.BracketType.FFA,
+            status=TournamentMatch.Status.READY,
+        )
+        participants = [TournamentMatchParticipant.objects.create(match=match, team=team) for team in teams]
+        scores = [
+            {'participant_id': participant.id, 'rank': '', 'score': score}
+            for participant, score in zip(participants, (100, 80))
+        ]
+        with self.assertRaisesMessage(TournamentMatchError, 'Rang 1'):
+            FFAMatchService.update_ffa_scores(match.id, scores, actor=self.admin)
+        match.refresh_from_db()
+        tournament.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.READY)
         self.assertEqual(tournament.status, Tournament.Status.IN_PROGRESS)
+        self.assertTrue(all(participant.rank is None and participant.score == 0
+                            for participant in match.participants.all()))
+
+        scores[0]['rank'] = 1
+        scores[1]['rank'] = 2
+        FFAMatchService.update_ffa_scores(match.id, scores, actor=self.admin)
+        match.refresh_from_db()
+        tournament.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(match.winner, teams[0])
+        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
 
     def test_is_in_active_tournament_and_status(self):
         tournament = self._create_tournament(
@@ -3569,7 +3606,6 @@ class TournamentAndTeamHardeningTests(TestCase):
         annotated_t = qs.get(pk=tournament.pk)
         self.assertEqual(annotated_t.reg_count, 1)
         self.assertEqual(t_admin.registered_count(annotated_t), 1)
-
 
 
 

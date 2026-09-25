@@ -1104,6 +1104,9 @@
     </h3>
     <form method="post" action="{% url 'match_update_ffa_score' match_id=ffa_match.id %}">
       {% csrf_token %}
+      <p style="font-size: 14px; color: var(--muted); margin: 0 0 16px;">
+        {% t "tournament_ffa_rank_required" "Zum Abschließen muss genau ein nicht disqualifizierter Teilnehmer Rang 1 erhalten. Punkte allein bestimmen die Platzierung nicht." %}
+      </p>
 
       <div style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; padding-right: 4px;">
         {% for p in ffa_participants %}

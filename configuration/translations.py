@@ -700,6 +700,7 @@ DEFAULT_TEXTS = {
     'tournament_modal_defeat_reason': 'Niederlage bestätigt durch {team}',
     'tournament_ffa_modal_title': '🏆 FFA-Ergebnisse erfassen',
     'tournament_ffa_modal_save_btn': 'Wertung speichern & abschließen',
+    'tournament_ffa_rank_required': 'Zum Abschließen muss genau ein nicht disqualifizierter Teilnehmer Rang 1 erhalten. Punkte allein bestimmen die Platzierung nicht.',
     'tournament_ffa_rank_label': 'Rang:',
     'tournament_ffa_points_label': 'Pkt:',
 

@@ -62,8 +62,10 @@ class TournamentPodiumService:
                     ffa_match.participants.select_related('team').order_by('rank', '-score', 'id')
                     if ffa_match else []
                 )
-            ranked = (participant for participant in ffa_participants if participant.rank)
-            for place, participant in zip(podium, ranked):
-                podium[place] = participant.team
+            places = {1: 'first', 2: 'second', 3: 'third'}
+            for participant in ffa_participants:
+                place = places.get(participant.rank)
+                if place and not participant.is_disqualified and podium[place] is None:
+                    podium[place] = participant.team
 
         return podium

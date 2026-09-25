@@ -15,7 +15,10 @@ from media_designer.data import certificate_rows
 from media_designer.models import MediaTemplate
 from media_designer.rendering import render_pdf, sheet_layout
 from media_designer.schema import default_elements
-from tournaments.models import Game, Team, Tournament, TournamentMatch, TournamentRegistration
+from tournaments.models import (
+    Game, Team, Tournament, TournamentMatch, TournamentMatchParticipant,
+    TournamentRegistration,
+)
 from users.models import User
 
 
@@ -180,6 +183,62 @@ class MediaDesignerTests(TestCase):
         response = self.client.post(reverse('media_template_export', args=[certificate.pk]), {
             'tournament': str(tournament.pk), 'recipients': [str(tournament.registrations.first().pk)],
             'award_title': 'Fairplay',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+    def test_ffa_result_completion_makes_tournament_available_for_certificate(self):
+        now = timezone.now()
+        game = Game.objects.create(name='FFA Export Game', team_size=1)
+        tournament = Tournament.objects.create(
+            title='FFA Export Cup', event=self.event, game=game,
+            mode=Tournament.Mode.FFA, status=Tournament.Status.IN_PROGRESS,
+            is_generated=True, registration_start=now - timedelta(days=2),
+            registration_end=now - timedelta(days=1),
+        )
+        match = TournamentMatch.objects.create(
+            tournament=tournament, bracket_type=TournamentMatch.BracketType.FFA,
+            status=TournamentMatch.Status.READY,
+        )
+        participants = []
+        registrations = []
+        for number, user in enumerate((self.staff, self.guest, self.other_guest), 1):
+            team = Team.objects.create(name=f'FFA Export {number}', captain=user,
+                                       game=game, event=self.event)
+            participants.append(TournamentMatchParticipant.objects.create(match=match, team=team))
+            registrations.append(TournamentRegistration.objects.create(tournament=tournament, team=team))
+        certificate = MediaTemplate.objects.create(
+            event=self.event, name='FFA Urkunde', kind=MediaTemplate.Kind.CERTIFICATE,
+            paper_size='A4', elements=default_elements('CERTIFICATE'),
+        )
+        self.client.force_login(self.staff)
+        export_url = reverse('media_template_export', args=[certificate.pk])
+        self.assertNotContains(self.client.get(export_url), 'FFA Export Cup')
+
+        score_url = reverse('match_update_ffa_score', args=[match.pk])
+        scores = {f'score_{participant.pk}': 100 - number * 10
+                  for number, participant in enumerate(participants)}
+        self.client.post(score_url, scores)
+        match.refresh_from_db()
+        tournament.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.READY)
+        self.assertEqual(tournament.status, Tournament.Status.IN_PROGRESS)
+
+        # Repair a match saved by the old implementation as completed without rank 1.
+        match.status = TournamentMatch.Status.COMPLETED
+        match.save(update_fields=['status'])
+        scores.update({f'rank_{participant.pk}': number
+                       for number, participant in enumerate(participants, 1)})
+        self.client.post(score_url, scores)
+        match.refresh_from_db()
+        tournament.refresh_from_db()
+        self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
+        self.assertContains(self.client.get(export_url), 'FFA Export Cup')
+        response = self.client.post(export_url, {
+            'tournament': str(tournament.pk),
+            'recipients': [str(registration.pk) for registration in registrations],
+            'award_title': 'Turnierurkunde',
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/pdf')

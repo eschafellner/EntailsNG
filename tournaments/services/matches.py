@@ -493,6 +493,11 @@ class FFAMatchService:
 
             if rank_1_count > 1:
                 raise TournamentMatchError("Mehrere Teilnehmer können nicht gleichzeitig Rang 1 belegen.")
+            if rank_1_count == 0:
+                raise TournamentMatchError(
+                    "Zum Abschließen des FFA-Turniers muss genau ein nicht disqualifizierter Teilnehmer Rang 1 erhalten. "
+                    "Punkte allein bestimmen die Platzierung nicht."
+                )
 
             for p, rank, score, is_disqualified, notes in valid_entries:
                 p.rank = rank

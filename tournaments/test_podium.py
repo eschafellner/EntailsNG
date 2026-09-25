@@ -124,3 +124,14 @@ class TournamentPodiumServiceTests(TestCase):
         response = self.client.get(reverse('tournament_detail', args=[tournament.slug]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(tuple(response.context['podium'].values()), expected)
+
+    def test_ffa_missing_places_and_disqualified_teams_stay_empty(self):
+        tournament = self.make_tournament(Tournament.Mode.FFA)
+        match = TournamentMatch.objects.create(
+            tournament=tournament, bracket_type=TournamentMatch.BracketType.FFA,
+            status=TournamentMatch.Status.COMPLETED,
+        )
+        TournamentMatchParticipant.objects.create(match=match, team=self.teams[0], rank=1)
+        TournamentMatchParticipant.objects.create(match=match, team=self.teams[1], rank=2, is_disqualified=True)
+        TournamentMatchParticipant.objects.create(match=match, team=self.teams[2], rank=3)
+        self.assert_podium(tournament, (self.teams[0], None, self.teams[2]))
