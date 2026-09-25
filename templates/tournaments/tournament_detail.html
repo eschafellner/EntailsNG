@@ -433,7 +433,7 @@
             {% endif %}
             {% if is_admin and tournament.mode == 'FFA' and ffa_match and tournament.status != 'FINISHED' %}
               <button type="button" onclick="openFfaScoreModal()" style="background: var(--signal); color: var(--navy); border: none; padding: 6px 14px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; cursor: pointer;">
-                ✏️ FFA-Ergebnisse eintragen
+                {% t "tournament_ffa_edit_scores" "✏️ FFA-Ergebnisse eintragen" %}
               </button>
             {% endif %}
           </div>
@@ -570,10 +570,10 @@
               <table style="width: 100%; border-collapse: collapse; font-family: 'DM Sans', sans-serif; font-size: 14px;">
                 <thead>
                   <tr style="background: var(--panel); border-bottom: 2px solid var(--line); text-align: left;">
-                    <th style="padding: 10px 14px; width: 60px;">Rang</th>
-                    <th style="padding: 10px 14px;">Teilnehmer / Team</th>
-                    <th style="padding: 10px 14px; text-align: center;">Punkte / Kills / Zeit</th>
-                    <th style="padding: 10px 14px;">Status / Notizen</th>
+                    <th style="padding: 10px 14px; width: 60px;">{% t "tournament_ffa_table_rank" "Rang" %}</th>
+                    <th style="padding: 10px 14px;">{% t "tournament_ffa_table_team" "Teilnehmer / Team" %}</th>
+                    <th style="padding: 10px 14px; text-align: center;">{% t "tournament_ffa_table_points" "Punkte / Kills / Zeit" %}</th>
+                    <th style="padding: 10px 14px;">{% t "tournament_ffa_table_status" "Status / Notizen" %}</th>
                   </tr>
                 </thead>
                 <tbody>

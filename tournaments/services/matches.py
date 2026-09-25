@@ -1,6 +1,7 @@
 import math
 from django.db import transaction
 
+from configuration.translations import get_translation
 from tournaments.models import (
     Tournament,
     TournamentMatch,
@@ -440,19 +441,19 @@ class FFAMatchService:
         [{'participant_id': 12, 'rank': 1, 'score': 1500, 'is_disqualified': False, 'notes': ''}, ...]
         """
         if not participant_scores:
-            raise TournamentMatchError("Es wurden keine Teilnehmer-Ergebnisse übergeben.")
+            raise TournamentMatchError(get_translation('tournament_ffa_error_no_scores', 'Es wurden keine Teilnehmer-Ergebnisse übergeben.'))
 
         with transaction.atomic():
             match = TournamentMatch.objects.select_for_update().get(pk=match_id)
             if actor is not None and not match.tournament.is_managed_by(actor):
-                raise MatchPermissionDeniedError("FFA-Ergebnisse können nur von einem Turnier-Admin eingetragen werden.")
+                raise MatchPermissionDeniedError(get_translation('tournament_ffa_error_permission', 'FFA-Ergebnisse können nur von einem Turnier-Admin eingetragen werden.'))
 
             if match.bracket_type != TournamentMatch.BracketType.FFA:
-                raise TournamentMatchError("Dieses Match ist kein Free-For-All (FFA) Match.")
+                raise TournamentMatchError(get_translation('tournament_ffa_error_wrong_match', 'Dieses Match ist kein Free-For-All (FFA) Match.'))
 
             participants = {p.id: p for p in match.participants.select_for_update()}
             if not participants:
-                raise TournamentMatchError("Das Match hat keine registrierten Teilnehmer.")
+                raise TournamentMatchError(get_translation('tournament_ffa_error_no_participants', 'Das Match hat keine registrierten Teilnehmer.'))
 
             winner_participant = None
             rank_1_count = 0
@@ -489,15 +490,15 @@ class FFAMatchService:
                 valid_entries.append((participants[p_id], rank, score, is_disqualified, notes))
 
             if not valid_entries:
-                raise TournamentMatchError("Es wurden keine gültigen Teilnehmer-Ergebnisse übergeben.")
+                raise TournamentMatchError(get_translation('tournament_ffa_error_no_valid_entries', 'Es wurden keine gültigen Teilnehmer-Ergebnisse übergeben.'))
 
             if rank_1_count > 1:
-                raise TournamentMatchError("Mehrere Teilnehmer können nicht gleichzeitig Rang 1 belegen.")
+                raise TournamentMatchError(get_translation('tournament_ffa_error_duplicate_winner', 'Mehrere Teilnehmer können nicht gleichzeitig Rang 1 belegen.'))
             if rank_1_count == 0:
-                raise TournamentMatchError(
-                    "Zum Abschließen des FFA-Turniers muss genau ein nicht disqualifizierter Teilnehmer Rang 1 erhalten. "
-                    "Punkte allein bestimmen die Platzierung nicht."
-                )
+                raise TournamentMatchError(get_translation(
+                    'tournament_ffa_rank_required',
+                    'Zum Abschließen des FFA-Turniers muss genau ein nicht disqualifizierter Teilnehmer Rang 1 erhalten. Punkte allein bestimmen die Platzierung nicht.',
+                ))
 
             for p, rank, score, is_disqualified, notes in valid_entries:
                 p.rank = rank

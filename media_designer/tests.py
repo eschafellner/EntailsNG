@@ -1,24 +1,29 @@
 from datetime import datetime, timedelta, timezone as datetime_timezone
 from io import BytesIO
+from io import StringIO
 import re
 from tempfile import TemporaryDirectory
 
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
 from events.models import Event, EventRegistration
+from configuration.models import SystemTranslation
 from media_designer.data import badge_rows, certificate_rows
 from media_designer.models import MediaTemplate
 from media_designer.rendering import render_card, render_pdf, sheet_layout
 from media_designer.schema import default_elements, translated_field_labels
+from tournaments.exceptions import TournamentMatchError
 from tournaments.models import (
     Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant,
     TournamentRegistration,
 )
+from tournaments.services import FFAMatchService
 from users.models import User
 
 
@@ -57,6 +62,49 @@ class MediaDesignerTests(TestCase):
         media_boxes = re.findall(rb'/MediaBox \[ [^]]+ \]', pdf)
         self.assertTrue(media_boxes)
         self.assertTrue(all(box == b'/MediaBox [ 0 0 595.2 841.92 ]' for box in media_boxes))
+
+    def test_seeded_media_texts_are_editable_and_seed_preserves_changes(self):
+        call_command('seed_translations', stdout=StringIO())
+        for key in (
+            'media_form_name', 'media_kind_badge', 'media_field_event_start',
+            'media_field_team_members', 'media_award_default',
+            'tournament_ffa_rank_required', 'tournament_ffa_error_duplicate_winner',
+        ):
+            self.assertTrue(SystemTranslation.objects.filter(key=key).exists(), key)
+
+        name_translation = SystemTranslation.objects.get(key='media_form_name')
+        name_translation.text = 'Vorlagenname für die Orga'
+        name_translation.save()
+        kind_translation = SystemTranslation.objects.get(key='media_kind_badge')
+        kind_translation.text = 'LAN Yard Badge'
+        kind_translation.save()
+        field_translation = SystemTranslation.objects.get(key='media_field_event_start')
+        field_translation.text = 'Start der LAN'
+        field_translation.save()
+        award_translation = SystemTranslation.objects.get(key='media_award_default')
+        award_translation.text = 'Sonderurkunde'
+        award_translation.save()
+        ffa_translation = SystemTranslation.objects.get(key='tournament_ffa_error_no_scores')
+        ffa_translation.text = 'Bitte FFA-Wertung eingeben.'
+        ffa_translation.save()
+        call_command('seed_translations', stdout=StringIO())
+        name_translation.refresh_from_db()
+        self.assertEqual(name_translation.text, 'Vorlagenname für die Orga')
+
+        self.client.force_login(self.staff)
+        self.assertContains(self.client.get(reverse('media_template_list')), 'Vorlagenname für die Orga')
+        self.assertContains(self.client.get(reverse('media_template_list')), 'LAN Yard Badge')
+        self.assertEqual(translated_field_labels()['BADGE']['event.start_date'], 'Start der LAN')
+        certificate = MediaTemplate.objects.create(
+            event=self.event, name='Sonderpreis', kind=MediaTemplate.Kind.CERTIFICATE,
+            paper_size='A4', created_by=self.staff,
+        )
+        self.assertContains(
+            self.client.get(reverse('media_template_export', args=[certificate.pk])),
+            'value="Sonderurkunde"',
+        )
+        with self.assertRaisesMessage(TournamentMatchError, 'Bitte FFA-Wertung eingeben.'):
+            FFAMatchService.update_ffa_scores(0, [])
 
     def test_badge_fields_include_event_start_and_end_in_local_time(self):
         self.event.start_date = datetime(2026, 9, 25, 16, 0, tzinfo=datetime_timezone.utc)

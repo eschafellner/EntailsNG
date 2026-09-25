@@ -31,7 +31,7 @@
       <label><input type="radio" name="sheet" value="single"> {% t "media_single" "Einzelne Badge-Seiten" %}</label>
     </fieldset>
   {% else %}
-    <label>{% t "media_award_title" "Auszeichnung" %}<input type="text" name="award_title" maxlength="120" value="Turnierurkunde"></label>
+    <label>{% t "media_award_title" "Auszeichnung" %}<input type="text" name="award_title" maxlength="120" value="{% t 'media_award_default' 'Turnierurkunde' %}"></label>
     <p>{% t "media_placement_hint" "Die Platzierung wird nur eingefügt, wenn sie vom Turnier bestimmt ist." %}</p>
   {% endif %}
   <fieldset style="margin-top:16px"><legend>{% t "media_recipients" "Empfänger" %}</legend>

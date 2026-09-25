@@ -490,7 +490,7 @@ def match_update_ffa_score(request, match_id):
     except TournamentError as e:
         messages.error(request, str(e))
     except Exception as e:
-        messages.error(request, f"Unerwarteter Fehler: {e}")
+        messages.error(request, get_translation('tournament_ffa_unexpected_error', 'Unerwarteter Fehler: {error}', error=e))
 
     return redirect('tournament_detail', slug=tournament.slug)
 
@@ -853,7 +853,7 @@ def team_join_by_code(request):
             messages.error(
                 request,
                 get_translation(
-                    'msg_team_in_active_tournament',
+                    'msg_team_join_in_active_tournament',
                     'Das Team "{team_name}" nimmt an einem laufenden Turnier teil. Ein Beitritt ist während des Turniers nicht möglich.',
                     team_name=team.name,
                 ),
@@ -1068,7 +1068,7 @@ def team_apply(request, slug):
         messages.error(
             request,
             get_translation(
-                'msg_team_in_active_tournament',
+                'msg_team_apply_in_active_tournament',
                 'Das Team "{team_name}" nimmt an einem laufenden Turnier teil. Bewerbungen sind während des Turniers nicht möglich.',
                 team_name=team.name,
             ),
@@ -1148,7 +1148,7 @@ def team_accept_membership(request, slug, membership_id):
             messages.error(
                 request,
                 get_translation(
-                    'msg_team_in_active_tournament',
+                    'msg_team_accept_in_active_tournament',
                     'Das Team "{team_name}" nimmt an einem laufenden Turnier teil. Beitritte sind während des Turniers nicht möglich.',
                     team_name=team.name,
                 ),

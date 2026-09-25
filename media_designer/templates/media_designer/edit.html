@@ -33,6 +33,10 @@
              data-static-label="{% t 'media_static_text' 'Fester Text' %}"
              data-sample-guest="{% t 'media_sample_guest' 'Gamer-Tag' %}"
              data-sample-team="{% t 'media_sample_team' 'Teamname' %}"
+             data-sample-placement="{% t 'media_place' '{number}. Platz' number=1 %}"
+             data-sample-award="{% t 'media_award_default' 'Turnierurkunde' %}"
+             data-sample-tournament="{% t 'media_sample_tournament' 'LAN Cup' %}"
+             data-sample-event="{{ template.event.title }}"
              data-sample-start="{{ template.event.start_date|date:'d.m.Y H:i' }}"
              data-sample-end="{{ template.event.end_date|date:'d.m.Y H:i' }}"></div>
       </div>

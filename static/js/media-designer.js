@@ -31,14 +31,14 @@
 
   const sample = {
     'guest.username': canvas.dataset.sampleGuest,
-    'guest.clan': 'Clan',
+    'guest.clan': labels.BADGE?.['guest.clan'],
     'guest.seat': 'A-12',
     'team.name': canvas.dataset.sampleTeam,
     'team.members': `${canvas.dataset.sampleGuest} 1\n${canvas.dataset.sampleGuest} 2\n${canvas.dataset.sampleGuest} 3`,
-    'team.placement': '1. Platz',
-    'award.title': 'Turnierurkunde',
-    'tournament.title': 'LAN Cup',
-    'event.title': 'LAN Event',
+    'team.placement': canvas.dataset.samplePlacement,
+    'award.title': canvas.dataset.sampleAward,
+    'tournament.title': canvas.dataset.sampleTournament,
+    'event.title': canvas.dataset.sampleEvent,
     'event.start_date': canvas.dataset.sampleStart,
     'event.end_date': canvas.dataset.sampleEnd,
   };
