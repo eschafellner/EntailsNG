@@ -34,10 +34,13 @@
     'guest.clan': 'Clan',
     'guest.seat': 'A-12',
     'team.name': canvas.dataset.sampleTeam,
+    'team.members': `${canvas.dataset.sampleGuest} 1\n${canvas.dataset.sampleGuest} 2\n${canvas.dataset.sampleGuest} 3`,
     'team.placement': '1. Platz',
     'award.title': 'Turnierurkunde',
     'tournament.title': 'LAN Cup',
     'event.title': 'LAN Event',
+    'event.start_date': canvas.dataset.sampleStart,
+    'event.end_date': canvas.dataset.sampleEnd,
   };
 
   function currentSize() { return sizes[paper.value] || sizes.A8; }

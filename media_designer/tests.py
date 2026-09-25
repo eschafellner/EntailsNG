@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 from io import BytesIO
 import re
 from tempfile import TemporaryDirectory
@@ -11,12 +11,12 @@ from django.utils import timezone
 from PIL import Image
 
 from events.models import Event, EventRegistration
-from media_designer.data import certificate_rows
+from media_designer.data import badge_rows, certificate_rows
 from media_designer.models import MediaTemplate
-from media_designer.rendering import render_pdf, sheet_layout
-from media_designer.schema import default_elements
+from media_designer.rendering import render_card, render_pdf, sheet_layout
+from media_designer.schema import default_elements, translated_field_labels
 from tournaments.models import (
-    Game, Team, Tournament, TournamentMatch, TournamentMatchParticipant,
+    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant,
     TournamentRegistration,
 )
 from users.models import User
@@ -57,6 +57,82 @@ class MediaDesignerTests(TestCase):
         media_boxes = re.findall(rb'/MediaBox \[ [^]]+ \]', pdf)
         self.assertTrue(media_boxes)
         self.assertTrue(all(box == b'/MediaBox [ 0 0 595.2 841.92 ]' for box in media_boxes))
+
+    def test_badge_fields_include_event_start_and_end_in_local_time(self):
+        self.event.start_date = datetime(2026, 9, 25, 16, 0, tzinfo=datetime_timezone.utc)
+        self.event.end_date = datetime(2026, 9, 27, 9, 30, tzinfo=datetime_timezone.utc)
+        self.event.save(update_fields=['start_date', 'end_date'])
+
+        rows = badge_rows([self.registration], self.event)
+        self.assertEqual(rows[0]['event.start_date'], '25.09.2026 18:00')
+        self.assertEqual(rows[0]['event.end_date'], '27.09.2026 11:30')
+        self.assertIn('event.start_date', translated_field_labels()['BADGE'])
+        self.assertIn('event.end_date', translated_field_labels()['BADGE'])
+
+        self.badge.elements = [
+            {**default_elements('BADGE')[0], 'source': 'event.start_date'},
+            {**default_elements('BADGE')[1], 'source': 'event.end_date'},
+        ]
+        self.badge.full_clean()
+        self.client.force_login(self.staff)
+        editor = self.client.get(reverse('media_template_edit', args=[self.badge.pk]))
+        self.assertContains(editor, 'data-sample-start="25.09.2026 18:00"')
+        self.assertContains(editor, 'event.start_date')
+        pdf = render_pdf(self.badge, rows)
+        try:
+            self.assertTrue(pdf.read().startswith(b'%PDF-'))
+        finally:
+            pdf.close()
+
+    def test_certificate_team_members_include_only_accepted_members_on_separate_lines(self):
+        game = Game.objects.create(name='Team Export Game', team_size=2)
+        team = Team.objects.create(name='Team Export', captain=self.staff,
+                                   game=game, event=self.event)
+        TeamMember.objects.create(team=team, user=self.staff, status=TeamMember.Status.ACCEPTED)
+        TeamMember.objects.create(team=team, user=self.guest, status=TeamMember.Status.ACCEPTED)
+        TeamMember.objects.create(team=team, user=self.other_guest, status=TeamMember.Status.PENDING)
+        now = timezone.now()
+        tournament = Tournament.objects.create(
+            title='Team Export Cup', event=self.event, game=game,
+            status=Tournament.Status.FINISHED, registration_start=now - timedelta(days=2),
+            registration_end=now - timedelta(days=1),
+        )
+        rows = certificate_rows([team], tournament, 'Teamurkunde')
+        self.assertEqual(rows[0]['team.members'], 'export-staff\nexport-guest')
+        self.assertEqual(rows[0]['event.title'], self.event.title)
+        self.assertIn('team.members', translated_field_labels()['CERTIFICATE'])
+        self.assertIn('event.start_date', translated_field_labels()['CERTIFICATE'])
+        self.assertIn('event.end_date', translated_field_labels()['CERTIFICATE'])
+
+        certificate = MediaTemplate.objects.create(
+            event=self.event, name='Mitgliederurkunde', kind=MediaTemplate.Kind.CERTIFICATE,
+            created_by=self.staff,
+            paper_size='A4', elements=[
+                {**default_elements('CERTIFICATE')[1], 'source': 'team.members',
+                 'y': 0.55, 'font_size_mm': 5},
+            ],
+        )
+        certificate.full_clean()
+        self.client.force_login(self.staff)
+        self.assertContains(
+            self.client.get(reverse('media_template_edit', args=[certificate.pk])),
+            'team.members',
+        )
+        card = render_card(certificate, rows[0])
+        try:
+            top = round(0.55 * card.height)
+            text_area = card.crop((0, top, card.width, top + 200)).convert('L')
+            ink_rows = [text_area.crop((0, y, text_area.width, y + 1)).getextrema()[0] < 200
+                        for y in range(text_area.height)]
+            self.assertEqual(sum(ink and (y == 0 or not ink_rows[y - 1])
+                                 for y, ink in enumerate(ink_rows)), 2)
+        finally:
+            card.close()
+        pdf = render_pdf(certificate, rows)
+        try:
+            self.assertTrue(pdf.read().startswith(b'%PDF-'))
+        finally:
+            pdf.close()
 
     def test_invalid_fields_are_rejected_before_rendering(self):
         self.badge.elements = [{**default_elements('BADGE')[0], 'source': 'guest.email'}]

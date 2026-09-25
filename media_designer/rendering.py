@@ -51,7 +51,7 @@ def render_card(template, values, *, base_card=None):
     draw = ImageDraw.Draw(card)
     for index, element in enumerate(template.elements, 1):
         value = element.get('text', '') if element['source'] == 'static' else values.get(element['source'], '')
-        text = str(value or '').replace('\n', ' ').strip()
+        text = str(value or '').strip()
         if not text:
             continue
         left = round(element['x'] * size[0])
@@ -61,7 +61,11 @@ def render_card(template, values, *, base_card=None):
         minimum_size = mm_to_px(1.5)
         while True:
             font = ImageFont.load_default(size=font_size)
-            bounds = draw.textbbox((0, 0), text, font=font)
+            spacing = round(font_size * 0.2)
+            bounds = draw.multiline_textbbox(
+                (0, 0), text, font=font, spacing=spacing,
+                align=element['align'],
+            )
             text_width = bounds[2] - bounds[0]
             text_height = bounds[3] - bounds[1]
             if text_width <= available_width and top + text_height <= size[1]:
@@ -74,7 +78,10 @@ def render_card(template, values, *, base_card=None):
             left += (available_width - text_width) // 2
         elif element['align'] == 'right':
             left += available_width - text_width
-        draw.text((left, top), text, font=font, fill=element['color'], anchor='lt')
+        draw.multiline_text(
+            (left - bounds[0], top - bounds[1]), text, font=font,
+            fill=element['color'], spacing=spacing, align=element['align'],
+        )
     return card
 
 

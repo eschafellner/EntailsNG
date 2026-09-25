@@ -32,7 +32,9 @@
         <div id="media-canvas" data-background="{% if template.background %}{{ template.background.url }}{% endif %}"
              data-static-label="{% t 'media_static_text' 'Fester Text' %}"
              data-sample-guest="{% t 'media_sample_guest' 'Gamer-Tag' %}"
-             data-sample-team="{% t 'media_sample_team' 'Teamname' %}"></div>
+             data-sample-team="{% t 'media_sample_team' 'Teamname' %}"
+             data-sample-start="{{ template.event.start_date|date:'d.m.Y H:i' }}"
+             data-sample-end="{{ template.event.end_date|date:'d.m.Y H:i' }}"></div>
       </div>
     </div>
 
@@ -60,6 +62,7 @@
         <button type="button" id="media-remove-field">{% t "media_remove_field" "Feld entfernen" %}</button>
       </div>
       <p>{% t "media_print_hint" "Hintergründe werden proportional gefüllt; Randbereiche können abgeschnitten werden. Lange Texte werden beim Export verkleinert, wenn sie ins Feld passen." %}</p>
+      {% if template.kind == 'CERTIFICATE' %}<p>{% t "media_members_hint" "Teammitglieder werden zeilenweise aus den aktuell bestätigten Mitgliedschaften eingefügt. Plane unter dem Feld genug Platz ein." %}</p>{% endif %}
     </div>
   </div>
   <p style="margin-top:20px"><button type="submit" class="btn btn-primary">{% t "media_save" "Vorlage speichern" %}</button></p>
@@ -77,7 +80,7 @@
 .media-editor-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:20px}
 #media-canvas-wrap{display:flex;justify-content:center;background:#d6d9dd;padding:20px;overflow:auto}
 #media-canvas{position:relative;width:min(100%,600px);background:white center/cover no-repeat;box-shadow:0 8px 25px #0003;touch-action:none}
-.media-element{position:absolute;min-height:20px;border:1px dashed #0284c7;background:transparent;cursor:move;white-space:nowrap;overflow:hidden;touch-action:none}
+.media-element{position:absolute;min-height:20px;border:1px dashed #0284c7;background:transparent;cursor:move;white-space:pre-line;overflow:hidden;touch-action:none}
 .media-element.is-selected{outline:2px solid #0284c7}
 #media-field-list{display:grid;gap:6px;margin-bottom:10px}
 #media-field-list button{text-align:left;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
