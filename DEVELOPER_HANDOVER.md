@@ -60,10 +60,11 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 
 ### 🖨️ `media_designer` (Vorlagen & Druckexport)
 * **Vorlagen:** Eventgebundene Badge- und Urkundenvorlagen mit optionalem JPG/PNG/WebP-Hintergrund und validierten Textfeldern in relativen Koordinaten (`schema_version=1`). Der Editor ist unter `/media-designer/` für Mitarbeiter erreichbar.
+* **Schriftarten:** `MediaFont` verwaltet TTF-, OTF- und WOFF2-Dateien bis 5 MB im Django-Admin. Jedes Textfeld kann eine verwaltete Schrift oder die Standardschrift wählen; Vorschau und PDF-Export verwenden die Auswahl. Beim Löschen werden Verweise in vorhandenen Vorlagen auf die Standardschrift zurückgesetzt und die Datei nach dem Datenbank-Commit entfernt.
 * **Seriendruck:** Badges verwenden Anmeldungen; die Empfänger können nach Bezahlstatus und zugewiesenem Sitzplatz gefiltert werden. Stornierte Anmeldungen bleiben ausgeschlossen. Urkunden verwenden angemeldete Teams abgeschlossener Turniere. Platzierungen kommen aus `TournamentPodiumService`; unbekannte Platzierungen bleiben leer. Die Orga kann pro Export eine frei benannte Auszeichnung vergeben.
 * **Zusätzliche Felder:** Veranstaltungsbeginn und -ende stehen mit lokaler Uhrzeit für Badges und Urkunden bereit. Urkunden können bestätigte Teammitglieder zeilenweise als Gamer-Tags ausgeben; maßgeblich ist der aktuelle Teamkader beim Export, kein historischer Turnier-Snapshot.
 * **Druck:** Serverseitige PDF-Erzeugung mit Pillow bei 300 DPI. A6/A7/A8-Badges sind einzeln oder auf A4-Bögen mit 5 mm Rand, 4 mm Abstand und Schnittmarken exportierbar (A8: 9 pro Bogen). A4-Urkunden werden einzeln ausgegeben.
-* **Grenzen der ersten Version:** Eine Schriftfamilie, Hochformat und keine Druckbeschnittzugabe. Hintergründe werden proportional zugeschnitten. Die Textvorschau verwendet Beispieldaten; der Export verkleinert lange Texte bis auf 1,5 mm und meldet danach einen Fehler.
+* **Grenzen der ersten Version:** Hochformat und keine Druckbeschnittzugabe. Hintergründe werden proportional zugeschnitten. Die Textvorschau verwendet Beispieldaten; der Export verkleinert lange Texte bis auf 1,5 mm und meldet danach einen Fehler.
 
 ### 🏆 `tournaments` (Turnier-Engine & Team-Management)
 * **Modi:** Single Elimination, Double Elimination, Liga (Round Robin), Gruppenphase + K.O., Free For All (FFA).

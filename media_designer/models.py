@@ -1,11 +1,30 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
-from django.db import models
+from django.db import models, transaction
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 
 from configuration.translations import get_translation
 from media_designer.schema import PAPER_MM, validate_elements
-from media_designer.validators import validate_background_image
+from media_designer.validators import validate_background_image, validate_font_file
+
+
+class MediaFont(models.Model):
+    name = models.CharField(max_length=120, unique=True, verbose_name='Schriftname')
+    file = models.FileField(
+        upload_to='media_fonts/', verbose_name='Schriftdatei',
+        help_text='TTF, OTF oder WOFF2 bis 5 MB. Beim Löschen verwenden betroffene Vorlagenfelder die Standardschrift.',
+        validators=[FileExtensionValidator(['ttf', 'otf', 'woff2']), validate_font_file],
+    )
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Medienschrift'
+        verbose_name_plural = 'Medienschriften'
+
+    def __str__(self):
+        return self.name
 
 
 class MediaTemplate(models.Model):
@@ -46,3 +65,20 @@ class MediaTemplate(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.event.title})'
+
+
+@receiver(post_delete, sender=MediaFont)
+def reset_deleted_font(sender, instance, using, **kwargs):
+    """Entfernt gelöschte Schriftverweise auch bei Admin-Sammellöschungen."""
+    for template in MediaTemplate.objects.using(using).only('pk', 'elements').iterator():
+        changed = False
+        for element in template.elements:
+            if element.get('font_id') == instance.pk:
+                element.pop('font_id')
+                changed = True
+        if changed:
+            MediaTemplate.objects.using(using).filter(pk=template.pk).update(elements=template.elements)
+
+    if instance.file.name:
+        name, storage = instance.file.name, instance.file.storage
+        transaction.on_commit(lambda: storage.delete(name), using=using)

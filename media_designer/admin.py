@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from media_designer.models import MediaTemplate
+from media_designer.models import MediaFont, MediaTemplate
+
+
+@admin.register(MediaFont)
+class MediaFontAdmin(admin.ModelAdmin):
+    list_display = ('name', 'file')
+    search_fields = ('name',)
 
 
 @admin.register(MediaTemplate)

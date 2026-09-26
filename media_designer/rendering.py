@@ -2,10 +2,12 @@
 
 import math
 import tempfile
+from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from configuration.translations import get_translation
+from media_designer.models import MediaFont
 from media_designer.schema import PAPER_MM, validate_elements
 
 
@@ -44,8 +46,26 @@ def _base_card(template):
     return card
 
 
-def render_card(template, values, *, base_card=None):
+def _load_fonts(template):
+    font_ids = {element['font_id'] for element in template.elements if 'font_id' in element}
+    fonts = {}
+    for font in MediaFont.objects.filter(pk__in=font_ids):
+        try:
+            with font.file.open('rb') as font_file:
+                fonts[font.pk] = font_file.read()
+        except OSError as exc:
+            raise ValueError(get_translation('media_error_font_unreadable', 'Eine Schriftdatei konnte nicht gelesen werden.')) from exc
+    if set(fonts) != font_ids:
+        raise ValueError(get_translation('media_error_font_missing', 'Eine ausgewählte Schriftart ist nicht mehr verfügbar.'))
+    return fonts
+
+
+def render_card(template, values, *, base_card=None, font_resources=None, font_cache=None):
     card = base_card.copy() if base_card is not None else _base_card(template)
+    if font_resources is None:
+        font_resources = _load_fonts(template)
+    if font_cache is None:
+        font_cache = {}
     size = card.size
 
     draw = ImageDraw.Draw(card)
@@ -60,7 +80,16 @@ def render_card(template, values, *, base_card=None):
         font_size = mm_to_px(element['font_size_mm'])
         minimum_size = mm_to_px(1.5)
         while True:
-            font = ImageFont.load_default(size=font_size)
+            font_id = element.get('font_id')
+            font_key = (font_id, font_size)
+            if font_key not in font_cache:
+                if len(font_cache) >= 32:
+                    font_cache.clear()
+                font_cache[font_key] = (
+                    ImageFont.truetype(BytesIO(font_resources[font_id]), size=font_size)
+                    if font_id else ImageFont.load_default(size=font_size)
+                )
+            font = font_cache[font_key]
             spacing = round(font_size * 0.2)
             bounds = draw.multiline_textbbox(
                 (0, 0), text, font=font, spacing=spacing,
@@ -98,7 +127,7 @@ def _draw_cut_marks(draw, x, y, width, height):
                        edge_x, edge_y + vertical * outer), fill='#444444', width=2)
 
 
-def _render_sheet(template, values_rows, base_card):
+def _render_sheet(template, values_rows, base_card, font_resources, font_cache):
     columns, rows, capacity = sheet_layout(template.paper_size)
     if capacity < 1:
         raise ValueError(get_translation('media_error_sheet_fit', 'Dieses Format passt nicht auf ein A4-Blatt.'))
@@ -114,7 +143,8 @@ def _render_sheet(template, values_rows, base_card):
         column, row = index % columns, index // columns
         x = mm_to_px(origin_x_mm + column * (card_width_mm + SHEET_GAP_MM))
         y = mm_to_px(origin_y_mm + row * (card_height_mm + SHEET_GAP_MM))
-        card = render_card(template, values, base_card=base_card)
+        card = render_card(template, values, base_card=base_card,
+                           font_resources=font_resources, font_cache=font_cache)
         sheet.paste(card, (x, y))
         _draw_cut_marks(draw, x, y, card.width, card.height)
         card.close()
@@ -132,14 +162,21 @@ def render_pdf(template, values_rows, *, on_a4=False):
     base_card = None
     try:
         base_card = _base_card(template)
+        font_resources = _load_fonts(template)
+        font_cache = {}
         if on_a4:
             capacity = sheet_layout(template.paper_size)[2]
             pages = (
-                _render_sheet(template, values_rows[start:start + capacity], base_card)
+                _render_sheet(template, values_rows[start:start + capacity], base_card,
+                              font_resources, font_cache)
                 for start in range(0, len(values_rows), capacity)
             )
         else:
-            pages = (render_card(template, values, base_card=base_card) for values in values_rows)
+            pages = (
+                render_card(template, values, base_card=base_card,
+                            font_resources=font_resources, font_cache=font_cache)
+                for values in values_rows
+            )
 
         for index, page in enumerate(pages):
             page.save(output, format='PDF', resolution=DPI, append=index > 0)

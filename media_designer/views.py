@@ -10,7 +10,7 @@ from configuration.translations import get_translation
 from events.models import EventRegistration
 from media_designer.data import badge_rows, certificate_rows
 from media_designer.forms import MediaTemplateCreateForm, MediaTemplateForm
-from media_designer.models import MediaTemplate
+from media_designer.models import MediaFont, MediaTemplate
 from media_designer.rendering import render_pdf, sheet_layout
 from media_designer.schema import PAPER_MM, translated_field_labels
 from seating.models import SeatingCell
@@ -61,6 +61,10 @@ def template_edit(request, pk):
         'form': form,
         'field_labels': translated_field_labels(),
         'paper_mm': PAPER_MM,
+        'fonts': [
+            {'id': font.pk, 'name': font.name, 'url': font.file.url}
+            for font in MediaFont.objects.all()
+        ],
     })
 
 

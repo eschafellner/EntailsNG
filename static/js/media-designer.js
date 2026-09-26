@@ -9,11 +9,23 @@
   const backgroundInput = document.getElementById('id_background');
   const labels = JSON.parse(document.getElementById('media-field-labels').textContent);
   const sizes = JSON.parse(document.getElementById('media-paper-mm').textContent);
+  const fonts = JSON.parse(document.getElementById('media-fonts').textContent);
+  const availableFonts = new Map(fonts.map(font => [font.id, font]));
   const list = document.getElementById('media-field-list');
   const controls = document.getElementById('media-field-controls');
   const source = document.getElementById('media-source');
   const staticWrap = document.getElementById('media-static-wrap');
   const staticText = document.getElementById('media-static-text');
+  const fontFamily = document.getElementById('media-font-family');
+  fontFamily.add(new Option(canvas.dataset.defaultFont, ''));
+  fonts.forEach(font => {
+    fontFamily.add(new Option(font.name, String(font.id)));
+    const face = new FontFace(`media-font-${font.id}`, `url(${JSON.stringify(font.url)})`);
+    face.load().then(loaded => {
+      document.fonts.add(loaded);
+      render();
+    }).catch(() => {});
+  });
   const inputs = {
     x: document.getElementById('media-x'),
     y: document.getElementById('media-y'),
@@ -74,6 +86,8 @@
       box.style.width = `${element.width * 100}%`;
       box.style.color = element.color;
       box.style.textAlign = element.align;
+      box.style.fontFamily = availableFonts.has(element.font_id)
+        ? `"media-font-${element.font_id}", sans-serif` : 'sans-serif';
       box.style.fontSize = `${Math.max(9, element.font_size_mm / widthMm * canvas.clientWidth)}px`;
       box.addEventListener('pointerdown', event => {
         event.preventDefault();
@@ -119,6 +133,7 @@
     staticText.value = element.text || '';
     for (const key of ['x', 'y', 'width']) inputs[key].value = (element[key] * 100).toFixed(1);
     inputs.font_size_mm.value = element.font_size_mm;
+    fontFamily.value = element.font_id ? String(element.font_id) : '';
     inputs.color.value = element.color;
     inputs.align.value = element.align;
   }
@@ -139,6 +154,12 @@
   });
   source.addEventListener('change', () => { current().source = source.value; render(); });
   staticText.addEventListener('input', () => { current().text = staticText.value; render(); });
+  fontFamily.addEventListener('change', () => {
+    if (!current()) return;
+    if (fontFamily.value) current().font_id = Number(fontFamily.value);
+    else delete current().font_id;
+    render();
+  });
   Object.entries(inputs).forEach(([key, input]) => input.addEventListener('input', () => {
     if (!current()) return;
     if (['x', 'y', 'width'].includes(key)) current()[key] = Number(input.value) / 100;

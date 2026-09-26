@@ -81,6 +81,7 @@ def validate_elements(elements, kind):
     if not isinstance(elements, list) or len(elements) > 30:
         raise ValidationError(get_translation('media_error_field_limit', 'Die Vorlage darf höchstens 30 Textfelder enthalten.'))
     allowed = FIELD_LABELS.get(kind, {})
+    font_ids = set()
     for index, element in enumerate(elements, 1):
         if not isinstance(element, dict):
             raise ValidationError(get_translation('media_error_field_structure', 'Feld {index}: ungültige Struktur.', index=index))
@@ -104,3 +105,13 @@ def validate_elements(elements, kind):
             raise ValidationError(get_translation('media_error_align', 'Feld {index}: ungültige Ausrichtung.', index=index))
         if not re.fullmatch(r'#[0-9a-fA-F]{6}', str(element.get('color', ''))):
             raise ValidationError(get_translation('media_error_color', 'Feld {index}: ungültige Textfarbe.', index=index))
+        if 'font_id' in element:
+            font_id = element['font_id']
+            if isinstance(font_id, bool) or not isinstance(font_id, int) or font_id <= 0:
+                raise ValidationError(get_translation('media_error_font_choice', 'Feld {index}: unbekannte Schriftart.', index=index))
+            font_ids.add(font_id)
+    if font_ids:
+        from media_designer.models import MediaFont
+        existing_ids = set(MediaFont.objects.filter(pk__in=font_ids).values_list('pk', flat=True))
+        if existing_ids != font_ids:
+            raise ValidationError(get_translation('media_error_font_missing', 'Eine ausgewählte Schriftart ist nicht mehr verfügbar.'))

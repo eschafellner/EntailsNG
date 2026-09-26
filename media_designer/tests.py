@@ -1,21 +1,24 @@
 from datetime import datetime, timedelta, timezone as datetime_timezone
 from io import BytesIO
 from io import StringIO
+import json
+from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
 
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
-from PIL import Image
+from PIL import Image, ImageChops
 
 from events.models import Event, EventRegistration
 from configuration.models import SystemTranslation
 from media_designer.data import badge_rows, certificate_rows
-from media_designer.models import MediaTemplate
+from media_designer.models import MediaFont, MediaTemplate
 from media_designer.rendering import render_card, render_pdf, sheet_layout
 from media_designer.schema import default_elements, translated_field_labels
 from seating.models import SeatingCell, SeatingPlan
@@ -69,7 +72,8 @@ class MediaDesignerTests(TestCase):
         for key in (
             'media_form_name', 'media_kind_badge', 'media_field_event_start',
             'media_field_team_members', 'media_award_default',
-            'media_filter_paid', 'media_filter_seat',
+            'media_filter_paid', 'media_filter_seat', 'media_font_family',
+            'media_font_default', 'media_error_font_missing',
             'tournament_ffa_rank_required', 'tournament_ffa_error_duplicate_winner',
         ):
             self.assertTrue(SystemTranslation.objects.filter(key=key).exists(), key)
@@ -190,6 +194,87 @@ class MediaDesignerTests(TestCase):
             self.badge.full_clean()
         with self.assertRaises(ValidationError):
             render_pdf(self.badge, [{'guest.email': 'private@example.test'}])
+
+    def test_managed_font_is_selectable_and_used_in_pdf_rendering(self):
+        font_bytes = (Path(settings.BASE_DIR) / 'static/fonts/dm-sans-normal-400-latin.woff2').read_bytes()
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            font = MediaFont(
+                name='DM Sans Test',
+                file=SimpleUploadedFile('dm-sans.woff2', font_bytes, content_type='font/woff2'),
+            )
+            font.full_clean()
+            font.save()
+            self.client.force_login(self.staff)
+            editor = self.client.get(reverse('media_template_edit', args=[self.badge.pk]))
+            self.assertContains(editor, 'DM Sans Test')
+            self.assertContains(editor, 'media-fonts')
+            self.assertContains(editor, 'Schriftart')
+
+            values = {'guest.username': 'Gamer-Test', 'guest.seat': 'A-12'}
+            default_card = render_card(self.badge, values)
+            self.badge.elements[0]['font_id'] = font.pk
+            self.badge.full_clean()
+            selected_card = render_card(self.badge, values)
+            try:
+                self.assertIsNotNone(ImageChops.difference(default_card, selected_card).getbbox())
+            finally:
+                default_card.close()
+                selected_card.close()
+            pdf = render_pdf(self.badge, [values])
+            try:
+                self.assertTrue(pdf.read().startswith(b'%PDF-'))
+            finally:
+                pdf.close()
+
+            response = self.client.post(reverse('media_template_edit', args=[self.badge.pk]), {
+                'event': self.event.pk, 'name': self.badge.name,
+                'paper_size': self.badge.paper_size, 'elements': json.dumps(self.badge.elements),
+            })
+            self.assertEqual(response.status_code, 302)
+            self.badge.refresh_from_db()
+            self.assertEqual(self.badge.elements[0]['font_id'], font.pk)
+            font_name = font.file.name
+            with self.captureOnCommitCallbacks(execute=True):
+                font.delete()
+            self.badge.refresh_from_db()
+            self.assertNotIn('font_id', self.badge.elements[0])
+            self.assertFalse(font.file.storage.exists(font_name))
+            self.badge.full_clean()
+
+    def test_unknown_font_and_invalid_upload_are_rejected(self):
+        self.badge.elements[0]['font_id'] = 999999
+        with self.assertRaises(ValidationError):
+            self.badge.full_clean()
+        self.badge.elements[0]['font_id'] = True
+        with self.assertRaises(ValidationError):
+            self.badge.full_clean()
+
+        font = MediaFont(name='Broken', file=SimpleUploadedFile(
+            'broken.ttf', b'not a font', content_type='font/ttf'
+        ))
+        with self.assertRaises(ValidationError):
+            font.full_clean()
+
+    def test_admin_can_add_and_delete_font(self):
+        font_bytes = (Path(settings.BASE_DIR) / 'static/fonts/dm-sans-normal-400-latin.woff2').read_bytes()
+        admin_user = User.objects.create_superuser(username='font-admin', password='test-password')
+        self.client.force_login(admin_user)
+        add_url = reverse('admin:media_designer_mediafont_add')
+        self.assertContains(self.client.get(add_url), 'Schriftdatei')
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            response = self.client.post(add_url, {
+                'name': 'Neue Urkundenschrift',
+                'file': SimpleUploadedFile('custom.woff2', font_bytes, content_type='font/woff2'),
+            })
+            self.assertEqual(response.status_code, 302)
+            font = MediaFont.objects.get(name='Neue Urkundenschrift')
+            self.assertTrue(font.file.storage.exists(font.file.name))
+            delete_url = reverse('admin:media_designer_mediafont_delete', args=[font.pk])
+            self.assertEqual(self.client.get(delete_url).status_code, 200)
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(delete_url, {'post': 'yes'})
+            self.assertEqual(response.status_code, 302)
+            self.assertFalse(MediaFont.objects.filter(pk=font.pk).exists())
 
     def test_background_only_template_can_be_saved(self):
         self.client.force_login(self.staff)

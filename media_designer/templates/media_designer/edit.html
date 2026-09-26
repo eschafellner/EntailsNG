@@ -8,6 +8,7 @@
   <p class="eyebrow">{% t "media_title" "Mediendesigner" %}</p>
   <h1>{{ template.name }}</h1>
   <p><a href="{% url 'media_template_list' %}">{% t "media_back" "← Alle Vorlagen" %}</a> · <a href="{% url 'media_template_export' template.pk %}">{% t "media_export" "Exportieren" %}</a></p>
+  {% if perms.media_designer.view_mediafont or perms.media_designer.change_mediafont %}<p><a href="{% url 'admin:media_designer_mediafont_changelist' %}">{% t "media_manage_fonts" "Schriftarten verwalten" %}</a></p>{% endif %}
   <p>{% t "media_edit_hint" "Textfelder auf der Vorschau verschieben; rechts Inhalt und Darstellung bearbeiten. Die Vorschau zeigt Beispieldaten." %}</p>
 </div>
 
@@ -30,6 +31,7 @@
       <h2>{% t "media_preview" "Vorschau" %}</h2>
       <div id="media-canvas-wrap">
         <div id="media-canvas" data-background="{% if template.background %}{{ template.background.url }}{% endif %}"
+             data-default-font="{% t 'media_font_default' 'Standardschrift' %}"
              data-static-label="{% t 'media_static_text' 'Fester Text' %}"
              data-sample-guest="{% t 'media_sample_guest' 'Gamer-Tag' %}"
              data-sample-team="{% t 'media_sample_team' 'Teamname' %}"
@@ -55,6 +57,7 @@
           <label>{% t "media_width" "Breite %" %}<input id="media-width" type="number" min="1" max="100" step="0.1"></label>
           <label>{% t "media_font_size" "Schrift mm" %}<input id="media-font-size" type="number" min="1.5" max="20" step="0.5"></label>
         </div>
+        <label>{% t "media_font_family" "Schriftart" %}<select id="media-font-family"></select></label>
         <label>{% t "media_color" "Textfarbe" %}<input id="media-color" type="color"></label>
         <label>{% t "media_align" "Ausrichtung" %}
           <select id="media-align">
@@ -75,6 +78,7 @@
 {{ template.elements|json_script:"media-elements" }}
 {{ field_labels|json_script:"media-field-labels" }}
 {{ paper_mm|json_script:"media-paper-mm" }}
+{{ fonts|json_script:"media-fonts" }}
 <script src="{% static 'js/media-designer.js' %}" defer></script>
 
 <style>
