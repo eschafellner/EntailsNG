@@ -63,6 +63,8 @@ def feature_flags(request):
         ),
         CACHE_SECONDS,
     )
+    viewer = getattr(request, 'user', None)
+    nav_items = [item for item in nav_items if item.is_visible_to(viewer)]
 
     site_customization = SiteCustomization.load()
     css_vars = site_customization.get_css_variables()
@@ -79,4 +81,3 @@ def feature_flags(request):
         'user_registration': SimpleLazyObject(lambda: _get_user_registration(request)),
         'user_pending_team_requests_count': SimpleLazyObject(lambda: _get_user_pending_team_requests_count(request)),
     }
-

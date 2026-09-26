@@ -1178,6 +1178,22 @@ h3 {
     gap: 6px;
 }
 
+.media-export-link {
+    min-height: 44px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.media-export-link span:last-child { overflow-wrap: anywhere; }
+.media-export-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+}
+
 .btn-action-blue {
     background: #0284c7;
     color: white;
@@ -1428,4 +1444,3 @@ h3 {
     border-color: var(--signal);
     font-weight: 700;
 }
-

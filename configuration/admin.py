@@ -17,11 +17,12 @@ class SystemTranslationAdmin(admin.ModelAdmin):
 
 @admin.register(NavigationItem)
 class NavigationItemAdmin(admin.ModelAdmin):
-    list_display = ('order', 'title', 'url_name', 'icon_name', 'badge_text', 'is_active')
+    list_display = ('order', 'title', 'url_name', 'icon_name', 'badge_text', 'visibility', 'is_active')
     list_display_links = ('title',)  # Verhindert den Django admin.E124 Fehler
     list_editable = ('order', 'is_active')
     ordering = ('order',)
-    fields = ('title', 'url_name', 'icon_name', 'icon_svg', 'badge_text', 'order', 'is_active')
+    list_filter = ('visibility', 'is_active')
+    fields = ('title', 'url_name', 'icon_name', 'icon_svg', 'badge_text', 'order', 'is_active', 'visibility')
 
     def get_readonly_fields(self, request, obj=None):
         readonly = list(super().get_readonly_fields(request, obj))
@@ -330,6 +331,5 @@ class SystemErrorLogAdmin(admin.ModelAdmin):
     def delete_resolved_logs(self, request, queryset):
         deleted, _ = queryset.filter(resolved=True).delete()
         self.message_user(request, f"{deleted} ausgewählte behobene(s) Fehlerprotokoll(e) erfolgreich gelöscht.")
-
 
 

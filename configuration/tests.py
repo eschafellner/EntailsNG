@@ -101,6 +101,71 @@ class ConfigurationModelTests(TestCase):
         self.assertIn('Sitzplan Aktiv', nav_titles)
         self.assertNotIn('Teams Inaktiv', nav_titles)
 
+    def test_navigation_visibility_for_guests_users_and_staff_with_shared_cache(self):
+        NavigationItem.objects.create(
+            title='Öffentlicher Testpunkt', url_name='dashboard', order=1
+        )
+        NavigationItem.objects.create(
+            title='Interner Testpunkt', url_name='profile', order=2,
+            visibility=NavigationItem.Visibility.AUTHENTICATED,
+        )
+        NavigationItem.objects.create(
+            title='Medien-Designer intern', url_name='media_template_list', order=3,
+            visibility=NavigationItem.Visibility.STAFF,
+        )
+        regular_user = User.objects.create_user(username='nav_user', password='test-password')
+        staff_user = User.objects.create_user(
+            username='nav_staff', password='test-password', is_staff=True
+        )
+
+        def visible_titles():
+            response = self.client.get(reverse('dashboard'))
+            self.assertEqual(response.status_code, 200)
+            return {item.title for item in response.context['nav_items']}, response
+
+        guest_titles, guest_response = visible_titles()
+        self.assertEqual(guest_titles, {'Öffentlicher Testpunkt'})
+        self.assertNotContains(guest_response, 'Medien-Designer intern')
+
+        self.client.force_login(regular_user)
+        user_titles, user_response = visible_titles()
+        self.assertEqual(user_titles, {'Öffentlicher Testpunkt', 'Interner Testpunkt'})
+        self.assertNotContains(user_response, 'Medien-Designer intern')
+
+        self.client.force_login(staff_user)
+        staff_titles, staff_response = visible_titles()
+        self.assertEqual(staff_titles, {
+            'Öffentlicher Testpunkt', 'Interner Testpunkt', 'Medien-Designer intern'
+        })
+        self.assertContains(staff_response, 'Medien-Designer intern')
+
+        self.client.logout()
+        guest_titles_again, _ = visible_titles()
+        self.assertEqual(guest_titles_again, guest_titles)
+
+    def test_media_designer_navigation_migration_restricts_existing_entries(self):
+        from importlib import import_module
+        from types import SimpleNamespace
+        from django.apps import apps
+        from django.db import connection
+
+        media_items = [
+            NavigationItem.objects.create(title='Medien', url_name=url_name)
+            for url_name in ('media_template_list', '/media-designer/')
+        ]
+        other_item = NavigationItem.objects.create(title='Öffentlich', url_name='dashboard')
+
+        migration = import_module('configuration.migrations.0020_navigationitem_visibility')
+        migration.restrict_media_designer_navigation(
+            apps, SimpleNamespace(connection=connection)
+        )
+
+        for item in media_items:
+            item.refresh_from_db()
+            self.assertEqual(item.visibility, NavigationItem.Visibility.STAFF)
+        other_item.refresh_from_db()
+        self.assertEqual(other_item.visibility, NavigationItem.Visibility.PUBLIC)
+
     def test_legal_links_rendered_in_desktop_and_mobile_menu(self):
         """Impressum und Datenschutz sind in der Desktop-Sidebar und im mobilen Mehr-Menü vorhanden."""
         response = self.client.get(reverse('dashboard'))
@@ -1283,6 +1348,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         item.title = 'LAN Meisterschaften 2026'
         item.order = 99
         item.is_active = False
+        item.visibility = NavigationItem.Visibility.STAFF
         with self.captureOnCommitCallbacks(execute=True):
             item.save()
 
@@ -1294,6 +1360,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         self.assertEqual(item.title, 'LAN Meisterschaften 2026')
         self.assertEqual(item.order, 99)
         self.assertFalse(item.is_active)
+        self.assertEqual(item.visibility, NavigationItem.Visibility.STAFF)
         # Es darf kein Duplikat mit dem alten Namen angelegt worden sein
         self.assertEqual(NavigationItem.objects.filter(url_name='tournament_list').count(), 1)
 
@@ -1303,6 +1370,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         self.assertEqual(item.title, 'Turniere')
         self.assertEqual(item.order, 2)
         self.assertTrue(item.is_active)
+        self.assertEqual(item.visibility, NavigationItem.Visibility.STAFF)
 
     def test_p7_delete_resolved_logs_admin_action_scope(self):
         """P7: delete_resolved_logs löscht nur die im Admin ausgewählten gelösten Logs."""
@@ -1365,8 +1433,6 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         for color in invalid_colors:
             with self.assertRaises(ValidationError, msg=f"Ungültige Farbe '{color}' wurde nicht abgewiesen"):
                 validate_hex_color(color)
-
-
 
 
 

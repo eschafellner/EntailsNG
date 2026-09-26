@@ -32,6 +32,11 @@ from configuration.cache import (
 
 
 class NavigationItem(models.Model):
+    class Visibility(models.TextChoices):
+        PUBLIC = 'PUBLIC', 'Alle Besucher'
+        AUTHENTICATED = 'AUTHENTICATED', 'Nur angemeldete Benutzer'
+        STAFF = 'STAFF', 'Nur Mitarbeiter'
+
     class IconChoices(models.TextChoices):
         DASHBOARD = 'dashboard', 'Dashboard / Übersicht (Home)'
         TOURNAMENTS = 'tournaments', 'Turniere (Pokal / Trophy)'
@@ -73,6 +78,13 @@ class NavigationItem(models.Model):
         default=0, help_text='Kleinere Zahlen stehen weiter oben bzw. links'
     )
     is_active = models.BooleanField(default=True, help_text='Im Menü anzeigen?')
+    visibility = models.CharField(
+        max_length=20,
+        choices=Visibility.choices,
+        default=Visibility.PUBLIC,
+        verbose_name='Sichtbarkeit',
+        help_text='Legt fest, für welche Besucher dieser Menüpunkt sichtbar ist. Die Zielseite prüft ihre Zugriffsrechte weiterhin selbst.',
+    )
 
     ALIAS_MAP = {
         'teams': 'team_list',
@@ -94,6 +106,17 @@ class NavigationItem(models.Model):
 
     def __str__(self):
         return f'{self.order}. {self.title} ({self.url_name})'
+
+    def is_visible_to(self, user):
+        if not self.is_active:
+            return False
+        if self.visibility == self.Visibility.PUBLIC:
+            return True
+        if not user or not user.is_authenticated:
+            return False
+        if self.visibility == self.Visibility.AUTHENTICATED:
+            return True
+        return self.visibility == self.Visibility.STAFF and user.is_staff
 
     def clean(self):
         """Verhindert Tippfehler und schützt vor XSS in SVG-Icons."""
@@ -526,7 +549,6 @@ def _on_general_config_change(sender, **kwargs):
 def _on_site_customization_change(sender, **kwargs):
     safe_cache_delete('site_customization')
     invalidate_site_customization_cache()
-
 
 
 

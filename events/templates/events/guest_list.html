@@ -17,11 +17,15 @@
           <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: var(--font-3xl, 32px); color: var(--ink);">
             {% t "guest_list_title" "Gästeliste" %}
           </h1>
-          {% if request.user.is_staff %}<a href="{% url 'media_template_list' %}">{% t "media_badge_link" "Badges gestalten und exportieren" %}</a>{% endif %}
           <p style="margin: 6px 0 0 0; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: var(--font-sm, 13px);">
             📅 {{ event.start_date|date:"d.m.Y, H:i" }} – {{ event.end_date|date:"d.m.Y, H:i" }} Uhr
             {% if event.location %} • 📍 {{ event.location }}{% endif %}
           </p>
+          {% if request.user.is_staff %}
+            <a href="{% url 'media_template_list' %}" class="btn-action-primary media-export-link" style="margin-top: 14px;">
+              <span aria-hidden="true">🖨️</span><span>{% t "media_badge_link" "Badges gestalten und exportieren" %}</span>
+            </a>
+          {% endif %}
         </div>
 
         <!-- Mini-Statistiken -->

@@ -18,6 +18,7 @@ from media_designer.data import badge_rows, certificate_rows
 from media_designer.models import MediaTemplate
 from media_designer.rendering import render_card, render_pdf, sheet_layout
 from media_designer.schema import default_elements, translated_field_labels
+from seating.models import SeatingCell, SeatingPlan
 from tournaments.exceptions import TournamentMatchError
 from tournaments.models import (
     Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant,
@@ -68,6 +69,7 @@ class MediaDesignerTests(TestCase):
         for key in (
             'media_form_name', 'media_kind_badge', 'media_field_event_start',
             'media_field_team_members', 'media_award_default',
+            'media_filter_paid', 'media_filter_seat',
             'tournament_ffa_rank_required', 'tournament_ffa_error_duplicate_winner',
         ):
             self.assertTrue(SystemTranslation.objects.filter(key=key).exists(), key)
@@ -266,6 +268,62 @@ class MediaDesignerTests(TestCase):
 
         response = self.client.post(url, {
             'recipients': [str(self.registration.pk)], 'sheet': 'a4',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(b''.join(response.streaming_content).startswith(b'%PDF-'))
+
+    def test_badge_filters_combine_payment_and_seat_and_limit_export(self):
+        plan = SeatingPlan.objects.create(event=self.event, name='Badge Filter Hall')
+        registrations = {'unpaid_no_seat': self.registration}
+        for name, status in (
+            ('paid_with_seat', EventRegistration.PaymentStatus.PAID),
+            ('paid_no_seat', EventRegistration.PaymentStatus.PAID),
+            ('unpaid_with_seat', EventRegistration.PaymentStatus.UNPAID),
+            ('cancelled_with_seat', EventRegistration.PaymentStatus.CANCELLED),
+        ):
+            user = User.objects.create_user(username=name)
+            registrations[name] = EventRegistration.objects.create(
+                user=user, event=self.event, payment_status=status,
+            )
+        for x, name in enumerate(('paid_with_seat', 'unpaid_with_seat', 'cancelled_with_seat'), 1):
+            SeatingCell.objects.create(
+                plan=plan, x=x, y=1, cell_type=SeatingCell.CellType.SEAT,
+                registration=registrations[name], seat_label=f'A-{x}',
+            )
+
+        self.client.force_login(self.staff)
+        url = reverse('media_template_export', args=[self.badge.pk])
+        cases = {
+            ('all', 'all'): {'unpaid_no_seat', 'paid_with_seat', 'paid_no_seat', 'unpaid_with_seat'},
+            ('yes', 'all'): {'paid_with_seat', 'paid_no_seat'},
+            ('no', 'all'): {'unpaid_no_seat', 'unpaid_with_seat'},
+            ('all', 'yes'): {'paid_with_seat', 'unpaid_with_seat'},
+            ('all', 'no'): {'unpaid_no_seat', 'paid_no_seat'},
+            ('yes', 'yes'): {'paid_with_seat'},
+            ('yes', 'no'): {'paid_no_seat'},
+            ('no', 'yes'): {'unpaid_with_seat'},
+            ('no', 'no'): {'unpaid_no_seat'},
+        }
+        for (paid, seat), expected in cases.items():
+            with self.subTest(paid=paid, seat=seat):
+                response = self.client.get(url, {'paid': paid, 'seat': seat})
+                self.assertEqual(
+                    {registration.pk for registration in response.context['recipients']},
+                    {registrations[name].pk for name in expected},
+                )
+                self.assertContains(response, f'name="paid" value="{paid}"')
+                self.assertContains(response, f'name="seat" value="{seat}"')
+
+        filtered = {'paid': 'yes', 'seat': 'yes', 'sheet': 'single'}
+        response = self.client.post(url, {
+            **filtered, 'recipients': [str(registrations['unpaid_with_seat'].pk)],
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.context['payment_filter'], 'yes')
+        self.assertEqual(response.context['seat_filter'], 'yes')
+        response = self.client.post(url, {
+            **filtered, 'recipients': [str(registrations['paid_with_seat'].pk)],
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/pdf')

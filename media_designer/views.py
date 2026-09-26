@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Exists, OuterRef
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
@@ -12,6 +13,7 @@ from media_designer.forms import MediaTemplateCreateForm, MediaTemplateForm
 from media_designer.models import MediaTemplate
 from media_designer.rendering import render_pdf, sheet_layout
 from media_designer.schema import PAPER_MM, translated_field_labels
+from seating.models import SeatingCell
 from tournaments.models import Tournament, TournamentRegistration
 
 
@@ -71,11 +73,30 @@ def template_export(request, pk):
     tournaments = []
     tournament = None
     capacity = None
+    filters = request.POST if request.method == 'POST' else request.GET
+    payment_filter = filters.get('paid', 'all')
+    seat_filter = filters.get('seat', 'all')
+    if payment_filter not in ('all', 'yes', 'no'):
+        payment_filter = 'all'
+    if seat_filter not in ('all', 'yes', 'no'):
+        seat_filter = 'all'
 
     if template.kind == MediaTemplate.Kind.BADGE:
-        recipients = list(
+        badge_registrations = (
             EventRegistration.objects.filter(event=template.event)
             .exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED)
+        )
+        if payment_filter != 'all':
+            badge_registrations = badge_registrations.filter(
+                payment_status=(EventRegistration.PaymentStatus.PAID if payment_filter == 'yes'
+                                else EventRegistration.PaymentStatus.UNPAID)
+            )
+        if seat_filter != 'all':
+            badge_registrations = badge_registrations.annotate(
+                has_seat=Exists(SeatingCell.objects.filter(registration_id=OuterRef('pk')))
+            ).filter(has_seat=seat_filter == 'yes')
+        recipients = list(
+            badge_registrations
             .select_related('user').prefetch_related('seats')
             .order_by('user__username')
         )
@@ -124,4 +145,6 @@ def template_export(request, pk):
         'tournament': tournament,
         'capacity': capacity,
         'error': error,
+        'payment_filter': payment_filter,
+        'seat_filter': seat_filter,
     }, status=400 if error else 200)

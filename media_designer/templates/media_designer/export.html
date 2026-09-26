@@ -12,6 +12,27 @@
 
 {% if error %}<div class="card" role="alert" style="padding:16px;margin-bottom:20px;border:2px solid #c62828">{{ error }}</div>{% endif %}
 
+{% if template.kind == 'BADGE' %}
+  <form method="get" class="card media-filter-form" style="padding:16px;margin-bottom:20px">
+    <label for="media-filter-paid">{% t "media_filter_paid" "Bezahlt" %}
+      <select id="media-filter-paid" name="paid">
+        <option value="all" {% if payment_filter == 'all' %}selected{% endif %}>{% t "media_filter_all" "Alle" %}</option>
+        <option value="yes" {% if payment_filter == 'yes' %}selected{% endif %}>{% t "media_filter_yes" "Ja" %}</option>
+        <option value="no" {% if payment_filter == 'no' %}selected{% endif %}>{% t "media_filter_no" "Nein" %}</option>
+      </select>
+    </label>
+    <label for="media-filter-seat">{% t "media_filter_seat" "Sitzplatz vorhanden" %}
+      <select id="media-filter-seat" name="seat">
+        <option value="all" {% if seat_filter == 'all' %}selected{% endif %}>{% t "media_filter_all" "Alle" %}</option>
+        <option value="yes" {% if seat_filter == 'yes' %}selected{% endif %}>{% t "media_filter_yes" "Ja" %}</option>
+        <option value="no" {% if seat_filter == 'no' %}selected{% endif %}>{% t "media_filter_no" "Nein" %}</option>
+      </select>
+    </label>
+    <button type="submit">{% t "media_filter_apply" "Filter anwenden" %}</button>
+    <a href="{% url 'media_template_export' template.pk %}">{% t "media_filter_reset" "Filter zurücksetzen" %}</a>
+  </form>
+{% endif %}
+
 {% if template.kind == 'CERTIFICATE' and tournaments %}
   <form method="get" class="card" style="padding:16px;margin-bottom:20px">
     <label for="tournament-select">{% t "media_tournament" "Abgeschlossenes Turnier" %}</label>
@@ -24,6 +45,10 @@
 
 <form method="post" class="card" style="padding:24px">
   {% csrf_token %}
+  {% if template.kind == 'BADGE' %}
+    <input type="hidden" name="paid" value="{{ payment_filter }}">
+    <input type="hidden" name="seat" value="{{ seat_filter }}">
+  {% endif %}
   {% if tournament %}<input type="hidden" name="tournament" value="{{ tournament.pk }}">{% endif %}
   {% if template.kind == 'BADGE' %}
     <fieldset><legend>{% t "media_output" "Ausgabeformat" %}</legend>
@@ -58,6 +83,9 @@ document.getElementById('media-select-all')?.addEventListener('change', event =>
 <style>
 .media-recipient-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;max-height:420px;overflow:auto;margin-top:12px}
 .media-recipient-list label{padding:7px;border:1px solid var(--line);border-radius:6px}
+.media-filter-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
+.media-filter-form label{display:grid;gap:6px}
+.media-filter-form select{min-width:150px}
 fieldset{border:1px solid var(--line);border-radius:8px;padding:12px}
 fieldset label{margin-right:14px}
 input[type="text"],select{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
