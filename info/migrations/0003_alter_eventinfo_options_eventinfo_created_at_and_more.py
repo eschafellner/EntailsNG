@@ -69,10 +69,12 @@ class Migration(migrations.Migration):
             name='show_in_nav',
             field=models.BooleanField(default=False, help_text='Erstellt automatisch einen Menüpunkt in der linken Seitenleiste.', verbose_name='In Hauptnavigation anzeigen?'),
         ),
+        # PostgreSQL legt den LIKE-Index beim späteren unique=True an.
+        # Ein früherer Index mit demselben Namen bricht frische Migrationen ab.
         migrations.AddField(
             model_name='eventinfo',
             name='slug',
-            field=models.SlugField(default='allgemein', help_text="Wird für die URL verwendet (z. B. 'allgemein', 'catering', 'regeln').", max_length=100, null=True, verbose_name='URL-Kürzel (Slug)'),
+            field=models.SlugField(db_index=False, default='allgemein', help_text="Wird für die URL verwendet (z. B. 'allgemein', 'catering', 'regeln').", max_length=100, null=True, verbose_name='URL-Kürzel (Slug)'),
         ),
         migrations.RunPython(populate_unique_slugs, reverse_code=migrations.RunPython.noop),
         migrations.AlterField(

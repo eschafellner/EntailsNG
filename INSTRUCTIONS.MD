@@ -132,10 +132,19 @@ nano .env
 * **`DB_PORT`**: `5432`
 * **`REDIS_URL`**: `redis://redis:6379/1` (für Multi-Worker-Konsistenz und Sitzplatzreservierungen)
 
-#### 3. E-Mail Warteschlange (Asynchroner Versand)
+#### 3. Web-Worker (Gunicorn)
+* **`WEB_CONCURRENCY`**: Anzahl der Web-Worker im Docker-Service `web`, standardmäßig `3`. Trage zum Beispiel `WEB_CONCURRENCY=2` in `.env` ein, wenn du die Zahl ändern möchtest. Das ist **keine** Einstellung für PostgreSQL-Parallel-Worker oder den separaten `email_worker`.
+* Mehr Web-Worker erlauben mehr gleichzeitige Anfragen, benötigen aber mehr Arbeitsspeicher und können mehr Datenbankverbindungen und Wartezeiten an der Event-Sperre verursachen. Erhöhe die Zahl daher nur, wenn Messwerte und verfügbare Ressourcen dafür sprechen. Im lokalen Betrieb mit `./start.sh` hat die Variable keine Wirkung.
+* Nach jeder Änderung den Web-Container **neu erstellen**; ein bloßes `docker compose restart web` übernimmt geänderte Umgebungsvariablen nicht:
+  ```bash
+  docker compose up -d --build --force-recreate web
+  ```
+* Diese Einstellung steht bewusst nicht im CMS-Admin: Der Admin kann laufende Gunicorn-Prozesse nicht selbst dauerhaft neu konfigurieren. PostgreSQLs `max_worker_processes` ist ein eigener Serverparameter, für den ein Datenbank-Neustart nötig ist; er behebt keine Warteschlange an der Event-Zeilensperre.
+
+#### 4. E-Mail Warteschlange (Asynchroner Versand)
 * **`EMAIL_ASYNC_QUEUE`**: Standardmäßig `True`. E-Mails (Tickets, Verifizierungen) werden non-blocking in einer DB-Warteschlange abgelegt und blockieren den Web-Request des Nutzers nicht.
 
-#### 4. Speichern in `nano`:
+#### 5. Speichern in `nano`:
 * Drücke `Strg` + `O`, dann `Enter` (Speichern).
 * Drücke `Strg` + `X` (Beenden).
 
@@ -406,5 +415,4 @@ docker compose up -d --build
 | **Server neu starten** | `docker compose restart` | `./start.sh` neu ausführen |
 | **Server stoppen** | `docker compose down` | `Strg + C` |
 | **Update durchführen** | `git pull && docker compose up -d --build` | `git pull && ./start.sh` |
-
 

@@ -162,72 +162,60 @@ function toggleCheckIn(registrationId) {
   });
 }
 
-const PAGE_SIZE = 30;
 let currentFilter = 'all';
-let visibleLimit = PAGE_SIZE;
+let displayedFilter = 'all';
+let displayedQuery = '';
+let listRequest = null;
+let listGeneration = 0;
 
-function applyFilters() {
-  const searchInput = document.getElementById('guest-search-input');
-  const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
-  const clearBtn = document.getElementById('guest-search-clear');
-  const noResults = document.getElementById('no-search-results');
+function setScannerStats(stats) {
+  document.getElementById('stat-total-count').innerText = stats.total;
+  document.getElementById('stat-paid-count').innerText = stats.paid;
+  document.getElementById('stat-checked-in-count').innerText = stats.checked_in;
+  document.getElementById('stat-progress-text').innerHTML = `<strong>${stats.checked_in}</strong> / ${stats.total} (${stats.percent}%)`;
+  document.getElementById('stat-progress-fill').style.width = `${stats.percent}%`;
+  document.getElementById('tab-count-all').innerText = stats.total;
+  document.getElementById('tab-count-pending').innerText = stats.pending;
+  document.getElementById('tab-count-checked-in').innerText = stats.checked_in;
+  document.getElementById('tab-count-unpaid').innerText = stats.unpaid;
+}
+
+function loadGuestPage(page = 1, append = false) {
+  if (listRequest) listRequest.abort();
+  listRequest = new AbortController();
+  const generation = ++listGeneration;
+  const query = document.getElementById('guest-search-input').value.trim();
+  const params = new URLSearchParams({ partial: '1', page: String(page), filter: currentFilter, q: query });
   const loadMoreWrap = document.getElementById('load-more-wrap');
-  const loadMoreCount = document.getElementById('load-more-count');
-
-  if (clearBtn) {
-    clearBtn.style.display = query ? 'block' : 'none';
-  }
-
-  const allRows = Array.from(document.querySelectorAll('.guest-row'));
-  if (allRows.length === 0) return;
-
-  // Filter matching rows
-  const matchingRows = allRows.filter(row => {
-    // 1. Tab Status Filter
-    const isCheckedIn = row.getAttribute('data-checked-in') === 'true';
-    const isPaid = row.getAttribute('data-paid') === 'paid';
-
-    if (currentFilter === 'pending' && isCheckedIn) return false;
-    if (currentFilter === 'checked-in' && !isCheckedIn) return false;
-    if (currentFilter === 'unpaid' && isPaid) return false;
-
-    // 2. Search Query Filter
-    if (query) {
-      const searchData = (row.getAttribute('data-search') || '').toLowerCase();
-      if (!searchData.includes(query)) return false;
-    }
-
-    return true;
-  });
-
-  // Display logic: Active search shows ALL matches without limit; browsing uses visibleLimit
-  const isSearching = query.length > 0;
-  const displayLimit = isSearching ? matchingRows.length : visibleLimit;
-
-  allRows.forEach(row => {
-    row.style.display = 'none';
-  });
-
-  matchingRows.slice(0, displayLimit).forEach(row => {
-    row.style.display = '';
-  });
-
-  // Empty state for search/filter
-  if (noResults) {
-    noResults.style.display = matchingRows.length === 0 ? 'block' : 'none';
-  }
-
-  // Load more button container
-  if (loadMoreWrap) {
-    if (!isSearching && matchingRows.length > visibleLimit) {
-      loadMoreWrap.style.display = 'block';
-      if (loadMoreCount) {
-        loadMoreCount.innerText = matchingRows.length - visibleLimit;
-      }
-    } else {
-      loadMoreWrap.style.display = 'none';
-    }
-  }
+  const loadMoreBtn = document.getElementById('btn-load-more');
+  if (loadMoreBtn) loadMoreBtn.disabled = true;
+  fetch(`${window.location.pathname}?${params}`, { signal: listRequest.signal })
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    })
+    .then(data => {
+      if (generation !== listGeneration) return;
+      const tbody = document.getElementById('guest-table-body');
+      if (append) tbody.insertAdjacentHTML('beforeend', data.rows_html);
+      else tbody.innerHTML = data.rows_html;
+      tbody.dataset.matchCount = data.match_count;
+      displayedFilter = currentFilter;
+      displayedQuery = query;
+      setScannerStats(data.stats);
+      document.getElementById('no-search-results').style.display = data.match_count === 0 ? 'block' : 'none';
+      loadMoreWrap.dataset.nextPage = data.next_page || '';
+      loadMoreWrap.style.display = data.next_page ? 'block' : 'none';
+      document.getElementById('load-more-count').innerText = data.remaining;
+      const clearBtn = document.getElementById('guest-search-clear');
+      clearBtn.style.display = query ? 'block' : 'none';
+    })
+    .catch(error => {
+      if (error.name !== 'AbortError') console.error('Teilnehmerliste konnte nicht geladen werden:', error);
+    })
+    .finally(() => {
+      if (generation === listGeneration && loadMoreBtn) loadMoreBtn.disabled = false;
+    });
 }
 
 function updateLocalTableStatus(regId, isCheckedIn, timeStr) {
@@ -257,44 +245,8 @@ function updateLocalTableStatus(regId, isCheckedIn, timeStr) {
     }
   }
 
-  // Recalculate stats & counts
-  const allRows = document.querySelectorAll('.guest-row');
-  const totalCount = allRows.length;
-  const checkedInCount = document.querySelectorAll('.guest-row[data-checked-in="true"]').length;
-  const pendingCount = Math.max(0, totalCount - checkedInCount);
-  const unpaidCount = document.querySelectorAll('.guest-row[data-paid]:not([data-paid="paid"])').length;
-  const pct = totalCount > 0 ? Math.round((checkedInCount / totalCount) * 100) : 0;
-
-  // Update Header Counters & Progress Bar
-  const statTotal = document.getElementById('stat-total-count');
-  const statCheckedIn = document.getElementById('stat-checked-in-count');
-  const statPaid = document.getElementById('stat-paid-count');
-  const progressText = document.getElementById('stat-progress-text');
-  const progressFill = document.getElementById('stat-progress-fill');
-
-  if (statTotal) statTotal.innerText = totalCount;
-  if (statCheckedIn) statCheckedIn.innerText = checkedInCount;
-  if (statPaid) statPaid.innerText = totalCount - unpaidCount;
-  if (progressText) {
-    progressText.innerHTML = `<strong>${checkedInCount}</strong> / ${totalCount} (${pct}%)`;
-  }
-  if (progressFill) {
-    progressFill.style.width = `${pct}%`;
-  }
-
-  // Update Tab Badges
-  const tabAll = document.getElementById('tab-count-all');
-  const tabPending = document.getElementById('tab-count-pending');
-  const tabCheckedIn = document.getElementById('tab-count-checked-in');
-  const tabUnpaid = document.getElementById('tab-count-unpaid');
-
-  if (tabAll) tabAll.innerText = totalCount;
-  if (tabPending) tabPending.innerText = pendingCount;
-  if (tabCheckedIn) tabCheckedIn.innerText = checkedInCount;
-  if (tabUnpaid) tabUnpaid.innerText = unpaidCount;
-
-  // Re-apply filters so row position/visibility updates accurately
-  applyFilters();
+  // Die Liste enthält höchstens 30 Zeilen; globale Zähler kommen vom Server.
+  loadGuestPage();
 }
 
 function startCamera() {
@@ -367,8 +319,7 @@ document.addEventListener('DOMContentLoaded', function() {
       tabBtns.forEach(b => b.classList.remove('active'));
       this.classList.add('active');
       currentFilter = this.getAttribute('data-filter') || 'all';
-      visibleLimit = PAGE_SIZE;
-      applyFilters();
+      loadGuestPage();
     });
   });
 
@@ -377,16 +328,22 @@ document.addEventListener('DOMContentLoaded', function() {
   const searchClearBtn = document.getElementById('guest-search-clear');
 
   if (searchInput) {
+    let searchTimer;
     searchInput.addEventListener('input', function() {
-      visibleLimit = PAGE_SIZE;
-      applyFilters();
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadGuestPage(), 250);
     });
 
     searchInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        const visibleRows = Array.from(document.querySelectorAll('.guest-row')).filter(r => r.style.display !== 'none');
-        if (visibleRows.length === 1) {
+        if (searchInput.value.trim() !== displayedQuery || displayedFilter !== currentFilter) {
+          clearTimeout(searchTimer);
+          loadGuestPage();
+          return;
+        }
+        const visibleRows = Array.from(document.querySelectorAll('.guest-row'));
+        if (visibleRows.length === 1 && Number(document.getElementById('guest-table-body').dataset.matchCount) === 1) {
           const targetRow = visibleRows[0];
           const regId = targetRow.getAttribute('data-id');
           const isAlreadyCheckedIn = targetRow.getAttribute('data-checked-in') === 'true';
@@ -410,8 +367,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (searchClearBtn && searchInput) {
     searchClearBtn.addEventListener('click', function() {
       searchInput.value = '';
-      visibleLimit = PAGE_SIZE;
-      applyFilters();
+      loadGuestPage();
       searchInput.focus();
     });
   }
@@ -420,8 +376,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const loadMoreBtn = document.getElementById('btn-load-more');
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener('click', function() {
-      visibleLimit += PAGE_SIZE;
-      applyFilters();
+      const page = Number(document.getElementById('load-more-wrap').dataset.nextPage);
+      if (page) loadGuestPage(page, true);
     });
   }
 
@@ -438,8 +394,7 @@ document.addEventListener('DOMContentLoaded', function() {
           b.classList.remove('active');
         }
       });
-      visibleLimit = PAGE_SIZE;
-      applyFilters();
+      loadGuestPage();
     });
   }
 
@@ -455,6 +410,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Initial Filter / Display Run
-  applyFilters();
+  displayedQuery = searchInput.value.trim();
+  document.getElementById('guest-search-clear').style.display = displayedQuery ? 'block' : 'none';
 });

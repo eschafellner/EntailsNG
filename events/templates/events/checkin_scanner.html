@@ -132,7 +132,7 @@
       <!-- Search Input with Clear Button -->
       <div class="scanner-search-box">
         <span class="scanner-search-icon">🔍</span>
-        <input type="text" id="guest-search-input" class="scanner-input scanner-search-field" placeholder="{% t 'scanner_search_placeholder' 'Name, Ticket, Platz (z. B. A-12)...' %}" autocomplete="off">
+        <input type="text" id="guest-search-input" class="scanner-input scanner-search-field" placeholder="{% t 'scanner_search_placeholder' 'Name, Ticket, Platz (z. B. A-12)...' %}" value="{{ search }}" autocomplete="off">
         <button type="button" id="guest-search-clear" class="scanner-search-clear" title="Suche leeren" style="display: none;">✕</button>
       </div>
     </div>
@@ -165,82 +165,13 @@
             <th class="col-th-action" style="text-align: right;">{% t "scanner_col_action" "AKTION" %}</th>
           </tr>
         </thead>
-        <tbody id="guest-table-body">
-          {% for reg in registrations %}
-            <tr class="guest-row" 
-                id="guest-row-{{ reg.id }}" 
-                data-id="{{ reg.id }}"
-                data-checked-in="{{ reg.is_checked_in|yesno:'true,false' }}"
-                data-paid="{{ reg.payment_status|lower }}"
-                data-search="{{ reg.user.username|lower }} {{ reg.user.get_full_name|lower }} {{ reg.short_code|lower }} {% for s in reg.seats.all %}{{ s.seat_label|lower }} {% endfor %}">
-              
-              <td class="col-user">
-                <div class="guest-user-wrap">
-                  <strong class="guest-username">{{ reg.user.username }}</strong>
-                  {% if reg.user.get_full_name %}
-                    <span class="guest-fullname">({{ reg.user.get_full_name }})</span>
-                  {% endif %}
-                  {% if reg.user.profile.clan %}
-                    <span class="guest-clan-tag">[{{ reg.user.profile.clan.tag }}]</span>
-                  {% endif %}
-                </div>
-              </td>
-
-              <td class="col-ticket">
-                <span class="scanner-ticket-tag">{{ reg.ticket_type.name|default:"Standard" }}</span>
-              </td>
-
-              <td class="col-payment">
-                {% if reg.payment_status == 'PAID' %}
-                  <span class="scanner-badge-paid">{% t "scanner_paid_badge" "✔ Bezahlt" %}</span>
-                {% else %}
-                  <span class="scanner-badge-unpaid">{% t "scanner_unpaid_badge" "✖ Offen" %}</span>
-                {% endif %}
-              </td>
-
-              <td class="col-seat">
-                {% with seat=reg.seats.first %}
-                  {% if seat %}
-                    <span class="scanner-badge-seat">💺 {{ seat.seat_label }}</span>
-                  {% else %}
-                    <span class="scanner-badge-noseat">-</span>
-                  {% endif %}
-                {% endwith %}
-              </td>
-
-              <td class="col-status" id="status-cell-{{ reg.id }}">
-                {% if reg.is_checked_in %}
-                  <span class="badge-checked-in scanner-badge-checked">
-                    ✓ {% t "scanner_tab_checked_in" "Eingecheckt" %} {% if reg.checked_in_at %}({{ reg.checked_in_at|date:"H:i:s" }}){% endif %}
-                  </span>
-                {% else %}
-                  <span class="badge-not-checked-in scanner-badge-pending">
-                    ⏳ {% t "scanner_tab_pending" "Noch nicht da" %}
-                  </span>
-                {% endif %}
-              </td>
-
-              <td class="col-action">
-                <button type="button" 
-                        onclick="toggleCheckIn({{ reg.id }})" 
-                        id="btn-toggle-{{ reg.id }}" 
-                        class="btn-checkin-action {% if reg.is_checked_in %}btn-action-checkout{% else %}btn-action-checkin{% endif %}">
-                  {% if reg.is_checked_in %}{% t "scanner_btn_checkout" "Auschecken" %}{% else %}{% t "scanner_btn_checkin" "Einchecken" %}{% endif %}
-                </button>
-              </td>
-            </tr>
-          {% empty %}
-            <tr id="empty-table-row">
-              <td colspan="6" style="text-align: center; padding: 30px; color: var(--muted);">
-                Keine Anmeldungen für dieses Event vorhanden.
-              </td>
-            </tr>
-          {% endfor %}
+        <tbody id="guest-table-body" data-match-count="{% if page %}{{ page.paginator.count }}{% else %}0{% endif %}">
+          {% include "events/_scanner_rows.html" %}
         </tbody>
       </table>
 
       <!-- Empty State for Search/Filter -->
-      <div id="no-search-results" class="scanner-no-results" style="display: none;">
+      <div id="no-search-results" class="scanner-no-results" style="display: {% if page and page.paginator.count == 0 %}block{% else %}none{% endif %};">
         <span style="font-size: 32px; display: block; margin-bottom: 6px;">🔍</span>
         <h3 style="margin: 0 0 6px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 20px;">
           {% t "scanner_no_results_title" "Keine Teilnehmer gefunden" %}
@@ -254,9 +185,9 @@
       </div>
 
       <!-- Load More Button Container (Pagination / Progressive Loading) -->
-      <div id="load-more-wrap" class="scanner-load-more-wrap" style="display: none;">
+      <div id="load-more-wrap" class="scanner-load-more-wrap" data-next-page="{% if page and page.has_next %}{{ page.next_page_number }}{% endif %}" style="display: {% if page and page.has_next %}block{% else %}none{% endif %};">
         <button type="button" id="btn-load-more" class="btn-load-more">
-          {% t "scanner_load_more_btn" "Weitere Teilnehmer laden" %} (<span id="load-more-count">0</span> verbleibend)
+          {% t "scanner_load_more_btn" "Weitere Teilnehmer laden" %} (<span id="load-more-count">{{ remaining }}</span> verbleibend)
         </button>
       </div>
     </div>

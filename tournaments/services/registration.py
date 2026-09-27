@@ -2,7 +2,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
-from events.models import EventRegistration
+from events.models import Event, EventRegistration
 from tournaments.exceptions import (
     TournamentAlreadyRegisteredError,
     TournamentError,
@@ -83,6 +83,18 @@ class TournamentRegistrationService:
         Prüft Zeitfenster, Vor-Ort Check-in, Kapazitätslimits und Team-Berechtigungen.
         """
         with transaction.atomic():
+            # Turnieranmeldungen und Eventabschluss sperren zuerst dieselbe Event-Zeile.
+            # So kann keine Turnieranmeldung zwischen Abschlussprüfung und Archivierung erfolgen.
+            event_id = Tournament.objects.values_list('event_id', flat=True).get(pk=tournament_id)
+            event = Event.objects.select_for_update().get(pk=event_id)
+            if event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED):
+                from configuration.translations import get_translation
+                raise TournamentNotOpenError(get_translation(
+                    'msg_tournament_event_finished',
+                    'Die Veranstaltung "{event_title}" ist beendet oder abgesagt. Eine Turnieranmeldung ist nicht mehr möglich.',
+                    event_title=event.title,
+                ))
+
             tournament = Tournament.objects.select_for_update().select_related('game', 'event').get(pk=tournament_id)
 
             # 1. Privilegien-Check (Staff / Superuser / Turnier-Admin)

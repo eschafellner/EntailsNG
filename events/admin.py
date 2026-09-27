@@ -1,12 +1,15 @@
 from django import forms
 from django.contrib import admin, messages
 from django.db import transaction
+from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from configuration.cache import invalidate_active_event_cache
+from configuration.translations import get_translation
 from seating.models import SeatingCell, SeatingPlan
 from .models import Event, EventRegistration, TicketType
-from .exceptions import EventFullError
+from .exceptions import EventFullError, EventLifecycleError
+from .services import EventLifecycleService
 
 
 class EventAdminForm(forms.ModelForm):
@@ -55,6 +58,39 @@ class EventAdminForm(forms.ModelForm):
             return True
         return val
 
+    def clean_status(self):
+        status = self.cleaned_data['status']
+        old_status = (
+            Event.objects.filter(pk=self.instance.pk).values_list('status', flat=True).first()
+            if self.instance.pk else None
+        )
+        if status == Event.Status.REGISTRATION_OPEN and old_status != Event.Status.REGISTRATION_OPEN:
+            raise forms.ValidationError(get_translation(
+                'msg_event_open_use_action',
+                'Bitte öffne die Anmeldung über die Aktion „Anmeldung öffnen“ in der Eventliste.',
+            ))
+        if status == Event.Status.FINISHED:
+            if old_status != Event.Status.FINISHED:
+                raise forms.ValidationError(get_translation(
+                    'msg_event_finish_use_action',
+                    'Bitte schließe die Veranstaltung über die Aktion „Veranstaltung abschließen“ in der Eventliste ab.',
+                ))
+        elif old_status == Event.Status.FINISHED:
+            raise forms.ValidationError(get_translation(
+                'msg_event_finish_no_reopen',
+                'Eine abgeschlossene Veranstaltung kann nicht über dieses Formular wieder geöffnet werden.',
+            ))
+        return status
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get('status') == Event.Status.FINISHED and cleaned_data.get('is_active'):
+            self.add_error('is_active', get_translation(
+                'msg_event_finish_no_reactivate',
+                'Eine abgeschlossene Veranstaltung kann nicht als aktive Hauptveranstaltung gesetzt werden.',
+            ))
+        return cleaned_data
+
 
 class TicketTypeInline(admin.TabularInline):
     model = TicketType
@@ -66,6 +102,7 @@ class EventAdmin(admin.ModelAdmin):
     form = EventAdminForm
     list_display = (
         'title',
+        'status',
         'start_date',
         'end_date',
         'location',
@@ -74,10 +111,95 @@ class EventAdmin(admin.ModelAdmin):
         'last_payment_check',
         'is_active',
     )
-    list_filter = ('is_active', 'start_date')
+    list_filter = ('status', 'is_active', 'start_date')
     search_fields = ('title', 'location')
     inlines = [TicketTypeInline]
-    actions = ['action_set_payment_check_now']
+    actions = ['action_open_registration', 'action_set_payment_check_now', 'action_finish_event']
+
+    @admin.action(description="📋 Bereitschaft prüfen und Anmeldung öffnen", permissions=['change'])
+    def action_open_registration(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                get_translation('msg_event_open_select_one', 'Bitte wähle genau eine Veranstaltung aus.'),
+                level=messages.ERROR,
+            )
+            return None
+
+        event = queryset.get()
+        if request.POST.get('confirm_open'):
+            try:
+                EventLifecycleService.open_registration(event.pk)
+            except EventLifecycleError as exc:
+                self.message_user(request, str(exc), level=messages.ERROR)
+                event.refresh_from_db()
+            else:
+                self.message_user(
+                    request,
+                    get_translation('msg_event_open_success', 'Anmeldung für „{event_title}“ geöffnet.', event_title=event.title),
+                    level=messages.SUCCESS,
+                )
+                return None
+
+        report = EventLifecycleService.registration_readiness(event)
+        return TemplateResponse(request, 'admin/events/open_registration.html', {
+            **self.admin_site.each_context(request),
+            'title': get_translation('event_open_title', 'Bereitschaftsprüfung vor Anmeldestart'),
+            'event': event,
+            'report': report,
+            'opts': self.model._meta,
+        })
+
+    @admin.action(description="🏁 Veranstaltung abschließen", permissions=['change'])
+    def action_finish_event(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                get_translation('msg_event_finish_select_one', 'Bitte wähle genau eine Veranstaltung aus.'),
+                level=messages.ERROR,
+            )
+            return None
+
+        event = queryset.get()
+        if not request.POST.get('confirm_finish'):
+            if event.status in (Event.Status.DRAFT, Event.Status.CANCELLED):
+                self.message_user(
+                    request,
+                    get_translation(
+                        'msg_event_finish_invalid_status',
+                        'Entwürfe und abgesagte Veranstaltungen können nicht abgeschlossen werden.',
+                    ),
+                    level=messages.ERROR,
+                )
+                return None
+            from tournaments.models import Tournament
+            open_tournaments = event.tournaments.exclude(
+                status__in=[Tournament.Status.FINISHED, Tournament.Status.CANCELLED]
+            ).order_by('title')
+            return TemplateResponse(request, 'admin/events/finish_event.html', {
+                **self.admin_site.each_context(request),
+                'title': get_translation('event_finish_title', 'Veranstaltung abschließen'),
+                'event': event,
+                'open_tournaments': open_tournaments,
+                'opts': self.model._meta,
+            })
+
+        try:
+            _, archived_count = EventLifecycleService.finish_event(event.pk)
+        except EventLifecycleError as exc:
+            self.message_user(request, str(exc), level=messages.ERROR)
+        else:
+            self.message_user(
+                request,
+                get_translation(
+                    'msg_event_finish_success',
+                    'Veranstaltung „{event_title}“ abgeschlossen. {count} Teams archiviert.',
+                    event_title=event.title,
+                    count=archived_count,
+                ),
+                level=messages.SUCCESS,
+            )
+        return None
 
     @admin.action(description="🏦 Letzten Kontocheck für ausgewählte Events auf JETZT setzen")
     def action_set_payment_check_now(self, request, queryset):
@@ -131,7 +253,10 @@ class EventAdmin(admin.ModelAdmin):
                     f"🎟️ {copied_count} Ticket-Kategorie(n) von '{source_ticket_event.title}' erfolgreich für '{obj.title}' übernommen!"
                 )
 
-        # Falls gar keine TicketType existieren, automatisch ein Standard-Ticket anlegen
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        obj = form.instance
+        # Inlines sind erst jetzt gespeichert. Ein Standardticket nur ohne Kategorien anlegen.
         if not obj.ticket_types.exists():
             TicketType.objects.create(
                 event=obj,
@@ -438,4 +563,3 @@ def _check_overbooking(request):
             f"⚠️ Achtung! Es wurden mehr Plätze gebucht als Kapazität vorhanden: "
             f"{', '.join(overbooked_events)}. Bitte prüfen!",
         )
-

@@ -1,0 +1,35 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h2>{{ event.title }}</h2>
+  <p>{% t "event_open_hint" "Prüfe die folgenden Punkte. Sperrgründe müssen behoben werden; Hinweise verhindern den Anmeldestart nicht." %}</p>
+  <table class="table" style="width: 100%; max-width: 960px;">
+    <thead><tr><th>{% t "event_open_check" "Prüfpunkt" %}</th><th>{% t "event_open_result" "Ergebnis" %}</th></tr></thead>
+    <tbody>
+      {% for check in report.checks %}
+        <tr>
+          <th scope="row">{{ check.label }}</th>
+          <td>
+            {% if check.level == 'blocker' %}<strong style="color: #ba2121;">{% t "event_open_blocker" "Sperrgrund" %}</strong>
+            {% elif check.level == 'warning' %}<strong style="color: #8a5a00;">{% t "event_open_warning" "Hinweis" %}</strong>
+            {% else %}<strong style="color: #237a42;">{% t "event_open_ok" "Bereit" %}</strong>{% endif %}
+            — {{ check.detail }}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if report.can_open %}
+    <p>{% t "event_open_confirm_hint" "Mit dem Öffnen wird diese Veranstaltung zur aktiven Hauptveranstaltung und Gäste können sich anmelden." %}</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="action_open_registration">
+      <input type="hidden" name="_selected_action" value="{{ event.pk }}">
+      <input type="hidden" name="confirm_open" value="1">
+      <input type="submit" value="{% t 'event_open_confirm_button' 'Anmeldung jetzt öffnen' %}">
+    </form>
+  {% else %}
+    <p class="errornote">{% t "event_open_blocked_hint" "Die Anmeldung kann erst nach Behebung aller Sperrgründe geöffnet werden." %}</p>
+  {% endif %}
+  <p><a href="{% url 'admin:events_event_changelist' %}">{% t "event_finish_cancel" "Zurück zur Eventliste" %}</a></p>
+{% endblock %}

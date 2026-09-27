@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from django.db import transaction
 from django.utils import timezone
 from .models import Event, EventRegistration, TicketType
@@ -7,7 +9,159 @@ from .exceptions import (
     EventFullError,
     RegistrationDeadlinePassedError,
     InvalidTicketTypeError,
+    EventLifecycleError,
 )
+
+
+@dataclass(frozen=True)
+class ReadinessCheck:
+    label: str
+    detail: str
+    level: str  # ok, warning, blocker
+
+
+@dataclass(frozen=True)
+class EventReadinessReport:
+    checks: tuple[ReadinessCheck, ...]
+
+    @property
+    def can_open(self):
+        return not any(check.level == 'blocker' for check in self.checks)
+
+
+class EventLifecycleService:
+    @staticmethod
+    def registration_readiness(event):
+        """Prüft die Voraussetzungen für das Öffnen einer Entwurfsveranstaltung."""
+        from configuration.models import GeneralConfiguration
+        from emails.models import GeneralEmailSettings
+        from seating.models import SeatingCell, SeatingPlan
+
+        checks = []
+
+        def add(label, detail, level='ok'):
+            checks.append(ReadinessCheck(label, detail, level))
+
+        if event.status != Event.Status.DRAFT:
+            add('Status', 'Nur eine Veranstaltung im Entwurf kann geöffnet werden.', 'blocker')
+        else:
+            add('Status', 'Die Veranstaltung ist im Entwurf.')
+
+        now = timezone.now()
+        if not event.start_date or not event.end_date or event.end_date <= event.start_date or event.start_date <= now:
+            add('Zeitraum', 'Beginn muss in der Zukunft liegen; Ende muss nach dem Beginn liegen.', 'blocker')
+        else:
+            add('Zeitraum', 'Beginn und Ende sind gültig.')
+
+        if not event.location.strip():
+            add('Veranstaltungsort', 'Bitte einen Veranstaltungsort eintragen.', 'blocker')
+        else:
+            add('Veranstaltungsort', event.location)
+
+        if event.max_guests < 1:
+            add('Kapazität', 'Bitte eine maximale Teilnehmerzahl größer als null festlegen.', 'blocker')
+        else:
+            add('Kapazität', f'Maximal {event.max_guests} Gäste.')
+
+        other_active = Event.objects.filter(is_active=True).exclude(pk=event.pk).first()
+        if other_active:
+            add('Aktive Veranstaltung', f'„{other_active.title}“ ist noch aktiv. Bitte diese Veranstaltung zuerst abschließen oder deaktivieren.', 'blocker')
+        else:
+            add('Aktive Veranstaltung', 'Keine andere Veranstaltung ist aktiv.')
+
+        tickets = list(event.ticket_types.filter(is_active=True))
+        if not tickets:
+            add('Tickets', 'Bitte mindestens eine aktive Ticketkategorie anlegen.', 'blocker')
+        else:
+            add('Tickets', f'{len(tickets)} aktive Ticketkategorie(n).')
+
+        email_settings = GeneralEmailSettings.load()
+        if not email_settings.is_operational:
+            add('E-Mail-Versand', email_settings.blocking_reason or 'Der E-Mail-Versand ist nicht betriebsbereit.', 'blocker')
+        else:
+            add('E-Mail-Versand', 'Der Versand für Registrierungs-E-Mails ist konfiguriert.')
+            if email_settings.is_sandbox:
+                add('E-Mail-Testmodus', email_settings.blocking_reason or 'Der Testmodus ist aktiv.', 'warning')
+
+        if any(ticket.price > 0 for ticket in tickets):
+            if not GeneralConfiguration.load().has_payment_details:
+                add('Zahlungsdaten', 'Für kostenpflichtige Tickets bitte IBAN und Kontoinhaber hinterlegen.', 'blocker')
+            else:
+                add('Zahlungsdaten', 'IBAN und Kontoinhaber sind hinterlegt.')
+
+        if not event.description.strip():
+            add('Beschreibung', 'Eine Beschreibung für Gäste fehlt.', 'warning')
+        else:
+            add('Beschreibung', 'Eine Beschreibung ist vorhanden.')
+
+        plan = SeatingPlan.objects.filter(event=event).first()
+        if plan is None:
+            add('Sitzplan', 'Es ist noch kein Sitzplan eingerichtet.', 'warning')
+        else:
+            seat_count = SeatingCell.objects.filter(plan=plan, cell_type=SeatingCell.CellType.SEAT).exclude(
+                reservation_status=SeatingCell.ReservationStatus.BLOCKED
+            ).count()
+            if seat_count < event.max_guests:
+                add('Sitzplan', f'{seat_count} nutzbare Sitzplätze für {event.max_guests} mögliche Gäste.', 'warning')
+            else:
+                add('Sitzplan', f'{seat_count} nutzbare Sitzplätze.')
+
+        return EventReadinessReport(tuple(checks))
+
+    @staticmethod
+    @transaction.atomic
+    def open_registration(event_id):
+        event = Event.objects.select_for_update().get(pk=event_id)
+        report = EventLifecycleService.registration_readiness(event)
+        if not report.can_open:
+            reasons = '; '.join(check.detail for check in report.checks if check.level == 'blocker')
+            raise EventLifecycleError(f'Anmeldung kann nicht geöffnet werden: {reasons}')
+        event.status = Event.Status.REGISTRATION_OPEN
+        event.is_active = True
+        event.save(update_fields=['status', 'is_active', 'updated_at'])
+        return event
+
+    @staticmethod
+    @transaction.atomic
+    def finish_event(event_id):
+        """Beendet ein Event und archiviert seine Teams als einen atomaren Vorgang."""
+        from configuration.translations import get_translation
+        from tournaments.models import Tournament
+        from tournaments.services.registration import archive_teams_for_event
+
+        event = Event.objects.select_for_update().get(pk=event_id)
+        if event.status in (Event.Status.DRAFT, Event.Status.CANCELLED):
+            raise EventLifecycleError(get_translation(
+                'msg_event_finish_invalid_status',
+                'Entwürfe und abgesagte Veranstaltungen können nicht abgeschlossen werden.',
+            ))
+        tournaments = list(
+            Tournament.objects.select_for_update()
+            .filter(event=event)
+            .order_by('pk')
+            .values_list('title', 'status')
+        )
+        open_tournaments = [
+            title for title, status in tournaments
+            if status not in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED)
+        ]
+        if open_tournaments:
+            names = ', '.join(open_tournaments[:3])
+            if len(open_tournaments) > 3:
+                names += ', …'
+            raise EventLifecycleError(get_translation(
+                'msg_event_finish_open_tournaments',
+                'Bitte beende oder sage zuerst die offenen Turniere ab: {tournaments}.',
+                tournaments=names,
+            ))
+
+        if event.status != Event.Status.FINISHED or event.is_active:
+            event.status = Event.Status.FINISHED
+            event.is_active = False
+            event.save(update_fields=['status', 'is_active', 'updated_at'])
+
+        archived_count = archive_teams_for_event(event)
+        return event, archived_count
 
 
 class RegistrationService:
@@ -201,6 +355,8 @@ class CheckInService:
     @transaction.atomic
     def check_in(registration_id: int, target_event=None, actor=None):
         from django.core.exceptions import ValidationError
+        event_id = EventRegistration.objects.values_list('event_id', flat=True).get(pk=registration_id)
+        Event.objects.select_for_update().get(pk=event_id)
         reg = EventRegistration.objects.select_for_update().select_related('event', 'user').get(pk=registration_id)
         result = reg.can_check_in(target_event=target_event, actor=actor)
         if not result.allowed:
@@ -221,4 +377,3 @@ class CheckInService:
             reg.checked_in_at = None
             reg.save(update_fields=['is_checked_in', 'checked_in_at'])
         return reg
-

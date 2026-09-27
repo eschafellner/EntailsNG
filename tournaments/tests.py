@@ -94,11 +94,11 @@ class TournamentUXTests(TestCase):
         self.assertIsNone(response.context['next_match'])
 
     def test_match_names_are_json_escaped(self):
-        self.team.name = '</script><script>alert(1)</script>'
+        self.team.name = '</script><script>x()</script>'
         self.team.save()
         TournamentMatch.objects.create(tournament=self.tournament, team1=self.team)
         response = self.client.get(reverse('tournament_detail', args=[self.tournament.slug]))
-        self.assertNotContains(response, '</script><script>alert(1)</script>')
+        self.assertNotContains(response, '</script><script>x()</script>')
         self.assertContains(response, r'\u003C/script\u003E')
 
 
@@ -3606,7 +3606,6 @@ class TournamentAndTeamHardeningTests(TestCase):
         annotated_t = qs.get(pk=tournament.pk)
         self.assertEqual(annotated_t.reg_count, 1)
         self.assertEqual(t_admin.registered_count(annotated_t), 1)
-
 
 
 

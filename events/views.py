@@ -8,10 +8,13 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Count, Prefetch, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -24,6 +27,7 @@ from configuration.models import GeneralConfiguration
 from configuration.services import should_show_onboarding_ticket
 from news.services import get_latest_news, get_pinned_news
 from seating.services import get_event_capacity_stats
+from seating.models import SeatingCell
 from sponsors.services import get_random_active_sponsor
 
 from .exceptions import RegistrationError
@@ -403,29 +407,59 @@ def checkin_scanner_view(request):
     """
     event = get_active_event()
     registrations = []
+    page = None
     total_count = 0
     paid_count = 0
     unpaid_count = 0
     checked_in_count = 0
     pending_count = 0
     checkin_percent = 0
+    search = request.GET.get('q', '').strip()[:100]
+    status_filter = request.GET.get('filter', 'all')
+    if status_filter not in ('all', 'pending', 'checked-in', 'unpaid'):
+        status_filter = 'all'
 
     if event:
-        regs_qs = EventRegistration.objects.filter(event=event).select_related(
-            'user', 'ticket_type'
-        ).prefetch_related('seats')
-        total_count = regs_qs.count()
-        paid_count = regs_qs.filter(
-            payment_status=EventRegistration.PaymentStatus.PAID
-        ).count()
-        unpaid_count = regs_qs.exclude(
-            payment_status=EventRegistration.PaymentStatus.PAID
-        ).count()
-        checked_in_count = regs_qs.filter(is_checked_in=True).count()
+        regs_qs = EventRegistration.objects.filter(event=event)
+        counts = regs_qs.aggregate(
+            total=Count('pk'),
+            paid=Count('pk', filter=Q(payment_status=EventRegistration.PaymentStatus.PAID)),
+            checked_in=Count('pk', filter=Q(is_checked_in=True)),
+        )
+        total_count = counts['total']
+        paid_count = counts['paid']
+        unpaid_count = total_count - paid_count
+        checked_in_count = counts['checked_in']
         pending_count = max(0, total_count - checked_in_count)
         checkin_percent = round((checked_in_count / total_count * 100)) if total_count > 0 else 0
-        # Noch nicht eingecheckte Gäste zuerst anzeigen (Priorität am Einlass)
-        registrations = regs_qs.order_by('is_checked_in', 'user__username')
+        if status_filter == 'pending':
+            regs_qs = regs_qs.filter(is_checked_in=False)
+        elif status_filter == 'checked-in':
+            regs_qs = regs_qs.filter(is_checked_in=True)
+        elif status_filter == 'unpaid':
+            regs_qs = regs_qs.exclude(payment_status=EventRegistration.PaymentStatus.PAID)
+        if search:
+            for term in search.split():
+                regs_qs = regs_qs.filter(
+                    Q(user__username__icontains=term)
+                    | Q(user__first_name__icontains=term)
+                    | Q(user__last_name__icontains=term)
+                    | Q(short_code__icontains=term)
+                    | Q(seats__seat_label__icontains=term)
+                )
+            regs_qs = regs_qs.distinct()
+        regs_qs = regs_qs.select_related('user', 'ticket_type').prefetch_related(
+            Prefetch('seats', queryset=SeatingCell.objects.only('id', 'registration_id', 'seat_label'), to_attr='scanner_seats'),
+            Prefetch(
+                'user__clan_memberships',
+                queryset=ClanMembership.objects.filter(status=ClanMembership.Status.ACCEPTED).select_related('clan'),
+                to_attr='scanner_memberships',
+            ),
+        )
+        page = Paginator(regs_qs.order_by('is_checked_in', 'user__username', 'pk'), 30).get_page(
+            request.GET.get('page', 1)
+        )
+        registrations = page.object_list
 
     context = {
         'event': event,
@@ -436,7 +470,23 @@ def checkin_scanner_view(request):
         'checked_in_count': checked_in_count,
         'pending_count': pending_count,
         'checkin_percent': checkin_percent,
+        'page': page,
+        'search': search,
+        'status_filter': status_filter,
+        'remaining': page.paginator.count - page.end_index() if page else 0,
     }
+    if request.GET.get('partial') == '1':
+        return JsonResponse({
+            'rows_html': render_to_string('events/_scanner_rows.html', context, request=request),
+            'next_page': page.next_page_number() if page and page.has_next() else None,
+            'remaining': page.paginator.count - page.end_index() if page else 0,
+            'match_count': page.paginator.count if page else 0,
+            'stats': {
+                'total': total_count, 'paid': paid_count, 'unpaid': unpaid_count,
+                'checked_in': checked_in_count, 'pending': pending_count,
+                'percent': checkin_percent,
+            },
+        })
     return render(request, 'events/checkin_scanner.html', context)
 
 
@@ -776,4 +826,3 @@ def update_payment_check_api(request, event_id):
 
     messages.success(request, success_msg)
     return redirect(request.META.get('HTTP_REFERER') or 'guest_list')
-

@@ -151,6 +151,62 @@ def _render_sheet(template, values_rows, base_card, font_resources, font_cache):
     return sheet
 
 
+def _write_pdf_page(output, offsets, page, index):
+    """Schreibt ein JPEG-basiertes PDF-Blatt, ohne das bisherige PDF neu einzulesen."""
+    image_id = 3 + index * 3
+    content_id = image_id + 1
+    page_id = image_id + 2
+    jpeg = BytesIO()
+    # Wie beim bisherigen Pillow-PDF-Export die Standard-JPEG-Komprimierung nutzen.
+    page.save(jpeg, format='JPEG')
+    image_data = jpeg.getvalue()
+    jpeg.close()
+
+    def start_object(object_id):
+        while len(offsets) <= object_id:
+            offsets.append(None)
+        offsets[object_id] = output.tell()
+        output.write(f'{object_id} 0 obj\n'.encode('ascii'))
+
+    start_object(image_id)
+    output.write((
+        f'<< /Type /XObject /Subtype /Image /Width {page.width} /Height {page.height} '
+        f'/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode '
+        f'/Length {len(image_data)} >>\nstream\n'
+    ).encode('ascii'))
+    output.write(image_data)
+    output.write(b'\nendstream\nendobj\n')
+
+    width_pt = page.width * 72.0 / DPI
+    height_pt = page.height * 72.0 / DPI
+    content = f'q {width_pt} 0 0 {height_pt} 0 0 cm /Im0 Do Q\n'.encode('ascii')
+    start_object(content_id)
+    output.write(f'<< /Length {len(content)} >>\nstream\n'.encode('ascii'))
+    output.write(content)
+    output.write(b'endstream\nendobj\n')
+
+    start_object(page_id)
+    output.write((
+        f'<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 {width_pt} {height_pt} ] '
+        f'/Resources << /XObject << /Im0 {image_id} 0 R >> >> '
+        f'/Contents {content_id} 0 R >>\nendobj\n'
+    ).encode('ascii'))
+    return page_id
+
+
+def _finish_pdf(output, offsets, page_ids):
+    offsets[1] = output.tell()
+    output.write(b'1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n')
+    offsets[2] = output.tell()
+    kids = ' '.join(f'{page_id} 0 R' for page_id in page_ids)
+    output.write(f'2 0 obj\n<< /Type /Pages /Kids [ {kids} ] /Count {len(page_ids)} >>\nendobj\n'.encode('ascii'))
+    xref_start = output.tell()
+    output.write(f'xref\n0 {len(offsets)}\n0000000000 65535 f \n'.encode('ascii'))
+    for offset in offsets[1:]:
+        output.write(f'{offset:010d} 00000 n \n'.encode('ascii'))
+    output.write(f'trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF\n'.encode('ascii'))
+
+
 def render_pdf(template, values_rows, *, on_a4=False):
     """Gibt eine seekbare temporäre PDF-Datei zurück; der Aufrufer schließt sie."""
     if not values_rows:
@@ -178,9 +234,15 @@ def render_pdf(template, values_rows, *, on_a4=False):
                 for values in values_rows
             )
 
+        output.write(b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')
+        offsets = [0, None, None]
+        page_ids = []
         for index, page in enumerate(pages):
-            page.save(output, format='PDF', resolution=DPI, append=index > 0)
-            page.close()
+            try:
+                page_ids.append(_write_pdf_page(output, offsets, page, index))
+            finally:
+                page.close()
+        _finish_pdf(output, offsets, page_ids)
         output.seek(0)
         return output
     except Exception:

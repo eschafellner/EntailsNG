@@ -1111,7 +1111,9 @@ class MultiEventTicketAndCheckinTests(TestCase):
         from django.contrib.messages.storage.fallback import FallbackStorage
         setattr(request, '_messages', FallbackStorage(request))
 
+        form.save(commit=False)
         admin_instance.save_model(request, event_no_tickets, form, change=True)
+        admin_instance.save_related(request, form, [], change=True)
         self.assertTrue(event_no_tickets.ticket_types.filter(name="Standard", price=45.00).exists())
 
     def test_dashboard_displays_past_event_notice_when_not_registered(self):
@@ -2098,7 +2100,6 @@ class EventFeedbackRegressionTests(TestCase):
         payload = generate_epc_qr_payload(reg)
         self.assertIn("EUR25.00", payload)
         self.assertNotIn("EUR35.00", payload)
-
 
 
 

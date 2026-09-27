@@ -107,6 +107,7 @@ Wichtige Parameter:
 * **`ALLOWED_HOSTS`**: `lan.meinedomain.de,localhost,127.0.0.1`.
 * **`CSRF_TRUSTED_ORIGINS`**: `https://lan.meinedomain.de`.
 * **`DB_PASSWORD`**: Starkes PostgreSQL-Passwort.
+* **`WEB_CONCURRENCY`**: Anzahl der Gunicorn-Web-Worker (Standard: 3), unabhängig von PostgreSQL-Parallel-Workern. Mehr Worker benötigen mehr RAM und können mehr gleichzeitige Datenbankverbindungen öffnen; anhand der tatsächlichen Last einstellen. Nach einer Änderung `docker compose up -d --build --force-recreate web` ausführen. Details: [Deployment-Handbuch](INSTRUCTIONS.MD).
 * **`EMAIL_HOST`**, **`EMAIL_PORT`**, **`EMAIL_HOST_USER`**, **`EMAIL_HOST_PASSWORD`**: SMTP-Zugangsdaten.
 
 ---

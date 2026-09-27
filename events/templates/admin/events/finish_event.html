@@ -1,0 +1,21 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h2>{{ event.title }}</h2>
+  {% if open_tournaments %}
+    <p class="errornote">{% t "event_finish_open_hint" "Beende oder sage diese Turniere zuerst ab:" %}</p>
+    <ul>
+      {% for tournament in open_tournaments %}<li>{{ tournament.title }}</li>{% endfor %}
+    </ul>
+  {% else %}
+    <p>{% t "event_finish_confirm_hint" "Die Veranstaltung wird beendet und deaktiviert. Zugehörige Teams werden archiviert; Anmeldungen und Ergebnisse bleiben erhalten." %}</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="action_finish_event">
+      <input type="hidden" name="_selected_action" value="{{ event.pk }}">
+      <input type="hidden" name="confirm_finish" value="1">
+      <input type="submit" value="{% t 'event_finish_confirm_button' 'Veranstaltung jetzt abschließen' %}">
+    </form>
+  {% endif %}
+  <p><a href="{% url 'admin:events_event_changelist' %}">{% t "event_finish_cancel" "Zurück zur Eventliste" %}</a></p>
+{% endblock %}

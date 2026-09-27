@@ -406,10 +406,13 @@ class EventRegistration(models.Model):
                 f"ABGELEHNT: Die Anmeldung von {self.user.username} ist noch NICHT BEZAHLT.",
                 code="unpaid"
             )
-        if self.event and self.event.status == Event.Status.CANCELLED:
+        # Ein bereits geladenes Registration-Objekt kann einen veralteten Eventstatus
+        # enthalten, insbesondere direkt nach einem Abschluss durch die Orga.
+        event = Event.objects.get(pk=self.event_id)
+        if event.status == Event.Status.CANCELLED:
             return CheckInResult(
                 False,
-                f"Check-in abgelehnt: Die Veranstaltung '{self.event.title}' wurde abgesagt.",
+                f"Check-in abgelehnt: Die Veranstaltung '{event.title}' wurde abgesagt.",
                 code="event_cancelled"
             )
 
@@ -417,9 +420,20 @@ class EventRegistration(models.Model):
         if active_event and self.event_id != active_event.id:
             return CheckInResult(
                 False,
-                f"ABGELEHNT: Dieses Ticket gehört zur Veranstaltung '{self.event.title}' "
+                f"ABGELEHNT: Dieses Ticket gehört zur Veranstaltung '{event.title}' "
                 f"und ist für die aktuelle Veranstaltung '{active_event.title}' nicht gültig!",
                 code="event_mismatch"
+            )
+        if event.effective_status == Event.Status.FINISHED:
+            from configuration.translations import get_translation
+            return CheckInResult(
+                False,
+                get_translation(
+                    'msg_checkin_event_finished',
+                    'Check-in abgelehnt: Die Veranstaltung "{event_title}" ist beendet.',
+                    event_title=event.title,
+                ),
+                code="event_finished",
             )
         return CheckInResult(True, "", code="ok")
 
@@ -430,6 +444,7 @@ class EventRegistration(models.Model):
         Prüft zwingend den Bezahlstatus und die Gültigkeit der Anmeldung vor der Zustandsänderung.
         Nutzt select_for_update() für Concurrency-Schutz gegen Race Conditions mit Stornierungen.
         """
+        Event.objects.select_for_update().get(pk=self.event_id)
         locked_reg = EventRegistration.objects.select_for_update().select_related('event', 'user').get(pk=self.pk)
         result = locked_reg.can_check_in(target_event=target_event, actor=actor)
         if not result.allowed:
@@ -561,9 +576,6 @@ class EventRegistration(models.Model):
             send_system_email('payment_confirmation', self.user.email, context_data)
         except Exception as e:
             logger.exception("Fehler beim Auslösen der Zahlungsbestätigung für Anmeldung %s: %s", self.id, e)
-
-
-
 
 
 

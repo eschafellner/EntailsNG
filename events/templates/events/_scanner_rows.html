@@ -1,0 +1,74 @@
+          {% for reg in registrations %}
+            <tr class="guest-row" 
+                id="guest-row-{{ reg.id }}" 
+                data-id="{{ reg.id }}"
+                data-checked-in="{{ reg.is_checked_in|yesno:'true,false' }}"
+                data-paid="{{ reg.payment_status|lower }}"
+                data-search="{{ reg.user.username|lower }} {{ reg.user.get_full_name|lower }} {{ reg.short_code|lower }} {% for s in reg.scanner_seats %}{{ s.seat_label|lower }} {% endfor %}">
+              
+              <td class="col-user">
+                <div class="guest-user-wrap">
+                  <strong class="guest-username">{{ reg.user.username }}</strong>
+                  {% if reg.user.get_full_name %}
+                    <span class="guest-fullname">({{ reg.user.get_full_name }})</span>
+                  {% endif %}
+                  {% with membership=reg.user.scanner_memberships.0 %}
+                    {% if membership and membership.clan.tag %}
+                      <span class="guest-clan-tag">[{{ membership.clan.tag }}]</span>
+                    {% endif %}
+                  {% endwith %}
+                </div>
+              </td>
+
+              <td class="col-ticket">
+                <span class="scanner-ticket-tag">{{ reg.ticket_type.name|default:"Standard" }}</span>
+              </td>
+
+              <td class="col-payment">
+                {% if reg.payment_status == 'PAID' %}
+                  <span class="scanner-badge-paid">{% t "scanner_paid_badge" "✔ Bezahlt" %}</span>
+                {% else %}
+                  <span class="scanner-badge-unpaid">{% t "scanner_unpaid_badge" "✖ Offen" %}</span>
+                {% endif %}
+              </td>
+
+              <td class="col-seat">
+                {% with seat=reg.scanner_seats.0 %}
+                  {% if seat %}
+                    <span class="scanner-badge-seat">💺 {{ seat.seat_label }}</span>
+                  {% else %}
+                    <span class="scanner-badge-noseat">-</span>
+                  {% endif %}
+                {% endwith %}
+              </td>
+
+              <td class="col-status" id="status-cell-{{ reg.id }}">
+                {% if reg.is_checked_in %}
+                  <span class="badge-checked-in scanner-badge-checked">
+                    ✓ {% t "scanner_tab_checked_in" "Eingecheckt" %} {% if reg.checked_in_at %}({{ reg.checked_in_at|date:"H:i:s" }}){% endif %}
+                  </span>
+                {% else %}
+                  <span class="badge-not-checked-in scanner-badge-pending">
+                    ⏳ {% t "scanner_tab_pending" "Noch nicht da" %}
+                  </span>
+                {% endif %}
+              </td>
+
+              <td class="col-action">
+                <button type="button" 
+                        onclick="toggleCheckIn({{ reg.id }})" 
+                        id="btn-toggle-{{ reg.id }}" 
+                        class="btn-checkin-action {% if reg.is_checked_in %}btn-action-checkout{% else %}btn-action-checkin{% endif %}">
+                  {% if reg.is_checked_in %}{% t "scanner_btn_checkout" "Auschecken" %}{% else %}{% t "scanner_btn_checkin" "Einchecken" %}{% endif %}
+                </button>
+              </td>
+            </tr>
+          {% empty %}
+            {% if not search and status_filter == 'all' %}
+            <tr id="empty-table-row">
+              <td colspan="6" style="text-align: center; padding: 30px; color: var(--muted);">
+                Keine Anmeldungen für dieses Event vorhanden.
+              </td>
+            </tr>
+            {% endif %}
+          {% endfor %}

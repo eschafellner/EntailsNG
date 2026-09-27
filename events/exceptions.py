@@ -21,3 +21,7 @@ class RegistrationDeadlinePassedError(RegistrationError):
 class InvalidTicketTypeError(RegistrationError):
     """Wird geworfen, wenn ein ungültiger oder inaktiver Tickettyp ausgewählt wurde."""
     pass
+
+
+class EventLifecycleError(Exception):
+    """Die Veranstaltung kann in ihrem aktuellen Zustand nicht abgeschlossen werden."""

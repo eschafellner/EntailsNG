@@ -199,9 +199,20 @@ class Tournament(models.Model):
         now = timezone.now()
         return (
             self.status == self.Status.REGISTRATION_OPEN
+            and not self._event_is_closed()
             and (self.registration_start is None or self.registration_start <= now)
             and (self.registration_end is None or now <= self.registration_end)
         )
+
+    def _event_is_closed(self):
+        """Liest den aktuellen Eventstatus, auch wenn self.event bereits geladen wurde."""
+        from events.models import Event
+        active_event = Event.objects.get_active()
+        event = (
+            active_event if active_event and active_event.pk == self.event_id
+            else Event.objects.get(pk=self.event_id)
+        )
+        return event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED)
 
     def is_managed_by(self, user):
         """
@@ -226,6 +237,14 @@ class Tournament(models.Model):
 
         if self.status != self.Status.REGISTRATION_OPEN:
             return False, f"Die Anmeldung für '{self.title}' ist aktuell nicht geöffnet (Status: {self.get_status_display()})."
+
+        if self._event_is_closed():
+            from configuration.translations import get_translation
+            return False, get_translation(
+                'msg_tournament_event_finished',
+                'Die Veranstaltung "{event_title}" ist beendet oder abgesagt. Eine Turnieranmeldung ist nicht mehr möglich.',
+                event_title=self.event.title,
+            )
 
         if self.registration_start and now < self.registration_start:
             formatted_start = self.registration_start.strftime('%d.%m.%Y %H:%M')

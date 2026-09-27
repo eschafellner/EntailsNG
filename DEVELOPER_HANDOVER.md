@@ -2,8 +2,8 @@
 
 > **Stand:** September 2026  
 > **Repository:** `entails-ng`  
-> **Git-Branch:** `main` (Up-to-date mit `origin/main`, Clean State)  
-> **Test-Status:** 🟢 **414 von 414 Tests erfolgreich bestanden** (0 Fehler, 0 Warnungen)  
+> **Git-Branch:** Aktuellen Arbeitsstand mit `git status` prüfen
+> **Test-Status:** 🟢 **532 von 532 Tests erfolgreich bestanden** (SQLite-Testdatenbank, 26. September 2026)
 > **Python / Django:** Python 3.12+ (kompatibel mit 3.14) / Django 6.0  
 
 ---
@@ -30,7 +30,7 @@
 graph TD
     Client["Browser (Desktop & Mobile)"] -->|HTTPS / HTTP| Nginx["Nginx Reverse Proxy (Port 80/443)"]
     Nginx -->|Statics / Media / Fonts| StaticFiles["WhiteNoise & Nginx Cache"]
-    Nginx -->|App Requests| Gunicorn["Gunicorn WSGI (4 Worker)"]
+    Nginx -->|App Requests| Gunicorn["Gunicorn WSGI (3 Worker, per WEB_CONCURRENCY konfigurierbar)"]
     Gunicorn --> Django["Django 6 App-Server"]
     Django --> Postgres["PostgreSQL 16 (oder SQLite Dev)"]
     Django --> Redis["Redis 7 (Sitzplan & Cache)"]
@@ -45,6 +45,14 @@ graph TD
 | **Frontend** | Vanilla ES6 JS + Semantic CSS Variables | Kein schweres JS-Framework (React/Vue), dadurch blitzschnelle Ladezeiten |
 | **Fonts & Assets** | Barlow Condensed, DM Sans, JetBrains Mono | 100% lokal eingebunden via `static/css/fonts.css` |
 
+### Worker und Betriebskonfiguration
+
+Der `web`-Container startet Gunicorn mit standardmäßig **3 Web-Workern**. Die Zahl wird über `WEB_CONCURRENCY` in `.env` gesetzt; das Dockerfile gibt 3 vor, falls die Variable fehlt. Der feste `--workers`-Parameter wurde entfernt, damit Gunicorn die Variable auswertet. Nach einer Änderung muss der Web-Container mit `docker compose up -d --build --force-recreate web` neu erstellt werden. `WEB_CONCURRENCY` wirkt nicht auf `./start.sh` beziehungsweise Djangos Entwicklungsserver und verändert auch nicht die Zahl der PostgreSQL-Worker.
+
+Die Worker-Zahl gehört zur Deployment-Konfiguration und nicht zu `GeneralConfiguration` im Django-Admin: Ein Datenbankwert kann laufende Gunicorn-Prozesse nicht zuverlässig und dauerhaft umstellen. Zusätzliche Web-Worker verbrauchen RAM, halten potenziell weitere Datenbankverbindungen offen und können die Wartezeit an der Event-Zeilensperre erhöhen. Die lokale [Lastmessung](docs/performance-smoke-2026-09-26.md) zeigte bei 32 parallelen Anmeldungen 52,9 ms p95 und bis zu 31 wartende PostgreSQL-Sessions; das ist kein Anlass, PostgreSQL-Parallel-Worker pauschal zu erhöhen.
+
+PostgreSQL-Parameter wie [`max_worker_processes`](https://www.postgresql.org/docs/16/runtime-config-resource.html#RUNTIME-CONFIG-RESOURCE-ASYNC-BEHAVIOR) sind separate Serverparameter; `max_worker_processes` wird erst beim Start des Datenbankservers wirksam. Sie sollten nur anhand konkreter Datenbankabfragen und Serverressourcen angepasst werden. Ebenso ist `email_worker` in `docker-compose.yml` ein eigener Prozess für die E-Mail-Warteschlange und unabhängig von `WEB_CONCURRENCY`.
+
 ---
 
 ## 📦 3. App- & Modul-Übersicht
@@ -56,6 +64,9 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Services:** `PaymentService` (`events/services.py`) entkoppelt Seiteneffekte (Sitzplatz-Reservierung, Zahlungs-Mail, Cache-Invalidierung) sauber von den Models.
 * **Aktives Event:** Immer über `Event.objects.get_active()` abfragen (Single Source of Truth).
 * **Helfer Check-in Scanner (`/checkin/scanner/`):** Vor-Ort-Kamera-QR-Scan für Helfer mit akustischem Feedback und Ausweis-Abgleich (`can_check_in()`).
+* **Veranstaltung abschließen:** Die Admin-Eventliste bietet eine Abschlussaktion mit Bestätigungsseite. `EventLifecycleService.finish_event()` verlangt, dass alle Turniere beendet oder abgesagt sind, beendet und deaktiviert das Event atomar und archiviert seine Teams. Entwürfe und abgesagte Events können nicht abgeschlossen werden. Das reguläre Admin-Formular verhindert den direkten Abschluss und die Wiederöffnung eines abgeschlossenen Events.
+* **Anmeldung öffnen:** Die Aktion „Bereitschaft prüfen und Anmeldung öffnen“ in der Admin-Eventliste zeigt Sperrgründe (Entwurfsstatus, gültiger künftiger Zeitraum, Ort, Kapazität, keine andere aktive Veranstaltung, aktive Tickets, betriebsbereite E-Mail-Konfiguration und bei kostenpflichtigen Tickets Zahlungsdaten) sowie Hinweise (Beschreibung, Sitzplan, E-Mail-Testmodus). `EventLifecycleService.open_registration()` prüft beim Bestätigen erneut und öffnet die Anmeldung atomar. Das Admin-Formular verhindert einen direkten Wechsel auf „Anmeldung geöffnet“. Beim Anlegen eines Events wird ein Standardticket nur erzeugt, wenn nach dem Speichern der Ticket-Inlines keine Kategorie vorhanden ist.
+* **Sperren nach Eventende:** Abgelaufene und abgeschlossene Events erlauben keinen neuen Check-in oder neue Turnieranmeldungen mehr. Die Prüfungen sitzen in den zentralen Modellen und Services; Eventabschluss, Check-in und Turnieranmeldung sperren die Event-Zeile zuerst.
 * **GiroCode (EPC-QR):** Generiert SEPA-Überweisungs-QRs mit vorbefülltem Betrag und Verwendungszweck.
 
 ### 🖨️ `media_designer` (Vorlagen & Druckexport)
@@ -167,10 +178,10 @@ python manage.py runserver
 
 ## 🧪 5. Testing & Qualitätssicherung
 
-Das Projekt verfügt über eine umfassende automatisierte Testsuite (**370 Tests** über alle Module, 100% bestanden).
+Das Projekt verfügt über eine umfassende automatisierte Testsuite (**537 Tests** über alle Module, auf SQLite und PostgreSQL bestanden; Stand 26.09.2026).
 
 > [!NOTE]
-> Die 370 Tests stellen den Testumfang dar. Zur Ermittlung der metrischen Zeilen- und Verzweigungsabdeckung (Code Coverage) wird das Tool `coverage` empfohlen:
+> Die 537 Tests stellen den Testumfang dar. Zur Ermittlung der metrischen Zeilen- und Verzweigungsabdeckung (Code Coverage) wird das Tool `coverage` empfohlen:
 > ```bash
 > coverage run manage.py test
 > coverage report
@@ -178,6 +189,8 @@ Das Projekt verfügt über eine umfassende automatisierte Testsuite (**370 Tests
 
 > **Wichtiger Hinweis zu Parallelitätstests & Zeilensperren:**  
 > SQLite prüft `select_for_update()` nicht (`has_select_for_update = False`). Während logische Datenbank-Constraints (wie `UniqueConstraint`) auch auf SQLite greifen, sollten Zeilensperren-Konflikte (`FOR UPDATE`) gezielt unter **PostgreSQL** mit `TransactionTestCase` und getrennten Datenbankverbindungen getestet werden.
+
+Die manuelle Browser-Simulation wurde mit einer getrennten PostgreSQL-Testdatenbank durchgeführt: Event-Entwurf und Bereitschaftsprüfung, Öffnung der Anmeldung, Gastregistrierung mit E-Mail-Code, Eventanmeldung, Zahlung und Check-in, zwei Solo-Turnieranmeldungen, Turnierbaum und Finale sowie Eventabschluss.
 
 ### Tests ausführen
 
@@ -193,6 +206,9 @@ DB_ENGINE=sqlite python manage.py test seating events
 
 # Testlauf mit Failfast (bricht beim ersten Fehler ab):
 DB_ENGINE=sqlite python manage.py test --failfast
+
+# PostgreSQL (mit eigener lokalen Testinstanz und passenden DB_*-Variablen):
+DB_ENGINE=postgresql python manage.py test --noinput
 ```
 
 ---
