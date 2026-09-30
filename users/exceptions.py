@@ -14,3 +14,11 @@ class VerificationCodeCooldownError(VerificationCodeError):
 class VerificationCodeLimitError(VerificationCodeError):
     """Wird geworfen, wenn das Stundenlimit für Bestätigungscodes erreicht ist."""
     pass
+
+
+class AccountDeletionError(Exception):
+    """Erwartete Ablehnung einer Selbstlöschung ohne teilweise Datenänderungen."""
+
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.code = code

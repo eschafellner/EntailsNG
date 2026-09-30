@@ -102,7 +102,7 @@
           {% endif %}
         </h1>
         <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 14px;">
-          {% t "team_captain_label" "Kapitän:" %} <strong>{{ team.captain.username }}</strong> | {% t "team_founded_label" "Gegründet am:" %} {{ team.created_at|date:"d.m.Y" }}
+          {% t "team_captain_label" "Kapitän:" %} <strong>{{ team.captain.display_name }}</strong> | {% t "team_founded_label" "Gegründet am:" %} {{ team.created_at|date:"d.m.Y" }}
         </p>
       </div>
 
@@ -194,7 +194,7 @@
         <div style="padding: 14px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; justify-content: space-between; align-items: center;">
           <div>
             <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; color: var(--ink);">
-              👤 {{ item.user.username }}
+              👤 {{ item.user.display_name }}
             </div>
             <div style="font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--muted); margin-top: 2px; display: flex; flex-direction: column; gap: 2px;">
               <span>
@@ -221,7 +221,7 @@
               </button>
               <div id="kick-confirm-{{ item.user.id }}" style="display: none; align-items: center; gap: 6px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; padding: 3px 8px; border-radius: 4px;">
                 <span style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: #b91c1c; font-weight: bold;">
-                  {% t "team_kick_confirm_prompt" "{username} kicken?" username=item.user.username %}
+                  {% t "team_kick_confirm_prompt" "{username} kicken?" username=item.user.display_name %}
                 </span>
                 <form method="post" action="{% url 'team_kick_member' slug=team.slug user_id=item.user.id %}" style="display: inline; margin: 0;">
                   {% csrf_token %}
@@ -254,7 +254,7 @@
         {% for p in pending_members %}
           <div style="padding: 12px 16px; border: 1px dashed var(--line); border-radius: 8px; background: var(--paper); display: flex; justify-content: space-between; align-items: center;">
             <span style="font-family: 'DM Sans', sans-serif; font-size: 14px;">
-              👤 {{ p.user.username }}
+              👤 {{ p.user.display_name }}
             </span>
             {% if is_team_full %}
               <button type="button" disabled style="background: var(--line); color: var(--muted); border: 1px solid var(--line); padding: 6px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; cursor: not-allowed;">

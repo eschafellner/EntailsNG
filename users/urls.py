@@ -7,4 +7,5 @@ urlpatterns = [
     path('resend-code/', views.resend_verification_code_view, name='resend_verification_code'),
     path('request-activation-code/', views.request_activation_code_view, name='request_activation_code'),
     path('profile/', views.profile_view, name='profile'),
+    path('profile/delete/', views.account_delete_view, name='account_delete'),
 ]

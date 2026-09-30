@@ -119,7 +119,7 @@
             {{ tournament.title }}
           </h1>
           <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 14px;">
-            {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ tournament.event.title }} | {% t "tournament_detail_admin_label" "Orga-Admin:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %} | 📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr | 🚀 {% t "tournament_start_label" "Turnierstart:" %} {{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr
+            {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ tournament.event.title }} | {% t "tournament_detail_admin_label" "Orga-Admin:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.display_name }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %} | 📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr | 🚀 {% t "tournament_start_label" "Turnierstart:" %} {{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr
           </p>
         </div>
       </div>
@@ -229,7 +229,7 @@
               {% elif user_member_team %}
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 440px;">
                   <div style="background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); padding: 10px 14px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink); line-height: 1.4; text-align: right;">
-                    🛡️ {% t "tournament_detail_member_team_notice" "Du bist Mitglied im Team '{team_name}'. Die Turnieranmeldung kann nur dein Kapitän ({captain_name}) vornehmen." team_name=user_member_team captain_name=user_member_team.captain.username %}
+                    🛡️ {% t "tournament_detail_member_team_notice" "Du bist Mitglied im Team '{team_name}'. Die Turnieranmeldung kann nur dein Kapitän ({captain_name}) vornehmen." team_name=user_member_team captain_name=user_member_team.captain.display_name %}
                   </div>
                   <a href="{% url 'team_detail' slug=user_member_team.slug %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; text-decoration: none; background: var(--paper); color: var(--ink); border: 1px solid var(--line);">
                     👥 {% t "tournament_detail_view_team_btn" "Team ansehen →" %}
@@ -329,7 +329,7 @@
           </div>
           {% if podium.first.captain %}
             <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); padding-top: 10px; border-top: 1px dashed var(--line); margin-top: 10px;">
-              {% t "tournament_podium_captain" "👤 Kapitän: {username}" username=podium.first.captain.username %}
+              {% t "tournament_podium_captain" "👤 Kapitän: {username}" username=podium.first.captain.display_name %}
             </div>
           {% endif %}
         </div>
@@ -353,7 +353,7 @@
             </div>
             {% if podium.second.captain %}
               <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); padding-top: 10px; border-top: 1px dashed var(--line); margin-top: 10px;">
-                {% t "tournament_podium_captain" "👤 Kapitän: {username}" username=podium.second.captain.username %}
+                {% t "tournament_podium_captain" "👤 Kapitän: {username}" username=podium.second.captain.display_name %}
               </div>
             {% endif %}
           </div>
@@ -378,7 +378,7 @@
             </div>
             {% if podium.third.captain %}
               <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); padding-top: 10px; border-top: 1px dashed var(--line); margin-top: 10px;">
-                {% t "tournament_podium_captain" "👤 Kapitän: {username}" username=podium.third.captain.username %}
+                {% t "tournament_podium_captain" "👤 Kapitän: {username}" username=podium.third.captain.display_name %}
               </div>
             {% endif %}
           </div>
@@ -473,7 +473,7 @@
                       <td style="padding: 10px 12px;">
                         {{ row.team.name }}
                         {% if row.team.captain %}
-                          <span style="font-size: 14px; color: var(--muted);">({{ row.team.captain.username }})</span>
+                          <span style="font-size: 14px; color: var(--muted);">({{ row.team.captain.display_name }})</span>
                         {% endif %}
                       </td>
                       <td style="padding: 10px 8px; text-align: center;">{{ row.played }}</td>
@@ -588,8 +588,8 @@
                       </td>
                       <td style="padding: 10px 14px;">
                         <strong>{{ p.team.name }}</strong>
-                        {% if p.team.captain and p.team.captain.username != p.team.name %}
-                          <span style="font-size: 14px; color: var(--muted);">({{ p.team.captain.username }})</span>
+                        {% if p.team.captain and p.team.captain.display_name != p.team.name %}
+                          <span style="font-size: 14px; color: var(--muted);">({{ p.team.captain.display_name }})</span>
                         {% endif %}
                       </td>
                       <td style="padding: 10px 14px; text-align: center; font-weight: bold; font-size: 14px; color: var(--signal-deep);">
@@ -1007,7 +1007,7 @@
                 {{ reg.team.name }}
               </strong>
               <div style="font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--muted);">
-                {% t "tournament_team_captain_label" "Kapitän:" %} {{ reg.team.captain.username }}
+                {% t "tournament_team_captain_label" "Kapitän:" %} {{ reg.team.captain.display_name }}
               </div>
             </div>
             <span style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted);">

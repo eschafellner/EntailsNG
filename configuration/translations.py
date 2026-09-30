@@ -6,6 +6,33 @@ TRANSLATION_CACHE_KEY = 'system_translations'
 CACHE_SECONDS = 300
 
 DEFAULT_TEXTS = {
+    # Endgültige Selbstlöschung eines Gast-Accounts
+    'user_deleted_name': 'Gelöschter Benutzer',
+    'account_delete_title': 'Account löschen',
+    'account_delete_intro': 'Du kannst deinen Account endgültig löschen. Bezahlte Anmeldungen sowie laufende oder bereits generierte Turniere müssen zuerst mit der Orga geklärt werden.',
+    'account_delete_prepare': 'Löschung vorbereiten',
+    'account_delete_effect_profile': 'Deine persönlichen Profildaten werden entfernt und alle Anmeldesitzungen verlieren ihre Gültigkeit.',
+    'account_delete_effect_registrations': 'Deine übrigen Eventanmeldungen werden storniert, Tickets ungültig gemacht und reservierte Sitzplätze freigegeben.',
+    'account_delete_effect_memberships': 'Du verlässt aktive Teams und Clans. Deine Verantwortung wird an verbleibende Mitglieder übergeben; leere Gruppen ohne Turnierhistorie werden aufgelöst.',
+    'account_delete_effect_history': 'Buchungen und Turnierergebnisse bleiben mit einem technischen Restdatensatz als „Gelöschter Benutzer“ erhalten.',
+    'account_delete_effect_new_account': 'Du kannst dich später mit derselben E-Mail-Adresse und demselben Benutzernamen neu registrieren. Der neue Account erhält keinen Zugriff auf deine bisherigen Daten.',
+    'account_delete_confirm_label': 'Ich habe die Folgen verstanden und möchte meinen Account endgültig löschen.',
+    'account_delete_confirmation_required': 'Bitte bestätige, dass du deinen Account endgültig löschen möchtest.',
+    'account_delete_password_required': 'Bitte gib dein aktuelles Passwort ein.',
+    'account_delete_submit': 'Account endgültig löschen',
+    'account_delete_cancel': 'Abbrechen',
+    'account_delete_success': 'Dein Account wurde gelöscht. Du kannst dich jederzeit neu registrieren; deine bisherigen Daten werden keinem neuen Account zugeordnet.',
+    'account_delete_already_deleted': 'Dieser Account wurde bereits gelöscht.',
+    'account_delete_immutable': 'Ein gelöschtes Benutzerkonto kann nicht geändert oder reaktiviert werden.',
+    'account_delete_verification_blocked': 'Für gelöschte Accounts können keine Bestätigungscodes erstellt werden.',
+    'account_delete_staff_blocked': 'Mitarbeiterkonten können nicht selbst gelöscht werden. Bitte wende dich an die Administration.',
+    'account_delete_paid_blocked': 'Du hast bezahlte Anmeldungen für folgende Veranstaltungen: {events}. Bitte kläre die Stornierung zuerst mit der Orga. Danach kannst du deinen Account löschen.',
+    'account_delete_tournament_blocked': 'Du bist an laufenden oder bereits generierten Turnieren beteiligt: {tournaments}. Bitte kläre deinen Austritt zuerst mit der Turnierleitung.',
+    'account_delete_locked': 'Zu viele Passwortfehlversuche. Bitte versuche es nach Ablauf der Kontosperre erneut.',
+    'account_delete_wrong_password': 'Das aktuelle Passwort ist nicht korrekt.',
+    'account_deleted_registration_blocked': 'Für einen gelöschten Account ist keine Anmeldung oder Zahlung mehr möglich.',
+    'account_deleted_checkin_blocked': 'Dieses Ticket gehört zu einem gelöschten Account und kann nicht mehr verwendet werden.',
+    'account_deleted_roster_blocked': 'Ein Team mit gelöschten Accounts kann nicht für ein Turnier angemeldet werden. Bitte aktualisiere zuerst den Kader.',
     # Mediendesigner
     'media_title': 'Mediendesigner',
     'media_templates': 'Medienvorlagen',

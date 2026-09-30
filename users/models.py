@@ -63,21 +63,41 @@ class User(AbstractUser):
         null=True, blank=True, verbose_name="Gesperrt bis"
     )
 
+    deleted_at = models.DateTimeField(
+        null=True, blank=True, editable=False, verbose_name="Account gelöscht am"
+    )
+
+    @property
+    def display_name(self):
+        from configuration.translations import get_translation
+        if self.deleted_at:
+            return get_translation('user_deleted_name', 'Gelöschter Benutzer')
+        return self.username
+
     def clean(self):
         super().clean()
         if self.username and '@' in self.username:
             raise ValidationError({'username': 'Der Benutzername darf kein @-Zeichen enthalten.'})
 
     def save(self, *args, **kwargs):
-        if self.email:
-            self.email = self.email.strip().lower()
-        else:
-            self.email = f"{str(self.username).lower()}@entailsng.local"
-        super().save(*args, **kwargs)
+        from django.db import transaction
+        # Auch veraltete Profil-/Admin-Objekte dürfen einen Restdatensatz nicht
+        # wieder mit persönlichen Daten oder einem Passwort beschreiben.
+        with transaction.atomic():
+            if self.pk:
+                deleted_at = type(self).objects.select_for_update(no_key=True).filter(pk=self.pk).values_list('deleted_at', flat=True).first()
+                if deleted_at:
+                    from configuration.translations import get_translation
+                    raise ValidationError(get_translation('account_delete_immutable'))
+            if self.email:
+                self.email = self.email.strip().lower()
+            else:
+                self.email = f"{str(self.username).lower()}@entailsng.local"
+            super().save(*args, **kwargs)
 
 
     def __str__(self):
-        return f"{self.username} ({self.get_role_display()})"
+        return f"{self.display_name} ({self.get_role_display()})"
 
     def is_locked(self):
         """Prüft, ob das Konto aktuell temporär gesperrt ist.
@@ -104,7 +124,7 @@ class User(AbstractUser):
             return False
 
         with transaction.atomic():
-            locked_user = type(self).objects.select_for_update().get(pk=self.pk)
+            locked_user = type(self).objects.select_for_update(no_key=True).get(pk=self.pk)
             now = timezone.now()
             if locked_user.locked_until and now >= locked_user.locked_until:
                 locked_user.failed_login_attempts = 0
@@ -130,7 +150,7 @@ class User(AbstractUser):
             return False
 
         with transaction.atomic():
-            locked_user = type(self).objects.select_for_update().get(pk=self.pk)
+            locked_user = type(self).objects.select_for_update(no_key=True).get(pk=self.pk)
             now = timezone.now()
 
             # Wenn bereits gesperrt und Sperrzeit noch aktiv
@@ -163,7 +183,7 @@ class User(AbstractUser):
             return
 
         with transaction.atomic():
-            locked_user = type(self).objects.select_for_update().get(pk=self.pk)
+            locked_user = type(self).objects.select_for_update(no_key=True).get(pk=self.pk)
             if locked_user.failed_login_attempts > 0 or locked_user.locked_until is not None:
                 locked_user.failed_login_attempts = 0
                 locked_user.locked_until = None
@@ -218,7 +238,11 @@ class EmailVerificationCode(models.Model):
         now = timezone.now()
 
         with transaction.atomic():
-            locked_user = User.objects.select_for_update().get(pk=user.pk)
+            locked_user = User.objects.select_for_update(no_key=True).get(pk=user.pk)
+
+            if locked_user.deleted_at:
+                from configuration.translations import get_translation
+                raise ValidationError(get_translation('account_delete_verification_blocked'))
 
             # 1. Zentraler Cooldown-Schutz & Stundenlimit
             if enforce_cooldown:
@@ -320,6 +344,10 @@ class EmailVerificationCode(models.Model):
         is_valid_format = bool(code_input.isascii() and re.fullmatch(r'^[0-9]{6}$', code_input))
 
         with transaction.atomic():
+            # Gleiche Sperrreihenfolge wie Account-Löschung und Code-Erzeugung.
+            locked_user = User.objects.select_for_update(no_key=True).get(pk=user.pk)
+            if locked_user.deleted_at:
+                return ('invalid_or_expired', None, 0)
             query = cls.objects.select_for_update().filter(user=user, is_used=False)
             if is_email_change:
                 query = query.filter(new_email__isnull=False)
@@ -336,13 +364,11 @@ class EmailVerificationCode(models.Model):
                     if User.objects.filter(email__iexact=code_obj.new_email).exclude(pk=user.pk).exists():
                         return ('email_taken', code_obj, 0)
                     # Neue E-Mail auf User übertragen und Code verbrauchen
-                    locked_user = User.objects.select_for_update().get(pk=user.pk)
                     locked_user.email = code_obj.new_email
                     locked_user.save(update_fields=['email'])
                     user.email = locked_user.email
                 else:
                     # Benutzer aktivieren und Code verbrauchen
-                    locked_user = User.objects.select_for_update().get(pk=user.pk)
                     locked_user.is_active = True
                     locked_user.save(update_fields=['is_active'])
                     user.is_active = True

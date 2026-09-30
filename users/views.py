@@ -2,7 +2,7 @@ import logging
 import secrets
 from datetime import timedelta
 from django.contrib import messages
-from django.contrib.auth import get_user_model, login, update_session_auth_hash
+from django.contrib.auth import get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.views import PasswordResetConfirmView
@@ -11,12 +11,14 @@ from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.http import require_POST
 from emails.models import GeneralEmailSettings
 from events.models import EventRegistration
 from configuration.translations import get_translation
 from .auth_backends import get_client_ip
-from .exceptions import VerificationCodeCooldownError, VerificationCodeLimitError
-from .forms import CustomUserCreationForm, UserProfileForm
+from .exceptions import AccountDeletionError, VerificationCodeCooldownError, VerificationCodeLimitError
+from .forms import AccountDeletionForm, CustomUserCreationForm, UserProfileForm
 from .models import EmailVerificationCode
 from .services import UserService
 
@@ -69,7 +71,7 @@ def verify_email_view(request):
         return redirect("login")
 
     try:
-        user = User.objects.get(pk=user_id)
+        user = User.objects.get(pk=user_id, deleted_at__isnull=True)
     except User.DoesNotExist:
         return redirect("login")
 
@@ -169,7 +171,7 @@ def resend_verification_code_view(request):
         return redirect("login")
 
     try:
-        user = User.objects.get(pk=user_id)
+        user = User.objects.get(pk=user_id, deleted_at__isnull=True)
     except User.DoesNotExist:
         return redirect("login")
 
@@ -208,9 +210,9 @@ def request_activation_code_view(request):
 
         email_input = request.POST.get("email", "").strip().lower()
         if email_input:
-            user = User.objects.filter(email__iexact=email_input, is_active=False).first()
+            user = User.objects.filter(email__iexact=email_input, is_active=False, deleted_at__isnull=True).first()
             if not user:
-                user = User.objects.filter(username__iexact=email_input, is_active=False).first()
+                user = User.objects.filter(username__iexact=email_input, is_active=False, deleted_at__isnull=True).first()
 
             if user:
                 has_code = user.verification_codes.filter(new_email__isnull=True).exists()
@@ -241,7 +243,7 @@ def request_activation_code_view(request):
 
 
 @login_required
-def profile_view(request):
+def profile_view(request, deletion_form=None):
     user = request.user
     registrations = (
         EventRegistration.objects.filter(user=user)
@@ -434,5 +436,24 @@ def profile_view(request):
         'pending_email_code': pending_email_code,
         'pending_email_info': pending_email_info,
         'clan_membership': clan_membership,
+        'deletion_form': deletion_form if deletion_form is not None else AccountDeletionForm(),
+        'deletion_blockers': UserService.deletion_blockers(user),
     }
     return render(request, "users/profile.html", context)
+
+
+@login_required
+@require_POST
+@sensitive_post_parameters('password')
+def account_delete_view(request):
+    form = AccountDeletionForm(request.POST)
+    if form.is_valid():
+        try:
+            UserService.delete_account(request.user, form.cleaned_data['password'])
+        except AccountDeletionError as error:
+            form.add_error('password' if error.code == 'wrong_password' else None, str(error))
+        else:
+            logout(request)
+            messages.success(request, get_translation('account_delete_success'))
+            return redirect('dashboard')
+    return profile_view(request, deletion_form=form)

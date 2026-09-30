@@ -25,7 +25,7 @@ def badge_rows(registrations, event):
     event_fields = event_values(event)
     return [
         {
-            'guest.username': registration.user.username,
+            'guest.username': registration.user.display_name,
             'guest.clan': clans.get(registration.user_id, ''),
             'guest.seat': ', '.join(
                 seat.seat_label or f'{seat.x}/{seat.y}' for seat in registration.seats.all()
@@ -48,7 +48,7 @@ def certificate_rows(teams, tournament, award_title):
         team_id__in=members_by_team, status=TeamMember.Status.ACCEPTED,
     ).select_related('user').order_by('team_id', 'joined_at', 'id')
     for membership in memberships:
-        members_by_team[membership.team_id].append(membership.user.username)
+        members_by_team[membership.team_id].append(membership.user.display_name)
     event_fields = event_values(tournament.event)
     return [
         {

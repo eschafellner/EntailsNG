@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -23,6 +24,11 @@ from users.models import EmailVerificationCode
     EMAIL_ASYNC_QUEUE=False,
 )
 class LanEventSimulationTests(TestCase):
+    def setUp(self):
+        # Rate-Limit-Zähler anderer Tests dürfen die vier Gäste dieser
+        # eigenständigen Simulation nicht von der Verifizierung ausschließen.
+        cache.clear()
+
     def test_event_from_draft_to_finished(self):
         now = timezone.now()
         event = Event.objects.create(

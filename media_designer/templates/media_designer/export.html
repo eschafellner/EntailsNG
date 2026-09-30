@@ -65,7 +65,7 @@
       <div class="media-recipient-list">
         {% for recipient in recipients %}
           <label><input type="checkbox" name="recipients" value="{{ recipient.pk }}">
-            {% if template.kind == 'BADGE' %}{{ recipient.user.username }}{% else %}{{ recipient.team.name }}{% endif %}
+            {% if template.kind == 'BADGE' %}{{ recipient.user.display_name }}{% else %}{{ recipient.team.name }}{% endif %}
           </label>
         {% endfor %}
       </div>

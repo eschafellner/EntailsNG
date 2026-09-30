@@ -400,6 +400,10 @@ class EventRegistration(models.Model):
         Zentrale fachliche Prüfung, ob der Gast für das Event eingecheckt werden darf.
         Rückgabe: CheckInResult (entpackbar als: allowed, reason) mit .code
         """
+        from django.contrib.auth import get_user_model
+        if get_user_model().objects.filter(pk=self.user_id, deleted_at__isnull=False).exists():
+            from configuration.translations import get_translation
+            return CheckInResult(False, get_translation('account_deleted_checkin_blocked'), code='account_deleted')
         if self.payment_status != self.PaymentStatus.PAID:
             return CheckInResult(
                 False,
@@ -445,7 +449,7 @@ class EventRegistration(models.Model):
         Nutzt select_for_update() für Concurrency-Schutz gegen Race Conditions mit Stornierungen.
         """
         Event.objects.select_for_update().get(pk=self.event_id)
-        locked_reg = EventRegistration.objects.select_for_update().select_related('event', 'user').get(pk=self.pk)
+        locked_reg = EventRegistration.objects.select_for_update(of=('self',)).select_related('event', 'user').get(pk=self.pk)
         result = locked_reg.can_check_in(target_event=target_event, actor=actor)
         if not result.allowed:
             raise ValidationError(result.reason)
@@ -522,7 +526,7 @@ class EventRegistration(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user.username} -> {self.event.title} ({self.get_payment_status_display()})"
+        return f"{self.user.display_name} -> {self.event.title} ({self.get_payment_status_display()})"
 
     def clean(self):
         super().clean()
@@ -560,6 +564,9 @@ class EventRegistration(models.Model):
 
     def send_payment_confirmation_email(self):
         """Sendet die automatische E-Mail-Zahlungsbestätigung an den Gast."""
+        from django.contrib.auth import get_user_model
+        if get_user_model().objects.filter(pk=self.user_id, deleted_at__isnull=False).exists():
+            return
         try:
             seat = self.seats.first()
             seat_label = seat.seat_label if seat else "Noch kein Sitzplatz"

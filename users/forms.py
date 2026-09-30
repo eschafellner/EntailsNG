@@ -9,6 +9,21 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+class AccountDeletionForm(forms.Form):
+    password = forms.CharField(widget=forms.PasswordInput(attrs={
+        'class': 'form-control', 'autocomplete': 'current-password',
+    }))
+    confirm_deletion = forms.BooleanField(required=True)
+
+    def __init__(self, *args, **kwargs):
+        from configuration.translations import get_translation
+        super().__init__(*args, **kwargs)
+        self.fields['password'].label = get_translation('profile_current_password_label')
+        self.fields['password'].error_messages['required'] = get_translation('account_delete_password_required')
+        self.fields['confirm_deletion'].label = get_translation('account_delete_confirm_label')
+        self.fields['confirm_deletion'].error_messages['required'] = get_translation('account_delete_confirmation_required')
+
+
 def validate_birthday_date(birthday):
     if not birthday:
         return birthday
@@ -220,7 +235,7 @@ class CustomPasswordResetForm(forms.Form):
         if token_generator is None:
             token_generator = default_token_generator
 
-        active_users = User.objects.filter(email__iexact=email, is_active=True)
+        active_users = User.objects.filter(email__iexact=email, is_active=True, deleted_at__isnull=True)
         for user in active_users:
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = token_generator.make_token(user)

@@ -184,6 +184,12 @@ class RegistrationService:
         if not user or not user.is_authenticated:
             raise RegistrationError("Du musst angemeldet sein, um dich zu registrieren.")
 
+        from django.contrib.auth import get_user_model
+        from configuration.translations import get_translation
+        user = get_user_model().objects.select_for_update(no_key=True).get(pk=user.pk)
+        if user.deleted_at or not user.is_active:
+            raise RegistrationError(get_translation('account_deleted_registration_blocked'))
+
         # 1. Event abrufen und per DB-Lock sperren
         try:
             event = Event.objects.select_for_update().get(pk=event_id, is_active=True)
@@ -259,12 +265,20 @@ class PaymentService:
     def mark_paid(registration, amount=None, send_email=True, allow_overbooking=False):
         from seating.models import SeatingCell
         from configuration.cache import invalidate_event_capacity_cache
+        from django.contrib.auth import get_user_model
+        from django.core.exceptions import ValidationError
+        from configuration.translations import get_translation
 
         # Robustness: Ensure registration is persisted before locking
         if not registration.pk:
             registration.save()
 
-        # Lock registration first to establish lock hierarchy: EventRegistration -> SeatingCell
+        # Gleiche Reihenfolge wie Selbstlöschung: User -> Event -> Anmeldung.
+        user_id, event_id = EventRegistration.objects.values_list('user_id', 'event_id').get(pk=registration.pk)
+        owner = get_user_model().objects.select_for_update(no_key=True).get(pk=user_id)
+        if owner.deleted_at:
+            raise ValidationError(get_translation('account_deleted_registration_blocked'))
+        Event.objects.select_for_update().get(pk=event_id)
         reg = EventRegistration.objects.select_for_update().get(pk=registration.pk)
 
         # Überbuchungsschutz: Reaktivierung einer stornierten Anmeldung prüft Kapazität
@@ -357,7 +371,7 @@ class CheckInService:
         from django.core.exceptions import ValidationError
         event_id = EventRegistration.objects.values_list('event_id', flat=True).get(pk=registration_id)
         Event.objects.select_for_update().get(pk=event_id)
-        reg = EventRegistration.objects.select_for_update().select_related('event', 'user').get(pk=registration_id)
+        reg = EventRegistration.objects.select_for_update(of=('self',)).select_related('event', 'user').get(pk=registration_id)
         result = reg.can_check_in(target_event=target_event, actor=actor)
         if not result.allowed:
             raise ValidationError(result.reason)

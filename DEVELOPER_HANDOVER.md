@@ -101,6 +101,7 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Feature:** Konfigurierbare Überschreibung unbezahlter Sitzplätze (`allow_unpaid_seat_overwrite`) mit automatischer E-Mail-Benachrichtigung (`seat_overwritten`).
 
 ### 👥 `users` (Authentifizierung & Sicherheit)
+* **Selbstlöschung im Profil (30.09.2026):** Gast-Accounts können sich nach Passwortbestätigung endgültig löschen. `UserService.delete_account()` entfernt persönliche Profildaten, hält einen irreversiblen Restdatensatz (`deleted_at`) für die Historie und gibt Namen/E-Mail zur Neuregistrierung frei. Neue Accounts erhalten eine neue ID ohne alte Tickets oder Mitgliedschaften. Jede `PAID`-Anmeldung sowie laufende/generierte Turnierbeteiligungen blockieren die Selbstlöschung bis zur Klärung mit der Orga. Clan-/Team-Nachfolgen, Sitzplatzfreigabe, Code-/Session-Invalidierung und Bereinigung zuordenbarer Mail-/Fehlerkopien sind enthalten. Mitarbeiterkonten werden an die Administration verwiesen. Nach dem Update `migrate` und `seed_translations` ausführen. Details, Testnachweise und Betriebsgrenzen: [Account-Löschung](docs/account-deletion.md).
 * **Login:** Flexibel per E-Mail oder Benutzername über `CustomAuthenticationBackend`.
 * **Brute-Force & Rate-Limiting:** Echte Client-IP-Erkennung hinter Proxies (`CF-Connecting-IP`, `X-Real-IP`).
 * **Double-Opt-In:**

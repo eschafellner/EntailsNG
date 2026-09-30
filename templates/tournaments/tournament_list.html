@@ -123,7 +123,7 @@
             <div style="display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line);">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <span>📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong>{{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr</strong></span>
-                <span>👤 {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_admin_default" "Orga-Team" %}{% endif %}</span>
+                <span>👤 {% if tournament.tournament_admin %}{{ tournament.tournament_admin.display_name }}{% else %}{% t "tournament_admin_default" "Orga-Team" %}{% endif %}</span>
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <span>🚀 {% t "tournament_start_label" "Turnierstart:" %} <strong>{{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr</strong></span>

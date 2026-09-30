@@ -83,7 +83,12 @@ class TournamentRegistrationService:
         Prüft Zeitfenster, Vor-Ort Check-in, Kapazitätslimits und Team-Berechtigungen.
         """
         with transaction.atomic():
-            # Turnieranmeldungen und Eventabschluss sperren zuerst dieselbe Event-Zeile.
+            from django.contrib.auth import get_user_model
+            from configuration.translations import get_translation
+            user = get_user_model().objects.select_for_update(no_key=True).get(pk=user.pk)
+            if user.deleted_at or not user.is_active:
+                raise TournamentRegistrationError(get_translation('account_deleted_registration_blocked'))
+            # Nach dem User sperren Turnieranmeldungen dieselbe Event-Zeile wie der Eventabschluss.
             # So kann keine Turnieranmeldung zwischen Abschlussprüfung und Archivierung erfolgen.
             event_id = Tournament.objects.values_list('event_id', flat=True).get(pk=tournament_id)
             event = Event.objects.select_for_update().get(pk=event_id)
@@ -112,7 +117,7 @@ class TournamentRegistrationService:
             else:
                 if not team_id:
                     raise TournamentRegistrationError("Bitte wähle ein Team für die Anmeldung aus.")
-                team = Team.objects.filter(id=team_id).first()
+                team = Team.objects.select_for_update().filter(id=team_id).first()
                 if not team:
                     raise TournamentRegistrationError("Das ausgewählte Team wurde nicht gefunden.")
 
@@ -152,6 +157,8 @@ class TournamentRegistrationService:
 
                 # 3.5 Roster-Vollständigkeit & Check-in aller Mitglieder prüfen
                 accepted_members = list(team.get_accepted_members())
+                if any(member.user.deleted_at for member in accepted_members):
+                    raise TournamentRegistrationError(get_translation('account_deleted_roster_blocked'))
                 if len(accepted_members) < tournament.game.team_size:
                     raise TournamentRegistrationError(
                         f"Das Team '{team.name}' hat nur {len(accepted_members)} von {tournament.game.team_size} erforderlichen Mitgliedern."

@@ -190,7 +190,7 @@
                 {% endif %}
               </h3>
               <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); margin-bottom: 10px;">
-                {% t "team_game_label" "Spiel:" %} {{ team.game.name|default:"Allgemein" }} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.username }}
+                {% t "team_game_label" "Spiel:" %} {{ team.game.name|default:"Allgemein" }} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.display_name }}
               </div>
               <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); margin-bottom: 14px;">
                 👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglieder" %}
@@ -226,7 +226,7 @@
                 {% t "team_game_label" "Spiel:" %} {{ team.game.name|default:"Allgemein" }} | {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ team.event.title|default:"Vergangenes Event" }}
               </div>
               <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); margin-bottom: 14px;">
-                👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglieder" %} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.username }}
+                👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglieder" %} | {% t "team_captain_label" "Kapitän:" %} {{ team.captain.display_name }}
               </div>
             </div>
 
