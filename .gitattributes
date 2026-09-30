@@ -1,0 +1,61 @@
+# Standardverhalten: Git erkennt Textdateien automatisch und normalisiert
+# Zeilenumbrüche im Repository zu LF.
+* text=auto
+
+###############################################################################
+# Python-Quellcode
+###############################################################################
+*.py        text eol=lf
+*.pyi       text eol=lf
+*.pyx       text eol=lf
+
+###############################################################################
+# Dokumentation & Markup
+###############################################################################
+*.md        text eol=lf
+*.rst       text eol=lf
+*.txt       text eol=lf
+LICENSE     text eol=lf
+
+###############################################################################
+# Konfigurations- und Datendateien
+###############################################################################
+*.toml      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.json      text eol=lf
+*.ini       text eol=lf
+*.cfg       text eol=lf
+*.env*      text eol=lf
+.gitignore  text eol=lf
+.gitattributes text eol=lf
+Dockerfile  text eol=lf
+
+###############################################################################
+# Skripte (strikt nach Zielbetriebssystem getrennt)
+###############################################################################
+# Shell-Skripte MÜSSEN LF haben (CRLF bricht in Linux, Docker und CI-Pipelines)
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# Windows-Batch-Skripte benötigen verlässlich CRLF
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+###############################################################################
+# Binärdateien (Git soll Zeilenumbrüche niemals anfassen)
+###############################################################################
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.svg       text eol=lf
+*.pdf       binary
+*.sqlite3   binary
+*.db        binary
+*.pyc       binary
+*.whl       binary
+*.tar.gz    binary
+*.zip       binary
