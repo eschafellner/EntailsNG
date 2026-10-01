@@ -94,7 +94,8 @@
   const storageKey = 'tournament-view:' + location.pathname;
   const readStorage = () => { try { return JSON.parse(sessionStorage.getItem(storageKey) || '{}'); } catch (_) { return {}; } };
   const writeStorage = value => { try { sessionStorage.setItem(storageKey, JSON.stringify(value)); } catch (_) { /* Storage is optional. */ } };
-  let listView = readStorage().view || (matchMedia('(max-width: 640px)').matches ? 'list' : 'tree');
+  const isSwiss = document.getElementById('match-tree')?.dataset.tournamentMode === 'SWISS';
+  let listView = readStorage().view || (!isSwiss && matchMedia('(max-width: 640px)').matches ? 'list' : 'tree');
   function setMatchView(view) {
     const list = document.getElementById('match-list'), tree = document.getElementById('match-tree');
     if (!list || !tree) return;

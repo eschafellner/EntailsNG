@@ -1,0 +1,6 @@
+<nav class="knowledge-breadcrumbs" aria-label="Navigationspfad">
+  <a href="{% url 'knowledge:home' %}">{% t "knowledge_title" "Wissensbasis" %}</a><span aria-hidden="true">/</span>
+  <a href="{{ space.get_absolute_url }}">{{ space.name }}</a>
+  {% for ancestor in ancestors %}<span aria-hidden="true">/</span><a href="{{ ancestor.get_absolute_url }}">{{ ancestor.display_title }}</a>{% endfor %}
+  {% if page %}<span aria-hidden="true">/</span><a href="{{ page.get_absolute_url }}">{{ page.display_title }}</a>{% endif %}
+</nav>

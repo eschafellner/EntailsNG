@@ -8,7 +8,7 @@ on:
 
 jobs:
   account-deletion-postgresql:
-    name: Account Deletion (PostgreSQL Row Locks)
+    name: Account Deletion & Tournaments (PostgreSQL Row Locks)
     runs-on: ubuntu-latest
     env:
       DEBUG: "False"
@@ -42,8 +42,8 @@ jobs:
           cache: 'pip'
       - name: Install Dependencies
         run: python -m pip install -r requirements.txt
-      - name: Test Account Deletion and Concurrent Payments
-        run: python manage.py test users.test_account_deletion --noinput
+      - name: Test Account Deletion and Concurrent Tournament Actions
+        run: python manage.py test users.test_account_deletion tournaments.test_swiss tournaments.test_swiss_concurrency tournaments.test_audit tournaments.test_audit_concurrency tournaments.test_solo_reactivation knowledge --noinput
 
   test:
     name: Django Test Suite & Checks
@@ -81,6 +81,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Set up Node for Scanner Tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Test Scanner Feedback and Tournament Views
+        run: node --test scripts/tests/checkin-scanner.test.cjs scripts/tests/tournaments.test.cjs
 
       - name: Run Django Security & Deployment Check
         env:

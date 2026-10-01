@@ -1959,6 +1959,12 @@ class TournamentResultReportingAndBracketSeparationTests(TestCase):
         self.team3 = Team.objects.create(name="Team Charlie", captain=self.u3, game=self.game, event=self.event)
         TeamMember.objects.create(team=self.team3, user=self.u3, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
 
+        # Result-reporting fixtures must provide complete 5v5 rosters at start.
+        for team in (self.team1, self.team2, self.team3):
+            for slot in range(1, self.game.team_size):
+                player = User.objects.create_user(username=f'roster_{team.pk}_{slot}')
+                TeamMember.objects.create(team=team, user=player, status=TeamMember.Status.ACCEPTED)
+
         self.tournament = Tournament.objects.create(
             title="CS2 Champions Cup",
             slug="cs2-champions-cup",

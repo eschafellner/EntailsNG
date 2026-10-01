@@ -2,6 +2,7 @@
             <tr class="guest-row" 
                 id="guest-row-{{ reg.id }}" 
                 data-id="{{ reg.id }}"
+                data-code="{{ reg.short_code }}"
                 data-checked-in="{{ reg.is_checked_in|yesno:'true,false' }}"
                 data-paid="{{ reg.payment_status|lower }}"
                 data-search="{{ reg.user.username|lower }} {{ reg.user.get_full_name|lower }} {{ reg.short_code|lower }} {% for s in reg.scanner_seats %}{{ s.seat_label|lower }} {% endfor %}">

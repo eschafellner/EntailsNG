@@ -1,0 +1,62 @@
+<section class="swiss-section" aria-labelledby="swiss-round-heading">
+  <div class="swiss-round-header">
+    <div>
+      <h2 id="swiss-round-heading">{% t "swiss_round_progress" "Runde {number} von {total}" number=swiss_current_round.number total=tournament.swiss_rounds %}</h2>
+      <p>{% t "swiss_scoring" "Sieg 3 · Unentschieden 1 · Niederlage 0 · Freilos 3 Punkte" %}</p>
+      <p>{% if tournament.swiss_allow_draws %}{% t "swiss_draws_allowed" "Unentschieden sind erlaubt." %}{% else %}{% t "swiss_draws_disabled" "Jedes gespielte Match braucht einen Sieger." %}{% endif %}</p>
+    </div>
+    {% if is_admin and swiss_ready %}
+      <a class="btn-action-primary" href="{% url 'tournament_swiss_preview' slug=tournament.slug %}">{% t "swiss_prepare_next" "Nächste Runde auslosen" %}</a>
+    {% endif %}
+  </div>
+  {% if tournament.status == 'FINISHED' %}
+    <h3>{% t "swiss_final_standings" "Abschlusstabelle" %}</h3>
+    {% if swiss_placements %}
+    <div class="swiss-podium" aria-label="{% t 'tournament_podium_title' 'Siegerehrung & Endstand' %}">
+      {% for place in swiss_placements %}<div class="ux-card"><strong>{{ place.rank }}. {% t "swiss_place" "Platz" %}</strong><p>{{ place.team.name }}</p></div>{% endfor %}
+    </div>
+    {% endif %}
+  {% else %}
+    <h3>{% t "swiss_standings" "Aktuelle Rangliste" %}</h3>
+    <p>{% t "swiss_provisional" "Die Feinwertung verändert sich mit den Ergebnissen deiner bisherigen Gegner. Gleichstände teilen sich einen Platz." %}</p>
+    {% if swiss_my_match.is_bye %}<p class="swiss-my-state">{% t "swiss_your_bye" "Dein Team hat in dieser Runde ein Freilos und erhält 3 Punkte." %}</p>{% endif %}
+    {% if swiss_ready %}<p role="status">{% t "swiss_waiting_release" "Alle Ergebnisse liegen vor. Die nächste Runde wartet auf die Freigabe der Turnierleitung." %}</p>{% endif %}
+  {% endif %}
+  <p id="swiss-tiebreak-hint">{% t "swiss_tiebreak_hint" "Reihenfolge: Punkte, Buchholz (Gegnerstärke), Sonneborn-Berger (Gegnerstärke × erzielte Punkte)." %}</p>
+  <div class="swiss-table-wrap" tabindex="0" role="region" aria-label="{% t 'swiss_scroll_table' 'Rangliste – horizontal scrollen' %}">
+    <table class="swiss-table" aria-describedby="swiss-tiebreak-hint">
+      <thead><tr><th scope="col">{% t "swiss_rank" "Platz" %}</th><th scope="col">{% t "swiss_team" "Teilnehmer" %}</th><th scope="col">{% t "swiss_points" "Punkte" %}</th><th scope="col">{% t "swiss_buchholz" "Buchholz" %}</th><th scope="col">{% t "swiss_sb" "Sonneborn-Berger" %}</th><th scope="col">{% t "swiss_record" "S/U/N" %}</th><th scope="col">{% t "swiss_byes" "Freilose" %}</th></tr></thead>
+      <tbody>
+        {% for row in swiss_standings %}
+        <tr{% if row.team == user_team %} class="swiss-my-row"{% endif %}>
+          <td>{{ row.rank|default_if_none:'—' }}</td><th scope="row">{{ row.team.name }}{% if row.withdrawn %} <span>({% t "swiss_withdrawn" "Zurückgezogen" %})</span>{% endif %}</th>
+          <td><strong>{{ row.points }}</strong></td><td>{{ row.buchholz }}</td><td>{{ row.sonneborn_berger }}</td><td>{{ row.won }}/{{ row.drawn }}/{{ row.lost }}</td><td>{{ row.byes }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <h3>{% t "swiss_rounds_heading" "Veröffentlichte Runden" %}</h3>
+  <div class="swiss-round-grid">
+    {% for round in swiss_rounds %}
+    <section class="swiss-round-column">
+      <h4>{% t "tournament_round_title" "Runde {round}" round=round.number %}</h4>
+      <p class="swiss-match-note">{{ round.published_at|date:'d.m.Y H:i' }}</p>
+      {% for match in round.matches %}{% include 'tournaments/includes/match_card.html' %}{% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+  {% if is_admin and tournament.status == 'IN_PROGRESS' %}
+  <details class="swiss-withdrawals">
+    <summary>{% t "swiss_withdraw_manage" "Teilnehmer zurückziehen" %}</summary>
+    <p>{% t "swiss_withdraw_hint" "Ein Rückzug ist endgültig. Ein offenes Match wird kampflos gewertet; die bisherige Historie bleibt erhalten." %}</p>
+    {% for row in swiss_standings %}{% if not row.withdrawn %}
+      <form method="post" action="{% url 'tournament_swiss_withdraw' slug=tournament.slug team_id=row.team.pk %}" class="swiss-withdraw-form">
+        {% csrf_token %}<strong>{{ row.team.name }}</strong>
+        <label>{% t "swiss_reason" "Grund" %}<input name="reason" required maxlength="255"></label>
+        <button type="submit">{% t "swiss_withdraw_confirm" "Rückzug bestätigen" %}</button>
+      </form>
+    {% endif %}{% endfor %}
+  </details>
+  {% endif %}
+</section>

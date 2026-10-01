@@ -135,9 +135,12 @@ class ConfigurationModelTests(TestCase):
         self.client.force_login(staff_user)
         staff_titles, staff_response = visible_titles()
         self.assertEqual(staff_titles, {
-            'Öffentlicher Testpunkt', 'Interner Testpunkt', 'Medien-Designer intern'
+            'Öffentlicher Testpunkt', 'Interner Testpunkt', 'Medien-Designer intern', 'Wissensbasis'
         })
         self.assertContains(staff_response, 'Medien-Designer intern')
+        self.assertContains(staff_response, 'Wissensbasis')
+        self.assertNotContains(guest_response, 'Wissensbasis')
+        self.assertNotContains(user_response, 'Wissensbasis')
 
         self.client.logout()
         guest_titles_again, _ = visible_titles()

@@ -1,3 +1,4 @@
+from configuration.translations import get_translation
 import math
 from django.db import models, transaction
 
@@ -13,6 +14,7 @@ from tournaments.exceptions import (
 )
 from tournaments.services.standings import LeagueStandingService
 from tournaments.services.matches import check_and_advance_match
+from .locking import lock_tournament, event_is_closed
 
 
 def next_power_of_two(n):
@@ -48,11 +50,17 @@ class TournamentBracketService:
         Atomare Generierung des Turnierbaums.
         Prüft Vorbedingungen, generiert Matches und setzt den Status erst bei absolutem Erfolg auf IN_PROGRESS.
         """
+        if Tournament.objects.filter(pk=tournament_id, mode=Tournament.Mode.SWISS).exists():
+            from .swiss import SwissTournamentService
+            SwissTournamentService.publish(tournament_id, actor=actor)
+            return True
         with transaction.atomic():
-            tournament = Tournament.objects.select_for_update().get(pk=tournament_id)
+            tournament = lock_tournament(tournament_id)
 
             if actor and not tournament.is_managed_by(actor):
                 raise TournamentBracketError("Keine Berechtigung zur Generierung des Turnierbaums.")
+            if event_is_closed(tournament) or tournament.status == Tournament.Status.CANCELLED:
+                raise TournamentBracketError(get_translation('audit_bracket_start_closed', 'Die Veranstaltung oder das Turnier ist beendet oder abgesagt.'))
 
             # 1. Prüfe ob bereits generiert
             if tournament.is_generated or tournament.status in [Tournament.Status.IN_PROGRESS, Tournament.Status.FINISHED]:
@@ -60,8 +68,12 @@ class TournamentBracketService:
                     f"Der Turnierbaum für '{tournament.title}' wurde bereits generiert und kann nicht erneut generiert werden."
                 )
 
+            if actor is not None:
+                from .registration import validate_start_roster
+                validate_start_roster(tournament)
+
             # 2. Mindestanzahl Teams prüfen
-            teams = list(tournament.registrations.select_related('team').order_by('registered_at'))
+            teams = list(tournament.registrations.filter(is_forfeited=False).select_related('team').order_by('registered_at'))
             num_teams = len(teams)
             if num_teams < 2:
                 raise InsufficientTeamsError(
@@ -69,7 +81,7 @@ class TournamentBracketService:
                 )
 
             # 3. Generierung der Matches
-            success = generate_bracket(tournament, preview=False)
+            success = _generate_bracket(tournament, preview=False)
             if not success:
                 raise TournamentBracketError("Die Generierung der Matches ist fehlgeschlagen.")
 
@@ -86,10 +98,16 @@ class TournamentBracketService:
         Sicherheit: Nur möglich, wenn noch keine Matches mit Ergebnissen gespielt wurden (außer mit force=True).
         """
         with transaction.atomic():
-            tournament = Tournament.objects.select_for_update().get(pk=tournament_id)
+            if Tournament.objects.filter(pk=tournament_id, mode=Tournament.Mode.SWISS).exists():
+                from .swiss import _locked_tournament
+                tournament = _locked_tournament(tournament_id, actor)
+            else:
+                tournament = lock_tournament(tournament_id)
 
             if actor and not tournament.is_managed_by(actor):
                 raise TournamentBracketError("Keine Berechtigung zum Zurücksetzen des Turnierbaums.")
+            if event_is_closed(tournament) or tournament.status in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED):
+                raise TournamentBracketError(get_translation('audit_bracket_reset_closed', 'Abgeschlossene oder abgesagte Turniere können nicht zurückgesetzt werden.'))
 
             if not tournament.is_generated:
                 raise TournamentBracketError(f"Für das Turnier '{tournament.title}' existiert noch kein generierter Turnierbaum.")
@@ -105,11 +123,14 @@ class TournamentBracketService:
                     "Ein Reset würde alle Spielergebnisse unwiderruflich löschen."
                 )
 
+            # Swiss round entries protect historical registrations until reset.
+            tournament.swiss_round_records.all().delete()
             # Matches löschen und Status zurücksetzen
             TournamentMatch.objects.filter(tournament=tournament).delete()
             tournament.is_generated = False
             tournament.status = Tournament.Status.REGISTRATION_OPEN
-            tournament.save(update_fields=['is_generated', 'status'])
+            tournament.swiss_pairing_seed = None
+            tournament.save(update_fields=['is_generated', 'status', 'swiss_pairing_seed'])
             return True
 
     @staticmethod
@@ -118,16 +139,39 @@ class TournamentBracketService:
         Liefert eine unverbindliche Vorschau der Turnierbaum-Struktur ohne Datenbankmutation.
         """
         tournament = Tournament.objects.get(pk=tournament_id)
+        if tournament.mode == Tournament.Mode.SWISS:
+            from .swiss import SwissTournamentService
+            try:
+                plan = SwissTournamentService.preview(tournament_id)
+                return {'swiss': True, 'total_teams': tournament.registrations.count(),
+                        'num_rounds': tournament.swiss_rounds, 'swiss_plan': plan}
+            except TournamentBracketError as exc:
+                return {'swiss': True, 'error': str(exc)}
         return generate_bracket(tournament, preview=True)
 
 
 def generate_bracket(tournament, preview=False):
+    """Compatibility entry point with the same safeguards as the service."""
+    if preview:
+        return _generate_bracket(tournament, preview=True)
+    result = TournamentBracketService.generate_bracket(tournament.pk)
+    tournament.refresh_from_db()
+    return result
+
+
+def _generate_bracket(tournament, preview=False):
     """
-    Hauptfunktion zur Generierung und Vorschau von Turnierbäumen für alle 5 Turniermodi.
+    Hauptfunktion zur Generierung und Vorschau der Turnierformate.
     Wenn preview=True, werden keine Daten in die DB geschrieben, sondern ein Dict mit der Vorschau-Struktur geliefert.
     """
+    if tournament.mode == Tournament.Mode.SWISS:
+        if preview:
+            return TournamentBracketService.get_bracket_preview(tournament.pk)
+        from .swiss import SwissTournamentService
+        SwissTournamentService.publish(tournament.pk)
+        return True
     teams = list(
-        tournament.registrations.select_related('team').order_by(
+        tournament.registrations.filter(is_forfeited=False).select_related('team').order_by(
             models.F('seed').asc(nulls_last=True),
             'registered_at',
         )
@@ -248,6 +292,11 @@ def _generate_single_elimination(tournament, registered_teams, preview=False):
             else:
                 m.status = TournamentMatch.Status.READY
                 m.save()
+
+        # Two first-round byes can feed the same next match. Resolve it after
+        # every first-round slot has been written, so both teams become READY.
+        for match in tournament.matches.filter(round_number=2).order_by('match_number'):
+            check_and_advance_match(match)
 
         tournament.is_generated = True
         tournament.status = Tournament.Status.IN_PROGRESS
@@ -652,6 +701,7 @@ def _generate_group_stage(tournament, registered_teams, preview=False):
             'mode': 'GROUP_STAGE',
             'groups': groups_preview,
             'ko_stage': ko_preview,
+            'ko_rounds': ko_preview,
             'total_teams': num_teams,
         }
 

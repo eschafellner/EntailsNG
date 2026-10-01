@@ -44,6 +44,7 @@ from tournaments.services.forfeits import (
     forfeit_team_in_active_tournaments,
 )
 from tournaments.services.podium import TournamentPodiumService
+from tournaments.services.swiss import SwissTournamentService, SwissPairingService, SwissStandingService
 
 __all__ = [
     # Registration
@@ -75,4 +76,7 @@ __all__ = [
     # Forfeits
     'forfeit_team_in_active_tournaments',
     'TournamentPodiumService',
+    'SwissTournamentService',
+    'SwissPairingService',
+    'SwissStandingService',
 ]

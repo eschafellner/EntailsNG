@@ -1,9 +1,9 @@
 # 🚀 EntailsNG – Entwickler-Übergabe & Projektstatus (Developer Handover)
 
-> **Stand:** September 2026  
+> **Stand:** Oktober 2026
 > **Repository:** `entails-ng`  
 > **Git-Branch:** Aktuellen Arbeitsstand mit `git status` prüfen
-> **Test-Status:** 🟢 **532 von 532 Tests erfolgreich bestanden** (SQLite-Testdatenbank, 26. September 2026)
+> **Test-Status:** Vollständiger Projektlauf am **1. Oktober 2026: 715 Tests, 695 erfolgreich, 20 PostgreSQL-Fälle auf SQLite übersprungen**, keine Fehler. Anschließend alle **38 Knowledge-Tests: 35 erfolgreich, 3 PostgreSQL-Fälle übersprungen**, einschließlich eines ergänzten Vergleichsfalls. Frühere Turnierprüfung: **12 JavaScript-Tests erfolgreich**. Details und Grenzen: [Interne Wissensbasis](docs/internal-knowledge-base.md), [Turnierprüfung](docs/tournament-audit-2026-10-01.md). Weitere Erweiterungen: [Solo-Reaktivierung](docs/solo-team-reactivation.md), [Schweizer Turniere](docs/swiss-tournaments.md). Der globale Migrationscheck meldet weiterhin die bereits dokumentierten Theme-Farbdefaults.
 > **Python / Django:** Python 3.12+ (kompatibel mit 3.14) / Django 6.0  
 
 ---
@@ -63,7 +63,7 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Modelle:** `Event`, `TicketCategory`, `EventRegistration`.
 * **Services:** `PaymentService` (`events/services.py`) entkoppelt Seiteneffekte (Sitzplatz-Reservierung, Zahlungs-Mail, Cache-Invalidierung) sauber von den Models.
 * **Aktives Event:** Immer über `Event.objects.get_active()` abfragen (Single Source of Truth).
-* **Helfer Check-in Scanner (`/checkin/scanner/`):** Vor-Ort-Kamera-QR-Scan für Helfer mit akustischem Feedback und Ausweis-Abgleich (`can_check_in()`).
+* **Helfer Check-in Scanner (`/checkin/scanner/`):** Kamera, USB-/Code-Eingabe und Teilnehmerliste zeigen auf dem Scanner-Gerät eine große Bestätigung mit Nickname, Sitzplatz und lokaler Uhrzeit. Drei Sekunden Lesepause und Unterdrückung dauerhaft sichtbarer QR-Codes verhindern das Überschreiben durch Mehrfachscans. Ablehnungen und unbestätigte Verbindungsfehler sind sichtbar; Ton/Vibration ergänzen die Anzeige. Die Enter-Suche checkt ausschließlich ein. Zentrale Prüfung über `can_check_in()`. Details und Testnachweise: [Scanner-Rückmeldung](docs/scanner-feedback.md).
 * **Veranstaltung abschließen:** Die Admin-Eventliste bietet eine Abschlussaktion mit Bestätigungsseite. `EventLifecycleService.finish_event()` verlangt, dass alle Turniere beendet oder abgesagt sind, beendet und deaktiviert das Event atomar und archiviert seine Teams. Entwürfe und abgesagte Events können nicht abgeschlossen werden. Das reguläre Admin-Formular verhindert den direkten Abschluss und die Wiederöffnung eines abgeschlossenen Events.
 * **Anmeldung öffnen:** Die Aktion „Bereitschaft prüfen und Anmeldung öffnen“ in der Admin-Eventliste zeigt Sperrgründe (Entwurfsstatus, gültiger künftiger Zeitraum, Ort, Kapazität, keine andere aktive Veranstaltung, aktive Tickets, betriebsbereite E-Mail-Konfiguration und bei kostenpflichtigen Tickets Zahlungsdaten) sowie Hinweise (Beschreibung, Sitzplan, E-Mail-Testmodus). `EventLifecycleService.open_registration()` prüft beim Bestätigen erneut und öffnet die Anmeldung atomar. Das Admin-Formular verhindert einen direkten Wechsel auf „Anmeldung geöffnet“. Beim Anlegen eines Events wird ein Standardticket nur erzeugt, wenn nach dem Speichern der Ticket-Inlines keine Kategorie vorhanden ist.
 * **Sperren nach Eventende:** Abgelaufene und abgeschlossene Events erlauben keinen neuen Check-in oder neue Turnieranmeldungen mehr. Die Prüfungen sitzen in den zentralen Modellen und Services; Eventabschluss, Check-in und Turnieranmeldung sperren die Event-Zeile zuerst.
@@ -78,11 +78,14 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Grenzen der ersten Version:** Hochformat und keine Druckbeschnittzugabe. Hintergründe werden proportional zugeschnitten. Die Textvorschau verwendet Beispieldaten; der Export verkleinert lange Texte bis auf 1,5 mm und meldet danach einen Fehler.
 
 ### 🏆 `tournaments` (Turnier-Engine & Team-Management)
-* **Modi:** Single Elimination, Double Elimination, Liga (Round Robin), Gruppenphase + K.O., Free For All (FFA).
+* **Modi:** Single Elimination, Double Elimination, Liga (Round Robin), Gruppenphase + K.O., Free For All (FFA), Schweizer System.
 * **Services:**
   * `TournamentBracketService`: Generierung aller Turnierbäume inkl. automatischer Freilos-Verteilung (BYEs).
   * `TournamentMatchService`: Score-Verarbeitung, Gewinner-Vorlauf, Bracket-Reset, Walkover-Automatisierung beim Löschen von Teams.
+  * `SwissTournamentService`, `SwissPairingService`, `SwissStandingService`: rundenweise Auslosung und Orga-Freigabe, 3/1/0-Punkte, optionale Unentschieden, Buchholz/Sonneborn-Berger und geteilte Ränge. Reines Schweizer System ohne K.-o.-Phase.
+* **Schweizer System (1. Oktober 2026):** Teilnehmer und Regeln werden mit Runde 1 festgeschrieben. Weitere Runden werden erst nach vollständigen Ergebnissen manuell freigegeben. Signierte Vorschauen, Rundenprotokolle und Datenbank-Constraints sichern die Veröffentlichung ab. Frühere Ergebnisse sind nach Freigabe der Folgerunde gesperrt; Rückzüge behalten die Historie. Urkunden übernehmen auch geteilte Ränge. Installation: Requirements aktualisieren, Migration `tournaments.0009` anwenden und `seed_translations` ausführen. Details und Testgrenzen: [Schweizer Turniere](docs/swiss-tournaments.md).
 * **Team-Management:**
+  * **Automatische Solo-Reaktivierung (1. Oktober 2026):** Die normale Einzelspieler-Anmeldung verwendet das aktuelle Team oder reaktiviert ein archiviertes Solo-Team desselben Accounts und Spiels. Team-ID und Turnierhistorie bleiben erhalten; die neue Turnieranmeldung übernimmt keine alten Ergebnisse oder Aufgaben. Laufende/generierte Turniere, offene alte Anmeldungen und widersprüchliche Kader werden vor dem Wechsel gesperrt. Ein erneuter Abschluss des früheren Events archiviert kein inzwischen reaktiviertes Team. Neue Accounts erhalten keinen Zugriff auf frühere Teams. Details und Tests: [Solo-Reaktivierung](docs/solo-team-reactivation.md). Keine zusätzliche Migration erforderlich.
   * **Spielbezug & Filter:** Teams zeigen das zugehörige Spiel (`team.game.name`); die Teamübersicht bietet Filter-Pills und Sortierung nach Spiel.
   * **Fairplay-Regel:** Ein Teilnehmer darf pro Spiel nur maximal einem aktiven Team angehören (verhindert Doppelteilnahmen).
   * **Benachrichtigungspunkt:** Roter Indikator am Menüpunkt „Teams“ (Sidebar & Mobile Nav) und im Team-Header bei offenen Beitrittsanfragen.
@@ -123,6 +126,7 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Error-Logging:** `DynamicDebugMiddleware` loggt ungefangene 500er-Fehler persistent als `SystemErrorLog` in die DB und vergibt eine Referenz-ID für den Benutzer.
 
 ### 📄 `info`, `news`, `emails`, `sponsors`
+* **`knowledge` – interne Wissensbasis (1. Oktober 2026):** Eigene Frontend-App unter `/knowledge/` mit veranstaltungsübergreifenden beziehungsweise eventbezogenen Bereichen, Seitenbaum, Suche, lokalem TinyMCE-Editor, Entwürfen, Veröffentlichung, Versionshistorie, Textvergleich, Wiederherstellung und optimistischer Konfliktprüfung. Alle aktiven Mitarbeiter (`is_staff`) dürfen lesen, bearbeiten und veröffentlichen; Gäste bleiben vollständig ausgeschlossen. Anhänge liegen außerhalb von `MEDIA_ROOT` im privaten Speicher und werden nur nach Mitarbeiterprüfung ausgeliefert. Docker erhält dafür das ausschließlich im Web-Container eingebundene Volume `private_media_data`. Einführung: `migrate`, `seed_translations`, `seed_features`, `collectstatic`; neue Container mit der aktualisierten Compose-Konfiguration erstellen. Details: [Interne Wissensbasis](docs/internal-knowledge-base.md).
 * `info`: Mehrseiten-CMS mit Tab-Leiste (`/info/<slug>/`), Slugs mit automatischer Kollisionsauflösung (`-2`, `-3`), XSS-Bereinigung (`sanitize_html`), granularen Rechten (`info.view_eventinfo`), Gast-Fallback auf `/info/` und atomarer Menü-Synchronisation (`NavigationItem`).
 * `news`: Newsartikel mit TinyMCE-Editor.
 * `emails`: Multi-Backend-E-Mail-Versand (SMTP, Resend API, Console) mit verschlüsselter Speicherung von Passwörtern (`FIELD_ENCRYPTION_KEY`) und transaktionssicherer E-Mail-Warteschlange (`OutgoingEmail` Outbox-Pattern).

@@ -11,6 +11,7 @@ def validate_background_image(upload):
         return
     if upload.size > 10 * 1024 * 1024:
         raise ValidationError(get_translation('media_error_image_size', 'Das Hintergrundbild darf höchstens 10 MB groß sein.'))
+    was_closed = upload.closed
     try:
         upload.seek(0)
         with Image.open(upload) as image:
@@ -24,7 +25,10 @@ def validate_background_image(upload):
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValidationError(get_translation('media_error_image_invalid', 'Das Hintergrundbild ist beschädigt oder ungültig.')) from exc
     finally:
-        upload.seek(0)
+        if was_closed:
+            upload.close()
+        else:
+            upload.seek(0)
 
 
 def validate_font_file(upload):
@@ -40,6 +44,7 @@ def validate_font_file(upload):
     }
     if suffix not in signatures:
         raise ValidationError(get_translation('media_error_font_file_format', 'Erlaubt sind TTF, OTF und WOFF2.'))
+    was_closed = upload.closed
     try:
         upload.seek(0)
         content = upload.read()
@@ -49,4 +54,7 @@ def validate_font_file(upload):
     except (OSError, ValueError) as exc:
         raise ValidationError(get_translation('media_error_font_file_invalid', 'Die Schriftdatei ist beschädigt oder ungültig.')) from exc
     finally:
-        upload.seek(0)
+        if was_closed:
+            upload.close()
+        else:
+            upload.seek(0)

@@ -22,7 +22,7 @@ from django.views.decorators.http import require_POST
 
 from clans.models import ClanMembership
 from configuration.cache import invalidate_active_event_cache
-from configuration.translations import get_translation
+from configuration.translations import DEFAULT_TEXTS, get_translation
 from configuration.models import GeneralConfiguration
 from configuration.services import should_show_onboarding_ticket
 from news.services import get_latest_news, get_pinned_news
@@ -272,17 +272,27 @@ def toggle_check_in_api(request):
 
     registration = EventRegistration.objects.filter(
         pk=data.get('registration_id')
-    ).select_related('user', 'event').first()
+    ).select_related('user', 'event', 'ticket_type').first()
     if registration is None:
         return JsonResponse(
             {'status': 'error', 'message': 'Anmeldung nicht gefunden.'},
             status=404,
         )
 
+    seat = registration.seats.first()
+    feedback_details = {
+        'registration_id': registration.id,
+        'user': registration.user.username,
+        'full_name': registration.user.get_full_name() or registration.user.username,
+        'ticket': registration.ticket_type.name if registration.ticket_type else 'Standard',
+        'seat': seat.seat_label if seat else 'Kein Platz',
+    }
+
     active_event = get_active_event()
     if not active_event or registration.event_id != active_event.id:
         return JsonResponse(
             {
+                **feedback_details,
                 'status': 'error',
                 'message': 'Check-in abgelehnt: Diese Anmeldung gehört nicht zur aktuellen Veranstaltung.',
             },
@@ -298,13 +308,14 @@ def toggle_check_in_api(request):
             status_msg = 'eingecheckt'
         except ValidationError as e:
             error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
-            return JsonResponse({'status': 'error', 'message': error_message}, status=400)
+            return JsonResponse({**feedback_details, 'status': 'error', 'message': error_message}, status=400)
 
     return JsonResponse({
+        **feedback_details,
         'status': 'success',
         'is_checked_in': registration.is_checked_in,
         'checked_in_at': (
-            registration.checked_in_at.strftime('%H:%M:%S')
+            timezone.localtime(registration.checked_in_at).strftime('%H:%M:%S')
             if registration.checked_in_at
             else None
         ),
@@ -487,6 +498,11 @@ def checkin_scanner_view(request):
                 'percent': checkin_percent,
             },
         })
+    context['scanner_feedback_texts'] = {
+        key.removeprefix('scanner_feedback_'): get_translation(key, default, request=request)
+        for key, default in DEFAULT_TEXTS.items()
+        if key.startswith('scanner_feedback_')
+    }
     return render(request, 'events/checkin_scanner.html', context)
 
 
@@ -629,7 +645,7 @@ def scan_qr_api(request):
         'seat': seat_label,
         'already_checked_in': already_checked_in,
         'checked_in_at': (
-            registration.checked_in_at.strftime('%H:%M:%S')
+            timezone.localtime(registration.checked_in_at).strftime('%H:%M:%S')
             if registration.checked_in_at
             else ''
         ),

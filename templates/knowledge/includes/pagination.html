@@ -1,0 +1,5 @@
+{% if items.has_other_pages %}<nav class="knowledge-actions" aria-label="Seiten">
+  {% if items.has_previous %}<a class="btn" href="?p={{ items.previous_page_number }}{% if query %}&amp;q={{ query|urlencode }}&amp;scope={{ scope|urlencode }}{% endif %}">{% t "knowledge_previous" "Zurück" %}</a>{% endif %}
+  <span>{{ items.number }} / {{ items.paginator.num_pages }}</span>
+  {% if items.has_next %}<a class="btn" href="?p={{ items.next_page_number }}{% if query %}&amp;q={{ query|urlencode }}&amp;scope={{ scope|urlencode }}{% endif %}">{% t "knowledge_next" "Weiter" %}</a>{% endif %}
+</nav>{% endif %}

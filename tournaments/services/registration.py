@@ -1,10 +1,13 @@
 import logging
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
+from .validation import identifier
 
 from events.models import Event, EventRegistration
 from tournaments.exceptions import (
     TournamentAlreadyRegisteredError,
+    TournamentBracketError,
     TournamentError,
     TournamentFullError,
     TournamentNotCheckedInError,
@@ -21,58 +24,162 @@ from tournaments.models import (
 logger = logging.getLogger(__name__)
 
 
+def validate_start_roster(tournament):
+    """Revalidate organizer starts after any roster changes since registration.
+
+    Call with the Event/Tournament locks held, before generating any matches.
+    Trusted internal imports without an actor retain the legacy service contract.
+    """
+    from configuration.translations import get_translation
+    registrations = list(tournament.registrations.filter(is_forfeited=False).order_by('pk'))
+    teams = {team.pk: team for team in Team.objects.select_for_update().filter(
+        pk__in=[registration.team_id for registration in registrations]).order_by('pk')}
+    seen_users = set()
+    for registration in registrations:
+        team = teams[registration.team_id]
+        members = list(team.get_accepted_members())
+        member_ids = {member.user_id for member in members}
+        valid = (not team.is_archived and team.game_id == tournament.game_id
+            and team.event_id in (None, tournament.event_id)
+            and len(members) == tournament.game.team_size and team.captain_id in member_ids
+            and all(member.user.is_active and not member.user.deleted_at for member in members)
+            and not member_ids.intersection(seen_users))
+        if not valid:
+            raise TournamentBracketError(get_translation('audit_start_roster_invalid',
+                'Das Team "{team}" ist nicht startbereit. Bitte Spiel, Veranstaltung, Archivstatus und vollständigen Kader prüfen. Gäste dürfen nur für ein Team antreten.', team=team.name))
+        seen_users.update(member_ids)
+
+
 def check_user_event_checkin(user, event):
     """
     Prüft, ob der angegebene Benutzer für das aktive Event eingecheckt ist.
     """
-    if not user or not user.is_authenticated or not event:
+    if not user or not user.is_authenticated or not user.is_active or user.deleted_at or not event:
         return False
     return EventRegistration.objects.filter(
         user=user,
         event=event,
         is_checked_in=True
-    ).exists()
+    ).exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED).exists()
 
 
 def archive_teams_for_event(event):
     """
     Archiviert alle Teams, die der angegebenen Veranstaltung zugeordnet sind
-    oder an Turnieren dieser Veranstaltung teilgenommen haben.
+    oder ohne aktuelle Zuordnung an ihren Turnieren teilgenommen haben.
+    Bereits für eine andere Veranstaltung reaktivierte Teams bleiben aktiv.
     """
     if not event:
         return 0
     direct_teams = Team.objects.filter(event=event, is_archived=False)
     tournament_teams = Team.objects.filter(
         tournament_registrations__tournament__event=event,
+        event__isnull=True,
         is_archived=False
     )
     combined_ids = set(direct_teams.values_list('id', flat=True)) | set(tournament_teams.values_list('id', flat=True))
-    count = Team.objects.filter(id__in=combined_ids).update(is_archived=True, event=event)
+    count = Team.objects.filter(id__in=combined_ids, is_archived=False).filter(
+        Q(event=event) | Q(event__isnull=True)).update(is_archived=True, event=event)
     return count
 
 
-def get_or_create_solo_team(user, game):
+def _solo_teams(user, game_id):
+    return Team.objects.filter(game_id=game_id).filter(
+        Q(captain=user) | Q(memberships__user=user, memberships__status=TeamMember.Status.ACCEPTED)
+    ).distinct()
+
+
+def _lock_solo_events(user, game_id, event_id):
+    """Lock current and former events before locking the destination tournament.
+
+    The user lock serializes roster changes for this player. Locking former
+    events also serializes reactivation with tournament starts and event closure.
     """
-    Erstellt oder holt ein 1v1 Solo-Team für den angegebenen Benutzer und das angegebene Spiel.
-    """
-    team_name = f"{user.username} (Solo)"
-    team = Team.objects.filter(captain=user, game=game, is_solo=True).first()
+    teams = _solo_teams(user, game_id)
+    event_ids = set(teams.exclude(event_id=None).values_list('event_id', flat=True))
+    event_ids.update(TournamentRegistration.objects.filter(team__in=teams)
+        .exclude(tournament__status__in=(Tournament.Status.FINISHED, Tournament.Status.CANCELLED))
+        .values_list('tournament__event_id', flat=True))
+    if event_id is not None:
+        event_ids.add(event_id)
+    return {event.pk: event for event in Event.objects.select_for_update()
+        .filter(pk__in=event_ids).order_by('pk')}
+
+
+def _get_or_reactivate_solo_team(user, game, event, locked_events):
+    """Call with the player and all relevant event locks already held."""
+    from configuration.translations import get_translation
+
+    event_id = event.pk if event else None
+    teams = list(Team.objects.select_for_update().filter(
+        pk__in=_solo_teams(user, game.pk).values('pk')).order_by('pk'))
+    if game.team_size != 1:
+        # Preserve the existing technical helper contract for internal callers.
+        teams = [team for team in teams if team.is_solo]
+    active = [team for team in teams if not team.is_archived]
+    if len(active) > 1:
+        raise TournamentRegistrationError(get_translation('solo_team_conflict'))
+    team = active[0] if active else None
+    if team and (team.captain_id != user.pk or team.event_id not in (None, event_id)):
+        raise TournamentRegistrationError(get_translation('solo_team_conflict'))
+
+    if not team:
+        archived = [team for team in teams if team.is_archived and team.is_solo and team.captain_id == user.pk]
+        if event is None:
+            archived = [team for team in archived if team.event_id is None]
+        # Prefer an archive of the destination event, then the most recently used
+        # solo team. Never merge or rewrite other teams' tournament history.
+        archived.sort(key=lambda team: (team.event_id == event_id, team.updated_at, -team.pk), reverse=True)
+        team = archived[0] if archived else None
+
+    if team:
+        if team.event_id is not None and team.event_id not in locked_events:
+            raise TournamentRegistrationError(get_translation('audit_team_event_changed'))
+        if team.memberships.filter(status=TeamMember.Status.ACCEPTED).exclude(user=user).exists():
+            raise TournamentRegistrationError(get_translation('solo_team_invalid_roster'))
+        changing_event = team.event_id != event_id
+        if (team.is_archived or changing_event) and team.is_in_active_tournament():
+            raise TournamentRegistrationError(get_translation('msg_team_reactivate_in_tournament'))
+        # An unstarted registration in another open event must not be stranded
+        # with a roster belonging to the destination event.
+        if changing_event and team.tournament_registrations.exclude(
+                tournament__event=event).exclude(tournament__status__in=(
+                    Tournament.Status.FINISHED, Tournament.Status.CANCELLED)).exists():
+            raise TournamentRegistrationError(get_translation('solo_team_previous_registration'))
+        if team.is_archived or changing_event:
+            team.event = event
+            team.is_archived = False
+            team.save(update_fields=['event', 'is_archived', 'updated_at'])
+
+    suffix = ' (Solo)'
+    name_limit = Team._meta.get_field('name').max_length
+    team_name = user.username[:name_limit-len(suffix)] + suffix
     if not team:
         team = Team.objects.create(
             name=team_name,
             game=game,
             captain=user,
             is_solo=True,
+            event=event,
         )
-        TeamMember.objects.get_or_create(
-            team=team,
-            user=user,
-            defaults={
-                'role': TeamMember.Role.CAPTAIN,
-                'status': TeamMember.Status.ACCEPTED,
-            }
-        )
+    TeamMember.objects.update_or_create(
+        team=team, user=user, defaults={'role': TeamMember.Role.CAPTAIN, 'status': TeamMember.Status.ACCEPTED})
     return team
+
+
+@transaction.atomic
+def get_or_create_solo_team(user, game, event=None):
+    """Reuse this account's active team or reactivate its archived solo team."""
+    from django.contrib.auth import get_user_model
+    from configuration.translations import get_translation
+    user = get_user_model().objects.select_for_update(no_key=True).get(pk=user.pk)
+    if user.deleted_at or not user.is_active:
+        raise TournamentRegistrationError(get_translation('account_deleted_registration_blocked'))
+    locked_events = _lock_solo_events(user, game.pk, event.pk if event else None)
+    event = locked_events[event.pk] if event else None
+    if event and event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED):
+        raise TournamentNotOpenError(get_translation('msg_tournament_event_finished', event_title=event.title))
+    return _get_or_reactivate_solo_team(user, game, event, locked_events)
 
 
 class TournamentRegistrationService:
@@ -90,8 +197,10 @@ class TournamentRegistrationService:
                 raise TournamentRegistrationError(get_translation('account_deleted_registration_blocked'))
             # Nach dem User sperren Turnieranmeldungen dieselbe Event-Zeile wie der Eventabschluss.
             # So kann keine Turnieranmeldung zwischen Abschlussprüfung und Archivierung erfolgen.
-            event_id = Tournament.objects.values_list('event_id', flat=True).get(pk=tournament_id)
-            event = Event.objects.select_for_update().get(pk=event_id)
+            event_id, game_id, team_size = Tournament.objects.values_list(
+                'event_id', 'game_id', 'game__team_size').get(pk=tournament_id)
+            locked_events = _lock_solo_events(user, game_id, event_id) if team_size == 1 else None
+            event = locked_events[event_id] if locked_events is not None else Event.objects.select_for_update().get(pk=event_id)
             if event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED):
                 from configuration.translations import get_translation
                 raise TournamentNotOpenError(get_translation(
@@ -101,6 +210,8 @@ class TournamentRegistrationService:
                 ))
 
             tournament = Tournament.objects.select_for_update().select_related('game', 'event').get(pk=tournament_id)
+            if (tournament.event_id, tournament.game_id, tournament.game.team_size) != (event_id, game_id, team_size):
+                raise TournamentRegistrationError(get_translation('audit_team_event_changed'))
 
             # 1. Privilegien-Check (Staff / Superuser / Turnier-Admin)
             is_privileged = tournament.is_managed_by(actor)
@@ -113,11 +224,11 @@ class TournamentRegistrationService:
 
             # 3. Team bestimmen / Solo-Team erzeugen
             if tournament.game.team_size == 1:
-                team = get_or_create_solo_team(user, tournament.game)
+                team = _get_or_reactivate_solo_team(user, tournament.game, event, locked_events)
             else:
                 if not team_id:
                     raise TournamentRegistrationError("Bitte wähle ein Team für die Anmeldung aus.")
-                team = Team.objects.select_for_update().filter(id=team_id).first()
+                team = Team.objects.select_for_update().filter(id=identifier(team_id, error=TournamentRegistrationError)).first()
                 if not team:
                     raise TournamentRegistrationError("Das ausgewählte Team wurde nicht gefunden.")
 
@@ -218,7 +329,7 @@ class TournamentRegistrationService:
 
             query = TournamentRegistration.objects.filter(tournament=tournament)
             if team_id:
-                query = query.filter(team_id=team_id)
+                query = query.filter(team_id=identifier(team_id, error=TournamentRegistrationError))
 
             is_privileged = tournament.is_managed_by(actor)
 

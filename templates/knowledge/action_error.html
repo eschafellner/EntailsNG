@@ -1,0 +1,2 @@
+{% extends 'knowledge/base.html' %}
+{% block knowledge_content %}<section class="card knowledge-form-card"><h1>{% t "knowledge_action_failed" "Die Aktion konnte nicht abgeschlossen werden" %}</h1><div class="knowledge-notice knowledge-error" role="alert">{{ errors }}</div><div class="knowledge-actions"><a class="btn" href="{{ page.get_absolute_url }}">{% t "knowledge_back_page" "Zur Seite" %}</a><a class="btn" href="{% url 'knowledge:edit' page.pk %}">{% t "knowledge_edit" "Bearbeiten" %}</a></div></section>{% endblock %}

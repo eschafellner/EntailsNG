@@ -1,5 +1,7 @@
 import math
 from django.db import transaction
+from .locking import lock_tournament, event_is_closed
+from .validation import integer, identifier, note
 
 from configuration.translations import get_translation
 from tournaments.models import (
@@ -183,22 +185,32 @@ class TournamentMatchService:
         """
         from tournaments.services.standings import GroupStageStandingService
 
-        try:
-            score1 = int(score1)
-            score2 = int(score2)
-        except (ValueError, TypeError):
-            raise InvalidScoreError("Ungültiges Punkteformat übergeben.")
-
-        if score1 < 0 or score2 < 0:
-            raise InvalidScoreError("Punkte müssen nicht-negative Ganzzahlen (>= 0) sein.")
+        score1 = integer(score1, error=InvalidScoreError, label='Punktestand')
+        score2 = integer(score2, error=InvalidScoreError, label='Punktestand')
+        winner_id = identifier(winner_id, error=InvalidWinnerError) if winner_id not in (None, '') else None
+        decision_reason = note(decision_reason, error=InvalidScoreError)
 
         with transaction.atomic():
+            swiss_tournament = None
+            tournament_id, mode = TournamentMatch.objects.values_list('tournament_id', 'tournament__mode').get(pk=match_id)
+            if mode == Tournament.Mode.SWISS:
+                from .swiss import _locked_tournament, SwissTournamentService
+                swiss_tournament = _locked_tournament(tournament_id)
+            locked = swiss_tournament or lock_tournament(tournament_id)
             match = TournamentMatch.objects.select_for_update(of=('self',)).select_related('tournament', 'team1', 'team2').get(pk=match_id)
-            tournament = match.tournament
+            tournament = locked
+            match.tournament = tournament
+            if event_is_closed(tournament) or tournament.status == Tournament.Status.CANCELLED:
+                raise MatchAlreadyCompletedError(get_translation('audit_score_closed', 'Für beendete oder abgesagte Veranstaltungen und abgesagte Turniere können keine Ergebnisse eingetragen werden.'))
+            if match.bracket_type == TournamentMatch.BracketType.FFA:
+                raise TournamentMatchError(get_translation('audit_ffa_use_scoring', 'FFA-Ergebnisse müssen über die FFA-Wertung eingetragen werden.'))
+            if swiss_tournament:
+                SwissTournamentService.validate_score_change(match, tournament)
 
             allows_draw = (
                 match.bracket_type == TournamentMatch.BracketType.GROUP
                 or tournament.mode == Tournament.Mode.LEAGUE
+                or (tournament.mode == Tournament.Mode.SWISS and tournament.swiss_allow_draws)
             )
 
             # 0. Berechtigungen und Match-Vollständigkeit prüfen (unter Lock)
@@ -295,6 +307,7 @@ class TournamentMatchService:
             allows_draw = (
                 match.bracket_type == TournamentMatch.BracketType.GROUP
                 or tournament.mode == Tournament.Mode.LEAGUE
+                or (tournament.mode == Tournament.Mode.SWISS and tournament.swiss_allow_draws)
             )
 
             winner_team = None
@@ -331,6 +344,8 @@ class TournamentMatchService:
                     score_discrepancy = True
 
             if score_discrepancy:
+                if not is_admin:
+                    raise InvalidWinnerError(get_translation('audit_score_consistency', 'Der Sieger muss zum Punktestand passen. Abweichende Wertungen kann nur die Orga vornehmen.'))
                 if not decision_reason or not str(decision_reason).strip():
                     raise InvalidWinnerError(
                         "Der gewählte Sieger widerspricht dem Punktestand. "
@@ -348,6 +363,10 @@ class TournamentMatchService:
             match.decision_reason = str(decision_reason).strip() if decision_reason else ""
             match.status = TournamentMatch.Status.COMPLETED
             match.save()
+
+            if swiss_tournament:
+                SwissTournamentService.sync_completion(tournament)
+                return match, winner_team
 
             # 5. Sieger ins Folgematch vorrücken (unter Lock)
             if match.next_match_winner:
@@ -444,7 +463,12 @@ class FFAMatchService:
             raise TournamentMatchError(get_translation('tournament_ffa_error_no_scores', 'Es wurden keine Teilnehmer-Ergebnisse übergeben.'))
 
         with transaction.atomic():
+            tournament_id = TournamentMatch.objects.values_list('tournament_id', flat=True).get(pk=match_id)
+            tournament = lock_tournament(tournament_id)
+            if event_is_closed(tournament) or tournament.status == Tournament.Status.CANCELLED:
+                raise TournamentMatchError(get_translation('audit_score_closed', 'Für beendete oder abgesagte Veranstaltungen und abgesagte Turniere können keine Ergebnisse eingetragen werden.'))
             match = TournamentMatch.objects.select_for_update().get(pk=match_id)
+            match.tournament = tournament
             if actor is not None and not match.tournament.is_managed_by(actor):
                 raise MatchPermissionDeniedError(get_translation('tournament_ffa_error_permission', 'FFA-Ergebnisse können nur von einem Turnier-Admin eingetragen werden.'))
 
@@ -452,43 +476,46 @@ class FFAMatchService:
                 raise TournamentMatchError(get_translation('tournament_ffa_error_wrong_match', 'Dieses Match ist kein Free-For-All (FFA) Match.'))
 
             participants = {p.id: p for p in match.participants.select_for_update()}
+            withdrawn = set(tournament.registrations.filter(is_forfeited=True).values_list('team_id', flat=True))
             if not participants:
                 raise TournamentMatchError(get_translation('tournament_ffa_error_no_participants', 'Das Match hat keine registrierten Teilnehmer.'))
 
             winner_participant = None
             rank_1_count = 0
             valid_entries = []
+            seen = set()
+            decision_reason = note(decision_reason, error=TournamentMatchError)
 
             for item in participant_scores:
+                if not isinstance(item, dict):
+                    raise TournamentMatchError(get_translation('audit_ffa_invalid_entries', 'Ungültige Teilnehmer-Ergebnisse.'))
                 p_id = item.get('participant_id')
                 if not p_id:
-                    t_id = item.get('team_id')
+                    t_id = identifier(item.get('team_id'), error=TournamentMatchError)
                     for p in participants.values():
                         if p.team_id == t_id:
                             p_id = p.id
                             break
 
-                if p_id not in participants:
-                    continue
-
-                try:
-                    rank = int(item['rank']) if item.get('rank') is not None and str(item.get('rank')).strip() != '' else None
-                except (ValueError, TypeError):
-                    rank = None
-
-                try:
-                    score = int(item['score']) if item.get('score') is not None and str(item.get('score')).strip() != '' else 0
-                except (ValueError, TypeError):
-                    score = 0
-
-                is_disqualified = bool(item.get('is_disqualified', False))
-                notes = str(item.get('notes', '')).strip()
+                p_id = identifier(p_id, error=TournamentMatchError)
+                if p_id not in participants or p_id in seen:
+                    raise TournamentMatchError(get_translation('audit_ffa_invalid_participants', 'Teilnehmer fehlen, sind doppelt oder gehören nicht zu diesem Match.'))
+                seen.add(p_id)
+                rank = integer(item['rank'], minimum=1, maximum=len(participants), error=TournamentMatchError, label='Rang') if item.get('rank') not in (None, '') else None
+                score = integer(item['score'], minimum=-(2**31), error=TournamentMatchError, label='Punkte') if item.get('score') not in (None, '') else 0
+                is_disqualified = item.get('is_disqualified', False)
+                if not isinstance(is_disqualified, bool):
+                    raise TournamentMatchError(get_translation('audit_ffa_invalid_dq', 'Ungültiger Disqualifikationsstatus.'))
+                is_disqualified = is_disqualified or participants[p_id].team_id in withdrawn
+                notes = note(item.get('notes'), error=TournamentMatchError)
 
                 if rank == 1 and not is_disqualified:
                     rank_1_count += 1
 
                 valid_entries.append((participants[p_id], rank, score, is_disqualified, notes))
 
+            if seen != set(participants):
+                raise TournamentMatchError(get_translation('audit_ffa_complete_results', 'Bitte die Ergebnisse aller Teilnehmer gemeinsam übermitteln.'))
             if not valid_entries:
                 raise TournamentMatchError(get_translation('tournament_ffa_error_no_valid_entries', 'Es wurden keine gültigen Teilnehmer-Ergebnisse übergeben.'))
 

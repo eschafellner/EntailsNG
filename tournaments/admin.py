@@ -2,11 +2,14 @@ from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.html import format_html
+from django.urls import reverse
+from configuration.translations import get_translation
 from tournaments.exceptions import TournamentError
 from tournaments.models import (
-    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration
+    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration, SwissRound
 )
 from tournaments.services import TournamentBracketService
+from tournaments.forms import TournamentMatchAdminForm
 
 
 @admin.register(Game)
@@ -21,11 +24,25 @@ class TournamentRegistrationInline(admin.TabularInline):
     extra = 0
     raw_id_fields = ('team',)
 
+    def get_readonly_fields(self, request, obj=None):
+        return ('team', 'seed', 'is_forfeited', 'group_name', 'score') if obj and obj.is_generated else ()
+
+    def has_add_permission(self, request, obj=None):
+        return not (obj and obj.is_generated) and super().has_add_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return not (obj and obj.is_generated) and super().has_delete_permission(request, obj)
+
 
 class TournamentMatchParticipantInline(admin.TabularInline):
     model = TournamentMatchParticipant
     extra = 0
     raw_id_fields = ('team',)
+    readonly_fields = ('team', 'rank', 'score', 'is_disqualified', 'notes')
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 class TournamentMatchInline(admin.TabularInline):
@@ -62,6 +79,11 @@ class TournamentAdmin(admin.ModelAdmin):
         'action_reset_bracket',
     ]
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.is_generated:
+            return ('mode', 'event', 'game', 'swiss_rounds', 'swiss_allow_draws', 'is_generated')
+        return ()
+
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(
             reg_count=models.Count('registrations', distinct=True)
@@ -83,6 +105,7 @@ class TournamentAdmin(admin.ModelAdmin):
                     (Tournament.Mode.LEAGUE, 'tournament_mode_league', 'Liga (Jeder gegen Jeden)'),
                     (Tournament.Mode.GROUP_STAGE, 'tournament_mode_group_stage', 'Gruppenspiele mit anschließendem KO-System'),
                     (Tournament.Mode.FFA, 'tournament_mode_ffa', 'Alle in einem (Free-For-All / Deathmatch)'),
+                    (Tournament.Mode.SWISS, 'tournament_mode_swiss', 'Schweizer System'),
                 ]
             ]
         elif db_field.name == 'status':
@@ -103,6 +126,12 @@ class TournamentAdmin(admin.ModelAdmin):
     @admin.action(description="Turnierbaum generieren & Turnier starten")
     def action_close_registration_and_generate_bracket(self, request, queryset):
         for tournament in queryset:
+            if tournament.mode == Tournament.Mode.SWISS:
+                from django.urls import reverse
+                self.message_user(request, format_html(
+                    'Schweizer System: <a href="{}">Paarungen prüfen und Runde freigeben</a>.',
+                    reverse('tournament_swiss_preview', args=[tournament.slug])), messages.INFO)
+                continue
             try:
                 TournamentBracketService.generate_bracket(tournament.id, actor=request.user)
                 self.message_user(
@@ -157,6 +186,15 @@ class TeamMemberInline(admin.TabularInline):
     extra = 0
     raw_id_fields = ('user',)
 
+    def get_readonly_fields(self, request, obj=None):
+        return ('user', 'role', 'status') if obj and obj.is_in_active_tournament() else ()
+
+    def has_add_permission(self, request, obj=None):
+        return not (obj and obj.is_in_active_tournament()) and super().has_add_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return not (obj and obj.is_in_active_tournament()) and super().has_delete_permission(request, obj)
+
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
@@ -167,6 +205,9 @@ class TeamAdmin(admin.ModelAdmin):
     raw_id_fields = ('captain', 'event')
     inlines = [TeamMemberInline]
     actions = ['action_archive_teams', 'action_unarchive_teams', 'action_forfeit_and_disqualify']
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('event', 'game', 'captain', 'is_archived', 'is_solo') if obj and obj.is_in_active_tournament() else ()
 
     @admin.action(description="Ausgewählte Teams archivieren")
     def action_archive_teams(self, request, queryset):
@@ -226,6 +267,25 @@ class TeamMemberAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'team__name')
     raw_id_fields = ('user', 'team')
 
+    def get_readonly_fields(self, request, obj=None):
+        return ('user', 'team', 'role', 'status') if obj and obj.team.is_in_active_tournament() else ()
+
+    def has_delete_permission(self, request, obj=None):
+        return not (obj and obj.team.is_in_active_tournament()) and super().has_delete_permission(request, obj)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'team':
+            active = TournamentRegistration.objects.filter(
+                models.Q(tournament__is_generated=True) | models.Q(tournament__status=Tournament.Status.IN_PROGRESS)
+            ).exclude(tournament__status__in=(Tournament.Status.FINISHED, Tournament.Status.CANCELLED))
+            kwargs['queryset'] = Team.objects.exclude(pk__in=active.values('team_id'))
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
 
 @admin.register(TournamentRegistration)
 class TournamentRegistrationAdmin(admin.ModelAdmin):
@@ -234,9 +294,27 @@ class TournamentRegistrationAdmin(admin.ModelAdmin):
     search_fields = ('tournament__title', 'team__name')
     raw_id_fields = ('tournament', 'team')
 
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'tournament':
+            kwargs['queryset'] = Tournament.objects.filter(is_generated=False).exclude(
+                status__in=(Tournament.Status.IN_PROGRESS, Tournament.Status.FINISHED, Tournament.Status.CANCELLED))
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('tournament', 'team', 'seed', 'is_forfeited', 'group_name', 'score') if obj and (obj.tournament.is_generated or obj.swiss_entries.exists()) else ()
+
+    def has_delete_permission(self, request, obj=None):
+        return not (obj and (obj.tournament.is_generated or obj.swiss_entries.exists())) and super().has_delete_permission(request, obj)
+
 
 @admin.register(TournamentMatch)
 class TournamentMatchAdmin(admin.ModelAdmin):
+    form = TournamentMatchAdminForm
     list_display = (
         '__str__', 'tournament', 'bracket_type', 'round_number',
         'match_number', 'team1', 'team2', 'score_team1', 'score_team2', 'winner', 'status'
@@ -244,14 +322,60 @@ class TournamentMatchAdmin(admin.ModelAdmin):
     list_filter = ('tournament', 'bracket_type', 'status', 'round_number')
     search_fields = ('tournament__title', 'team1__name', 'team2__name')
     readonly_fields = (
-        'tournament', 'bracket_type', 'round_number', 'match_number',
+        'tournament', 'bracket_type', 'round_number', 'match_number', 'group_name',
         'is_bye', 'loser', 'next_match_winner', 'next_match_loser',
         'next_match_winner_slot', 'next_match_loser_slot', 'status',
+        'result_editor',
     )
     raw_id_fields = ('team1', 'team2', 'winner')
     inlines = [TournamentMatchParticipantInline]
 
+    @admin.display(description='Turnieransicht')
+    def result_editor(self, obj):
+        return format_html('<a href="{}">{}</a>', reverse('tournament_detail', args=[obj.tournament.slug]),
+                           get_translation('tournament_match_admin_open', 'Turnier öffnen und Ergebnisse eintragen'))
+
+    def get_readonly_fields(self, request, obj=None):
+        extra = ('team1', 'team2', 'swiss_round', 'result_type')
+        if obj and obj.bracket_type == TournamentMatch.BracketType.FFA:
+            extra += ('score_team1', 'score_team2', 'winner', 'decision_reason')
+        if obj and obj.bracket_type == TournamentMatch.BracketType.SWISS:
+            if (obj.result_type != TournamentMatch.ResultType.PLAYED
+                or obj.tournament.status != Tournament.Status.IN_PROGRESS
+                or obj.tournament.swiss_round_records.filter(number__gt=obj.round_number).exists()):
+                extra += ('score_team1', 'score_team2', 'winner', 'decision_reason')
+        return self.readonly_fields + extra
+
+    def get_form(self, request, obj=None, **kwargs):
+        base = super().get_form(request, obj, **kwargs)
+        class ActorForm(base):
+            actor = request.user
+        return ActorForm
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions
+
+    def has_delete_permission(self, request, obj=None):
+        return not (obj and obj.tournament.is_generated) and super().has_delete_permission(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        if queryset.filter(bracket_type=TournamentMatch.BracketType.SWISS).exists():
+            raise ValidationError('Veröffentlichte Schweizer Matches können nicht einzeln gelöscht werden.')
+        super().delete_queryset(request, queryset)
+
     def save_model(self, request, obj, form, change):
+        if change and obj.bracket_type != TournamentMatch.BracketType.FFA:
+            original = TournamentMatch.objects.get(pk=obj.pk)
+            fields = ('score_team1', 'score_team2', 'winner_id', 'decision_reason')
+            if not any(getattr(original, field) != getattr(obj, field) for field in fields):
+                return
+            if obj.score_team1 is None or obj.score_team2 is None:
+                raise ValidationError(get_translation('audit_score_required', 'Bitte beide Ergebnisse angeben. Gewertete Ergebnisse dürfen nicht gelöscht werden.'))
         if change and obj.bracket_type != TournamentMatch.BracketType.FFA:
             if obj.score_team1 is not None and obj.score_team2 is not None:
                 from tournaments.services.matches import TournamentMatchService
@@ -290,3 +414,23 @@ class TournamentMatchParticipantAdmin(admin.ModelAdmin):
     list_filter = ('is_disqualified', 'rank')
     search_fields = ('team__name', 'match__tournament__title')
     raw_id_fields = ('match', 'team')
+    readonly_fields = ('match', 'team', 'rank', 'score', 'is_disqualified', 'notes')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SwissRound)
+class SwissRoundAdmin(admin.ModelAdmin):
+    list_display = ('tournament', 'number', 'published_at', 'published_by')
+    list_filter = ('tournament',)
+    readonly_fields = ('tournament', 'number', 'published_at', 'published_by', 'input_digest', 'standings_snapshot')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

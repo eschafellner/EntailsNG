@@ -1,0 +1,15 @@
+<details class="knowledge-navigation" open>
+  <summary>{% t "knowledge_navigation" "Bereiche und Seiten" %}</summary>
+  <nav aria-label="{% t 'knowledge_navigation' 'Bereiche und Seiten' %}">
+    {% for area in spaces %}
+      <a class="knowledge-area{% if area.pk == space.pk %} is-current{% endif %}" href="{{ area.get_absolute_url }}">{{ area.name }}{% if area.event %}<small>{{ area.event.title }}</small>{% endif %}</a>
+      {% if area.pk == space.pk %}
+        <ul class="knowledge-tree">
+        {% for row in tree %}
+          <li style="--knowledge-depth: {{ row.depth }}"><a href="{{ row.page.get_absolute_url }}"{% if row.page.pk == page.pk %} aria-current="page"{% endif %}>{{ row.page.display_title }}{% if not row.page.published_revision_id %}<small>{% t "knowledge_draft" "Entwurf" %}</small>{% endif %}</a></li>
+        {% empty %}<li class="knowledge-muted">{% t "knowledge_no_pages" "Noch keine Seiten." %}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    {% endfor %}
+  </nav>
+</details>

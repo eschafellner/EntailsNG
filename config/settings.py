@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     'configuration',
     'seating',
     'info',
+    'knowledge',
     'news',
     'clans',
     'emails',
@@ -252,6 +253,7 @@ STORAGES = {
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+PRIVATE_MEDIA_ROOT = Path(os.environ.get('PRIVATE_MEDIA_ROOT', BASE_DIR / 'private_media'))
 SERVE_MEDIA = env_bool('SERVE_MEDIA', default=DEBUG)
 
 AUTH_USER_MODEL = 'users.User'

@@ -1,5 +1,7 @@
 import logging
-from tournaments.models import Team, TournamentMatch
+from django.db import transaction
+from tournaments.models import Team, Tournament, TournamentMatch
+from .locking import lock_tournament, event_is_closed
 
 logger = logging.getLogger(__name__)
 
@@ -160,12 +162,16 @@ class GroupStageStandingService:
         return _calculate_standings_base(matches, teams)
 
     @staticmethod
+    @transaction.atomic
     def check_and_advance_group_stage(tournament):
         """
         Prüft nach jedem Match, ob alle Gruppenspiele beendet sind.
         Falls ja, werden die Gruppenstände ermittelt und die qualifizierten Teams
         automatisch in die Halbfinals / das Finale eingetragen und auf READY gesetzt.
         """
+        tournament = lock_tournament(tournament.pk)
+        if event_is_closed(tournament) or tournament.status in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED):
+            return False
         group_matches = tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GROUP)
         if not group_matches.exists():
             return False
@@ -181,8 +187,9 @@ class GroupStageStandingService:
         standings_a = GroupStageStandingService.calculate_group_standings(tournament, 'Gruppe A')
         standings_b = GroupStageStandingService.calculate_group_standings(tournament, 'Gruppe B')
 
-        if not standings_a or not standings_b:
-            return False
+        forfeited = set(tournament.registrations.filter(is_forfeited=True).values_list('team_id', flat=True))
+        standings_a = [row for row in standings_a if row['team'].pk not in forfeited]
+        standings_b = [row for row in standings_b if row['team'].pk not in forfeited]
 
         team_a1 = standings_a[0]['team'] if len(standings_a) > 0 else None
         team_a2 = standings_a[1]['team'] if len(standings_a) > 1 else None
@@ -214,6 +221,9 @@ class GroupStageStandingService:
             if hf2.team1 and hf2.team2:
                 hf2.status = TournamentMatch.Status.READY
             hf2.save(update_fields=['team1', 'team2', 'status'])
+            from .matches import check_and_advance_match
+            check_and_advance_match(hf1)
+            check_and_advance_match(hf2)
             return True
 
         if len(semi_matches) == 1:
@@ -223,6 +233,8 @@ class GroupStageStandingService:
             if final_match.team1 and final_match.team2:
                 final_match.status = TournamentMatch.Status.READY
             final_match.save(update_fields=['team1', 'team2', 'status'])
+            from .matches import check_and_advance_match
+            check_and_advance_match(final_match)
             return True
 
         return False

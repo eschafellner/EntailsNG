@@ -8,6 +8,9 @@ urlpatterns = [
     path('<slug:slug>/register/', views.tournament_register, name='tournament_register'),
     path('<slug:slug>/unregister/', views.tournament_unregister, name='tournament_unregister'),
     path('<slug:slug>/generate-bracket/', views.tournament_generate_bracket, name='tournament_generate_bracket'),
+    path('<slug:slug>/swiss/preview/', views.tournament_swiss_preview, name='tournament_swiss_preview'),
+    path('<slug:slug>/swiss/publish/', views.tournament_swiss_publish, name='tournament_swiss_publish'),
+    path('<slug:slug>/swiss/withdraw/<int:team_id>/', views.tournament_swiss_withdraw, name='tournament_swiss_withdraw'),
     path('matches/<int:match_id>/update-score/', views.match_update_score, name='match_update_score'),
     path('matches/<int:match_id>/update-ffa-score/', views.match_update_ffa_score, name='match_update_ffa_score'),
 

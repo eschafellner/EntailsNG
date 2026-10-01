@@ -6,6 +6,22 @@ from tournaments.services.standings import LeagueStandingService
 
 class TournamentPodiumService:
     @staticmethod
+    def placements(tournament, *, swiss_standings=None):
+        """All placements, including shared Swiss ranks, for UI and certificates."""
+        if not tournament.is_generated or tournament.status != Tournament.Status.FINISHED:
+            return []
+        if tournament.mode == Tournament.Mode.SWISS:
+            from .swiss import SwissStandingService
+            rows = swiss_standings if swiss_standings is not None else SwissStandingService.calculate(tournament)
+            return [{'rank': row['rank'], 'team': row['team']} for row in rows if row['rank'] is not None]
+        if tournament.mode == Tournament.Mode.FFA:
+            participants = tournament.matches.filter(bracket_type=TournamentMatch.BracketType.FFA).first()
+            return [{'rank': p.rank, 'team': p.team} for p in
+                    participants.participants.filter(is_disqualified=False, rank__isnull=False).select_related('team').order_by('rank', 'pk')] if participants else []
+        return [{'rank': number, 'team': team} for number, team in
+                enumerate(TournamentPodiumService.calculate(tournament).values(), 1) if team is not None]
+
+    @staticmethod
     def calculate(tournament, *, league_standings=None, ffa_participants=None):
         """Liefert die Podiums-Teams; unbekannte Plätze bleiben ``None``.
 
@@ -49,6 +65,13 @@ class TournamentPodiumService:
                 podium['first'] = final.winner
                 podium['second'] = final.loser
 
+        elif tournament.mode == Tournament.Mode.SWISS:
+            # Legacy consumers must never invent a unique winner from a shared rank.
+            places = TournamentPodiumService.placements(tournament)
+            for key, number in zip(podium, (1, 2, 3)):
+                teams = [p['team'] for p in places if p['rank'] == number]
+                podium[key] = teams[0] if len(teams) == 1 else None
+
         elif tournament.mode == Tournament.Mode.LEAGUE:
             if league_standings is None:
                 league_standings = LeagueStandingService.calculate_league_standings(tournament)
@@ -63,9 +86,9 @@ class TournamentPodiumService:
                     if ffa_match else []
                 )
             places = {1: 'first', 2: 'second', 3: 'third'}
-            for participant in ffa_participants:
-                place = places.get(participant.rank)
-                if place and not participant.is_disqualified and podium[place] is None:
-                    podium[place] = participant.team
+            participants = list(ffa_participants)
+            for rank, place in places.items():
+                teams = [p.team for p in participants if p.rank == rank and not p.is_disqualified]
+                podium[place] = teams[0] if len(teams) == 1 else None
 
         return podium

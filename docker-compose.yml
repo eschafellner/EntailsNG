@@ -48,6 +48,7 @@ services:
     volumes:
       - static_data:/app/staticfiles
       - media_data:/app/media
+      - private_media_data:/app/private_media
     depends_on:
       db:
         condition: service_healthy
@@ -130,6 +131,7 @@ volumes:
   redis_data:
   static_data:
   media_data:
+  private_media_data:
 
 
 

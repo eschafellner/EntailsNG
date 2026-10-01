@@ -1,0 +1,17 @@
+{% extends 'knowledge/base.html' %}
+{% block knowledge_content %}
+<div class="knowledge-actions knowledge-section-heading"><h1>{% if query %}{% t "knowledge_results" "Suchergebnisse" %}{% else %}{% t "knowledge_spaces" "Wissensbereiche" %}{% endif %}</h1><a class="btn btn-primary" href="{% url 'knowledge:space_create' %}">{% t "knowledge_new_space" "Bereich anlegen" %}</a></div>
+<form method="get" class="knowledge-filter"><input type="hidden" name="q" value="{{ query }}">
+  <label for="knowledge-scope">{% t "knowledge_scope" "Veranstaltungsbezug" %}</label>
+  <select id="knowledge-scope" name="scope"><option value="all">{% t "knowledge_all" "Alle Bereiche" %}</option><option value="global"{% if scope == 'global' %} selected{% endif %}>{% t "knowledge_global" "Veranstaltungsübergreifend" %}</option>{% for event in events %}<option value="{{ event.pk }}"{% if scope == event.pk|stringformat:'s' %} selected{% endif %}>{{ event.title }}</option>{% endfor %}</select>
+  <button class="btn" type="submit">{% t "knowledge_filter" "Anzeigen" %}</button>
+</form>
+{% if query %}
+  <p class="knowledge-muted">{{ results.paginator.count }} {% t "knowledge_results_for" "Treffer für" %} „{{ query }}“</p>
+  <div class="knowledge-list">{% for result in results %}<a class="card knowledge-result" href="{{ result.get_absolute_url }}"><strong>{{ result.display_title }}</strong><small>{{ result.space.name }}{% if result.space.event %} · {{ result.space.event.title }}{% endif %}{% if not result.published_revision_id %} · {% t "knowledge_draft" "Entwurf" %}{% endif %}</small></a>{% empty %}<p class="card">{% t "knowledge_no_results" "Keine passenden Dokumente gefunden." %}</p>{% endfor %}</div>
+  {% include 'knowledge/includes/pagination.html' with items=results %}
+{% else %}
+  <div class="knowledge-grid">{% for area in spaces %}<a class="card knowledge-space-card" href="{{ area.get_absolute_url }}"><p class="eyebrow">{% if area.event %}{{ area.event.title }}{% else %}{% t "knowledge_global" "Veranstaltungsübergreifend" %}{% endif %}</p><h2>{{ area.name }}</h2><p>{{ area.description }}</p><small>{{ area.page_count }} {% t "knowledge_pages" "Seiten" %}</small></a>{% empty %}<div class="card knowledge-empty"><h2>{% t "knowledge_start_title" "Wissen gemeinsam festhalten" %}</h2><p>{% t "knowledge_start_text" "Lege den ersten Bereich an, zum Beispiel Technik, Einlass oder Turnierleitung. Alle Mitarbeiter können die Dokumentation lesen und ergänzen." %}</p><a class="btn btn-primary" href="{% url 'knowledge:space_create' %}">{% t "knowledge_new_space" "Bereich anlegen" %}</a></div>{% endfor %}</div>
+  {% if recent_pages %}<h2 class="knowledge-section-heading">{% t "knowledge_recent" "Zuletzt bearbeitet" %}</h2><div class="knowledge-list">{% for recent in recent_pages %}<a class="knowledge-result card" href="{{ recent.get_absolute_url }}"><strong>{{ recent.display_title }}</strong><small>{{ recent.space.name }} · {{ recent.updated_at|date:'d.m.Y H:i' }}{% if recent.has_draft %} · {% t "knowledge_draft_available" "Entwurf vorhanden" %}{% endif %}</small></a>{% endfor %}</div>{% endif %}
+{% endif %}
+{% endblock %}

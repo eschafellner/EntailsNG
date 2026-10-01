@@ -38,10 +38,9 @@ def badge_rows(registrations, event):
 
 def certificate_rows(teams, tournament, award_title):
     teams = list(teams)
-    podium = TournamentPodiumService.calculate(tournament)
     placements = {
-        team.pk: get_translation('media_place', '{number}. Platz', number=number)
-        for number, team in enumerate(podium.values(), 1) if team is not None
+        row['team'].pk: get_translation('media_place', '{number}. Platz', number=row['rank'])
+        for row in TournamentPodiumService.placements(tournament)
     }
     members_by_team = {team.pk: [] for team in teams}
     memberships = TeamMember.objects.filter(

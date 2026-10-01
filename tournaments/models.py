@@ -1,9 +1,11 @@
 import uuid
 import secrets
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 from django.utils import timezone
+from configuration.translations import get_translation
 
 
 class Game(models.Model):
@@ -59,6 +61,7 @@ class Tournament(models.Model):
         LEAGUE = 'LEAGUE', 'Liga (Jeder gegen Jeden)'
         GROUP_STAGE = 'GROUP_STAGE', 'Gruppenspiele mit anschließendem KO-System'
         FFA = 'FFA', 'Alle in einem (Free-For-All / Deathmatch)'
+        SWISS = 'SWISS', 'Schweizer System'
 
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Entwurf'
@@ -95,6 +98,11 @@ class Tournament(models.Model):
         default=16,
         verbose_name="Max. Teams / Teilnehmer",
     )
+
+    swiss_rounds = models.PositiveSmallIntegerField(default=4, verbose_name="Schweizer System: Runden",
+        help_text="Vor dem Start festlegen. Bei gerader Teilnehmerzahl höchstens N−1, bei ungerader höchstens N Runden.")
+    swiss_allow_draws = models.BooleanField(default=False, verbose_name="Schweizer System: Unentschieden erlauben")
+    swiss_pairing_seed = models.PositiveIntegerField(null=True, blank=True, editable=False)
 
     registration_start = models.DateTimeField(verbose_name="Anmeldebeginn")
     registration_end = models.DateTimeField(verbose_name="Anmeldeschluss")
@@ -151,6 +159,7 @@ class Tournament(models.Model):
             self.Mode.LEAGUE: ('tournament_mode_league', 'Liga (Jeder gegen Jeden)'),
             self.Mode.GROUP_STAGE: ('tournament_mode_group_stage', 'Gruppenspiele mit anschließendem KO-System'),
             self.Mode.FFA: ('tournament_mode_ffa', 'Alle in einem (Free-For-All / Deathmatch)'),
+            self.Mode.SWISS: ('tournament_mode_swiss', 'Schweizer System'),
         }
         if self.mode in key_map:
             key, default = key_map[self.mode]
@@ -184,15 +193,41 @@ class Tournament(models.Model):
         return self.tournament_start or self.registration_end
 
     def save(self, *args, **kwargs):
+        self._validate_swiss_settings()
         if not self.slug:
             base_slug = slugify(self.title) or "turnier"
-            slug = base_slug
+            slug_limit = self._meta.get_field('slug').max_length
+            slug = base_slug[:slug_limit]
             count = 1
             while Tournament.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f"{base_slug}-{count}"
+                suffix = f'-{count}'
+                slug = base_slug[:slug_limit-len(suffix)] + suffix
                 count += 1
             self.slug = slug
         super().save(*args, **kwargs)
+
+    def _validate_swiss_settings(self):
+        if self.mode == self.Mode.SWISS and not 1 <= self.swiss_rounds <= 100:
+            raise ValidationError({'swiss_rounds': 'Bitte zwischen 1 und 100 Runden festlegen.'})
+        if self.pk and SwissRound.objects.filter(tournament_id=self.pk).exists():
+            original = Tournament.objects.get(pk=self.pk)
+            immutable = ('mode', 'event_id', 'game_id', 'swiss_rounds', 'swiss_allow_draws', 'swiss_pairing_seed')
+            if any(getattr(self, field) != getattr(original, field) for field in immutable):
+                raise ValidationError('Die Regeln eines gestarteten Schweizer Turniers sind festgeschrieben.')
+            if original.is_generated and not self.is_generated:
+                raise ValidationError('Bitte zum Zurücksetzen die Turnieraktion verwenden.')
+            if original.status in (self.Status.FINISHED, self.Status.CANCELLED) and self.status != original.status:
+                raise ValidationError('Ein abgeschlossenes Schweizer Turnier kann nicht wieder geöffnet werden.')
+            if self.status not in (self.Status.IN_PROGRESS, self.Status.FINISHED, self.Status.CANCELLED):
+                raise ValidationError(get_translation('audit_swiss_registration_frozen', 'Die Anmeldung eines gestarteten Schweizer Turniers kann nur über die Turnieraktion wieder geöffnet werden.'))
+            if self.status == self.Status.FINISHED:
+                last = self.swiss_round_records.order_by('-number').first()
+                if last.number != self.swiss_rounds or last.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists():
+                    raise ValidationError('Das Schweizer Turnier kann erst nach Abschluss der letzten Runde beendet werden.')
+
+    def clean(self):
+        super().clean()
+        self._validate_swiss_settings()
 
     @property
     def is_registration_open(self):
@@ -219,7 +254,7 @@ class Tournament(models.Model):
         Zentrale Autorisierungsprüfung: Prüft, ob der angegebene Benutzer
         Turnier-Administrator, Support oder System-Staff/Superuser ist.
         """
-        if not user or not user.is_authenticated:
+        if not user or not user.is_authenticated or not user.is_active or user.deleted_at:
             return False
         return bool(
             user.is_staff
@@ -417,6 +452,12 @@ class Team(models.Model):
                 )
             from tournaments.services import forfeit_team_in_active_tournaments
             forfeit_team_in_active_tournaments(self, reason=f"Walkover: Team '{self.name}' gelöscht")
+        # Swiss standings depend on every historical opponent, including withdrawals.
+        if self.tournament_registrations.filter(tournament__mode=Tournament.Mode.SWISS,
+                                                tournament__is_generated=True).exists():
+            self.is_archived = True
+            self.save(update_fields=['is_archived'])
+            return
         super().delete(*args, **kwargs)
 
     def leave_team(self, user, force_forfeit=False):
@@ -430,7 +471,7 @@ class Team(models.Model):
         if not membership:
             return False
 
-        if self.is_in_active_tournament():
+        if membership.status == TeamMember.Status.ACCEPTED and self.is_in_active_tournament():
             accepted_count = self.memberships.filter(status=TeamMember.Status.ACCEPTED).count()
             required_size = self.game.team_size if self.game and self.game.team_size else 1
             if (accepted_count - 1) < required_size or accepted_count <= 1:
@@ -556,6 +597,22 @@ class TournamentRegistration(models.Model):
     def __str__(self):
         return f"{self.team.name} -> {self.tournament.title}"
 
+    def clean(self):
+        super().clean()
+        started_swiss = self.tournament_id and Tournament.objects.filter(
+            pk=self.tournament_id, mode=Tournament.Mode.SWISS, is_generated=True).exists()
+        historical_entry = self.pk and self.swiss_entries.exists()
+        if started_swiss or historical_entry:
+            if not self.pk:
+                raise ValidationError('Nach dem Start sind keine weiteren Schweizer Teilnehmer möglich.')
+            old = TournamentRegistration.objects.get(pk=self.pk)
+            if (old.team_id, old.tournament_id, old.seed) != (self.team_id, self.tournament_id, self.seed):
+                raise ValidationError('Teilnehmer und Startreihenfolge sind bereits festgeschrieben.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
 
 class TournamentMatch(models.Model):
     class BracketType(models.TextChoices):
@@ -566,6 +623,13 @@ class TournamentMatch(models.Model):
         FINAL = 'FINAL', 'Finale'
         GROUP = 'GROUP', 'Gruppenspiel'
         FFA = 'FFA', 'Free For All'
+        SWISS = 'SWISS', 'Schweizer Runde'
+
+    class ResultType(models.TextChoices):
+        PLAYED = 'PLAYED', 'Gespielt'
+        BYE = 'BYE', 'Freilos'
+        WALKOVER = 'WALKOVER', 'Kampfloser Sieg'
+        DOUBLE_FORFEIT = 'DOUBLE_FORFEIT', 'Beide Teilnehmer zurückgezogen'
 
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Ausstehend'
@@ -580,6 +644,9 @@ class TournamentMatch(models.Model):
         verbose_name="Turnier",
     )
     round_number = models.PositiveIntegerField(default=1, verbose_name="Runde")
+    swiss_round = models.ForeignKey('SwissRound', null=True, blank=True, on_delete=models.CASCADE, related_name='matches')
+    result_type = models.CharField(max_length=20, choices=ResultType.choices, default=ResultType.PLAYED,
+                                   verbose_name="Ergebnisart")
     match_number = models.PositiveIntegerField(default=1, verbose_name="Match-Nummer in Runde")
     bracket_type = models.CharField(
         max_length=20,
@@ -679,6 +746,8 @@ class TournamentMatch(models.Model):
         verbose_name = "Turnier-Match"
         verbose_name_plural = "Turnier-Matches"
         ordering = ['bracket_type', 'round_number', 'match_number']
+        constraints = [models.UniqueConstraint(fields=['tournament', 'round_number', 'match_number'],
+            condition=models.Q(bracket_type='SWISS'), name='unique_swiss_match_number')]
 
     @property
     def winner_advances_to(self):
@@ -715,6 +784,7 @@ class TournamentMatch(models.Model):
             self.BracketType.FINAL: ('tournament_bracket_final', 'Finale'),
             self.BracketType.GROUP: ('tournament_bracket_group', 'Gruppenspiel'),
             self.BracketType.FFA: ('tournament_bracket_ffa', 'Free For All'),
+            self.BracketType.SWISS: ('tournament_bracket_swiss', 'Schweizer Runde'),
         }
         if self.bracket_type in key_map:
             key, default = key_map[self.bracket_type]
@@ -738,6 +808,8 @@ class TournamentMatch(models.Model):
             return f"Spieltag {self.round_number}{group_label}"
         elif self.bracket_type == self.BracketType.FFA:
             return f"FFA Runde {self.round_number}"
+        elif self.bracket_type == self.BracketType.SWISS:
+            return f"Schweizer Runde {self.round_number}"
         return f"Runde {self.round_number}"
 
     def __str__(self):
@@ -746,6 +818,33 @@ class TournamentMatch(models.Model):
         t1 = self.team1.name if self.team1 else ("BYE" if self.is_bye else "TBD")
         t2 = self.team2.name if self.team2 else ("BYE" if (self.is_bye and not self.team2) else "TBD")
         return f"{self.round_name} M{self.match_number}: {t1} vs {t2}"
+
+
+class SwissRound(models.Model):
+    tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='swiss_round_records')
+    number = models.PositiveSmallIntegerField(verbose_name='Runde')
+    published_at = models.DateTimeField(default=timezone.now, verbose_name='Veröffentlicht am')
+    published_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    input_digest = models.CharField(max_length=64)
+    standings_snapshot = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ['number']
+        constraints = [models.UniqueConstraint(fields=['tournament', 'number'], name='unique_swiss_round')]
+
+    def __str__(self):
+        return f'{self.tournament.title} – Runde {self.number}'
+
+
+class SwissRoundEntry(models.Model):
+    round = models.ForeignKey(SwissRound, on_delete=models.CASCADE, related_name='entries')
+    match = models.ForeignKey(TournamentMatch, on_delete=models.CASCADE, related_name='swiss_entries')
+    registration = models.ForeignKey(TournamentRegistration, on_delete=models.RESTRICT, related_name='swiss_entries')
+    team = models.ForeignKey(Team, on_delete=models.RESTRICT, related_name='swiss_entries')
+    seed = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['round', 'team'], name='unique_swiss_round_team')]
 
 
 class TournamentMatchParticipant(models.Model):

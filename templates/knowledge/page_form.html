@@ -1,0 +1,26 @@
+{% extends 'knowledge/base.html' %}{% load static %}
+{% block knowledge_content %}
+<div class="knowledge-layout">{% include 'knowledge/includes/tree.html' %}<section class="card knowledge-document">
+  {% include 'knowledge/includes/breadcrumbs.html' %}<h1>{% if page %}{% t "knowledge_edit_page" "Seite bearbeiten" %}{% else %}{% t "knowledge_new_page" "Seite anlegen" %}{% endif %}</h1>
+  {% if form.non_field_errors %}<div class="knowledge-notice knowledge-error" role="alert">{{ form.non_field_errors }}{% if page %}<a href="{% url 'knowledge:edit' page.pk %}" target="_blank" rel="noopener">{% t "knowledge_open_current" "Aktuellen Stand in einem zweiten Tab öffnen" %}</a>{% endif %}</div>{% endif %}
+  <form method="post" class="knowledge-fields" id="knowledge-editor-form"{% if page %} data-upload-url="{% url 'knowledge:upload' page.pk %}"{% endif %}>
+    {% csrf_token %}{{ form.expected_version }}
+    <p>{{ form.title.label_tag }}{{ form.title }}{{ form.title.errors }}</p>
+    <div class="knowledge-form-grid"><p>{{ form.parent.label_tag }}{{ form.parent }}{{ form.parent.errors }}</p><p>{{ form.order.label_tag }}{{ form.order }}{{ form.order.errors }}</p></div>
+    <div class="knowledge-link-picker"><label for="knowledge-link">{% t "knowledge_internal_link" "Andere Wissensseite verlinken" %}</label><select id="knowledge-link"><option value="">{% t "knowledge_choose_page" "Seite auswählen …" %}</option>{% for linked in link_pages %}<option value="{{ linked.get_absolute_url }}">{{ linked.space.name }} / {{ linked.display_title }}</option>{% endfor %}</select><button class="btn" type="button" id="knowledge-insert-link">{% t "knowledge_insert_link" "Link einfügen" %}</button></div>
+    <div>{{ form.content.label_tag }}{{ form.content }}{{ form.content.errors }}</div>
+    <p>{{ form.note.label_tag }}{{ form.note }}{{ form.note.errors }}</p>
+    <div class="knowledge-actions"><button type="submit" name="action" value="draft" class="btn">{% t "knowledge_save_draft" "Entwurf speichern" %}</button><button type="submit" name="action" value="publish" class="btn btn-primary">{% t "knowledge_publish" "Speichern und veröffentlichen" %}</button><a class="btn" href="{% if page %}{{ page.get_absolute_url }}{% else %}{{ space.get_absolute_url }}{% endif %}">{% t "knowledge_cancel" "Abbrechen" %}</a></div>
+  </form>
+  <section class="knowledge-attachments"><h2>{% t "knowledge_attachments" "Anhänge" %}</h2>
+    <p id="knowledge-upload-status" role="status" aria-live="polite"></p>
+    {% if page %}
+    <form method="post" enctype="multipart/form-data" action="{% url 'knowledge:upload' page.pk %}" id="knowledge-upload-form" class="knowledge-actions">{% csrf_token %}<label for="id_file">{% t "knowledge_file" "Datei (max. 10 MB)" %}</label>{{ attachment_form.file }}<button type="submit" class="btn">{% t "knowledge_upload" "Hochladen" %}</button></form>
+    <p class="knowledge-muted">{% t "knowledge_attachment_hint" "Anhänge werden sofort gespeichert. Füge Bilder oder Datei-Links anschließend in den Text ein; vorhandene Dateien bleiben für frühere Seitenversionen erhalten." %}</p>
+    <ul id="knowledge-attachment-list">{% for attachment in attachments %}<li><a href="{{ attachment.get_absolute_url }}">{{ attachment.original_name }}</a> <small>{{ attachment.size|filesizeformat }}</small><button type="button" class="btn knowledge-insert-attachment" data-url="{% if attachment.is_image %}{{ attachment.image_url }}{% else %}{{ attachment.get_absolute_url }}{% endif %}" data-name="{{ attachment.original_name }}" data-image="{{ attachment.is_image|yesno:'1,0' }}">{% if attachment.is_image %}{% t "knowledge_insert_image" "Bild einfügen" %}{% else %}{% t "knowledge_insert_link" "Link einfügen" %}{% endif %}</button></li>{% endfor %}</ul>
+    {% else %}<p class="knowledge-muted">{% t "knowledge_save_before_upload" "Speichere die neue Seite zuerst als Entwurf. Danach kannst du Bilder und Dateien hochladen." %}</p>{% endif %}
+  </section>
+</section></div>
+{{ knowledge_js_texts|json_script:'knowledge-js-texts' }}
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/knowledge.js' %}"></script>{{ form.media }}{% endblock %}

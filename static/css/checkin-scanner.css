@@ -103,6 +103,7 @@
 
 /* INPUT CONTROLS */
 .scanner-input {
+  min-width: 0;
   background: var(--paper);
   color: var(--ink);
   border: 1px solid var(--line);
@@ -112,6 +113,8 @@
   font-size: 13px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+
+#btn-manual-scan { flex-shrink: 0; }
 
 .scanner-input:focus {
   outline: none;
@@ -132,6 +135,53 @@
   border-radius: 12px;
   position: relative;
 }
+
+/* One persistent result, briefly enlarged over the camera after confirmation. */
+.scanner-result-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.scanner-result-card.is-prominent {
+  position: fixed;
+  z-index: 10000;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  background: var(--panel);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.65);
+}
+
+.scanner-feedback {
+  padding: 24px 16px;
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px solid var(--line);
+  text-align: center;
+  min-height: 200px;
+  overflow-wrap: anywhere;
+}
+
+.scanner-feedback[data-state="success"] { background: #166534; color: #fff; border-color: #22c55e; }
+.scanner-feedback[data-state="warning"] { background: #854d0e; color: #fff; border-color: #facc15; }
+.scanner-feedback[data-state="error"] { background: #991b1b; color: #fff; border-color: #f87171; }
+.scanner-feedback-icon { display: block; font-size: 48px; line-height: 1; margin-bottom: 10px; }
+.scanner-feedback-title { font-family: 'Barlow Condensed', sans-serif; font-size: 30px; line-height: 1.1; margin: 0 0 10px; color: inherit; }
+.scanner-feedback-message { font-size: 14px; margin: 0; color: inherit; }
+.scanner-feedback-summary { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 700; margin: 16px 0 0; color: inherit; }
+.scanner-next-hint { font-size: 12px; color: var(--muted); text-align: center; margin: 12px 0 0; }
+.scanner-result-details { margin-top: 16px; background: var(--paper); padding: 14px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px; overflow-wrap: anywhere; }
+.scanner-result-details[hidden], .scanner-feedback-summary[hidden] { display: none; }
+.scanner-container[data-feedback="success"] .scanner-reader-viewport { border: 3px solid #22c55e; }
+.scanner-container[data-feedback="warning"] .scanner-reader-viewport { border: 3px solid #facc15; }
+.scanner-container[data-feedback="error"] .scanner-reader-viewport { border: 3px solid #f87171; }
+.scanner-container button:disabled { opacity: 0.55; cursor: wait; }
 
 .scanner-reader-viewport {
   width: 100%;
@@ -494,6 +544,10 @@
    ========================================================================= */
 
 @media (max-width: 768px) {
+  .scanner-grid { grid-template-columns: minmax(0, 1fr); }
+  .scanner-card { padding: 14px; }
+  .scanner-result-card { order: -1; }
+  .scanner-feedback { min-height: 160px; padding: 18px 12px; }
   .scanner-header {
     padding: 14px;
     gap: 14px;

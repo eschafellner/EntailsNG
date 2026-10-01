@@ -4,6 +4,11 @@ from configuration.models import NavigationItem
 
 DEFAULT_NAV_ITEMS = [
     {
+        'title': 'Wissensbasis', 'url_name': 'knowledge:home', 'icon_name': 'rules', 'order': 10,
+        'visibility': NavigationItem.Visibility.STAFF,
+        'icon_svg': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 3H20v19H6.5A2.5 2.5 0 0 1 4 19.5v-14A2.5 2.5 0 0 1 6.5 3Z"/></svg>',
+    },
+    {
         'title': 'Dashboard',
         'url_name': 'dashboard',
         'icon_name': 'dashboard',
@@ -141,6 +146,7 @@ class Command(BaseCommand):
                     'order': nav_data['order'],
                     'icon_svg': nav_data['icon_svg'],
                     'is_active': True,
+                    'visibility': nav_data.get('visibility', NavigationItem.Visibility.PUBLIC),
                 },
             )
             if not created and reset_mode:
@@ -149,6 +155,8 @@ class Command(BaseCommand):
                 item.icon_svg = nav_data['icon_svg']
                 item.order = nav_data['order']
                 item.is_active = True
+                if 'visibility' in nav_data:
+                    item.visibility = nav_data['visibility']
                 item.save()
             elif not created:
                 # Im normalen Lauf nur fehlende Icons/SVGs nachrüsten, falls leer, aber keine Nutzereinstellungen überschreiben

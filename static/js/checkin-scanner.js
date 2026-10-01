@@ -1,11 +1,22 @@
 /**
- * Check-in Scanner Frontend Controller
- * Kapselt Kamera-QR-Scan, Web Audio Feedback, USB/Token-Scans und AJAX-Statusupdates.
+ * Shared, server-confirmed feedback for camera, USB scanner and guest list.
  */
-
 let html5QrcodeScanner = null;
 let isScannerRunning = false;
+let isCameraStarting = false;
 let audioCtx = null;
+let scanBusy = false;
+let nextScanAt = 0;
+let feedbackTimer = null;
+let lastCameraCode = '';
+let lastCameraSeenAt = 0;
+const FEEDBACK_HOLD_MS = 3000;
+const CAMERA_REMOVAL_MS = 1500;
+
+function scannerText(key) {
+  const texts = JSON.parse(document.getElementById('scanner-feedback-texts').textContent);
+  return texts[key] || '';
+}
 
 function getCsrfToken() {
   const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -14,153 +25,148 @@ function getCsrfToken() {
   return match ? match[1] : '';
 }
 
-// WEB AUDIO API SOUND GENERATOR
-function playTone(type) {
+// Unlock audio on user interaction; sound is supplementary to visible feedback.
+function prepareAudio() {
   try {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  } catch (_) { /* Audio may be unavailable on this device. */ }
+}
+
+function playTone(type) {
+  prepareAudio();
+  if (!audioCtx || audioCtx.state !== 'running') return;
+  try {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain);
     gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    osc.type = type === 'success' ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(type === 'success' ? 880 : type === 'warning' ? 600 : 220, now);
+    if (type === 'success') osc.frequency.exponentialRampToValueAtTime(1320, now + 0.15);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    osc.start(now);
+    osc.stop(now + 0.3);
+  } catch (_) { /* Visual feedback remains available. */ }
+}
 
-    if (type === 'success') {
-      // Hoher angenehmer Chime-Ton
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
-      osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.15); // E6
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.3);
-    } else if (type === 'warning') {
-      // Doppel-Beep für bereits eingecheckt
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.2);
-    } else {
-      // Tiefer Fehler-Brummton für Unbezahlt / Ungültig
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(220, audioCtx.currentTime); // A3
-      osc.frequency.setValueAtTime(140, audioCtx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
-    }
-  } catch (e) {
-    console.warn("Audio feedback unavailable:", e);
+function setScanControls(disabled) {
+  document.querySelectorAll('#btn-manual-scan, #toggle-camera-btn, .btn-checkin-action').forEach(button => {
+    button.disabled = disabled;
+  });
+}
+
+function renderScanFeedback(state, title, message, body = {}, prominent = false) {
+  const banner = document.getElementById('scan-status-banner');
+  const card = document.getElementById('scan-result-card');
+  banner.dataset.state = state;
+  document.querySelector('.scanner-container').dataset.feedback = state;
+  // API messages contain guest input: always render text, never HTML.
+  document.getElementById('scan-result-icon').textContent =
+    { ready: '⌁', checking: '…', success: '✓', warning: '⚠', error: '✕' }[state];
+  document.getElementById('scan-result-title').textContent = title;
+  document.getElementById('scan-result-message').textContent = message;
+  const summary = document.getElementById('scan-result-summary');
+  summary.textContent = [
+    body.user,
+    body.seat ? scannerText('seat') + ': ' + body.seat : '',
+    body.checked_in_at ? scannerText('time') + ': ' + body.checked_in_at : ''
+  ].filter(Boolean).join(' · ');
+  summary.hidden = !summary.textContent;
+  const details = document.getElementById('scan-details-box');
+  details.hidden = !body.user;
+  ['user', 'name', 'seat', 'ticket'].forEach(key => {
+    document.getElementById('res-' + key).textContent = body[key === 'name' ? 'full_name' : key] || '—';
+  });
+  banner.setAttribute('aria-busy', state === 'checking' ? 'true' : 'false');
+  card.classList.toggle('is-prominent', prominent);
+  if (prominent) {
+    playTone(state);
+    try {
+      if (navigator.vibrate) navigator.vibrate(state === 'success' ? 100 : [80, 60, 80]);
+    } catch (_) { /* Vibration is optional. */ }
   }
 }
 
-// SCAN ANFRAGE VERARBEITEN
+function holdScanFeedback() {
+  setScanControls(true);
+  nextScanAt = Date.now() + FEEDBACK_HOLD_MS;
+  document.getElementById('scan-next-hint').textContent = scannerText('pause');
+  clearTimeout(feedbackTimer);
+  feedbackTimer = setTimeout(() => {
+    nextScanAt = 0;
+    document.getElementById('scan-result-card').classList.remove('is-prominent');
+    document.getElementById('scan-next-hint').textContent = scannerText('next');
+    setScanControls(scanBusy);
+  }, FEEDBACK_HOLD_MS);
+}
+
+function startScannerRequest(url, payload, isToggle = false) {
+  if (scanBusy || Date.now() < nextScanAt) return false;
+  prepareAudio();
+  scanBusy = true;
+  setScanControls(true);
+  renderScanFeedback('checking', scannerText('checking'), scannerText('waiting'));
+  document.getElementById('scan-next-hint').textContent = scannerText('waiting');
+  void performScannerRequest(url, payload, isToggle);
+  return true;
+}
+
+async function performScannerRequest(url, payload, isToggle) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    // Server errors, expired sessions (HTML redirects) and lost replies are uncertain.
+    if (response.redirected || response.status >= 500) throw new Error('Unconfirmed response');
+    const body = await response.json();
+    if (response.ok && (body.status === 'success' || body.status === 'already_checked_in')) {
+      const checkedIn = isToggle ? body.is_checked_in : true;
+      const warning = body.status === 'already_checked_in' || !checkedIn;
+      const title = body.status === 'already_checked_in' ? scannerText('already') :
+        checkedIn ? scannerText('success') : scannerText('checkout');
+      renderScanFeedback(warning ? 'warning' : 'success', title, body.message, body, true);
+      updateLocalTableStatus(body.registration_id || payload.registration_id, checkedIn, body.checked_in_at);
+    } else {
+      renderScanFeedback(response.status === 429 ? 'warning' : 'error',
+        response.status === 429 ? scannerText('limited') : scannerText('rejected'),
+        body.message || scannerText('unknown'), body, true);
+    }
+  } catch (_) {
+    renderScanFeedback('error', scannerText('unconfirmed'), scannerText('network'), {}, true);
+    // The request may have been saved even if its reply was lost.
+    loadGuestPage();
+  } finally {
+    clearTimeout(timeout);
+    scanBusy = false;
+    holdScanFeedback();
+  }
+}
+
 function sendScanCode(code) {
-  const banner = document.getElementById('scan-status-banner');
-  const detailsBox = document.getElementById('scan-details-box');
-  if (!banner) return;
-
-  banner.style.background = '#0b0f17';
-  banner.style.borderColor = 'var(--line)';
-  banner.innerHTML = '<span style="font-size: 32px;">⏳</span><p style="color: var(--muted); margin: 6px 0 0 0;">Code wird geprüft...</p>';
-
-  fetch('/api/check-in/scan/', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': getCsrfToken()
-    },
-    body: JSON.stringify({ code: code })
-  })
-  .then(res => res.json().then(data => ({ status: res.status, body: data })))
-  .then(({ status, body }) => {
-    if (detailsBox) detailsBox.style.display = 'block';
-    const resUser = document.getElementById('res-user');
-    const resName = document.getElementById('res-name');
-    const resSeat = document.getElementById('res-seat');
-    const resTicket = document.getElementById('res-ticket');
-
-    if (resUser) resUser.innerText = body.user || '-';
-    if (resName) resName.innerText = body.full_name || '-';
-    if (resSeat) resSeat.innerText = body.seat || '-';
-    if (resTicket) resTicket.innerText = body.ticket || '-';
-
-    if (body.status === 'success') {
-      playTone('success');
-      banner.style.background = 'rgba(34, 197, 94, 0.15)';
-      banner.style.borderColor = '#22c55e';
-      banner.innerHTML = `
-        <span style="font-size: 48px; color: #22c55e;">✓</span>
-        <h3 style="margin: 6px 0 2px 0; color: #22c55e; font-family: 'Barlow Condensed', sans-serif; font-size: 26px;">EINLASS GESTATTET</h3>
-        <p style="margin: 0; color: #86efac; font-family: 'JetBrains Mono', monospace; font-size: 13px;">${body.message}</p>
-      `;
-      updateLocalTableStatus(body.registration_id, true, body.checked_in_at);
-
-    } else if (body.status === 'already_checked_in') {
-      playTone('warning');
-      banner.style.background = 'rgba(234, 179, 8, 0.15)';
-      banner.style.borderColor = '#eab308';
-      banner.innerHTML = `
-        <span style="font-size: 48px; color: #eab308;">⚠️</span>
-        <h3 style="margin: 6px 0 2px 0; color: #eab308; font-family: 'Barlow Condensed', sans-serif; font-size: 26px;">BEREITS EINGECHECKT</h3>
-        <p style="margin: 0; color: #fde047; font-family: 'JetBrains Mono', monospace; font-size: 13px;">${body.message}</p>
-      `;
-
-    } else if (body.status === 'unpaid') {
-      playTone('error');
-      banner.style.background = 'rgba(239, 68, 68, 0.2)';
-      banner.style.borderColor = '#ef4444';
-      banner.innerHTML = `
-        <span style="font-size: 48px; color: #ef4444;">⛔</span>
-        <h3 style="margin: 6px 0 2px 0; color: #ef4444; font-family: 'Barlow Condensed', sans-serif; font-size: 26px;">CHECK-IN ABGELEHNT</h3>
-        <p style="margin: 0; color: #fca5a5; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold;">${body.message}</p>
-      `;
-
-    } else {
-      playTone('error');
-      banner.style.background = 'rgba(239, 68, 68, 0.15)';
-      banner.style.borderColor = '#ef4444';
-      banner.innerHTML = `
-        <span style="font-size: 48px; color: #ef4444;">✖</span>
-        <h3 style="margin: 6px 0 2px 0; color: #ef4444; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">UNGÜLTIGER CODE</h3>
-        <p style="margin: 0; color: #fca5a5; font-family: 'JetBrains Mono', monospace; font-size: 12px;">${body.message || 'Code nicht gefunden'}</p>
-      `;
-    }
-  })
-  .catch(() => {
-    playTone('error');
-    banner.style.background = 'rgba(239, 68, 68, 0.15)';
-    banner.style.borderColor = '#ef4444';
-    banner.innerHTML = '<span style="font-size: 32px;">⚠️</span><p style="color: #fca5a5; margin: 6px 0 0 0;">Netzwerkfehler beim Scannen.</p>';
-  });
+  if (!code.trim()) return false;
+  return startScannerRequest('/api/check-in/scan/', { code: code.trim() });
 }
 
-// TOGGLE CHECK-IN PER BUTTON IN DER TABELLE
 function toggleCheckIn(registrationId) {
-  fetch('/api/check-in/toggle/', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': getCsrfToken()
-    },
-    body: JSON.stringify({ registration_id: registrationId })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.status === 'success') {
-      updateLocalTableStatus(registrationId, data.is_checked_in, data.checked_in_at);
-      playTone(data.is_checked_in ? 'success' : 'warning');
-    } else {
-      alert(data.message || 'Fehler beim Umschalten.');
-    }
-  })
-  .catch(err => {
-    alert('Netzwerkfehler: ' + err);
-  });
+  return startScannerRequest('/api/check-in/toggle/', { registration_id: registrationId }, true);
 }
+
+function handleCameraCode(decodedText) {
+  const now = Date.now();
+  if (now - lastCameraSeenAt >= CAMERA_REMOVAL_MS) lastCameraCode = '';
+  lastCameraSeenAt = now;
+  if (decodedText === lastCameraCode) return;
+  if (sendScanCode(decodedText)) lastCameraCode = decodedText;
+}
+
 
 let currentFilter = 'all';
 let displayedFilter = 'all';
@@ -199,6 +205,7 @@ function loadGuestPage(page = 1, append = false) {
       const tbody = document.getElementById('guest-table-body');
       if (append) tbody.insertAdjacentHTML('beforeend', data.rows_html);
       else tbody.innerHTML = data.rows_html;
+      setScanControls(scanBusy || Date.now() < nextScanAt);
       tbody.dataset.matchCount = data.match_count;
       displayedFilter = currentFilter;
       displayedQuery = query;
@@ -250,31 +257,38 @@ function updateLocalTableStatus(regId, isCheckedIn, timeStr) {
 }
 
 function startCamera() {
+  if (isCameraStarting || isScannerRunning) return;
+  prepareAudio();
   if (typeof Html5Qrcode === 'undefined') {
-    alert("QR-Code Bibliothek lädt noch oder wird blockiert.");
+    renderScanFeedback('error', scannerText('camera'), scannerText('library'), {}, true);
+    holdScanFeedback();
     return;
   }
 
   const cameraBtn = document.getElementById('toggle-camera-btn');
   const placeholder = document.getElementById('camera-placeholder');
   if (placeholder) placeholder.style.display = 'none';
-
+  isCameraStarting = true;
+  lastCameraCode = '';
+  lastCameraSeenAt = 0;
   html5QrcodeScanner = new Html5Qrcode("reader");
   html5QrcodeScanner.start(
     { facingMode: "environment" },
     { fps: 10, qrbox: { width: 220, height: 220 } },
-    (decodedText) => {
-      sendScanCode(decodedText);
-    },
+    handleCameraCode,
     () => {}
   ).then(() => {
     isScannerRunning = true;
+    isCameraStarting = false;
     if (cameraBtn) {
-      cameraBtn.innerText = "Kamera Stoppen";
+      cameraBtn.innerText = scannerText('camera_stop');
       cameraBtn.classList.add('btn-camera-active');
     }
   }).catch(() => {
-    alert("Kamera-Zugriff nicht möglich. Bitte Berechtigung im Browser erteilen.");
+    isCameraStarting = false;
+    if (placeholder) placeholder.style.display = 'block';
+    renderScanFeedback('error', scannerText('camera'), scannerText('camera_permission'), {}, true);
+    holdScanFeedback();
   });
 }
 
@@ -284,7 +298,7 @@ function stopCamera() {
       isScannerRunning = false;
       const cameraBtn = document.getElementById('toggle-camera-btn');
       if (cameraBtn) {
-        cameraBtn.innerText = "Kamera Starten";
+        cameraBtn.innerText = scannerText('camera_start');
         cameraBtn.classList.remove('btn-camera-active');
       }
       const placeholder = document.getElementById('camera-placeholder');
@@ -295,19 +309,21 @@ function stopCamera() {
 
 // EVENTS & INIT
 document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('pointerdown', prepareAudio, { once: true });
   const manualBtn = document.getElementById('btn-manual-scan');
   const manualInput = document.getElementById('manual-code-input');
 
   if (manualBtn && manualInput) {
     manualBtn.addEventListener('click', () => {
       const val = manualInput.value.trim();
-      if (val) { sendScanCode(val); manualInput.value = ''; }
+      if (val && sendScanCode(val)) manualInput.value = '';
     });
 
     manualInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
+        e.preventDefault();
         const val = manualInput.value.trim();
-        if (val) { sendScanCode(val); manualInput.value = ''; }
+        if (val && sendScanCode(val)) manualInput.value = '';
       }
     });
   }
@@ -345,20 +361,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const visibleRows = Array.from(document.querySelectorAll('.guest-row'));
         if (visibleRows.length === 1 && Number(document.getElementById('guest-table-body').dataset.matchCount) === 1) {
           const targetRow = visibleRows[0];
-          const regId = targetRow.getAttribute('data-id');
-          const isAlreadyCheckedIn = targetRow.getAttribute('data-checked-in') === 'true';
-
-          if (!isAlreadyCheckedIn) {
-            toggleCheckIn(regId);
-            targetRow.style.outline = '2px solid #22c55e';
-            setTimeout(() => { targetRow.style.outline = ''; }, 1200);
-          } else {
-            playTone('warning');
-            targetRow.style.outline = '2px solid #eab308';
-            setTimeout(() => { targetRow.style.outline = ''; }, 1200);
-          }
+          // Enter always checks in; a stale list must never check a guest out.
+          sendScanCode(targetRow.getAttribute('data-code') || '');
         } else if (visibleRows.length === 0) {
-          playTone('error');
+          if (!scanBusy && Date.now() >= nextScanAt) {
+            renderScanFeedback('error', scannerText('rejected'), scannerText('no_guest'), {}, true);
+            holdScanFeedback();
+          }
         }
       }
     });

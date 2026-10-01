@@ -1,0 +1,11 @@
+{% extends 'knowledge/base.html' %}
+{% block knowledge_content %}<div class="knowledge-layout">{% include 'knowledge/includes/tree.html' %}<article class="card knowledge-document">
+{% include 'knowledge/includes/breadcrumbs.html' %}<p class="eyebrow">{% t "knowledge_historical" "Frühere Seitenversion" %} · {{ revision.number }}</p><h1>{{ revision.title }}</h1><p class="knowledge-muted">{{ revision.created_at|date:'d.m.Y H:i' }} · {{ revision.author.display_name|default:'—' }}{% if revision.note %} · {{ revision.note }}{% endif %}</p>
+<div class="knowledge-actions"><a class="btn" href="{% url 'knowledge:history' page.pk %}">{% t "knowledge_history" "Versionshistorie" %}</a>
+  <form method="post" action="{% url 'knowledge:restore' page.pk revision.pk %}">{% csrf_token %}<input type="hidden" name="expected_version" value="{{ page.version }}"><button class="btn" type="submit">{% t "knowledge_restore" "Als neuen Entwurf übernehmen" %}</button></form></div>
+<p class="knowledge-muted">{% t "knowledge_restore_hint" "Die veröffentlichte Version bleibt bestehen, bis der wiederhergestellte Entwurf veröffentlicht wird." %}</p>
+<div class="knowledge-content">{{ revision_content|safe }}</div>
+<details class="knowledge-diff" open><summary>{% t "knowledge_compare" "Textänderungen vergleichen" %}</summary>
+<form method="get" class="knowledge-actions"><label for="knowledge-compare">{% t "knowledge_compare_with" "Vergleichen mit" %}</label><select name="compare" id="knowledge-compare"><option value=""{% if not previous %} selected{% endif %}>{% t "knowledge_compare_auto" "Vorherige Version (automatisch)" %}</option>{% for choice in comparison_revisions %}<option value="{{ choice.pk }}"{% if choice.pk == previous.pk %} selected{% endif %}>{% t "knowledge_version" "Version" %} {{ choice.number }}</option>{% endfor %}</select><button class="btn" type="submit">{% t "knowledge_compare_button" "Vergleichen" %}</button></form>
+<pre>{% if diff %}{{ diff }}{% else %}{% t "knowledge_diff_empty" "Keine Textänderungen." %}{% endif %}</pre></details>
+</article></div>{% endblock %}

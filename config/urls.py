@@ -64,6 +64,7 @@ urlpatterns = [
     path('', include('configuration.urls')),
     path('tinymce/', include('tinymce.urls')),
     path('info/', include('info.urls')),
+    path('knowledge/', include('knowledge.urls')),
     path('news/', include('news.urls')),
     path('seating/', include('seating.urls')),
     path('clans/', include('clans.urls')),

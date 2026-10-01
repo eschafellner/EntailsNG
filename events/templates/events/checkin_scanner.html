@@ -89,23 +89,26 @@
     </div>
 
     <!-- SCAN ERGEBNIS & STATUS DISPLAY CARD -->
-    <div class="card scanner-card" style="display: flex; flex-direction: column; justify-content: space-between;" id="scan-result-card">
+    <div class="card scanner-card scanner-result-card" id="scan-result-card">
       <div>
         <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; margin-top: 0; margin-bottom: 14px;">
           {% t "scanner_result_title" "Scan-Ergebnis" %}
         </h2>
 
         <!-- Status Result Banner -->
-        <div id="scan-status-banner" style="padding: 24px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); text-align: center; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-          <span style="font-size: 36px; margin-bottom: 8px;">🔍</span>
-          <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted);">
+        <div id="scan-status-banner" class="scanner-feedback" data-state="ready" role="status" aria-live="polite" aria-atomic="true">
+          <span id="scan-result-icon" class="scanner-feedback-icon" aria-hidden="true">⌁</span>
+          <h3 id="scan-result-title" class="scanner-feedback-title">{% t "scanner_feedback_ready" "Bereit zum Scannen" %}</h3>
+          <p id="scan-result-message" class="scanner-feedback-message">
             {% t "scanner_ready_text" "Bereit zum Scannen. Bitte QR-Code in das Kamerafeld halten oder 8-stelligen Ticket-Code eingeben." %}
           </p>
+          <p id="scan-result-summary" class="scanner-feedback-summary" hidden></p>
         </div>
+        <p id="scan-next-hint" class="scanner-next-hint">{% t "scanner_feedback_next" "Bereit für den nächsten Gast." %}</p>
       </div>
 
       <!-- Quick Details Card -->
-      <div id="scan-details-box" style="display: none; margin-top: 16px; background: var(--paper); padding: 14px; border-radius: 8px; border: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+      <div id="scan-details-box" class="scanner-result-details" hidden>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
           <div><span style="color: var(--muted);">GAST:</span> <strong id="res-user" style="color: var(--ink);">-</strong></div>
           <div><span style="color: var(--muted);">NAME:</span> <strong id="res-name" style="color: var(--ink);">-</strong></div>
@@ -196,6 +199,7 @@
 </div>
 
 <!-- OFFLINE-CAPABLE HTML5 QR CODE SCANNER LIBRARY -->
+{{ scanner_feedback_texts|json_script:"scanner-feedback-texts" }}
 <script src="{% static 'js/vendor/html5-qrcode.min.js' %}"></script>
 <script src="{% static 'js/checkin-scanner.js' %}"></script>
 {% endblock %}

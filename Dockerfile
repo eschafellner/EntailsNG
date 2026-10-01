@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/
 
 # Verzeichnisse für Static- und Media-Dateien anlegen und Rechte setzen
-RUN mkdir -p /app/staticfiles /app/media && \
+RUN mkdir -p /app/staticfiles /app/media /app/private_media && \
     chown -R appuser:appuser /app && \
     chmod +x /app/entrypoint.sh
 

@@ -49,3 +49,28 @@
   .tournaments-ui .bracket-round { min-width: 240px; }
   .tournaments-ui form { min-width: 0; flex-wrap: wrap; }
 }
+/* Swiss standings and round publication stay usable on narrow screens. */
+.swiss-section { min-width: 0; }
+.swiss-round-header, .swiss-withdraw-form { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.swiss-round-header { justify-content: space-between; }
+.swiss-round-header h2 { margin-bottom: 8px; }
+.swiss-round-header p, .swiss-match-note { font-size: 13px; color: var(--muted); }
+.swiss-table-wrap { overflow-x: auto; margin: 16px 0 28px; }
+.swiss-table { border-collapse: collapse; width: 100%; min-width: 660px; font-size: 14px; }
+#swiss-tiebreak-hint { color: var(--muted); font-size: 14px; }
+.swiss-table th, .swiss-table td { white-space: nowrap; }
+.swiss-table th:nth-child(2) { white-space: normal; min-width: 140px; max-width: 200px; }
+.swiss-table th, .swiss-table td { text-align: left; padding: 10px; border-bottom: 1px solid var(--line); }
+.swiss-my-row, .swiss-my-state { background: var(--signal-soft); }
+.swiss-round-grid, .swiss-preview-pairs, .swiss-podium { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 16px; }
+.swiss-round-column { min-width: 0; }
+.swiss-round-column .match-card { margin-bottom: 12px; }
+.swiss-preview-page { max-width: 1000px; margin: 0 auto; }
+.swiss-preview-page > a { display: inline-block; margin-bottom: 16px; }
+.swiss-preview-pairs { margin: 20px 0; }
+.swiss-preview-pairs .ux-card { margin: 0; overflow-wrap: anywhere; }
+.swiss-withdrawals { margin-top: 24px; }
+.swiss-withdraw-form { border-top: 1px solid var(--line); padding: 14px 0; }
+.swiss-withdraw-form label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.swiss-withdraw-form input { min-width: 0; max-width: 100%; padding: 8px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+.swiss-section button, .swiss-preview-page button { padding: 8px 12px; border-radius: 6px; cursor: pointer; }

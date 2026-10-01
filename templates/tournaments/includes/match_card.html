@@ -22,13 +22,19 @@
       {% if match.team2 %}
         {% if user_team and match.team2 == user_team %}⭐ {% endif %}{{ match.team2.name }}
       {% else %}
-        {% t "tournament_match_tbd" "TBD" %}
+        {% if match.is_bye %}{% t "tournament_match_bye" "Freilos (BYE)" %}{% else %}{% t "tournament_match_tbd" "TBD" %}{% endif %}
       {% endif %}
     </span>
     <strong>{{ match.score_team2|default_if_none:"-" }}</strong>
   </div>
 
-  {% if match.status != 'COMPLETED' and not match.is_bye and match.team1 and match.team2 %}
+  {% if match.bracket_type == 'SWISS' and match.result_type != 'PLAYED' %}
+    <p class="swiss-match-note">{{ match.get_result_type_display }}{% if match.decision_reason %} · {{ match.decision_reason }}{% endif %}</p>
+  {% endif %}
+  {% if not results_locked and match.status == 'COMPLETED' and match.swiss_editable %}
+    <button type="button" class="btn-action-primary" onclick="openScoreModal(this)" data-match-id="{{ match.id }}" data-score-url="{% url 'match_update_score' match_id=match.id %}">{% t "swiss_correct_result" "Ergebnis korrigieren" %}</button>
+  {% endif %}
+  {% if not results_locked and match.status != 'COMPLETED' and not match.is_bye and match.team1 and match.team2 %}
     {% if is_admin %}
       <button type="button" onclick="openScoreModal(this)" data-match-id="{{ match.id }}" data-score-url="{% url 'match_update_score' match_id=match.id %}" style="margin-top: 6px; background: #0284c7; color: white; border: none; padding: 5px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 14px; cursor: pointer; width: 100%;">
         {% t "tournament_match_enter_score_btn" "✏️ Ergebnis eintragen" %}
@@ -36,11 +42,11 @@
     {% elif user_team %}
       {% if match.team1 == user_team %}
         <button type="button" onclick="openScoreModal(this)" data-match-id="{{ match.id }}" data-score-url="{% url 'match_update_score' match_id=match.id %}" style="margin-top: 6px; background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid #f87171; padding: 5px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 14px; cursor: pointer; width: 100%; font-weight: bold;">
-          {% if tournament.mode == "LEAGUE" or match.bracket_type == "GROUP" %}{% t "ux_confirm_result" "Ergebnis bestätigen" %}{% else %}{% t "tournament_match_report_defeat_btn" "🏳️ Niederlage melden" %}{% endif %}
+          {% if tournament.mode == "LEAGUE" or match.bracket_type == "GROUP" or tournament.mode == "SWISS" and tournament.swiss_allow_draws %}{% t "ux_confirm_result" "Ergebnis bestätigen" %}{% else %}{% t "tournament_match_report_defeat_btn" "🏳️ Niederlage melden" %}{% endif %}
         </button>
       {% elif match.team2 == user_team %}
         <button type="button" onclick="openScoreModal(this)" data-match-id="{{ match.id }}" data-score-url="{% url 'match_update_score' match_id=match.id %}" style="margin-top: 6px; background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid #f87171; padding: 5px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 14px; cursor: pointer; width: 100%; font-weight: bold;">
-          {% if tournament.mode == "LEAGUE" or match.bracket_type == "GROUP" %}{% t "ux_confirm_result" "Ergebnis bestätigen" %}{% else %}{% t "tournament_match_report_defeat_btn" "🏳️ Niederlage melden" %}{% endif %}
+          {% if tournament.mode == "LEAGUE" or match.bracket_type == "GROUP" or tournament.mode == "SWISS" and tournament.swiss_allow_draws %}{% t "ux_confirm_result" "Ergebnis bestätigen" %}{% else %}{% t "tournament_match_report_defeat_btn" "🏳️ Niederlage melden" %}{% endif %}
         </button>
       {% endif %}
     {% endif %}

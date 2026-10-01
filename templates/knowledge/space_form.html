@@ -1,0 +1,6 @@
+{% extends 'knowledge/base.html' %}
+{% block knowledge_content %}
+<section class="card knowledge-form-card"><h1>{% if space %}{% t "knowledge_edit_space" "Bereich bearbeiten" %}{% else %}{% t "knowledge_new_space" "Bereich anlegen" %}{% endif %}</h1>
+<p class="knowledge-muted">{% t "knowledge_space_hint" "Ohne Veranstaltung bleibt dieser Bereich für alle LAN-Partys nutzbar. Der Zugriff ist immer auf Mitarbeiter beschränkt." %}</p>
+<form method="post" class="knowledge-fields">{% csrf_token %}{{ form.as_p }}<div class="knowledge-actions"><button class="btn btn-primary" type="submit">{% t "knowledge_save" "Speichern" %}</button><a class="btn" href="{% if space %}{{ space.get_absolute_url }}{% else %}{% url 'knowledge:home' %}{% endif %}">{% t "knowledge_cancel" "Abbrechen" %}</a></div></form>
+</section>{% endblock %}

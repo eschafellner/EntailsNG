@@ -1,0 +1,30 @@
+{% extends 'tournaments/base.html' %}
+{% block title %}{% t "swiss_preview_title" "Schweizer Runde vorbereiten" %} – {{ tournament.title }}{% endblock %}
+{% block content %}
+<div class="swiss-preview-page">
+  <a href="{% url 'tournament_detail' slug=tournament.slug %}">← {{ tournament.title }}</a>
+  <section class="ux-card">
+    <h1>{% t "swiss_preview_title" "Schweizer Runde vorbereiten" %}</h1>
+    {% if error %}
+      <p role="status">{{ error }}</p>
+      <a href="{% url 'tournament_swiss_preview' slug=tournament.slug %}">{% t "swiss_refresh_preview" "Vorschau erneut prüfen" %}</a>
+    {% else %}
+      <h2>{% t "swiss_round_progress" "Runde {number} von {total}" number=plan.number total=tournament.swiss_rounds %}</h2>
+      <p>{% t "swiss_release_hint" "Die folgenden Paarungen werden mit der Freigabe verbindlich. Danach sind Ergebnisse früherer Runden gesperrt." %}</p>
+      {% if plan.number == 1 %}<p>{% t "swiss_start_hint" "Mit der ersten Runde wird die Anmeldung geschlossen. Teilnehmer, Startreihenfolge und Regeln werden festgeschrieben." %}</p>{% endif %}
+      <div class="swiss-preview-pairs">
+        {% for pair in plan.pairings %}
+        <article class="ux-card">
+          <strong>{{ pair.team1.name }}</strong>
+          <p>{% if pair.team2 %}{% t "swiss_versus" "gegen" %} <strong>{{ pair.team2.name }}</strong>{% else %}{% t "swiss_bye_points" "Freilos · 3 Punkte" %}{% endif %}</p>
+        </article>
+        {% endfor %}
+      </div>
+      <form method="post" action="{% url 'tournament_swiss_publish' slug=tournament.slug %}">
+        {% csrf_token %}<input type="hidden" name="preview_token" value="{{ plan.token }}">
+        <button type="submit" class="btn-action-primary">{% t "swiss_publish" "Paarungen veröffentlichen und Runde freigeben" %}</button>
+      </form>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
