@@ -1,0 +1,5 @@
+{% extends "admin/index.html" %}
+{% block content %}
+{% if user.is_superuser %}<div class="module"><h2><a href="{% url 'backups:index' %}">{% t "backup_title" %}</a></h2><p>{% t "backup_notice" %}</p></div>{% endif %}
+{{ block.super }}
+{% endblock %}

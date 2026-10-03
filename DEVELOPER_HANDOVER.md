@@ -6,6 +6,15 @@
 > **Test-Status:** Vollständiger Projektlauf am **1. Oktober 2026: 715 Tests, 695 erfolgreich, 20 PostgreSQL-Fälle auf SQLite übersprungen**, keine Fehler. Anschließend alle **38 Knowledge-Tests: 35 erfolgreich, 3 PostgreSQL-Fälle übersprungen**, einschließlich eines ergänzten Vergleichsfalls. Frühere Turnierprüfung: **12 JavaScript-Tests erfolgreich**. Details und Grenzen: [Interne Wissensbasis](docs/internal-knowledge-base.md), [Turnierprüfung](docs/tournament-audit-2026-10-01.md). Weitere Erweiterungen: [Solo-Reaktivierung](docs/solo-team-reactivation.md), [Schweizer Turniere](docs/swiss-tournaments.md). Der globale Migrationscheck meldet weiterhin die bereits dokumentierten Theme-Farbdefaults.
 > **Python / Django:** Python 3.12+ (kompatibel mit 3.14) / Django 6.0  
 
+> **Aktuelle Regression vom 3. Oktober 2026:** Vollständiger SQLite-Projektlauf:
+> **822 Tests, 799 erfolgreich, 23 übersprungen**, keine Fehler. Backup-Modul
+> zusätzlich nativ gegen PostgreSQL 16.15: **47 Tests, 45 erfolgreich, zwei
+> übersprungen** (POSIX-Dateirechte unter Windows und SQLite-Dateiverbindungen).
+> **12 JavaScript-Tests** und
+> Syntaxprüfung des Backup-JavaScripts erfolgreich. Docker-Imagebau und CI wurden
+> lokal nicht ausgeführt. Der bekannte globale Migrationscheck zu drei
+> Theme-Farbdefaults besteht weiterhin; das Backup-Modul benötigt keine Migration.
+
 ---
 
 ## 📌 1. Projekt-Steckbrief & Zielsetzung
@@ -78,6 +87,9 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Grenzen der ersten Version:** Hochformat und keine Druckbeschnittzugabe. Hintergründe werden proportional zugeschnitten. Die Textvorschau verwendet Beispieldaten; der Export verkleinert lange Texte bis auf 1,5 mm und meldet danach einen Fehler.
 
 ### 🏆 `tournaments` (Turnier-Engine & Team-Management)
+* **Turnier-Neustarts im Backend (2. Oktober 2026):** Der Button „Neustart vorbereiten“ an einem Turnier erstellt für alle sechs Modi und alle Ausgangsstatus eine neue Ausgabe als Entwurf. Titel/Termine, Teamauswahl, Übernahme von Seeds und optionale Absage des offenen/laufenden Originals werden in einer Vorschau festgelegt. Ergebnisse, Gruppen, Rückzüge und Schweizer Runden beginnen neu; die ursprüngliche Historie bleibt erhalten. Signierte Vorschau, atomare Erstellung, Schutz gegen doppelte Formularübermittlung und schreibgeschützte Herkunftsprotokolle sind enthalten. Erforderlich: Mitarbeiterstatus sowie Rechte zum Anlegen/Ändern von Turnieren und zum Anlegen von Turnieranmeldungen. Archivierte Teams werden nicht automatisch reaktiviert; der Turnierstart prüft die aktuellen Kader. Beendete Events erlauben nur die Vorbereitung eines Entwurfs. Migration `tournaments.0011_tournament_restart` und `seed_translations` erforderlich. Bedienung und Tests: [Turnier-Neustarts](docs/tournament-restarts.md).
+* **Verbesserungen aller sechs Modi (1. Oktober 2026):** Die Befunde aus der Einzelprüfung sind korrigiert: expliziter Schweizer Rettungsweg mit signierter Ausnahmevorschau und zusätzlicher Orga-Zustimmung, Ausschluss zurückgezogener Liga-Teams aus Platzierungen, Bereinigung überflüssiger Grand-Final-Resets, vollständige Ligaplatzierungen für Urkunden und vollständige aktive FFA-Ränge. Dazu kommen optionales kleines Finale, klare Rundennamen, DE-Kreuzverteilung, echtes Snake-Seeding sowie konfigurierbare Liga-/Gruppen-Gleichstandsregeln und Gruppenqualifikanten. Neue Regeln werden nach Generierung gesperrt; vorhandene Turniere behalten ihre historische Gleichstandsregel. Migration `tournaments.0010_format_improvements`, `seed_translations` und `collectstatic` erforderlich. Größerer Testlauf: 350 bestanden, 12 PostgreSQL-Fälle auf SQLite übersprungen; 38 separate Modusprüfungen und 5 JavaScript-Tests erfolgreich. Details und aktuelle Regressionen: [Umsetzung der Verbesserungen](docs/tournament-mode-improvements-2026-10-01.md); historischer Befundbericht: [Einzelprüfung der Modi](docs/tournament-mode-review-2026-10-01.md).
+* **Entwürfe im Frontend (1. Oktober 2026):** Entwurfsturniere sind nur für angemeldete, aktive Mitarbeiter (`is_staff`) und Superadmins sichtbar. Gäste erhalten auch beim direkten Aufruf der Detail- und Turnieraktions-URLs keinen Zugriff; eine Zuweisung als Turnieradmin oder Support ersetzt den Mitarbeiterstatus nicht. Ein Klick auf „Entwurf“ in Übersicht oder Detailansicht öffnet die Anmeldung über einen CSRF-geschützten POST und `TournamentLifecycleService.open_registration()`. Die Aktion prüft den aktuellen Entwurfsstatus, sperrt Event und Turnier in dieser Reihenfolge und verhindert das Öffnen bei beendetem/abgesagtem Event oder generiertem Turnierbaum. Anmeldezeiträume bleiben erhalten. Keine Migration erforderlich; neue Texte über `seed_translations` verwalten. Tests: `tournaments.test_draft_visibility`.
 * **Modi:** Single Elimination, Double Elimination, Liga (Round Robin), Gruppenphase + K.O., Free For All (FFA), Schweizer System.
 * **Services:**
   * `TournamentBracketService`: Generierung aller Turnierbäume inkl. automatischer Freilos-Verteilung (BYEs).
@@ -85,6 +97,7 @@ Das Projekt ist in saubere Django-Apps unterteilt:
   * `SwissTournamentService`, `SwissPairingService`, `SwissStandingService`: rundenweise Auslosung und Orga-Freigabe, 3/1/0-Punkte, optionale Unentschieden, Buchholz/Sonneborn-Berger und geteilte Ränge. Reines Schweizer System ohne K.-o.-Phase.
 * **Schweizer System (1. Oktober 2026):** Teilnehmer und Regeln werden mit Runde 1 festgeschrieben. Weitere Runden werden erst nach vollständigen Ergebnissen manuell freigegeben. Signierte Vorschauen, Rundenprotokolle und Datenbank-Constraints sichern die Veröffentlichung ab. Frühere Ergebnisse sind nach Freigabe der Folgerunde gesperrt; Rückzüge behalten die Historie. Urkunden übernehmen auch geteilte Ränge. Installation: Requirements aktualisieren, Migration `tournaments.0009` anwenden und `seed_translations` ausführen. Details und Testgrenzen: [Schweizer Turniere](docs/swiss-tournaments.md).
 * **Team-Management:**
+  * **Clanaufnahme und persönliche Einladungen (3. Oktober 2026):** Der aktuelle Kapitän kann bestätigte Mitglieder seines eigenen Clans per Mehrfachauswahl sofort aufnehmen und weitere Spieler per Nickname persönlich einladen. Clan-Adminrechte sind nicht nötig. Clanexterne Spieler müssen selbst annehmen oder ablehnen; der Kapitän kann Einladungen zurückziehen und Bewerbungen ablehnen. Ein späterer Clanaustritt lässt die Teammitgliedschaft bestehen. Der rote Punkt berücksichtigt offene eigene Einladungen und Bewerbungen an eigene Teams auf Desktop und Mobilgeräten. Kadergröße, ein aktives Team pro Spiel, Archiv-/Event-/Turniersperren und gemeinsame Benutzer-/Event-/Teamsperren bleiben maßgeblich. Einladungscode bleibt erhalten; offene Einladungen reservieren keine Plätze. Erforderlich: Migration `tournaments.0012_team_invitations`, `seed_translations`, `collectstatic`. SQLite-Gesamtlauf: 860 Tests, 831 erfolgreich, 29 übersprungen; 29 neue Funktionstests erfolgreich, sechs PostgreSQL-Paralleltests auf SQLite übersprungen und in CI aufgenommen. Bedienung, Lebenszyklus und Prüfgrenzen: [Teamaufnahme und Einladungen](docs/team-recruitment.md).
   * **Automatische Solo-Reaktivierung (1. Oktober 2026):** Die normale Einzelspieler-Anmeldung verwendet das aktuelle Team oder reaktiviert ein archiviertes Solo-Team desselben Accounts und Spiels. Team-ID und Turnierhistorie bleiben erhalten; die neue Turnieranmeldung übernimmt keine alten Ergebnisse oder Aufgaben. Laufende/generierte Turniere, offene alte Anmeldungen und widersprüchliche Kader werden vor dem Wechsel gesperrt. Ein erneuter Abschluss des früheren Events archiviert kein inzwischen reaktiviertes Team. Neue Accounts erhalten keinen Zugriff auf frühere Teams. Details und Tests: [Solo-Reaktivierung](docs/solo-team-reactivation.md). Keine zusätzliche Migration erforderlich.
   * **Spielbezug & Filter:** Teams zeigen das zugehörige Spiel (`team.game.name`); die Teamübersicht bietet Filter-Pills und Sortierung nach Spiel.
   * **Fairplay-Regel:** Ein Teilnehmer darf pro Spiel nur maximal einem aktiven Team angehören (verhindert Doppelteilnahmen).
@@ -115,6 +128,7 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * Clans, Logos, Beitrittspasswörter.
 * **Partieller UniqueConstraint:** Ein Benutzer kann immer nur in **maximal einem aktiven Clan** Mitglied sein (`condition=Q(status='ACCEPTED')`).
 * Inline-Bestätigungen für Kicken und Verlassen (ohne störende Browser-Popups).
+* **Mehrere gleichberechtigte Clan-Admins (3. Oktober 2026):** Unbegrenzte Anzahl, öffentliche Übersicht der aktiven Admins und ihrer Anzahl im Clanprofil. Beförderung und Herabstufung benötigen eine Inline-Bestätigung; die Mitgliedschaft bleibt erhalten. Nur aktive, bestätigte Mitglieder erhalten Adminrechte. Der letzte aktive Admin ist geschützt, auch bei veralteten Formularen und parallelen Rollenänderungen/Austritten. Benutzer-/Clan-/Mitgliedschaftssperren koordinieren die Rollenverwaltung mit der Kontolöschung; die Nachfolge bevorzugt aktive Mitglieder. Beitrittsentscheidungen verarbeiten ausschließlich offene Anfragen. SQLite-Regression: 113 Tests, 101 erfolgreich, 12 PostgreSQL-Fälle übersprungen; sieben neue Paralleltests in PostgreSQL-CI aufgenommen, lokal nicht gegen PostgreSQL ausgeführt. Desktop und Mobilansicht (390 px) geprüft. Einführung: `seed_translations`, `collectstatic`; keine Migration. Bedienung und Grenzen: [Clan-Admins](docs/clan-admins.md).
 
 ### ⚙️ `configuration` (CMS, Themes & System-Services)
 * **Translations:** `SystemTranslation` & `configuration/translations.py`.
@@ -128,9 +142,35 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 ### 📄 `info`, `news`, `emails`, `sponsors`
 * **`knowledge` – interne Wissensbasis (1. Oktober 2026):** Eigene Frontend-App unter `/knowledge/` mit veranstaltungsübergreifenden beziehungsweise eventbezogenen Bereichen, Seitenbaum, Suche, lokalem TinyMCE-Editor, Entwürfen, Veröffentlichung, Versionshistorie, Textvergleich, Wiederherstellung und optimistischer Konfliktprüfung. Alle aktiven Mitarbeiter (`is_staff`) dürfen lesen, bearbeiten und veröffentlichen; Gäste bleiben vollständig ausgeschlossen. Anhänge liegen außerhalb von `MEDIA_ROOT` im privaten Speicher und werden nur nach Mitarbeiterprüfung ausgeliefert. Docker erhält dafür das ausschließlich im Web-Container eingebundene Volume `private_media_data`. Einführung: `migrate`, `seed_translations`, `seed_features`, `collectstatic`; neue Container mit der aktualisierten Compose-Konfiguration erstellen. Details: [Interne Wissensbasis](docs/internal-knowledge-base.md).
 * `info`: Mehrseiten-CMS mit Tab-Leiste (`/info/<slug>/`), Slugs mit automatischer Kollisionsauflösung (`-2`, `-3`), XSS-Bereinigung (`sanitize_html`), granularen Rechten (`info.view_eventinfo`), Gast-Fallback auf `/info/` und atomarer Menü-Synchronisation (`NavigationItem`).
-* `news`: Newsartikel mit TinyMCE-Editor.
+* `news`: Newsartikel mit lokalem TinyMCE-Editor im Django-Admin (3. Oktober 2026). Das Inhaltsfeld verwendet `AdminTinyMCE` mit GPL-Konfiguration, Formatierung, Listen, Links, Bildern per URL, Tabellen, Quelltext und Vorschau. Die Newsansicht rendert das von berechtigten Mitarbeitern verfasste HTML; bestehende reine Textbeiträge behalten ihre Absätze und Zeilenumbrüche. Dashboard-Auszüge bleiben reine Textvorschauen. Keine zusätzliche Abhängigkeit oder Migration erforderlich. Prüfung: `python manage.py test news`.
 * `emails`: Multi-Backend-E-Mail-Versand (SMTP, Resend API, Console) mit verschlüsselter Speicherung von Passwörtern (`FIELD_ENCRYPTION_KEY`) und transaktionssicherer E-Mail-Warteschlange (`OutgoingEmail` Outbox-Pattern).
 * `sponsors`: Partner- und Sponsoren-Verwaltung.
+
+### 💾 `backups` (3. Oktober 2026)
+* **Bedienung:** `/admin/backups/` und Link auf der Admin-Startseite, ausschließlich
+  für aktive Superuser mit Mitarbeiterstatus. Manuelle Sicherung, verschlüsselter
+  Download, Upload/Vorprüfung und vollständiger Datenersatz nach Passwortbestätigung.
+* **Umfang:** Native PostgreSQL-/SQLite-Sicherung sowie öffentliche und private
+  Medien, AES-256-GCM mit separatem `BACKUP_ENCRYPTION_KEY`. `.env`, Schlüssel,
+  Quellcode, Zertifikate und Redis werden separat gesichert.
+* **Betrieb:** Ein eigener Prozess `process_backup_jobs --daemon`, optionales
+  Compose-Profil `backups`, standardmäßig eine CPU und 512 MB RAM. Gemeinsamer,
+  nicht öffentlich ausgelieferter `backup_data`-Speicher für Web-, Mail- und
+  Backup-Worker; PostgreSQL-16-Clients im Anwendungsimage. Keine neue Queue oder
+  externe Dienste, keine Zeitplanung. Einrichtung und Grenzen: [Backup-Anleitung](docs/backups.md).
+* **Konsistenz und Rücksetzung:** Dateisperren koordinieren Webanfragen und Mail,
+  Wartungsfenster für Datenaufnahme und Wiederherstellung, isolierte Vorprüfung,
+  automatische Sicherung vor Datenersatz und Journal außerhalb der Datenbank.
+  Ein unterbrochener Wechsel wird beim Worker-Start zurückgesetzt. Nach Restore
+  werden Sessions/Codes gelöscht, Caches und Verbindungen erneuert und Mail pausiert.
+* **Kompatibilität:** Derselbe produktive Code, Migrationsstand, Datenbanktyp und
+  dieselbe Datenbank-Hauptversion. Für lokale Dateisysteme/gemeinsame Docker-Volumes
+  auf einem Host; zusätzliche Schreibprozesse und Deployments im Wartungsfenster
+  stoppen. Kein unterstützter Betrieb über verteilte Hosts/NFS.
+* **Aktivierung:** `BACKUP_ENCRYPTION_KEY` setzen und separat aufbewahren,
+  `docker compose --profile backups up -d --build`, `seed_translations` ausführen.
+  Keine zusätzliche Datenbankmigration erforderlich. Tests: `backups/tests.py`,
+  eigener PostgreSQL-16-Job in CI; beide nativen Datenbankverfahren lokal geprüft.
 
 ---
 

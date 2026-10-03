@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p class="errornote">{% t "backup_restore_notice" %}</p>
+<dl><dt>{% t "backup_created" %}</dt><dd>{{ record.created_at }}</dd><dt>{% t "backup_description" %}</dt><dd>{{ record.description }}</dd><dt>{% t "backup_size" %}</dt><dd>{{ record.bytes|filesizeformat }}</dd></dl>
+{% if record.manifest %}<dl>
+<dt>{% t "backup_scope_label" %}</dt><dd>{% t "backup_scope" %}</dd>
+<dt>{% t "backup_database" %}</dt><dd>{{ record.manifest.database_engine }} {{ record.manifest.database_major }}</dd>
+<dt>{% t "backup_file_count" %}</dt><dd>{{ record.manifest.file_count }}</dd>
+<dt>{% t "backup_unpacked_size" %}</dt><dd>{{ record.manifest.unpacked_bytes|filesizeformat }}</dd>
+<dt>{% t "backup_software" %}</dt><dd><code style="overflow-wrap:anywhere">{{ record.manifest.software_fingerprint }}</code></dd>
+</dl>{% endif %}
+<form method="post">{% csrf_token %}
+{% if prepare %}<button type="submit">{% t "backup_check" %}</button>
+{% else %}{{ form.as_p }}<button type="submit" class="deletelink">{% t "backup_confirm_restore" %}</button>{% endif %}
+</form><p><a href="{% url 'backups:index' %}">{% t "backup_back" %}</a></p>
+{% endblock %}

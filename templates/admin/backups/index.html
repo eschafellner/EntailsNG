@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p>{% t "backup_notice" %}</p>
+<p>{% t "backup_keys_notice" %}</p>
+{% if issue %}<p class="errornote">{{ issue }}</p>{% endif %}
+{% if mail_paused %}
+<div class="module"><p>{% t "backup_mail_paused" %}</p>
+<form method="post" action="{% url 'backups:resume_mail' %}">{% csrf_token %}<button type="submit">{% t "backup_resume_mail" %}</button></form></div>
+{% endif %}
+<div class="module"><h2>{% t "backup_create" %}</h2>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="create">{{ create_form.as_p }}<button type="submit" {% if not ready %}disabled{% endif %}>{% t "backup_create" %}</button></form></div>
+<div class="module"><h2>{% t "backup_upload" %}</h2>
+<form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="upload">{{ upload_form.as_p }}<button type="submit" {% if not ready %}disabled{% endif %}>{% t "backup_upload" %}</button></form></div>
+<div class="module"><table style="width:100%"><thead><tr><th>{% t "backup_created" %}</th><th>{% t "backup_description" %}</th><th>{% t "backup_size" %}</th><th>{% t "backup_status" %}</th><th></th></tr></thead><tbody>
+{% for record in records %}<tr><td>{{ record.created_at }}</td><td>{{ record.description }}</td><td>{{ record.bytes|filesizeformat }}</td><td>{{ record.status_label }}</td><td>
+{% if record.state == 'completed' or record.state == 'prepared' %}
+<a href="{% url 'backups:download' record.id %}">{% t "backup_download" %}</a> · <a href="{% url 'backups:restore' record.id %}">{% t "backup_restore" %}</a>
+{% endif %}
+<details><summary>{% t "backup_delete" %}</summary><p>{% t "backup_delete_confirm" %}</p><form method="post" action="{% url 'backups:delete' record.id %}">{% csrf_token %}<button type="submit">{% t "backup_delete" %}</button></form></details>
+</td></tr>{% empty %}<tr><td colspan="5">{% t "backup_empty" %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if jobs %}<div class="module"><h2>{% t "backup_job_title" %}</h2><ul>{% for job in jobs %}<li><a href="{% url 'backups:job' job.id job.token %}">{{ job.created_at }} — {{ job.status_label }}</a></li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}

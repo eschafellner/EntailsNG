@@ -133,7 +133,7 @@
               </button>
             </div>
           </div>
-        {% elif user.is_authenticated and not is_team_archived %}
+        {% elif user.is_authenticated and not is_team_archived and not received_invitations %}
           {% if is_team_full %}
             <button type="button" disabled style="background: var(--line); color: var(--muted); border: 1px solid var(--line); padding: 8px 16px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; cursor: not-allowed;" title="{% t 'team_roster_full_short' 'Kader voll' %}">
               {% t "team_is_full_badge" "🔒 Team ist voll" %}
@@ -151,6 +151,14 @@
     </div>
   </div>
 
+
+  {% include 'tournaments/includes/team_invitations.html' %}
+  {% if user_membership.status == 'ACCEPTED' and user_membership.added_by %}
+  <div class="card team-recruitment" role="status">
+    <p>{% t "team_direct_addition_notice" username=user_membership.added_by.display_name team_name=team.name %}</p>
+  </div>
+  {% endif %}
+  {% include 'tournaments/includes/team_recruitment.html' %}
 
   <!-- EINLADUNGSCODE WIDGET (mit Kopier-Button) -->
   {% if is_member %}
@@ -252,7 +260,7 @@
       {% endif %}
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 16px;">
         {% for p in pending_members %}
-          <div style="padding: 12px 16px; border: 1px dashed var(--line); border-radius: 8px; background: var(--paper); display: flex; justify-content: space-between; align-items: center;">
+          <div style="padding: 12px 16px; border: 1px dashed var(--line); border-radius: 8px; background: var(--paper); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <span style="font-family: 'DM Sans', sans-serif; font-size: 14px;">
               👤 {{ p.user.display_name }}
             </span>
@@ -268,6 +276,10 @@
                 </button>
               </form>
             {% endif %}
+            <form method="post" action="{% url 'team_reject_application' slug=team.slug membership_id=p.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="btn-action-navy">{% t "team_application_decline" %}</button>
+            </form>
           </div>
         {% endfor %}
       </div>

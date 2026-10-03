@@ -1,0 +1,25 @@
+{% if received_invitations %}
+<section class="card team-recruitment" aria-labelledby="received-invitations-title">
+  <h2 id="received-invitations-title">{% t "team_invitation_received" %} <span class="badge-pending-indicator">🔴 {{ received_invitations|length }}</span></h2>
+  <p class="team-recruitment-hint">{% t "team_invitation_no_reservation" %}</p>
+  <div class="team-recruitment-list">
+    {% for invitation in received_invitations %}
+    <div class="team-recruitment-row">
+      <div>
+        <a href="{% url 'team_detail' slug=invitation.team.slug %}"><strong>{{ invitation.team.name }}</strong></a>
+        {% if invitation.team.game %}<span> · {{ invitation.team.game.name }}</span>{% endif %}
+        <p class="team-recruitment-hint">{% t "team_invitation_from" username=invitation.invited_by.display_name %} · {{ invitation.created_at|date:"d.m.Y H:i" }}</p>
+      </div>
+      <div class="team-recruitment-actions">
+        <form method="post" action="{% url 'team_accept_invitation' slug=invitation.team.slug invitation_id=invitation.pk %}">
+          {% csrf_token %}<button class="btn-action-blue-sm" type="submit">{% t "team_invitation_accept" %}</button>
+        </form>
+        <form method="post" action="{% url 'team_decline_invitation' slug=invitation.team.slug invitation_id=invitation.pk %}">
+          {% csrf_token %}<button class="btn-action-navy" type="submit">{% t "team_invitation_decline" %}</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}

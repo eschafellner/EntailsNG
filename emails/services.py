@@ -15,6 +15,8 @@ from .models import EmailTemplate, OutgoingEmail
 
 logger = logging.getLogger(__name__)
 
+from backups.locking import guarded_email
+
 
 def safe_format(text, context, escape_html=False):
     """
@@ -153,6 +155,7 @@ def recover_stale_processing_emails(timeout_seconds=None):
     return recovered
 
 
+@guarded_email
 def process_email_queue(limit=50, email_ids=None):
     """
     Verarbeitet fällige E-Mails aus der Warteschlange.

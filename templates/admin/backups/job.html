@@ -1,0 +1,9 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block extrahead %}{{ block.super }}<meta name="referrer" content="no-referrer"><script src="{% static 'js/backups.js' %}" defer></script>{% endblock %}
+{% block content %}
+<p>{% t "backup_job_hint" %}</p>
+<div id="backup-progress" data-url="{{ progress_url }}"><p id="backup-state" role="status" aria-live="polite">{% t "backup_pending" %}</p><p id="backup-stage"></p><p id="backup-error" class="errornote" hidden></p></div>
+<p><a id="backup-restore-link" hidden>{% t "backup_confirm_restore" %}</a></p>
+<p><a href="{% url 'backups:index' %}">{% t "backup_back" %}</a></p>
+{% endblock %}

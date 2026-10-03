@@ -38,6 +38,11 @@ class TournamentBracketError(TournamentError):
     pass
 
 
+class SwissPairingError(TournamentBracketError):
+    """A strict Swiss pairing is impossible; an explicit exception may rescue it."""
+    pass
+
+
 class InsufficientTeamsError(TournamentBracketError):
     """Zu wenige Teams für Turnierbaum-Generierung."""
     pass

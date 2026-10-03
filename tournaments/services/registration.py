@@ -78,6 +78,9 @@ def archive_teams_for_event(event):
         is_archived=False
     )
     combined_ids = set(direct_teams.values_list('id', flat=True)) | set(tournament_teams.values_list('id', flat=True))
+    from tournaments.recruitment_signals import expire_invitations
+    from tournaments.models import TeamInvitation
+    expire_invitations(TeamInvitation.objects.filter(team_id__in=combined_ids))
     count = Team.objects.filter(id__in=combined_ids, is_archived=False).filter(
         Q(event=event) | Q(event__isnull=True)).update(is_archived=True, event=event)
     return count

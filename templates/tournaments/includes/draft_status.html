@@ -1,0 +1,9 @@
+{% if can_view_drafts %}
+  <form method="post" action="{% url 'tournament_open_registration' slug=tournament.slug %}" class="tournament-draft-form">
+    {% csrf_token %}
+    <input type="hidden" name="return_to" value="{{ return_to }}">
+    <button type="submit" class="badge-status-default tournament-draft-button" title="{% t 'tournament_open_registration_hint' %}" aria-label="{% t 'tournament_open_registration_hint' %}">
+      {% t "tournament_status_draft" "Entwurf" %}
+    </button>
+  </form>
+{% endif %}

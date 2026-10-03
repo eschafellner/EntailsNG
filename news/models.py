@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.db import models
+from django.utils.html import linebreaks, strip_tags
+from django.utils.safestring import mark_safe
 
 
 class NewsArticle(models.Model):
@@ -36,3 +38,10 @@ class NewsArticle(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def rendered_content(self):
+        """Render staff-authored HTML; preserve line breaks in existing plain text."""
+        if strip_tags(self.content) == self.content:
+            return mark_safe(linebreaks(self.content, autoescape=True))
+        return mark_safe(self.content)

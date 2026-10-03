@@ -21,6 +21,14 @@
     </div>
   </div>
 
+  {% include 'tournaments/includes/team_invitations.html' %}
+  {% for membership in team_addition_notices %}
+  <div class="card team-recruitment" role="status">
+    <p>{% t "team_direct_addition_notice" username=membership.added_by.display_name team_name=membership.team.name %}</p>
+    <a href="{% url 'team_detail' slug=membership.team.slug %}">{% t "btn_details" "Details" %} →</a>
+  </div>
+  {% endfor %}
+
   <!-- Meine Teams -->
   {% if user.is_authenticated and my_active_teams or my_archived_teams %}
   <div>

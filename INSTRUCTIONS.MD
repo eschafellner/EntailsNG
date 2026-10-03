@@ -330,20 +330,34 @@ Für den Einlass am Empfang deiner LAN-Party bietet EntailsNG ein spezialisierte
 
 ## 💾 Schritt 8: Datensicherung (Backup) & Wiederherstellung
 
-### 1. Backup erstellen (Dauert 5 Sekunden):
-```bash
-# 1. Datenbank sichern (in Datei mit aktuellem Datum speichern):
-docker compose exec -T db pg_dump -U entailsng_user entailsng_db > backup_$(date +%Y%m%d_%H%M%S).sql
+1. Einen eigenen `BACKUP_ENCRYPTION_KEY` generieren, in `.env` eintragen und
+   zusätzlich außerhalb des Servers aufbewahren:
+   ```bash
+   python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+   ```
+2. Den optionalen Backup-Worker starten:
+   ```bash
+   docker compose --profile backups up -d --build
+   docker compose exec web python manage.py seed_translations
+   ```
+3. Als Superuser `/admin/backups/` öffnen, Beschreibung und Wartungsfenster
+   bestätigen und das fertige Backup herunterladen. Die Sicherung enthält die
+   Datenbank sowie öffentliche und private Medien.
+4. Zur Wiederherstellung eine Sicherung auswählen oder hochladen, die Vorprüfung
+   abwarten und den vollständigen Datenersatz mit dem aktuellen
+   Administratorpasswort bestätigen. Das System erstellt vorher eine zusätzliche
+   Sicherung und setzt bei Fehlern auf den vorherigen Zustand zurück.
 
-# 2. Uploads & Konfiguration sichern:
-tar -czf media_backup_$(date +%Y%m%d).tar.gz media/ .env
-```
+Die Anwendung ist während der Datenaufnahme und während des Datenwechsels im
+Wartungsmodus; die Dauer hängt von Datenmenge und Infrastruktur ab. Nach einer
+Wiederherstellung neu anmelden und den E-Mail-Versand erst nach Prüfung der
+Outbox freigeben. Softwarestand, Migrationsstand und Datenbank-Hauptversion müssen
+zur Sicherung passen.
 
-### 2. Backup wiederherstellen (Disaster Recovery):
-```bash
-# Datenbank aus SQL-Datei wiederherstellen:
-cat backup_20260901_120000.sql | docker compose exec -T db psql -U entailsng_user entailsng_db
-```
+`.env`, Schlüssel, Quellcode und Zertifikate separat sichern. Die vollständige
+[Backup-Anleitung](docs/backups.md) beschreibt Schlüsselverwaltung, Speicherbedarf,
+CLI, Wiederherstellung auf einem neuen Server und Wiederaufnahme nach einem
+Prozessabbruch.
 
 ---
 
@@ -410,6 +424,8 @@ docker compose up -d --build
 | **Mail-Vorlagen seeden** | `docker compose exec web python manage.py seed_email_templates` | `python manage.py seed_email_templates` |
 | **Mail-Queue abarbeiten** | `docker compose exec web python manage.py process_email_queue` | `python manage.py process_email_queue` |
 | **Mail-Queue Worker-Logs** | `docker compose logs -f email_worker` | `python manage.py process_email_queue --daemon` |
+| **Backup-Worker starten** | `docker compose --profile backups up -d --build` | `python manage.py process_backup_jobs --daemon` |
+| **Backup-Worker-Logs** | `docker compose logs -f backup_worker` | Ausgabe des Backup-Workers |
 | **E-Mail-Diagnose / Test** | `docker compose exec web python manage.py email_doctor` | `python manage.py email_doctor` |
 | **Sicherheits-Check** | `docker compose exec web python manage.py check --deploy` | `python manage.py check --deploy` |
 | **Server neu starten** | `docker compose restart` | `./start.sh` neu ausführen |

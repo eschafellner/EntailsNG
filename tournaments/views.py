@@ -1,4 +1,5 @@
 import logging
+from itertools import groupby
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
@@ -8,6 +9,8 @@ from django.views.decorators.http import require_POST, require_GET
 from django.utils import timezone
 from .services.validation import identifier
 from .services.rosters import roster_action
+from .services.recruitment import received_invitations, current_recruitment_teams
+from .team_views import recruitment_context
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,7 @@ from tournaments.exceptions import (
     TournamentBracketError,
     TournamentMatchError,
     MatchPermissionDeniedError,
+    SwissPairingError,
 )
 from tournaments.services import (
     FFAMatchService,
@@ -33,6 +37,7 @@ from tournaments.services import (
     TournamentMatchService,
     TournamentPodiumService,
     TournamentRegistrationService,
+    TournamentLifecycleService,
     SwissTournamentService, SwissStandingService,
     advance_match_winner,
     check_user_event_checkin,
@@ -51,7 +56,7 @@ def tournament_list(request):
     """
     active_event = Event.objects.get_active()
     tournaments = (
-        Tournament.objects.filter(event=active_event)
+        Tournament.objects.visible_to(request.user).filter(event=active_event)
         .select_related('game', 'event')
         .annotate(annotated_registered_teams_count=models.Count('registrations'))
     ) if active_event else []
@@ -73,6 +78,7 @@ def tournament_list(request):
         'tournaments': tournaments,
         'user_checkin': user_checkin,
         'registered_tournament_ids': registered_tournament_ids,
+        'can_view_drafts': Tournament.can_view_drafts(request.user),
     }
     return render(request, 'tournaments/tournament_list.html', context)
 
@@ -82,7 +88,7 @@ def tournament_detail(request, slug):
     Detailansicht eines Turniers: Infos, Anmeldungen, Turnierbaum & Live-Matches.
     """
     tournament = get_object_or_404(
-        Tournament.objects.select_related('game', 'event', 'tournament_admin', 'tournament_support'),
+        Tournament.objects.visible_to(request.user).select_related('game', 'event', 'tournament_admin', 'tournament_support'),
         slug=slug
     )
 
@@ -143,7 +149,8 @@ def tournament_detail(request, slug):
         ).select_related('captain').first()
 
     registrations = tournament.registrations.select_related('team', 'team__captain').all()
-    matches = tournament.matches.select_related('team1', 'team2', 'winner', 'loser').order_by('bracket_type', 'round_number', 'match_number')
+    matches = tournament.matches.select_related('team1', 'team2', 'winner', 'loser', 'tournament',
+        'next_match_winner', 'next_match_winner__next_match_winner').order_by('bracket_type', 'round_number', 'match_number')
 
     # Status & Zeitfenster-Details für die UI
     tournament_is_full = bool(tournament.max_teams and registrations.count() >= tournament.max_teams)
@@ -223,6 +230,22 @@ def tournament_detail(request, slug):
         })
 
     match_list = list(matches)
+    bracket_rounds = []
+    if tournament.mode in (Tournament.Mode.SINGLE_ELIMINATION, Tournament.Mode.LEAGUE, Tournament.Mode.GROUP_STAGE):
+        def round_key(match):
+            return (match.bracket_type != TournamentMatch.BracketType.GROUP,
+                    match.round_number, match.bracket_type == TournamentMatch.BracketType.THIRD_PLACE)
+
+        for _, round_matches in groupby(sorted(match_list, key=lambda m: (*round_key(m), m.match_number)), key=round_key):
+            round_matches = list(round_matches)
+            first = round_matches[0]
+            if first.bracket_type == TournamentMatch.BracketType.GROUP or tournament.mode == Tournament.Mode.LEAGUE:
+                name = get_translation('tournament_matchday_title', round=first.round_number)
+                if tournament.mode == Tournament.Mode.GROUP_STAGE:
+                    name = f"{get_translation('tournament_group_phase_title')} · {name}"
+            else:
+                name = first.round_name
+            bracket_rounds.append({'name': name, 'matches': round_matches})
     for match in match_list:
         match.swiss_editable = bool(is_admin and tournament.mode == Tournament.Mode.SWISS
             and tournament.status == Tournament.Status.IN_PROGRESS and swiss_current_round
@@ -256,6 +279,7 @@ def tournament_detail(request, slug):
     context = {
         'swiss_standings': swiss_standings,
         'swiss_rounds': [{'number': record.number, 'published_at': record.published_at,
+                          'repeat_pairings_approved': record.repeat_pairings_approved,
                           'matches': [m for m in match_list if m.round_number == record.number]}
                          for record in tournament.swiss_round_records.all()] if tournament.mode == Tournament.Mode.SWISS else [],
         'swiss_current_round': swiss_current_round,
@@ -279,9 +303,13 @@ def tournament_detail(request, slug):
         )),
         'score_matches': score_matches,
         'tournament': tournament,
+        'restart_source': Tournament.objects.visible_to(request.user).filter(pk=tournament.restarted_from_id).first()
+            if tournament.restarted_from_id else None,
+        'restart_editions': tournament.restart_editions.visible_to(request.user).order_by('created_at'),
         'user_checkin': user_checkin,
         'has_event_ticket': has_event_ticket,
         'is_admin': is_admin,
+        'can_view_drafts': Tournament.can_view_drafts(request.user),
         'results_locked': tournament.status in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED)
             or tournament.event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED),
         'ffa_editable': is_admin and tournament.status != Tournament.Status.CANCELLED
@@ -295,6 +323,7 @@ def tournament_detail(request, slug):
         'grand_final_matches': grand_final_matches,
         'se_matches': se_matches,
         'podium': podium,
+        'bracket_rounds': bracket_rounds,
         'preview_data': preview_data,
         'my_user_teams': my_user_teams,
         'user_member_team': user_member_team,
@@ -312,12 +341,30 @@ def tournament_detail(request, slug):
 
 @login_required
 @require_POST
+def tournament_open_registration(request, slug):
+    if not Tournament.can_view_drafts(request.user):
+        return HttpResponseForbidden(get_translation('msg_tournament_open_permission'))
+    tournament = get_object_or_404(Tournament, slug=slug)
+    try:
+        TournamentLifecycleService.open_registration(tournament.pk, actor=request.user)
+        messages.success(request, get_translation(
+            'msg_tournament_open_success', tournament_title=tournament.title,
+        ))
+    except TournamentError as exc:
+        messages.error(request, str(exc))
+    if request.POST.get('return_to') == 'list':
+        return redirect('tournament_list')
+    return redirect('tournament_detail', slug=slug)
+
+
+@login_required
+@require_POST
 def tournament_register(request, slug):
     """
     Meldet ein Team oder einen Einzelspieler für das Turnier an.
     Prüft Zeitfenster, Vor-Ort Check-in, Kapazitätslimits und Team-Berechtigungen transaktionssicher.
     """
-    tournament = get_object_or_404(Tournament, slug=slug)
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug)
     team_id = request.POST.get('team_id')
 
     try:
@@ -358,7 +405,7 @@ def tournament_unregister(request, slug):
     """
     Meldet das Team des Benutzers vom Turnier ab.
     """
-    tournament = get_object_or_404(Tournament, slug=slug)
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug)
     team_id = request.POST.get('team_id')
 
     try:
@@ -389,7 +436,7 @@ def tournament_generate_bracket(request, slug):
     """
     Admin-Aktion: Validiert Mindestteams, generiert den Turnierbaum und schließt erst dann atomar die Anmeldung.
     """
-    tournament = get_object_or_404(Tournament, slug=slug)
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug)
 
     is_admin = tournament.is_managed_by(request.user)
 
@@ -421,28 +468,32 @@ def tournament_generate_bracket(request, slug):
 @login_required
 @require_GET
 def tournament_swiss_preview(request, slug):
-    tournament = get_object_or_404(Tournament, slug=slug, mode=Tournament.Mode.SWISS)
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug, mode=Tournament.Mode.SWISS)
     if not tournament.is_managed_by(request.user):
         return HttpResponseForbidden('Nur die Turnierleitung darf Runden freigeben.')
-    plan, error = None, ''
+    plan, error, can_rescue = None, '', False
     try:
-        plan = SwissTournamentService.preview(tournament.pk, actor=request.user)
+        plan = SwissTournamentService.preview(tournament.pk, actor=request.user,
+            allow_repeats=request.GET.get('allow_repeats') == '1')
     except TournamentError as exc:
         error = str(exc)
-    return render(request, 'tournaments/swiss_preview.html', {'tournament': tournament, 'plan': plan, 'error': error})
+        can_rescue = isinstance(exc, SwissPairingError)
+    return render(request, 'tournaments/swiss_preview.html', {'tournament': tournament, 'plan': plan,
+        'error': error, 'can_rescue': can_rescue})
 
 
 @login_required
 @require_POST
 def tournament_swiss_publish(request, slug):
-    tournament = get_object_or_404(Tournament, slug=slug, mode=Tournament.Mode.SWISS)
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug, mode=Tournament.Mode.SWISS)
     if not tournament.is_managed_by(request.user):
         return HttpResponseForbidden('Nur die Turnierleitung darf Runden freigeben.')
     try:
         token = request.POST.get('preview_token')
         if not token:
             raise TournamentBracketError('Bitte zuerst die Rundenvorschau aufrufen.')
-        round_record = SwissTournamentService.publish(tournament.pk, actor=request.user, token=token)
+        round_record = SwissTournamentService.publish(tournament.pk, actor=request.user, token=token,
+            approve_repeats=request.POST.get('approve_repeats') == 'yes')
         messages.success(request, get_translation('swiss_published', 'Runde {number} wurde veröffentlicht.', number=round_record.number))
     except TournamentError as exc:
         messages.error(request, str(exc))
@@ -452,7 +503,7 @@ def tournament_swiss_publish(request, slug):
 @login_required
 @require_POST
 def tournament_swiss_withdraw(request, slug, team_id):
-    tournament = get_object_or_404(Tournament, slug=slug, mode=Tournament.Mode.SWISS)
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug, mode=Tournament.Mode.SWISS)
     if not tournament.is_managed_by(request.user):
         return HttpResponseForbidden('Nur die Turnierleitung darf Teilnehmer zurückziehen.')
     get_object_or_404(TournamentRegistration, tournament=tournament, team_id=team_id)
@@ -649,6 +700,11 @@ def team_list(request):
         'my_archived_teams': my_archived_teams,
         'games': games,
         'selected_game_id': selected_game_id,
+        'received_invitations': received_invitations(request.user, active_event),
+        'team_addition_notices': TeamMember.objects.filter(
+            user=request.user, status=TeamMember.Status.ACCEPTED, added_by__isnull=False,
+            team__in=current_recruitment_teams(active_event),
+        ).select_related('team', 'added_by') if request.user.is_authenticated else [],
     }
     return render(request, 'tournaments/team_list.html', context)
 
@@ -758,7 +814,7 @@ def team_detail(request, slug):
 
     user_membership = None
     if request.user.is_authenticated:
-        user_membership = team.memberships.filter(user=request.user).first()
+        user_membership = team.memberships.filter(user=request.user).select_related('added_by').first()
 
     # Roster-Status für das aktive Event prüfen
     roster_with_event_status = []
@@ -794,7 +850,9 @@ def team_detail(request, slug):
         'is_captain': is_captain,
         'is_member': is_member,
         'user_membership': user_membership,
+        'received_invitations': received_invitations(request.user, active_event).filter(team=team),
     }
+    context.update(recruitment_context(team, request.user, active_event, request.GET.get('q', '')))
     return render(request, 'tournaments/team_detail.html', context)
 
 
@@ -880,6 +938,8 @@ def team_reactivate(request, slug):
             return redirect('team_reactivate', slug=team.slug)
 
         with transaction.atomic():
+            from .recruitment_signals import expire_invitations
+            expire_invitations(team.invitations.all())
             team.event = active_event
             team.is_archived = False
             if target_game:
@@ -1160,6 +1220,10 @@ def team_apply(request, slug):
     Gast bewirbt sich für ein Team (Status = PENDING).
     """
     team = get_object_or_404(Team, slug=slug)
+
+    if received_invitations(request.user, Event.objects.get_active()).filter(team=team).exists():
+        messages.info(request, get_translation('team_invitation_existing_hint'))
+        return redirect('team_detail', slug=slug)
 
     if team.is_member(request.user):
         messages.info(

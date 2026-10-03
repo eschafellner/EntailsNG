@@ -8,6 +8,10 @@
     {% if error %}
       <p role="status">{{ error }}</p>
       <a href="{% url 'tournament_swiss_preview' slug=tournament.slug %}">{% t "swiss_refresh_preview" "Vorschau erneut prüfen" %}</a>
+      {% if can_rescue %}
+        <p>{% t "format_swiss_rescue_hint" %}</p>
+        <a class="btn-action-primary" href="{% url 'tournament_swiss_preview' slug=tournament.slug %}?allow_repeats=1">{% t "format_swiss_rescue_preview" %}</a>
+      {% endif %}
     {% else %}
       <h2>{% t "swiss_round_progress" "Runde {number} von {total}" number=plan.number total=tournament.swiss_rounds %}</h2>
       <p>{% t "swiss_release_hint" "Die folgenden Paarungen werden mit der Freigabe verbindlich. Danach sind Ergebnisse früherer Runden gesperrt." %}</p>
@@ -17,11 +21,16 @@
         <article class="ux-card">
           <strong>{{ pair.team1.name }}</strong>
           <p>{% if pair.team2 %}{% t "swiss_versus" "gegen" %} <strong>{{ pair.team2.name }}</strong>{% else %}{% t "swiss_bye_points" "Freilos · 3 Punkte" %}{% endif %}</p>
+          {% if pair.repeated %}<p><strong>{% t "format_swiss_repeat_preview" %}</strong></p>{% endif %}
         </article>
         {% endfor %}
       </div>
       <form method="post" action="{% url 'tournament_swiss_publish' slug=tournament.slug %}">
         {% csrf_token %}<input type="hidden" name="preview_token" value="{{ plan.token }}">
+        {% if plan.has_repeats %}
+          <p role="status">{% t "format_swiss_rescue_hint" %}</p>
+          <label><input type="checkbox" name="approve_repeats" value="yes" required> {% t "format_swiss_approve" %}</label>
+        {% endif %}
         <button type="submit" class="btn-action-primary">{% t "swiss_publish" "Paarungen veröffentlichen und Runde freigeben" %}</button>
       </form>
     {% endif %}

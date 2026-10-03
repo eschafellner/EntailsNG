@@ -1,0 +1,26 @@
+.clan-profile, .clan-profile .card { min-width: 0; }
+.clan-profile h1, .clan-profile strong, .clan-profile a { overflow-wrap: anywhere; }
+.clan-admin-overview { padding: 20px 24px; }
+.clan-admin-overview h2 { margin: 0 0 8px; font-size: 24px; }
+.clan-admin-overview p { color: var(--muted); margin: 0 0 14px; font-size: 13px; }
+.clan-admin-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.clan-admin-list li { padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+.clan-member-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.clan-role-action { max-width: 380px; }
+.clan-role-button { display: inline-block; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+.clan-role-button:focus-visible { outline: 2px solid var(--signal-deep); outline-offset: 3px; }
+.clan-role-button:disabled { cursor: default; opacity: .65; }
+.clan-role-action[open] > summary { margin-bottom: 8px; }
+.clan-role-confirm { padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
+.clan-role-confirm p { margin: 0 0 12px; font-size: 13px; }
+.clan-role-confirm-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.clan-role-confirm-buttons form { margin: 0; }
+.clan-role-submit { background: var(--navy); color: white; }
+.clan-last-admin-hint { margin: 6px 0 0; color: var(--muted); font-size: 12px; max-width: 320px; }
+.clan-profile #leave-clan-container, .clan-profile #leave-clan-confirm { flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .clan-profile .card { padding: 16px !important; }
+  .clan-profile .clan-banner-identity { flex-wrap: wrap; }
+  .clan-profile .clan-member-identity { flex-wrap: wrap; }
+  .clan-role-action { width: 100%; }
+}

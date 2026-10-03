@@ -18,6 +18,7 @@ Stack: **Python 3.12+ / Django 6, PostgreSQL 16, Redis 7, Nginx, Gunicorn, White
 * 🏆 **Turnier- & Clan-Verwaltung:** Single/Double Elimination Brackets, Match-Scoring, Team-Management & Clan-Logos.
 * 📰 **News & Ankündigungen:** Newsfeed mit Markdown/Rich-Text und Benachrichtigungen.
 * 🎨 **Theme-Engine & UI-Skalierung:** Farbpaletten (*Warm Amber*, *Cyberpunk*, *Slate Blue*), Logo-Upload, Global `UIScale` und 100% Backend-übersetzbare Systemtexte.
+* 💾 **Vollständige Backups:** Verschlüsselte Sicherung von Datenbank und öffentlichen/privaten Medien, Download und geprüfte Wiederherstellung unter `/admin/backups/`. Einrichtung und Betrieb: [Backup-Anleitung](docs/backups.md).
 
 ---
 

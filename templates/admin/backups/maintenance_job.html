@@ -1,0 +1,6 @@
+{% load static %}
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>{{ texts.backup_job_title }}</title><link rel="stylesheet" href="{% static 'admin/css/base.css' %}"><script src="{% static 'js/backups.js' %}" defer></script></head>
+<body><main style="max-width:800px;margin:40px auto;padding:20px"><h1>{{ texts.backup_job_title }}</h1><p>{{ texts.backup_job_hint }}</p>
+<div id="backup-progress" data-url="{{ progress_url }}"><p id="backup-state" role="status" aria-live="polite">{{ texts.backup_running }}</p><p id="backup-stage"></p><p id="backup-error" class="errornote" hidden></p></div>
+<p><a id="backup-restore-link" hidden>{{ texts.backup_confirm_restore }}</a></p><p><a href="{{ index_url }}">{{ texts.backup_back }}</a></p>
+</main></body></html>

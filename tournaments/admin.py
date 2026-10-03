@@ -1,15 +1,19 @@
 from django.contrib import admin, messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import models
-from django.utils.html import format_html
-from django.urls import reverse
+from django.utils.html import format_html, format_html_join
+from django.utils.functional import lazy
+from django.urls import path, reverse
+from django.http import Http404, HttpResponseNotAllowed
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
 from configuration.translations import get_translation
 from tournaments.exceptions import TournamentError
 from tournaments.models import (
     Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration, SwissRound
 )
-from tournaments.services import TournamentBracketService
-from tournaments.forms import TournamentMatchAdminForm
+from tournaments.services import TournamentBracketService, TournamentRestartService
+from tournaments.forms import TournamentMatchAdminForm, TournamentRestartForm
 
 
 @admin.register(Game)
@@ -64,6 +68,7 @@ class TournamentMatchInline(admin.TabularInline):
 
 @admin.register(Tournament)
 class TournamentAdmin(admin.ModelAdmin):
+    change_form_template = 'admin/tournaments/tournament/change_form.html'
     list_display = (
         'title', 'event', 'game', 'mode', 'status',
         'registered_count', 'max_teams', 'is_generated', 'registration_start', 'registration_end', 'tournament_start'
@@ -80,9 +85,69 @@ class TournamentAdmin(admin.ModelAdmin):
     ]
 
     def get_readonly_fields(self, request, obj=None):
+        history = ('restarted_from', 'restart_source_title', 'restarted_by', 'restart_reason',
+                   'restart_cancelled_source', 'restart_team_snapshot', 'restart_history', 'created_at')
         if obj and obj.is_generated:
-            return ('mode', 'event', 'game', 'swiss_rounds', 'swiss_allow_draws', 'is_generated')
-        return ()
+            return ('mode', 'event', 'game', 'swiss_rounds', 'swiss_allow_draws', 'is_generated',
+                    'play_third_place', 'group_qualifiers_per_group', 'standings_tiebreak') + history
+        return history
+
+    def has_restart_permission(self, request, obj):
+        return (Tournament.can_view_drafts(request.user) and self.has_change_permission(request, obj)
+                and self.has_add_permission(request) and request.user.has_perm('tournaments.add_tournamentregistration'))
+
+    def get_urls(self):
+        return [path('<int:object_id>/restart/', self.admin_site.admin_view(self.restart_view),
+                     name='tournaments_tournament_restart')] + super().get_urls()
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        obj = self.get_object(request, object_id)
+        context = dict(extra_context or {})
+        context['can_restart'] = bool(obj and self.has_restart_permission(request, obj))
+        return super().change_view(request, object_id, form_url, context)
+
+    def restart_history(self, obj):
+        if not obj.pk:
+            return '—'
+        return format_html_join(' ', '<p><a href="{}">{}</a> · {}</p>', (
+            (reverse('admin:tournaments_tournament_change', args=[edition.pk]),
+             edition.title, edition.get_status_display()) for edition in obj.restart_editions.all())) or '—'
+
+    restart_history.short_description = lazy(get_translation, str)('restart_editions')
+
+    def restart_view(self, request, object_id):
+        if request.method not in ('GET', 'POST'):
+            return HttpResponseNotAllowed(['GET', 'POST'])
+        source = self.get_object(request, object_id)
+        if source is None:
+            raise Http404()
+        if not self.has_restart_permission(request, source):
+            raise PermissionDenied(get_translation('restart_permission'))
+        preview = TournamentRestartService.preview(source.pk, actor=request.user)
+        source = preview['source']
+        suffix_length = len(get_translation('restart_default_title', title=''))
+        initial = {'title': get_translation('restart_default_title', title=source.title[:max(0, 150-suffix_length)])[:150],
+            'registration_start': source.registration_start, 'registration_end': source.registration_end,
+            'tournament_start': source.tournament_start, 'copy_seeds': True,
+            'registration_ids': [str(r['id']) for r in preview['registrations']], 'preview_token': preview['token']}
+        form = TournamentRestartForm(request.POST if request.method == 'POST' else None,
+            preview=preview, initial=initial)
+        if request.method == 'POST' and form.is_valid():
+            try:
+                edition, created = TournamentRestartService.create(source.pk, actor=request.user, **form.cleaned_data)
+            except (TournamentError, ValidationError) as error:
+                form.add_error(None, '; '.join(error.messages) if isinstance(error, ValidationError) else str(error))
+            else:
+                if created:
+                    self.log_addition(request, edition, get_translation('restart_log', title=source.title))
+                    if edition.restart_cancelled_source:
+                        self.log_change(request, source, get_translation('restart_cancel_log', title=edition.title))
+                self.message_user(request, get_translation('restart_success', title=edition.title), messages.SUCCESS)
+                return redirect('admin:tournaments_tournament_change', edition.pk)
+        context = {**self.admin_site.each_context(request), 'opts': self.model._meta, 'original': source,
+            'title': get_translation('restart_prepare'), 'form': form, 'preview': preview,
+            'source_url': reverse('admin:tournaments_tournament_change', args=[source.pk])}
+        return TemplateResponse(request, 'admin/tournaments/tournament/restart.html', context)
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(
@@ -425,9 +490,9 @@ class TournamentMatchParticipantAdmin(admin.ModelAdmin):
 
 @admin.register(SwissRound)
 class SwissRoundAdmin(admin.ModelAdmin):
-    list_display = ('tournament', 'number', 'published_at', 'published_by')
+    list_display = ('tournament', 'number', 'published_at', 'published_by', 'repeat_pairings_approved')
     list_filter = ('tournament',)
-    readonly_fields = ('tournament', 'number', 'published_at', 'published_by', 'input_digest', 'standings_snapshot')
+    readonly_fields = ('tournament', 'number', 'published_at', 'published_by', 'input_digest', 'standings_snapshot', 'repeat_pairings_approved')
 
     def has_add_permission(self, request):
         return False

@@ -2,6 +2,7 @@
 staticfiles/
 media/
 private_media/
+backups_data/
 db.sqlite3
 __pycache__/
 *.pyc

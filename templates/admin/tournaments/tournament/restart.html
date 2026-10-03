@@ -1,0 +1,34 @@
+{% extends 'admin/base_site.html' %}
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">{% t 'restart_admin_home' %}</a> › <a href="{{ source_url }}">{{ original.title }}</a> › {% t 'restart_prepare' %}</div>
+{% endblock %}
+{% block content %}
+<div style="max-width: 900px;">
+  <div class="module" style="padding: 16px;">
+    <h2>{% t 'restart_preview' %}</h2>
+    <p><strong>{{ original.title }}</strong> · {{ original.get_status_display }} · {{ original.event.title }} · {{ original.game.name }}</p>
+    <p>{{ original.get_mode_display }} · {% t 'restart_capacity_label' %} {{ original.max_teams }}</p>
+    <p>{% t 'restart_explanation' %}</p>
+    <p>{% t 'restart_teams_hint' %}</p>
+    {% if preview.event_closed %}<p role="status"><strong>{% t 'restart_event_closed_hint' %}</strong></p>{% endif %}
+    {% if not preview.can_cancel %}<p>{% t 'restart_finished_hint' %}</p>{% endif %}
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      {% if field.is_hidden %}{{ field }}{% else %}
+        <div class="form-row" style="padding: 12px 0;">
+          {{ field.errors }}{{ field.label_tag }}<div>{{ field }}</div>
+          {% if field.name == 'cancel_source' %}<p class="help">{% t 'restart_cancel_hint' %}</p>{% endif %}
+        </div>
+      {% endif %}
+    {% endfor %}
+    <div class="submit-row">
+      <input type="submit" class="default" value="{% t 'restart_create_draft' %}">
+      <a href="{{ source_url }}">{% t 'restart_back' %}</a> ·
+      <a href="{% url 'admin:tournaments_tournament_restart' original.pk %}">{% t 'restart_refresh' %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

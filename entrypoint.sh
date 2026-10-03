@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
+# Do not migrate/seed a database while an interrupted restore still needs recovery.
+if [ "${SKIP_ENTRYPOINT_INIT:-0}" != "1" ] && [ -f "${BACKUP_ROOT:-/app/backups_data}/maintenance.json" ]; then
+    echo "Backup-Wartungsmodus aktiv: Initialisierung bleibt bis zur Rücksetzung pausiert."
+    exec "$@"
+fi
+
 # Wenn SKIP_ENTRYPOINT_INIT=1 gesetzt ist, direkt das übergebene Kommando ausführen
 if [ "${SKIP_ENTRYPOINT_INIT:-0}" = "1" ]; then
     exec "$@"

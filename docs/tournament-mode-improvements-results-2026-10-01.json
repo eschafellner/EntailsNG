@@ -1,0 +1,44 @@
+{
+  "SINGLE_ELIMINATION": {
+    "tests": 6,
+    "passed": 6,
+    "failures": [],
+    "errors": [],
+    "skipped": []
+  },
+  "DOUBLE_ELIMINATION": {
+    "tests": 6,
+    "passed": 6,
+    "failures": [],
+    "errors": [],
+    "skipped": []
+  },
+  "LEAGUE": {
+    "tests": 7,
+    "passed": 7,
+    "failures": [],
+    "errors": [],
+    "skipped": []
+  },
+  "GROUP_STAGE": {
+    "tests": 6,
+    "passed": 6,
+    "failures": [],
+    "errors": [],
+    "skipped": []
+  },
+  "FFA": {
+    "tests": 6,
+    "passed": 6,
+    "failures": [],
+    "errors": [],
+    "skipped": []
+  },
+  "SWISS": {
+    "tests": 7,
+    "passed": 7,
+    "failures": [],
+    "errors": [],
+    "skipped": []
+  }
+}

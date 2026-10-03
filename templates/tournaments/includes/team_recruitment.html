@@ -1,0 +1,64 @@
+{% if is_captain %}
+<section class="card team-recruitment" aria-labelledby="team-recruitment-title">
+  <h2 id="team-recruitment-title">{% t "team_recruit_heading" %}</h2>
+  {% if can_recruit %}
+  <div class="team-recruitment-grid">
+    <div>
+      <h3>{% t "team_recruit_clan" %}{% if recruitment_clan %} · {{ recruitment_clan.name }}{% endif %}</h3>
+      <p class="team-recruitment-hint">{% t "team_recruit_clan_hint" %}</p>
+      {% if recruitment_clan %}
+        {% if available_clan_members %}
+        <form method="post" action="{% url 'team_add_clan_members' slug=team.slug %}">
+          {% csrf_token %}
+          <div class="team-recruitment-list">
+            {% for player in available_clan_members %}
+              <label class="team-recruitment-check"><input type="checkbox" name="user_ids" value="{{ player.pk }}"> {{ player.display_name }}</label>
+            {% endfor %}
+          </div>
+          <button type="submit" class="btn-action-blue-sm">{% t "team_recruit_add_selected" %}</button>
+        </form>
+        {% else %}<p class="team-recruitment-hint">{% t "team_recruit_clan_empty" %}</p>{% endif %}
+      {% else %}<p class="team-recruitment-hint">{% t "team_recruit_no_clan" %}</p>{% endif %}
+    </div>
+    <div>
+      <h3>{% t "team_recruit_search" %}</h3>
+      <p class="team-recruitment-hint">{% t "team_recruit_search_hint" %}</p>
+      <form method="get" action="{% url 'team_detail' slug=team.slug %}#team-recruitment-title" class="team-recruitment-search">
+        <label for="recruitment-search">{% t "team_recruit_search_label" %}</label>
+        <input id="recruitment-search" name="q" type="search" minlength="2" maxlength="150" value="{{ recruitment_query }}" required>
+        <button type="submit" class="btn-action-navy">{% t "team_recruit_search_button" %}</button>
+      </form>
+      {% if recruitment_searched %}
+      <div class="team-recruitment-list">
+        {% for result in recruitment_results %}
+        <div class="team-recruitment-row">
+          <span>{{ result.user.display_name }}{% if result.same_clan %} · {% t "team_recruit_same_clan" %}{% endif %}</span>
+          <form method="post" action="{% url 'team_recruit_player' slug=team.slug %}">
+            {% csrf_token %}<input type="hidden" name="user_id" value="{{ result.user.pk }}">
+            <button type="submit" class="btn-action-blue-sm">{% if result.same_clan %}{% t "team_recruit_add" %}{% else %}{% t "team_recruit_invite" %}{% endif %}</button>
+          </form>
+        </div>
+        {% empty %}<p class="team-recruitment-hint">{% t "team_recruit_search_empty" %}</p>{% endfor %}
+      </div>
+      <p class="team-recruitment-hint">{% t "team_recruit_search_limit" %}</p>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}<p class="team-recruitment-hint" role="status">{{ recruitment_disabled_reason }}</p>{% endif %}
+
+  {% if sent_invitations %}
+  <h3>{% t "team_invitation_sent" %} ({{ sent_invitations|length }})</h3>
+  <p class="team-recruitment-hint">{% t "team_invitation_no_reservation" %}</p>
+  <div class="team-recruitment-list">
+    {% for invitation in sent_invitations %}
+    <div class="team-recruitment-row">
+      <span>{{ invitation.user.display_name }} · {{ invitation.created_at|date:"d.m.Y H:i" }}</span>
+      <form method="post" action="{% url 'team_withdraw_invitation' slug=team.slug invitation_id=invitation.pk %}">
+        {% csrf_token %}<button type="submit" class="btn-action-navy">{% t "team_invitation_withdraw" %}</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}

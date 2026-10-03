@@ -17,8 +17,8 @@
             {{ article.created_at|date:"d.m.Y H:i" }} Uhr {% if article.author %}von {{ article.author.display_name }}{% endif %}
           </small>
         </header>
-        <div style="font-size: 15px; line-height: 1.6; color: var(--ink);">
-          {{ article.content|linebreaks }}
+        <div class="event-content" style="font-size: 15px; line-height: 1.6; color: var(--ink);">
+          {{ article.rendered_content }}
         </div>
       </article>
     {% empty %}

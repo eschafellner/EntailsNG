@@ -54,7 +54,24 @@ class Game(models.Model):
         super().save(*args, **kwargs)
 
 
+class TournamentQuerySet(models.QuerySet):
+    def visible_to(self, user):
+        if self.model.can_view_drafts(user):
+            return self
+        return self.exclude(status=self.model.Status.DRAFT)
+
+
 class Tournament(models.Model):
+    objects = TournamentQuerySet.as_manager()
+
+    @staticmethod
+    def can_view_drafts(user):
+        """Drafts are internal, including when a guest is assigned tournament support."""
+        return bool(
+            user and user.is_authenticated and user.is_active
+            and not user.deleted_at and (user.is_staff or user.is_superuser)
+        )
+
     class Mode(models.TextChoices):
         SINGLE_ELIMINATION = 'SINGLE_ELIMINATION', 'Single Elimination (KO-System)'
         DOUBLE_ELIMINATION = 'DOUBLE_ELIMINATION', 'Double Elimination (Winner + Loser Bracket)'
@@ -70,6 +87,11 @@ class Tournament(models.Model):
         IN_PROGRESS = 'IN_PROGRESS', 'Turnier läuft'
         FINISHED = 'FINISHED', 'Beendet'
         CANCELLED = 'CANCELLED', 'Abgesagt'
+
+    class Tiebreak(models.TextChoices):
+        LEGACY = 'LEGACY', 'Punkte, Score-Differenz, Scores, Teamname'
+        SHARED = 'SHARED', 'Punkte, Score-Differenz, Scores; geteilte Plätze'
+        HEAD_TO_HEAD = 'HEAD_TO_HEAD', 'Punkte, direkter Vergleich, Score; geteilte Plätze'
 
     event = models.ForeignKey(
         'events.Event',
@@ -103,6 +125,14 @@ class Tournament(models.Model):
         help_text="Vor dem Start festlegen. Bei gerader Teilnehmerzahl höchstens N−1, bei ungerader höchstens N Runden.")
     swiss_allow_draws = models.BooleanField(default=False, verbose_name="Schweizer System: Unentschieden erlauben")
     swiss_pairing_seed = models.PositiveIntegerField(null=True, blank=True, editable=False)
+    play_third_place = models.BooleanField(default=False, verbose_name='Spiel um Platz 3',
+        help_text='Bei Single Elimination und Gruppenphase mit Halbfinals.')
+    group_qualifiers_per_group = models.PositiveSmallIntegerField(default=0,
+        choices=[(0, 'Automatisch (ab 8 Teams zwei pro Gruppe)'), (1, 'Ein Team pro Gruppe'), (2, 'Zwei Teams pro Gruppe')],
+        verbose_name='Qualifikanten pro Gruppe')
+    standings_tiebreak = models.CharField(max_length=20, choices=Tiebreak.choices,
+        default=Tiebreak.SHARED, verbose_name='Gleichstandsregel für Liga und Gruppen',
+        help_text='In Gruppen entscheidet bei weiterem Gleichstand die Setzposition über die Qualifikation.')
 
     registration_start = models.DateTimeField(verbose_name="Anmeldebeginn")
     registration_end = models.DateTimeField(verbose_name="Anmeldeschluss")
@@ -143,6 +173,16 @@ class Tournament(models.Model):
         help_text="Zeigt an, ob der Turnierbaum für dieses Turnier offiziell generiert wurde.",
     )
 
+    restarted_from = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='restart_editions', editable=False, verbose_name='Neustart von')
+    restart_source_title = models.CharField(max_length=150, blank=True, editable=False, verbose_name='Originaltitel beim Neustart')
+    restarted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='restarted_tournaments', editable=False, verbose_name='Neustart vorbereitet von')
+    restart_reason = models.TextField(blank=True, max_length=1000, editable=False, verbose_name='Anlass für den Neustart')
+    restart_request_id = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    restart_cancelled_source = models.BooleanField(default=False, editable=False, verbose_name='Original beim Neustart abgesagt')
+    restart_team_snapshot = models.JSONField(default=list, blank=True, editable=False, verbose_name='Übernommene Teams beim Neustart')
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Zuletzt geändert")
 
@@ -181,6 +221,11 @@ class Tournament(models.Model):
             return get_translation(key, default)
         return super().get_status_display()
 
+    def get_standings_tiebreak_display(self):
+        keys = {self.Tiebreak.LEGACY: 'format_tiebreak_legacy', self.Tiebreak.SHARED: 'format_tiebreak_shared',
+                self.Tiebreak.HEAD_TO_HEAD: 'format_tiebreak_head_to_head'}
+        return get_translation(keys.get(self.standings_tiebreak, 'format_tiebreak_shared'))
+
     def __str__(self):
         return f"{self.title} ({self.get_mode_display()})"
 
@@ -193,6 +238,7 @@ class Tournament(models.Model):
         return self.tournament_start or self.registration_end
 
     def save(self, *args, **kwargs):
+        self._validate_format_settings()
         self._validate_swiss_settings()
         if not self.slug:
             base_slug = slugify(self.title) or "turnier"
@@ -225,8 +271,20 @@ class Tournament(models.Model):
                 if last.number != self.swiss_rounds or last.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists():
                     raise ValidationError('Das Schweizer Turnier kann erst nach Abschluss der letzten Runde beendet werden.')
 
+    def _validate_format_settings(self):
+        if self.group_qualifiers_per_group not in (0, 1, 2):
+            raise ValidationError({'group_qualifiers_per_group': get_translation('format_invalid_qualifiers')})
+        if self.standings_tiebreak not in self.Tiebreak.values:
+            raise ValidationError({'standings_tiebreak': get_translation('format_invalid_tiebreak')})
+        if self.pk:
+            fields = ('play_third_place', 'group_qualifiers_per_group', 'standings_tiebreak')
+            old = type(self).objects.filter(pk=self.pk, is_generated=True).values(*fields).first()
+            if old and any(getattr(self, field) != old[field] for field in fields):
+                raise ValidationError(get_translation('format_rules_frozen'))
+
     def clean(self):
         super().clean()
+        self._validate_format_settings()
         self._validate_swiss_settings()
 
     @property
@@ -532,6 +590,10 @@ class TeamMember(models.Model):
         verbose_name="Status",
     )
     joined_at = models.DateTimeField(auto_now_add=True, verbose_name="Beigetreten am")
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='direct_team_additions', verbose_name="Hinzugefügt von", editable=False,
+    )
 
     class Meta:
         verbose_name = "Team-Mitgliedschaft"
@@ -563,6 +625,36 @@ class TeamMember(models.Model):
 
     def __str__(self):
         return f"{self.user.username} @ {self.team.name} ({self.get_role_display()})"
+
+
+class TeamInvitation(models.Model):
+    """Personal invitations are separate from applications and accepted rosters."""
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Offen'
+        ACCEPTED = 'ACCEPTED', 'Angenommen'
+        DECLINED = 'DECLINED', 'Abgelehnt'
+        WITHDRAWN = 'WITHDRAWN', 'Zurückgezogen'
+        EXPIRED = 'EXPIRED', 'Ungültig geworden'
+
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='invitations')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='team_invitations', verbose_name="Eingeladener Spieler")
+    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, related_name='sent_team_invitations', verbose_name="Eingeladen von")
+    event = models.ForeignKey('events.Event', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='team_invitations', verbose_name="Veranstaltung bei Einladung")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Team-Einladung"
+        verbose_name_plural = "Team-Einladungen"
+        ordering = ['-created_at', '-pk']
+        constraints = [models.UniqueConstraint(
+            fields=['team', 'user'], condition=models.Q(status='PENDING'),
+            name='unique_pending_team_invitation',
+        )]
 
 
 class TournamentRegistration(models.Model):
@@ -621,6 +713,7 @@ class TournamentMatch(models.Model):
         GRAND_FINAL = 'GRAND_FINAL', 'Grand Final'
         GRAND_FINAL_RESET = 'GRAND_FINAL_RESET', 'Grand Final Reset'
         FINAL = 'FINAL', 'Finale'
+        THIRD_PLACE = 'THIRD_PLACE', 'Spiel um Platz 3'
         GROUP = 'GROUP', 'Gruppenspiel'
         FFA = 'FFA', 'Free For All'
         SWISS = 'SWISS', 'Schweizer Runde'
@@ -782,6 +875,7 @@ class TournamentMatch(models.Model):
             self.BracketType.GRAND_FINAL: ('tournament_bracket_grand_final', 'Grand Final'),
             self.BracketType.GRAND_FINAL_RESET: ('tournament_bracket_grand_final_reset', 'Grand Final Reset'),
             self.BracketType.FINAL: ('tournament_bracket_final', 'Finale'),
+            self.BracketType.THIRD_PLACE: ('format_third_place', 'Spiel um Platz 3'),
             self.BracketType.GROUP: ('tournament_bracket_group', 'Gruppenspiel'),
             self.BracketType.FFA: ('tournament_bracket_ffa', 'Free For All'),
             self.BracketType.SWISS: ('tournament_bracket_swiss', 'Schweizer Runde'),
@@ -793,16 +887,25 @@ class TournamentMatch(models.Model):
 
     @property
     def round_name(self):
+        if self.bracket_type == self.BracketType.THIRD_PLACE:
+            return get_translation('format_third_place')
         if self.bracket_type == self.BracketType.GRAND_FINAL:
             return "Grand Final"
         elif self.bracket_type == self.BracketType.GRAND_FINAL_RESET:
             return "Grand Final Reset"
         elif self.bracket_type == self.BracketType.WINNERS:
-            return f"WB Round {self.round_number}"
+            if self.tournament.mode == Tournament.Mode.SINGLE_ELIMINATION:
+                next_match = self.next_match_winner
+                if next_match and next_match.bracket_type == self.BracketType.FINAL:
+                    return get_translation('format_semifinal')
+                if next_match and next_match.next_match_winner and next_match.next_match_winner.bracket_type == self.BracketType.FINAL:
+                    return get_translation('format_quarterfinal')
+                return get_translation('format_ko_round', number=self.round_number)
+            return get_translation('format_winner_round', number=self.round_number)
         elif self.bracket_type == self.BracketType.LOSERS:
             return f"LB Round {self.round_number}"
         elif self.bracket_type == self.BracketType.FINAL:
-            return "Finale"
+            return get_translation('format_semifinal' if self.next_match_winner_id else 'format_final')
         elif self.bracket_type == self.BracketType.GROUP:
             group_label = f" ({self.group_name})" if self.group_name else ""
             return f"Spieltag {self.round_number}{group_label}"
@@ -827,6 +930,7 @@ class SwissRound(models.Model):
     published_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     input_digest = models.CharField(max_length=64)
     standings_snapshot = models.JSONField(default=list)
+    repeat_pairings_approved = models.BooleanField(default=False, verbose_name='Wiederholungen ausdrücklich freigegeben')
 
     class Meta:
         ordering = ['number']

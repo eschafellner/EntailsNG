@@ -55,7 +55,9 @@
               </span>
             </div>
 
-            {% if tournament.status == 'OPEN' %}
+            {% if tournament.status == 'DRAFT' %}
+              {% include 'tournaments/includes/draft_status.html' with return_to='list' %}
+            {% elif tournament.status == 'OPEN' %}
               <span class="badge-status-open">
                 🟢 {% t "tournament_status_open" "Anmeldephase" %}
               </span>

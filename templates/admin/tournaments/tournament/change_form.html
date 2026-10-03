@@ -1,0 +1,7 @@
+{% extends 'admin/change_form.html' %}
+{% block object-tools-items %}
+  {% if can_restart %}
+    <li><a href="{% url 'admin:tournaments_tournament_restart' original.pk %}">{% t 'restart_prepare' %}</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

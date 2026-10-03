@@ -2,6 +2,8 @@
 
 Die anschließende modulweite Prüfung und die aktuellen Testergebnisse sind im
 [Prüfbericht vom 1. Oktober 2026](tournament-audit-2026-10-01.md) dokumentiert.
+Die spätere [Verbesserungsrunde](tournament-mode-improvements-2026-10-01.md)
+ergänzt einen explizit genehmigten Rettungsweg für blockierte Auslosungen.
 
 Stand: 1. Oktober 2026. Das Schweizer System ist der sechste Turniermodus und
 funktioniert sowohl für Einzelspieler als auch für Teams. Es endet mit einer
@@ -45,11 +47,13 @@ Frontend-Vorschau. Rundenprotokolle sind im Admin lesbar.
   Teilnehmer ein Freilos. Wer bereits ein Freilos oder einen kampflosen Sieg hatte,
   erhält kein weiteres Freilos. Falls das verbleibende Feld damit nicht vollständig
   gepaart werden kann, wird der nächste berechtigte Kandidat geprüft.
-- Rückzüge können eine spätere vollständige Paarung unmöglich machen. Bei fehlender
-  Paarung, fehlendem Freilos-Kandidaten oder weniger als zwei aktiven Teilnehmern
-  erscheint eine Fehlermeldung, ohne eine Teilrunde anzulegen. Es gibt keine
-  automatische Wiederholungsbegegnung. Die Orga kann das Turnier dann im Admin
-  absagen; daraus entsteht keine reguläre Abschlusstabelle.
+- Eine spätere vollständige Paarung kann auch ohne Rückzüge unmöglich werden.
+  Bei fehlender Paarung oder fehlendem Freilos-Kandidaten legt die Vorschau keine
+  Teilrunde an. Sie bietet eine Ausnahmevorschau mit möglichst wenigen
+  Wiederholungen, die eine zusätzliche ausdrückliche Orga-Zustimmung erfordert.
+  Die Ausnahme ist an das signierte Token gebunden und bleibt im Rundenprotokoll
+  sichtbar. Mit weniger als zwei aktiven Teilnehmern bleibt die weitere Runde
+  gesperrt. Eine Absage im Admin erzeugt keine reguläre Abschlusstabelle.
 
 ## Punkte, Feinwertung und Rückzüge
 
@@ -98,7 +102,8 @@ werden. Ein Reset ist regulär nur vor dem ersten gespielten/gewerteten Match m�
 Schreibaktionen sperren **Event → Turnier → Anmeldung/Match** in einer Transaktion.
 Eindeutige Datenbank-Constraints schützen Rundennummer, Matchnummer je Runde und
 die einmalige Teilnahme eines Teams je Runde. `SwissRound` hält Zeitpunkt, Orga,
-Eingabe-Prüfsumme und Ranglisten-Snapshot; `SwissRoundEntry` hält die Teilnahme.
+Eingabe-Prüfsumme, Ranglisten-Snapshot und eine ausdrückliche Ausnahmefreigabe;
+`SwissRoundEntry` hält die Teilnahme.
 Die Auslosung verwendet NetworkX für ein globales Matching.
 
 ## Installation und Prüfung
@@ -110,8 +115,9 @@ python manage.py seed_translations
 python manage.py collectstatic --noinput
 ```
 
-Danach die Web-Prozesse neu starten. Die neue Migration ist
-`tournaments.0009_swissroundentry_tournament_swiss_allow_draws_and_more`. Bestehende
+Danach die Web-Prozesse neu starten. Schweizer Grundfunktionen benötigen
+`tournaments.0009_swissroundentry_tournament_swiss_allow_draws_and_more`, die
+Ausnahmefreigabe zusätzlich `tournaments.0010_format_improvements`. Bestehende
 Turniere werden nicht in Schweizer Turniere umgewandelt. Neue Systemtexte können
 wie bisher im Admin angepasst werden.
 

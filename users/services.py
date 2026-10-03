@@ -289,10 +289,16 @@ class UserService:
                 clan.delete()
                 if logo_name:
                     transaction.on_commit(lambda name=logo_name, storage=storage: storage.delete(name))
-            elif not remaining.filter(role=ClanMembership.Role.ADMIN).exists():
-                successor = remaining.first()
-                successor.role = ClanMembership.Role.ADMIN
-                successor.save(update_fields=['role'])
+            else:
+                # Ein deaktivierter Admin ersetzt keinen noch aktiven Admin.
+                # Bei ausschließlich inaktiven Restkonten bleibt die bisherige
+                # Nachfolge erhalten, damit eine spätere Aktivierung möglich ist.
+                eligible = remaining.filter(user__is_active=True)
+                candidates = eligible if eligible.exists() else remaining
+                if not candidates.filter(role=ClanMembership.Role.ADMIN).exists():
+                    successor = candidates.first()
+                    successor.role = ClanMembership.Role.ADMIN
+                    successor.save(update_fields=['role'])
 
     @staticmethod
     def _leave_teams(user, team_ids, marker):

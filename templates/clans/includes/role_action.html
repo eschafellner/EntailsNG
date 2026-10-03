@@ -1,0 +1,27 @@
+<details class="clan-role-action">
+  <summary class="clan-role-button">
+    {% if item.membership.role == 'ADMIN' %}
+      {% t "clan_demote_btn" "Als Mitglied setzen" %}
+    {% else %}
+      {% t "clan_make_admin_btn" "Admin machen" %}
+    {% endif %}
+  </summary>
+  <div class="clan-role-confirm">
+    <p><strong>{{ item.user.username }}</strong>:
+      {% if item.membership.role == 'ADMIN' %}
+        {% t "clan_demote_question" "Adminrolle entziehen? Die Person bleibt Mitglied des Clans." %}
+      {% else %}
+        {% t "clan_promote_question" "Zum Clan-Admin machen? Diese Person erhält alle Adminrechte für den Clan." %}
+      {% endif %}
+    </p>
+    <div class="clan-role-confirm-buttons">
+      <form method="post" action="{% url 'clan_manage_member' slug=clan.slug membership_id=item.membership.id %}">
+        {% csrf_token %}
+        <input type="hidden" name="confirmed" value="1">
+        <input type="hidden" name="action" value="{% if item.membership.role == 'ADMIN' %}demote{% else %}promote{% endif %}">
+        <button type="submit" class="clan-role-button clan-role-submit">{% t "clan_role_confirm_btn" "Änderung bestätigen" %}</button>
+      </form>
+      <button type="button" class="clan-role-button" onclick="this.closest('details').removeAttribute('open')">{% t "clan_role_cancel_btn" "Abbrechen" %}</button>
+    </div>
+  </div>
+</details>

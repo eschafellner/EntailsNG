@@ -41,11 +41,13 @@ def _get_user_pending_team_requests_count(request):
     if not request.user.is_authenticated:
         return 0
     from tournaments.models import TeamMember
-    return TeamMember.objects.filter(
+    from tournaments.services.recruitment import received_invitations
+    applications = TeamMember.objects.filter(
         team__captain=request.user,
         team__is_archived=False,
         status=TeamMember.Status.PENDING,
     ).count()
+    return applications + received_invitations(request.user, _get_active_event()).count()
 
 
 def feature_flags(request):

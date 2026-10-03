@@ -84,7 +84,7 @@ class Clan(models.Model):
         return self.memberships.filter(status=ClanMembership.Status.PENDING).select_related('user')
 
     def is_admin(self, user):
-        if not user or not user.is_authenticated:
+        if not user or not user.is_authenticated or not user.is_active or user.deleted_at is not None:
             return False
         return self.memberships.filter(
             user=user,

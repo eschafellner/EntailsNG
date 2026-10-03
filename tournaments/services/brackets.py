@@ -221,13 +221,16 @@ def _generate_single_elimination(tournament, registered_teams, preview=False):
                 'is_bye': is_bye,
                 'status': 'COMPLETED' if is_bye else 'READY'
             })
-        preview_rounds.append({'round': 1, 'name': 'Runde 1', 'matches': r1_matches})
+        first_name = get_translation('format_final' if num_rounds == 1 else 'format_semifinal'
+            if num_rounds == 2 else 'format_quarterfinal' if num_rounds == 3 else 'format_ko_round', number=1)
+        preview_rounds.append({'round': 1, 'name': first_name, 'matches': r1_matches})
 
         current_count = len(r1_matches)
         r_num = 2
         while current_count > 1:
             current_count = current_count // 2
-            round_name = 'Finale' if current_count == 1 else ('Halbfinale' if current_count == 2 else f'Runde {r_num}')
+            round_name = get_translation('format_final' if current_count == 1 else 'format_semifinal'
+                if current_count == 2 else 'format_quarterfinal' if current_count == 4 else 'format_ko_round', number=r_num)
             m_list = []
             for m_idx in range(1, current_count + 1):
                 m_list.append({
@@ -240,6 +243,10 @@ def _generate_single_elimination(tournament, registered_teams, preview=False):
             preview_rounds.append({'round': r_num, 'name': round_name, 'matches': m_list})
             r_num += 1
 
+        if tournament.play_third_place and num_rounds >= 2:
+            preview_rounds.append({'round': num_rounds, 'name': get_translation('format_third_place'), 'matches': [
+                {'match_number': 1, 'team1': get_translation('format_loser_semifinal', number=1),
+                 'team2': get_translation('format_loser_semifinal', number=2), 'status': 'PENDING', 'is_bye': False}]})
         return {'mode': 'SINGLE_ELIMINATION', 'rounds': preview_rounds, 'total_teams': num_teams, 'byes': num_byes}
 
     # Echtes Speichern in DB
@@ -267,6 +274,14 @@ def _generate_single_elimination(tournament, registered_teams, preview=False):
                 round_matches_db[r].append(match_obj)
 
         r1_matches = round_matches_db[1]
+        if tournament.play_third_place and num_rounds >= 2:
+            bronze = TournamentMatch.objects.create(tournament=tournament,
+                round_number=num_rounds, match_number=1,
+                bracket_type=TournamentMatch.BracketType.THIRD_PLACE)
+            for slot, semi in enumerate(round_matches_db[num_rounds - 1], 1):
+                semi.next_match_loser = bronze
+                semi.next_match_loser_slot = slot
+                semi.save(update_fields=['next_match_loser', 'next_match_loser_slot'])
         for i in range(0, bracket_size, 2):
             match_idx = i // 2
             m = r1_matches[match_idx]
@@ -292,6 +307,9 @@ def _generate_single_elimination(tournament, registered_teams, preview=False):
             else:
                 m.status = TournamentMatch.Status.READY
                 m.save()
+
+        if tournament.play_third_place and num_rounds >= 2:
+            check_and_advance_match(bronze)
 
         # Two first-round byes can feed the same next match. Resolve it after
         # every first-round slot has been written, so both teams become READY.
@@ -383,7 +401,7 @@ def _generate_double_elimination(tournament, registered_teams, preview=False):
                         m_list.append({
                             'match_number': m,
                             'team1': f"Sieger LB R{r-1} M{m}",
-                            'team2': f"Verlierer WB R{wb_feed_round} M{m}",
+                            'team2': f"Verlierer WB R{wb_feed_round} M{m_count + 1 - m}",
                             'is_bye': False,
                             'status': 'PENDING'
                         })
@@ -517,7 +535,9 @@ def _generate_double_elimination(tournament, registered_teams, preview=False):
             m_count = 2 ** (k - wb_round)
             for m in range(1, m_count + 1):
                 wb_m = wb_matches[wb_round][m]
-                wb_m.next_match_loser = lb_matches[lb_round][m]
+                # Cross the two halves to avoid an immediate repeat of the WB encounter.
+                target = m_count + 1 - m
+                wb_m.next_match_loser = lb_matches[lb_round][target]
                 wb_m.next_match_loser_slot = 2
 
         # 6.3 WB Finale (WB Runde k, Match 1) -> LB Finale (LB Runde 2(k-1), Match 1)
@@ -658,13 +678,14 @@ def _generate_group_stage(tournament, registered_teams, preview=False):
         return False
 
     # Snake-Verteilung in Gruppe A und B
-    group_a = [teams[i] for i in range(len(teams)) if i % 2 == 0]
-    group_b = [teams[i] for i in range(len(teams)) if i % 2 == 1]
+    group_a = [team for i, team in enumerate(teams) if i % 4 in (0, 3)]
+    group_b = [team for i, team in enumerate(teams) if i % 4 in (1, 2)]
 
     schedule_a = LeagueStandingService.generate_round_robin_schedule(group_a)
     schedule_b = LeagueStandingService.generate_round_robin_schedule(group_b)
 
-    has_semifinals = (num_teams >= 8)
+    has_semifinals = (tournament.group_qualifiers_per_group == 2 or
+        tournament.group_qualifiers_per_group == 0 and num_teams >= 8)
 
     if preview:
         groups_preview = {
@@ -696,6 +717,11 @@ def _generate_group_stage(tournament, registered_teams, preview=False):
                     {'match_number': 1, 'team1': '1. Gruppe A', 'team2': '1. Gruppe B', 'status': 'PENDING'}
                 ]
             })
+
+        if has_semifinals and tournament.play_third_place:
+            ko_preview.append({'round': 3, 'name': get_translation('format_third_place'), 'matches': [
+                {'match_number': 1, 'team1': get_translation('format_loser_semifinal', number=1),
+                 'team2': get_translation('format_loser_semifinal', number=2), 'status': 'PENDING'}]})
 
         return {
             'mode': 'GROUP_STAGE',
@@ -755,7 +781,7 @@ def _generate_group_stage(tournament, registered_teams, preview=False):
                 status=TournamentMatch.Status.PENDING,
             )
             # Halbfinale 1 & 2 anlegen (Runde 2)
-            TournamentMatch.objects.create(
+            semi1 = TournamentMatch.objects.create(
                 tournament=tournament,
                 round_number=2,
                 match_number=1,
@@ -764,7 +790,7 @@ def _generate_group_stage(tournament, registered_teams, preview=False):
                 next_match_winner=final_match,
                 next_match_winner_slot=1,
             )
-            TournamentMatch.objects.create(
+            semi2 = TournamentMatch.objects.create(
                 tournament=tournament,
                 round_number=2,
                 match_number=2,
@@ -773,6 +799,12 @@ def _generate_group_stage(tournament, registered_teams, preview=False):
                 next_match_winner=final_match,
                 next_match_winner_slot=2,
             )
+            if tournament.play_third_place:
+                bronze = TournamentMatch.objects.create(tournament=tournament, round_number=3,
+                    match_number=1, bracket_type=TournamentMatch.BracketType.THIRD_PLACE)
+                for slot, semi in enumerate((semi1, semi2), 1):
+                    semi.next_match_loser, semi.next_match_loser_slot = bronze, slot
+                    semi.save(update_fields=['next_match_loser', 'next_match_loser_slot'])
         else:
             # Direktes Finale (Runde 2)
             TournamentMatch.objects.create(

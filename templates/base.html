@@ -105,7 +105,7 @@
             <span class="nav-title-wrapper">
               <span>{{ item.title }}</span>
               {% if item.url_name == 'team_list' and user_pending_team_requests_count %}
-                <span class="nav-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
+                <span class="nav-notification-dot" title="{% t 'team_attention_title' count=user_pending_team_requests_count %}"></span>
               {% endif %}
             </span>
           </span>
@@ -190,7 +190,7 @@
             </svg>
           {% endif %}
           {% if item.url_name == 'team_list' and user_pending_team_requests_count %}
-            <span class="mobile-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
+            <span class="mobile-notification-dot" title="{% t 'team_attention_title' count=user_pending_team_requests_count %}"></span>
           {% endif %}
         </span>
         <span>{{ item.title }}</span>
@@ -237,7 +237,7 @@
                 </svg>
               {% endif %}
               {% if item.url_name == 'team_list' and user_pending_team_requests_count %}
-                <span class="mobile-notification-dot" title="{{ user_pending_team_requests_count }} offene Beitrittsanfrage(n)"></span>
+                <span class="mobile-notification-dot" title="{% t 'team_attention_title' count=user_pending_team_requests_count %}"></span>
               {% endif %}
             </span>
             <span>{{ item.title }}</span>

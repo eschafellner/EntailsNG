@@ -1,0 +1,77 @@
+{
+  "SINGLE_ELIMINATION": {
+    "tests": 6,
+    "passed": 6,
+    "failures": [],
+    "errors": [],
+    "skipped": []
+  },
+  "DOUBLE_ELIMINATION": {
+    "tests": 6,
+    "passed": 5,
+    "failures": [
+      {
+        "test": "test_corrected_grand_final_does_not_leave_a_reset_match_open (__main__.DoubleEliminationAudit.test_corrected_grand_final_does_not_leave_a_reset_match_open)",
+        "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 242, in test_corrected_grand_final_does_not_leave_a_reset_match_open\n    self.assertFalse(tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists(),\nAssertionError: True is not false : Finished tournament still contains an unplayable READY reset final\n"
+      }
+    ],
+    "errors": [],
+    "skipped": []
+  },
+  "LEAGUE": {
+    "tests": 7,
+    "passed": 5,
+    "failures": [
+      {
+        "test": "test_certificates_include_places_below_third (__main__.LeagueAudit.test_certificates_include_places_below_third)",
+        "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 267, in test_certificates_include_places_below_third\n    self.assertEqual(certificate_rows([fourth], tournament, '')[0]['team.placement'], '4. Platz')\nAssertionError: '' != '4. Platz'\n+ 4. Platz\n\n"
+      },
+      {
+        "test": "test_withdrawn_leader_cannot_be_declared_champion (__main__.LeagueAudit.test_withdrawn_leader_cannot_be_declared_champion)",
+        "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 260, in test_withdrawn_leader_cannot_be_declared_champion\n    self.assertNotEqual(TournamentPodiumService.calculate(tournament)['first'], leader,\nAssertionError: <Team: Team 01> == <Team: Team 01> : A withdrawn team remains champion with its historical points/score difference\n"
+      }
+    ],
+    "errors": [],
+    "skipped": []
+  },
+  "GROUP_STAGE": {
+    "tests": 6,
+    "passed": 5,
+    "failures": [
+      {
+        "test": "test_top_two_seeds_are_balanced_across_groups (__main__.GroupStageAudit.test_top_two_seeds_are_balanced_across_groups)",
+        "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 278, in test_top_two_seeds_are_balanced_across_groups\n    self.assertEqual(seeds[1], seeds[4],\nAssertionError: 'Gruppe A' != 'Gruppe B'\n- Gruppe A\n?        ^\n+ Gruppe B\n?        ^\n : Alternating distribution is not snake seeding: A gets 1,3,5,7; B gets 2,4,6,8\n"
+      }
+    ],
+    "errors": [],
+    "skipped": []
+  },
+  "FFA": {
+    "tests": 6,
+    "passed": 5,
+    "failures": [
+      {
+        "test": "test_missing_active_ranks_do_not_finish_the_tournament (__main__.FFAAudit.test_missing_active_ranks_do_not_finish_the_tournament)",
+        "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 295, in test_missing_active_ranks_do_not_finish_the_tournament\n    self.assertNotEqual(tournament.status, Tournament.Status.FINISHED,\nAssertionError: 'FINISHED' == Tournament.Status.FINISHED : Only the winner has a rank, yet every active participant is finalized\n"
+      }
+    ],
+    "errors": [],
+    "skipped": []
+  },
+  "SWISS": {
+    "tests": 7,
+    "passed": 5,
+    "failures": [
+      {
+        "test": "test_four_round_pairings_for_six_players_never_dead_end_without_withdrawals (__main__.SwissAudit.test_four_round_pairings_for_six_players_never_dead_end_without_withdrawals)",
+        "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 331, in test_four_round_pairings_for_six_players_never_dead_end_without_withdrawals\n    pairs = SwissPairingService.pair(rows, history, set(), seed, number)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\ed_sc\\EntailsNG\\tournaments\\services\\swiss.py\", line 148, in pair\n    raise TournamentBracketError('Keine vollständige Paarung ohne Wiederholungen möglich. Bitte Rundenanzahl und Rückzüge prüfen.')\ntournaments.exceptions.TournamentBracketError: Keine vollständige Paarung ohne Wiederholungen möglich. Bitte Rundenanzahl und Rückzüge prüfen.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 333, in test_four_round_pairings_for_six_players_never_dead_end_without_withdrawals\n    self.fail(f'No withdrawals: seed={seed}, round={number}, '\nAssertionError: No withdrawals: seed=0, round=4, points=[9, 6, 6, 3, 3, 0], history=[(1, 2), (1, 3), (1, 4), (2, 5), (2, 6), (3, 5), (3, 6), (4, 5), (4, 6)]: Keine vollständige Paarung ohne Wiederholungen möglich. Bitte Rundenanzahl und Rückzüge prüfen.\n"
+      },
+      {
+        "test": "test_six_player_four_round_tournament_can_publish_its_final_round (__main__.SwissAudit.test_six_player_four_round_tournament_can_publish_its_final_round)",
+        "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 317, in test_six_player_four_round_tournament_can_publish_its_final_round\n    self.start(tournament)\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 90, in start\n    plan = SwissTournamentService.preview(tournament.pk, actor=self.staff)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\ed_sc\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\ed_sc\\EntailsNG\\tournaments\\services\\swiss.py\", line 206, in preview\n    plan = SwissTournamentService._plan(tournament, seed)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\ed_sc\\EntailsNG\\tournaments\\services\\swiss.py\", line 187, in _plan\n    pairs = SwissPairingService.pair(standings, previous_pairs, bye_winners, seed, number)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\ed_sc\\EntailsNG\\tournaments\\services\\swiss.py\", line 148, in pair\n    raise TournamentBracketError('Keine vollständige Paarung ohne Wiederholungen möglich. Bitte Rundenanzahl und Rückzüge prüfen.')\ntournaments.exceptions.TournamentBracketError: Keine vollständige Paarung ohne Wiederholungen möglich. Bitte Rundenanzahl und Rückzüge prüfen.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\ed_sc\\EntailsNG\\scripts\\tournament_mode_review.py\", line 319, in test_six_player_four_round_tournament_can_publish_its_final_round\n    self.fail(f'Regular six-player tournament is stuck before round 4: {exc}')\nAssertionError: Regular six-player tournament is stuck before round 4: Keine vollständige Paarung ohne Wiederholungen möglich. Bitte Rundenanzahl und Rückzüge prüfen.\n"
+      }
+    ],
+    "errors": [],
+    "skipped": []
+  }
+}

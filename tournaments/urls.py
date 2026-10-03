@@ -1,10 +1,12 @@
 from django.urls import path
 from tournaments import views
+from tournaments import team_views
 
 urlpatterns = [
     # Turniere URLs
     path('', views.tournament_list, name='tournament_list'),
     path('<slug:slug>/', views.tournament_detail, name='tournament_detail'),
+    path('<slug:slug>/open-registration/', views.tournament_open_registration, name='tournament_open_registration'),
     path('<slug:slug>/register/', views.tournament_register, name='tournament_register'),
     path('<slug:slug>/unregister/', views.tournament_unregister, name='tournament_unregister'),
     path('<slug:slug>/generate-bracket/', views.tournament_generate_bracket, name='tournament_generate_bracket'),
@@ -24,5 +26,11 @@ urlpatterns = [
     path('teams/<slug:slug>/kick/<int:user_id>/', views.team_kick_member, name='team_kick_member'),
     path('teams/<slug:slug>/apply/', views.team_apply, name='team_apply'),
     path('teams/<slug:slug>/accept/<int:membership_id>/', views.team_accept_membership, name='team_accept_membership'),
+    path('teams/<slug:slug>/add-clan/', team_views.team_add_clan_members, name='team_add_clan_members'),
+    path('teams/<slug:slug>/recruit/', team_views.team_recruit_player, name='team_recruit_player'),
+    path('teams/<slug:slug>/invitations/<int:invitation_id>/accept/', team_views.team_accept_invitation, name='team_accept_invitation'),
+    path('teams/<slug:slug>/invitations/<int:invitation_id>/decline/', team_views.team_decline_invitation, name='team_decline_invitation'),
+    path('teams/<slug:slug>/invitations/<int:invitation_id>/withdraw/', team_views.team_withdraw_invitation, name='team_withdraw_invitation'),
+    path('teams/<slug:slug>/reject/<int:membership_id>/', team_views.team_reject_application, name='team_reject_application'),
 
 ]

@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
@@ -13,7 +13,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     netcat-openbsd \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Native backup tools must match the PostgreSQL 16 server (official PGDG repository).
+RUN install -d /usr/share/postgresql-common/pgdg && \
+    curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+      -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc && \
+    echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main' \
+      > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Non-Root-User für sicheren Betrieb anlegen
 RUN groupadd -g 1000 appuser && \
@@ -25,7 +35,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/
 
 # Verzeichnisse für Static- und Media-Dateien anlegen und Rechte setzen
-RUN mkdir -p /app/staticfiles /app/media /app/private_media && \
+RUN mkdir -p /app/staticfiles /app/media /app/private_media /app/backups_data && \
     chown -R appuser:appuser /app && \
     chmod +x /app/entrypoint.sh
 

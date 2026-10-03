@@ -42,6 +42,7 @@
     <section class="swiss-round-column">
       <h4>{% t "tournament_round_title" "Runde {round}" round=round.number %}</h4>
       <p class="swiss-match-note">{{ round.published_at|date:'d.m.Y H:i' }}</p>
+      {% if round.repeat_pairings_approved %}<p>{% t "format_swiss_repeat_record" %}</p>{% endif %}
       {% for match in round.matches %}{% include 'tournaments/includes/match_card.html' %}{% endfor %}
     </section>
     {% endfor %}

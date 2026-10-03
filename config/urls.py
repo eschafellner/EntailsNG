@@ -13,6 +13,7 @@ urlpatterns = [
     path('', include('events.urls')),
 
     # 2. Django Admin
+    path('admin/backups/', include('backups.urls')),
     path('admin/', admin.site.urls),
 
     # 3. Authentifizierung

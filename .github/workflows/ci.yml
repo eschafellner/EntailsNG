@@ -7,11 +7,55 @@ on:
     branches: [ main, master ]
 
 jobs:
+  backups-postgresql:
+    name: Native Backups and Restore (PostgreSQL 16)
+    runs-on: ubuntu-24.04
+    env:
+      DEBUG: "True"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
+      SECRET_KEY: "ci-backup-tests-only"
+      FIELD_ENCRYPTION_KEY: "ci-field-backup-tests-only"
+      DB_ENGINE: "postgresql"
+      DB_NAME: "entailsng_backups_test"
+      DB_USER: "entailsng_backups_test"
+      DB_PASSWORD: "ci-backups-only"
+      DB_HOST: "127.0.0.1"
+      DB_PORT: "5432"
+      BACKUP_PG_BIN_DIR: "/usr/lib/postgresql/16/bin"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: entailsng_backups_test
+          POSTGRES_USER: entailsng_backups_test
+          POSTGRES_PASSWORD: ci-backups-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U entailsng_backups_test -d entailsng_backups_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install native PostgreSQL tools and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          python -m pip install -r requirements.txt
+      - name: Test native capture, restore and recovery
+        run: python manage.py test backups --noinput
+
   account-deletion-postgresql:
     name: Account Deletion & Tournaments (PostgreSQL Row Locks)
     runs-on: ubuntu-latest
     env:
       DEBUG: "False"
+      SECURE_SSL_REDIRECT: "False"
       ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
       SECRET_KEY: "ci-account-deletion-tests-only"
       DB_ENGINE: "postgresql"
@@ -43,13 +87,14 @@ jobs:
       - name: Install Dependencies
         run: python -m pip install -r requirements.txt
       - name: Test Account Deletion and Concurrent Tournament Actions
-        run: python manage.py test users.test_account_deletion tournaments.test_swiss tournaments.test_swiss_concurrency tournaments.test_audit tournaments.test_audit_concurrency tournaments.test_solo_reactivation knowledge --noinput
+        run: python manage.py test users.test_account_deletion clans.test_admin_roles clans.test_admin_roles_concurrency tournaments.test_swiss tournaments.test_swiss_concurrency tournaments.test_audit tournaments.test_audit_concurrency tournaments.test_solo_reactivation tournaments.test_format_improvements tournaments.test_draft_visibility tournaments.test_restart tournaments.test_recruitment tournaments.test_recruitment_concurrency knowledge --noinput
 
   test:
     name: Django Test Suite & Checks
     env:
        # Für CI-Testläufe explizit setzen:
       DEBUG: "False"
+      SECURE_SSL_REDIRECT: "False"
       ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
       SECRET_KEY: "ci-insecure-dummy-key-for-tests-only"
       DB_ENGINE: "sqlite"

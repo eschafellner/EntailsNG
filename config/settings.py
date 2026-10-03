@@ -88,10 +88,12 @@ INSTALLED_APPS = [
     'tournaments',
     'media_designer',
     'sponsors',
+    'backups',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'backups.middleware.BackupMaintenanceMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -255,6 +257,19 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 PRIVATE_MEDIA_ROOT = Path(os.environ.get('PRIVATE_MEDIA_ROOT', BASE_DIR / 'private_media'))
 SERVE_MEDIA = env_bool('SERVE_MEDIA', default=DEBUG)
+
+# Private backup storage: deliberately separate from both media areas.
+BACKUP_ROOT = Path(os.environ.get('BACKUP_ROOT', BASE_DIR / 'backups_data'))
+BACKUP_ENCRYPTION_KEY = os.environ.get('BACKUP_ENCRYPTION_KEY', '')
+BACKUP_PG_BIN_DIR = os.environ.get('BACKUP_PG_BIN_DIR', '')
+BACKUP_MAX_UPLOAD_BYTES = int(os.environ.get('BACKUP_MAX_UPLOAD_BYTES', 1024 ** 3))
+BACKUP_MAX_UNPACKED_BYTES = int(os.environ.get('BACKUP_MAX_UNPACKED_BYTES', 10 * 1024 ** 3))
+BACKUP_MAX_FILES = int(os.environ.get('BACKUP_MAX_FILES', 50000))
+BACKUP_MAX_MANIFEST_BYTES = 16 * 1024 ** 2
+BACKUP_MIN_FREE_BYTES = int(os.environ.get('BACKUP_MIN_FREE_BYTES', 256 * 1024 ** 2))
+BACKUP_KEEP_COUNT = max(1, int(os.environ.get('BACKUP_KEEP_COUNT', 7)))
+BACKUP_DRAIN_TIMEOUT = int(os.environ.get('BACKUP_DRAIN_TIMEOUT', 60))
+BACKUP_OPERATION_TIMEOUT = int(os.environ.get('BACKUP_OPERATION_TIMEOUT', 1800))
 
 AUTH_USER_MODEL = 'users.User'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

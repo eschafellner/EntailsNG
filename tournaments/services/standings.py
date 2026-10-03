@@ -6,14 +6,19 @@ from .locking import lock_tournament, event_is_closed
 logger = logging.getLogger(__name__)
 
 
-def _calculate_standings_base(matches, teams):
+def _calculate_standings_base(matches, teams, *, tiebreak=Tournament.Tiebreak.LEGACY,
+                              withdrawn=None, seeds=None, group=False):
     """
     Gemeinsamer Kern zur Tabellenberechnung für Liga und Gruppenphase.
     Wertung: Sieg = 3 Pkt, Unentschieden = 1 Pkt, Niederlage = 0 Pkt.
-    Tiebreak: 1. Punkte, 2. Tordifferenz / Score-Diff, 3. Erzielte Scores, 4. Teamname.
+    Gleichstandsregel nach Turniereinstellung; Rückzüge erhalten keinen Rang.
+    Gruppen benötigen eindeutige Qualifikanten und verwenden zuletzt den Seed
+    (bei historischen LEGACY-Turnieren den Teamnamen).
     """
     if not teams:
         return []
+    matches = list(matches)
+    withdrawn, seeds = set(withdrawn or ()), seeds or {}
 
     stats = {
         team.id: {
@@ -27,6 +32,7 @@ def _calculate_standings_base(matches, teams):
             'score_against': 0,
             'score_diff': 0,
             'head_to_head_points': {},
+            'withdrawn': team.id in withdrawn,
         }
         for team in teams
     }
@@ -70,18 +76,45 @@ def _calculate_standings_base(matches, teams):
     for s in stats.values():
         s['score_diff'] = s['score_for'] - s['score_against']
 
+    # Mini-table for teams tied on points. Use it only after every encounter
+    # in the tied set is complete; partial results cannot decide the tiebreak.
+    mini = {team_id: [0, 0, 0] for team_id in stats}
+    if tiebreak == Tournament.Tiebreak.HEAD_TO_HEAD:
+        for points in {row['points'] for row in stats.values()}:
+            ids = {team_id for team_id, row in stats.items() if row['points'] == points and not row['withdrawn']}
+            meetings = [m for m in matches if m.team1_id in ids and m.team2_id in ids]
+            if len(meetings) != len(ids) * (len(ids) - 1) // 2:
+                continue
+            for m in meetings:
+                for team_id, opponent_id, score, against in (
+                    (m.team1_id, m.team2_id, m.score_team1 or 0, m.score_team2 or 0),
+                    (m.team2_id, m.team1_id, m.score_team2 or 0, m.score_team1 or 0)):
+                    mini[team_id][0] += 3 if m.winner_id == team_id else (1 if m.winner_id is None else 0)
+                    mini[team_id][1] += score - against
+                    mini[team_id][2] += score
+
+    def sporting_key(row):
+        direct = tuple(-value for value in mini[row['team'].pk]) if tiebreak == Tournament.Tiebreak.HEAD_TO_HEAD else ()
+        return (-row['points'], *direct, -row['score_diff'], -row['score_for'])
+
     sorted_list = sorted(
         stats.values(),
-        key=lambda s: (
-            -s['points'],
-            -s['score_diff'],
-            -s['score_for'],
-            s['team'].name.lower(),
-        )
+        key=lambda s: (s['withdrawn'], *sporting_key(s),
+                       seeds.get(s['team'].pk, s['team'].pk) if group and tiebreak != Tournament.Tiebreak.LEGACY
+                       else s['team'].name.lower(), s['team'].pk)
     )
 
-    for idx, item in enumerate(sorted_list, 1):
-        item['rank'] = idx
+    previous, rank, active_index = None, 0, 0
+    for item in sorted_list:
+        if item['withdrawn']:
+            item['rank'] = None
+            continue
+        active_index += 1
+        key = sporting_key(item)
+        # Group qualification uses seed as an explicit last criterion.
+        if group or tiebreak == Tournament.Tiebreak.LEGACY or key != previous:
+            rank = active_index
+        item['rank'], previous = rank, key
 
     return sorted_list
 
@@ -133,7 +166,8 @@ class LeagueStandingService:
             bracket_type=TournamentMatch.BracketType.GROUP,
             status=TournamentMatch.Status.COMPLETED
         ).select_related('team1', 'team2', 'winner')
-        return _calculate_standings_base(matches, teams)
+        return _calculate_standings_base(matches, teams, tiebreak=tournament.standings_tiebreak,
+            withdrawn={r.team_id for r in registrations if r.is_forfeited})
 
 
 class GroupStageStandingService:
@@ -159,7 +193,9 @@ class GroupStageStandingService:
             group_name=group_name,
             status=TournamentMatch.Status.COMPLETED
         ).select_related('team1', 'team2', 'winner')
-        return _calculate_standings_base(matches, teams)
+        return _calculate_standings_base(matches, teams, tiebreak=tournament.standings_tiebreak,
+            withdrawn={r.team_id for r in registrations if r.is_forfeited},
+            seeds={r.team_id: r.seed or r.pk for r in registrations}, group=True)
 
     @staticmethod
     @transaction.atomic

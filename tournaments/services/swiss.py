@@ -13,7 +13,8 @@ from django.core import signing
 from django.db import transaction
 
 from events.models import Event
-from tournaments.exceptions import TournamentBracketError, MatchAlreadyCompletedError
+from tournaments.exceptions import TournamentBracketError, MatchAlreadyCompletedError, SwissPairingError
+from configuration.translations import get_translation
 from tournaments.models import Tournament, TournamentRegistration, TournamentMatch, SwissRound, SwissRoundEntry
 
 TOKEN_SALT = 'tournaments.swiss.publish.v1'
@@ -108,20 +109,28 @@ class SwissStandingService:
 
 class SwissPairingService:
     @staticmethod
-    def pair(standings, previous_pairs, bye_winners, seed, number):
+    def pair(standings, previous_pairs, bye_winners, seed, number, *, allow_repeats=False):
+        if allow_repeats:
+            try:
+                return SwissPairingService.pair(standings, previous_pairs, bye_winners, seed, number)
+            except SwissPairingError:
+                pass
         active = [row for row in standings if not row['withdrawn']]
         if len(active) < 2:
             raise TournamentBracketError('Für eine weitere Runde sind mindestens zwei aktive Teilnehmer erforderlich.')
         active_ids = {row['team'].pk for row in active}
         candidates = [None]
         if len(active) % 2:
-            candidates = [r for r in reversed(active) if r['team'].pk not in bye_winners]
+            candidates = [r for r in reversed(active) if allow_repeats or r['team'].pk not in bye_winners]
             if not candidates:
-                raise TournamentBracketError('Kein Teilnehmer ist mehr für ein Freilos berechtigt. Die Runde kann nicht ausgelost werden.')
+                raise SwissPairingError('Kein Teilnehmer ist mehr für ein Freilos berechtigt. Die Runde kann nicht ausgelost werden.')
         n = len(active)
         # Integer weights make score-group proximity dominate all secondary preferences.
         tie_scale = n * 65536 + 1
         score_scale = (n * max(row['seed'] for row in active) + 1) * tie_scale
+        max_weight = max(row['points'] for row in active) * score_scale + (max(row['seed'] for row in active) + n) * tie_scale + 65536
+        repeat_penalty = n * max_weight + 1
+        best = None
         for bye in candidates:
             players = [r for r in active if bye is None or r['team'].pk != bye['team'].pk]
             graph = nx.Graph()
@@ -129,11 +138,14 @@ class SwissPairingService:
             for i, left in enumerate(players):
                 for right in players[i + 1:]:
                     a, b = sorted((left['team'].pk, right['team'].pk))
-                    if (a, b) in previous_pairs:
+                    repeated = (a, b) in previous_pairs
+                    if repeated and not allow_repeats:
                         continue
                     tie = int(hashlib.sha256(f'{seed}:{number}:{a}:{b}'.encode()).hexdigest()[:4], 16)
                     distance = abs(abs(left['seed'] - right['seed']) - max(1, len(players) // 2))
                     weight = abs(left['points'] - right['points']) * score_scale + distance * tie_scale + tie
+                    if repeated:
+                        weight += repeat_penalty
                     graph.add_edge(a, b, weight=weight)
             matching = nx.min_weight_matching(graph)
             if len(matching) * 2 != len(players):
@@ -144,13 +156,21 @@ class SwissPairingService:
             if bye is not None:
                 pairs.append((bye['team'].pk, None))
             assert {team for pair in pairs for team in pair if team is not None} == active_ids
-            return pairs
-        raise TournamentBracketError('Keine vollständige Paarung ohne Wiederholungen möglich. Bitte Rundenanzahl und Rückzüge prüfen.')
+            if not allow_repeats:
+                return pairs
+            cost = (bool(bye and bye['team'].pk in bye_winners),
+                    sum(tuple(sorted((a, b))) in previous_pairs for a, b in pairs if b is not None),
+                    sum(graph[a][b]['weight'] for a, b in pairs if b is not None))
+            if best is None or cost < best[0]:
+                best = (cost, pairs)
+        if best:
+            return best[1]
+        raise SwissPairingError('Keine vollständige Paarung ohne Wiederholungen möglich. Bitte Rundenanzahl und Rückzüge prüfen.')
 
 
 class SwissTournamentService:
     @staticmethod
-    def _plan(tournament, seed):
+    def _plan(tournament, seed, *, allow_repeats=False):
         if tournament.is_generated:
             if tournament.status != Tournament.Status.IN_PROGRESS:
                 raise TournamentBracketError('Das Turnier läuft nicht.')
@@ -184,33 +204,38 @@ class SwissTournamentService:
         previous_pairs = {tuple(sorted((m['team1_id'], m['team2_id']))) for m in history if m['team1_id'] and m['team2_id']}
         bye_winners = {m['winner_id'] for m in history if m['status'] == TournamentMatch.Status.COMPLETED
                        and m['result_type'] in (TournamentMatch.ResultType.BYE, TournamentMatch.ResultType.WALKOVER)}
-        pairs = SwissPairingService.pair(standings, previous_pairs, bye_winners, seed, number)
+        pairs = SwissPairingService.pair(standings, previous_pairs, bye_winners, seed, number, allow_repeats=allow_repeats)
         snapshot = [{'registration_id': r['registration'].pk, 'team_id': r['team'].pk, 'seed': r['seed'],
                      'points': r['points'], 'buchholz': r['buchholz'], 'sonneborn_berger': r['sonneborn_berger'],
                      'withdrawn': r['withdrawn']} for r in standings]
-        digest_data = {'round': number, 'seed': seed, 'rules': [tournament.swiss_rounds, tournament.swiss_allow_draws],
+        repeated = [(a, b) for a, b in pairs if (b is None and a in bye_winners)
+                    or (b is not None and tuple(sorted((a, b))) in previous_pairs)]
+        digest_data = {'round': number, 'seed': seed, 'allow_repeats': allow_repeats,
+                       'rules': [tournament.swiss_rounds, tournament.swiss_allow_draws],
                        'registrations': [(r.pk, r.team_id, r.team.name, r.seed, r.is_forfeited) for r in registrations],
                        'history': history}
         digest = hashlib.sha256(json.dumps(digest_data, sort_keys=True).encode()).hexdigest()
         by_id = {r['team'].pk: r for r in standings}
         return {'number': number, 'seed': seed, 'digest': digest, 'snapshot': snapshot, 'pairs': pairs,
+                'allow_repeats': allow_repeats, 'has_repeats': bool(repeated), 'repeated_pairs': repeated,
                 'pairings': [{'team1': by_id[a]['team'], 'team2': by_id[b]['team'] if b else None,
-                              'seed1': by_id[a]['seed'], 'seed2': by_id[b]['seed'] if b else None}
+                              'seed1': by_id[a]['seed'], 'seed2': by_id[b]['seed'] if b else None,
+                              'repeated': (a, b) in repeated}
                              for a, b in pairs]}
 
     @staticmethod
     @transaction.atomic
-    def preview(tournament_id, actor=None):
+    def preview(tournament_id, actor=None, *, allow_repeats=False):
         tournament = _locked_tournament(tournament_id, actor)
         seed = tournament.swiss_pairing_seed if tournament.is_generated else secrets.randbits(31)
-        plan = SwissTournamentService._plan(tournament, seed)
+        plan = SwissTournamentService._plan(tournament, seed, allow_repeats=allow_repeats)
         plan['token'] = signing.dumps({'tournament': tournament.pk, 'number': plan['number'],
-                                      'seed': seed, 'digest': plan['digest']}, salt=TOKEN_SALT)
+                                      'seed': seed, 'digest': plan['digest'], 'allow_repeats': allow_repeats}, salt=TOKEN_SALT)
         return plan
 
     @staticmethod
     @transaction.atomic
-    def publish(tournament_id, actor=None, token=None):
+    def publish(tournament_id, actor=None, token=None, *, approve_repeats=False):
         tournament = _locked_tournament(tournament_id, actor)
         if token:
             try:
@@ -220,11 +245,17 @@ class SwissTournamentService:
             except (signing.BadSignature, KeyError, TypeError):
                 raise TournamentBracketError('Die Vorschau ist ungültig oder abgelaufen. Bitte erneut aufrufen.')
             seed = claim['seed']
+            allow_repeats = claim.get('allow_repeats', False)
+            if not isinstance(allow_repeats, bool):
+                raise TournamentBracketError(get_translation('format_swiss_invalid_approval'))
         else:
             if tournament.is_generated:
                 raise TournamentBracketError('Bitte zuerst die nächste Runde in der Vorschau prüfen.')
             seed = secrets.randbits(31)
-        plan = SwissTournamentService._plan(tournament, seed)
+            allow_repeats = False
+        plan = SwissTournamentService._plan(tournament, seed, allow_repeats=allow_repeats)
+        if plan['has_repeats'] and approve_repeats is not True:
+            raise TournamentBracketError(get_translation('format_swiss_approval_required'))
         if token and (claim['number'] != plan['number'] or claim['digest'] != plan['digest']):
             raise TournamentBracketError('Ergebnisse oder Teilnehmer haben sich seit der Vorschau geändert. Bitte erneut prüfen.')
         if plan['number'] == 1:
@@ -235,7 +266,8 @@ class SwissTournamentService:
             tournament.status = Tournament.Status.IN_PROGRESS
             tournament.save(update_fields=['swiss_pairing_seed', 'is_generated', 'status'])
         round_record = SwissRound.objects.create(tournament=tournament, number=plan['number'],
-            published_by=actor, input_digest=plan['digest'], standings_snapshot=plan['snapshot'])
+            published_by=actor, input_digest=plan['digest'], standings_snapshot=plan['snapshot'],
+            repeat_pairings_approved=plan['has_repeats'])
         rows = {r['team_id']: r for r in plan['snapshot']}
         for index, (a, b) in enumerate(plan['pairs'], 1):
             match = TournamentMatch.objects.create(tournament=tournament, swiss_round=round_record,
@@ -243,7 +275,8 @@ class SwissTournamentService:
                 team1_id=a, team2_id=b, is_bye=b is None, winner_id=a if b is None else None,
                 result_type=TournamentMatch.ResultType.BYE if b is None else TournamentMatch.ResultType.PLAYED,
                 status=TournamentMatch.Status.COMPLETED if b is None else TournamentMatch.Status.READY,
-                decision_reason='Freilos (3 Punkte)' if b is None else '')
+                decision_reason=get_translation('format_swiss_repeat') if (a, b) in plan['repeated_pairs']
+                    else ('Freilos (3 Punkte)' if b is None else ''))
             for team_id in (a, b):
                 if team_id is not None:
                     SwissRoundEntry.objects.create(round=round_record, match=match, team_id=team_id,

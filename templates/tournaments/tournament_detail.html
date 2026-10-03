@@ -118,6 +118,8 @@
           <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; color: var(--ink);">
             {{ tournament.title }}
           </h1>
+          {% if restart_source %}<p>{% t 'restart_original' %} <a href="{% url 'tournament_detail' restart_source.slug %}">{{ restart_source.title }}</a></p>{% endif %}
+          {% if restart_editions %}<p>{% t 'restart_editions' %}: {% for edition in restart_editions %}<a href="{% url 'tournament_detail' edition.slug %}">{{ edition.title }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
           <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 14px;">
             {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ tournament.event.title }} | {% t "tournament_detail_admin_label" "Orga-Admin:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.display_name }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %} | 📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr | 🚀 {% t "tournament_start_label" "Turnierstart:" %} {{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr
           </p>
@@ -163,7 +165,9 @@
           </div>
         {% endif %}
 
-        {% if tournament.status == 'FINISHED' %}
+        {% if tournament.status == 'DRAFT' %}
+          {% include 'tournaments/includes/draft_status.html' with return_to='detail' %}
+        {% elif tournament.status == 'FINISHED' %}
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             {% if is_registered %}
               <span style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); padding: 6px 10px; border-radius: 6px;">
@@ -284,10 +288,6 @@
           {% elif tournament_is_full %}
             <span style="background: rgba(239, 68, 68, 0.1); color: #dc2626; padding: 6px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold;">
               {% t "tournament_detail_teams_full" "🔴 Voll (Max. {max_teams} Teams erreicht)" max_teams=tournament.max_teams %}
-            </span>
-          {% elif tournament.status == 'DRAFT' %}
-            <span style="background: rgba(100, 116, 139, 0.15); color: var(--muted); padding: 6px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px;">
-              {% t "tournament_detail_status_draft" "Entwurf (Anmeldung noch nicht freigegeben)" %}
             </span>
           {% else %}
             <span style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted);">
@@ -411,6 +411,10 @@
 
   <!-- Tab 1: Turnierbaum & Matches -->
   <div id="tab-bracket" role="tabpanel" aria-labelledby="tab-button-bracket" tabindex="0" class="tab-content active">
+    {% if tournament.mode == 'DOUBLE_ELIMINATION' %}<p>{% t "format_de_reset_hint" %}</p>{% endif %}
+    {% if tournament.mode == 'LEAGUE' or tournament.mode == 'GROUP_STAGE' %}
+      <p>{% t "format_ranking_rule" %} {{ tournament.get_standings_tiebreak_display }}{% if tournament.mode == 'GROUP_STAGE' and tournament.standings_tiebreak != 'LEGACY' %} · {% t "format_group_seed_tiebreak" %}{% endif %}</p>
+    {% endif %}
     {% if tournament.is_generated and tournament.mode != 'FFA' %}
     <div class="ux-actions ux-view-toggle">
       <button type="button" data-match-view="tree" aria-pressed="true">{% t "ux_bracket_view" "Turnierübersicht" %}</button>
@@ -418,7 +422,7 @@
     </div>
     <div id="match-list" class="ux-match-list" hidden>
       {% for match in match_list_cards %}
-      <section><h3>{{ match.get_bracket_type_display }} · {% t "ux_round" "Runde" %} {{ match.round_number }}</h3>
+      <section><h3>{{ match.round_name }}</h3>
         {% include "tournaments/includes/match_card.html" %}
       </section>
       {% endfor %}
@@ -472,10 +476,11 @@
                   {% for row in league_standings %}
                     <tr style="border-bottom: 1px solid var(--line); {% if user_team and row.team == user_team %}background: rgba(248, 171, 45, 0.08); font-weight: bold;{% endif %}">
                       <td style="padding: 10px 12px;">
-                        {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}{{ row.rank }}.{% endif %}
+                        {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% elif row.rank %}{{ row.rank }}.{% else %}—{% endif %}
                       </td>
                       <td style="padding: 10px 12px;">
                         {{ row.team.name }}
+                        {% if row.withdrawn %}<span>({% t "format_withdrawn" %})</span>{% endif %}
                         {% if row.team.captain %}
                           <span style="font-size: 14px; color: var(--muted);">({{ row.team.captain.display_name }})</span>
                         {% endif %}
@@ -523,8 +528,8 @@
                 <tbody>
                   {% for row in group_a_standings %}
                     <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); {% if user_team and row.team == user_team %}background: rgba(248, 171, 45, 0.12); font-weight: bold;{% endif %}">
-                      <td style="padding: 6px 8px;">{{ row.rank }}.</td>
-                      <td style="padding: 6px 8px;">{{ row.team.name }}</td>
+                      <td style="padding: 6px 8px;">{{ row.rank|default_if_none:'—' }}</td>
+                      <td style="padding: 6px 8px;">{{ row.team.name }}{% if row.withdrawn %} ({% t "format_withdrawn" %}){% endif %}</td>
                       <td style="padding: 6px 6px; text-align: center;">{{ row.played }}</td>
                       <td style="padding: 6px 6px; text-align: center;">{% if row.score_diff > 0 %}+{% endif %}{{ row.score_diff }}</td>
                       <td style="padding: 6px 8px; text-align: right; font-weight: bold;">{{ row.points }}</td>
@@ -552,8 +557,8 @@
                 <tbody>
                   {% for row in group_b_standings %}
                     <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); {% if user_team and row.team == user_team %}background: rgba(248, 171, 45, 0.12); font-weight: bold;{% endif %}">
-                      <td style="padding: 6px 8px;">{{ row.rank }}.</td>
-                      <td style="padding: 6px 8px;">{{ row.team.name }}</td>
+                      <td style="padding: 6px 8px;">{{ row.rank|default_if_none:'—' }}</td>
+                      <td style="padding: 6px 8px;">{{ row.team.name }}{% if row.withdrawn %} ({% t "format_withdrawn" %}){% endif %}</td>
                       <td style="padding: 6px 6px; text-align: center;">{{ row.played }}</td>
                       <td style="padding: 6px 6px; text-align: center;">{% if row.score_diff > 0 %}+{% endif %}{{ row.score_diff }}</td>
                       <td style="padding: 6px 8px; text-align: right; font-weight: bold;">{{ row.points }}</td>
@@ -728,19 +733,10 @@
         {# ================== ANDERE MODI: SE, LIGA, GRUPPE ================== #}
         {% elif tournament.mode != 'FFA' and tournament.mode != 'SWISS' %}
           <div class="bracket-container">
-            {% regroup matches by round_number as round_list %}
-            {% for round in round_list %}
+            {% for round in bracket_rounds %}
               <div class="bracket-round">
-                <div class="bracket-round-title">
-                  {% if tournament.mode == 'LEAGUE' %}
-                    {% t "tournament_matchday_title" "Spieltag {round}" round=round.grouper %}
-                  {% elif tournament.mode == 'GROUP_STAGE' %}
-                    {% if round.grouper == 1 %}{% t "tournament_group_phase_title" "Gruppenphase" %}{% elif round.grouper == 2 %}{% t "tournament_semifinal_final_title" "Halbfinale / Finale" %}{% else %}{% t "tournament_final_title" "Finale" %}{% endif %}
-                  {% else %}
-                    {% t "tournament_round_title" "Runde {round}" round=round.grouper %}
-                  {% endif %}
-                </div>
-                {% for match in round.list %}
+                <div class="bracket-round-title">{{ round.name }}</div>
+                {% for match in round.matches %}
                   {% include "tournaments/includes/match_card.html" with match=match is_admin=is_admin user_team=user_team %}
                 {% endfor %}
               </div>
@@ -1119,7 +1115,7 @@
     <form method="post" action="{% url 'match_update_ffa_score' match_id=ffa_match.id %}">
       {% csrf_token %}
       <p style="font-size: 14px; color: var(--muted); margin: 0 0 16px;">
-        {% t "tournament_ffa_rank_required" "Zum Abschließen muss genau ein nicht disqualifizierter Teilnehmer Rang 1 erhalten. Punkte allein bestimmen die Platzierung nicht." %}
+        {% t "format_ffa_complete_hint" %}
       </p>
 
       <div style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; padding-right: 4px;">

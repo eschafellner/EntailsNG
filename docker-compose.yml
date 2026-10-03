@@ -49,6 +49,7 @@ services:
       - static_data:/app/staticfiles
       - media_data:/app/media
       - private_media_data:/app/private_media
+      - backup_data:/app/backups_data
     depends_on:
       db:
         condition: service_healthy
@@ -77,6 +78,32 @@ services:
       - SKIP_ENTRYPOINT_MIGRATION=1
     volumes:
       - media_data:/app/media
+      - backup_data:/app/backups_data
+    depends_on:
+      web:
+        condition: service_healthy
+
+  backup_worker:
+    build: .
+    container_name: entailsng_backup_worker
+    profiles:
+      - backups
+    restart: unless-stopped
+    command: python manage.py process_backup_jobs --daemon
+    cpus: 1.0
+    mem_limit: 512m
+    env_file:
+      - .env
+    environment:
+      - DB_ENGINE=postgresql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/1
+      - SKIP_ENTRYPOINT_INIT=1
+    volumes:
+      - media_data:/app/media
+      - private_media_data:/app/private_media
+      - backup_data:/app/backups_data
     depends_on:
       web:
         condition: service_healthy
@@ -132,6 +159,7 @@ volumes:
   static_data:
   media_data:
   private_media_data:
+  backup_data:
 
 
 

@@ -416,6 +416,8 @@ class TournamentMatchService:
             tournament = match.tournament
             if match.bracket_type == TournamentMatch.BracketType.GRAND_FINAL:
                 if match.winner == match.team1:
+                    tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GRAND_FINAL_RESET,
+                        status__in=(TournamentMatch.Status.PENDING, TournamentMatch.Status.READY)).delete()
                     tournament.status = Tournament.Status.FINISHED
                     tournament.save(update_fields=['status'])
                 else:
@@ -434,9 +436,8 @@ class TournamentMatchService:
                 tournament.status = Tournament.Status.FINISHED
                 tournament.save(update_fields=['status'])
             elif match.bracket_type == TournamentMatch.BracketType.FINAL:
-                if match.next_match_winner is None:
-                    tournament.status = Tournament.Status.FINISHED
-                    tournament.save(update_fields=['status'])
+                # Completion is checked below, including an optional bronze match.
+                pass
             elif match.bracket_type == TournamentMatch.BracketType.GROUP:
                 if tournament.mode == Tournament.Mode.GROUP_STAGE:
                     GroupStageStandingService.check_and_advance_group_stage(tournament)
@@ -526,6 +527,9 @@ class FFAMatchService:
                     'tournament_ffa_rank_required',
                     'Zum Abschließen des FFA-Turniers muss genau ein nicht disqualifizierter Teilnehmer Rang 1 erhalten. Punkte allein bestimmen die Platzierung nicht.',
                 ))
+
+            if any(rank is None and not is_disqualified for _, rank, _, is_disqualified, _ in valid_entries):
+                raise TournamentMatchError(get_translation('format_ffa_complete_ranks'))
 
             for p, rank, score, is_disqualified, notes in valid_entries:
                 p.rank = rank

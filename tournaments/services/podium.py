@@ -14,6 +14,9 @@ class TournamentPodiumService:
             from .swiss import SwissStandingService
             rows = swiss_standings if swiss_standings is not None else SwissStandingService.calculate(tournament)
             return [{'rank': row['rank'], 'team': row['team']} for row in rows if row['rank'] is not None]
+        if tournament.mode == Tournament.Mode.LEAGUE:
+            return [{'rank': row['rank'], 'team': row['team']}
+                    for row in LeagueStandingService.calculate_league_standings(tournament) if row['rank'] is not None]
         if tournament.mode == Tournament.Mode.FFA:
             participants = tournament.matches.filter(bracket_type=TournamentMatch.BracketType.FFA).first()
             return [{'rank': p.rank, 'team': p.team} for p in
@@ -64,6 +67,10 @@ class TournamentPodiumService:
             if final and final.winner:
                 podium['first'] = final.winner
                 podium['second'] = final.loser
+            bronze = matches.filter(bracket_type=TournamentMatch.BracketType.THIRD_PLACE,
+                                    status=TournamentMatch.Status.COMPLETED).first()
+            if bronze:
+                podium['third'] = bronze.winner
 
         elif tournament.mode == Tournament.Mode.SWISS:
             # Legacy consumers must never invent a unique winner from a shared rank.
@@ -75,8 +82,9 @@ class TournamentPodiumService:
         elif tournament.mode == Tournament.Mode.LEAGUE:
             if league_standings is None:
                 league_standings = LeagueStandingService.calculate_league_standings(tournament)
-            for place, standing in zip(podium, league_standings):
-                podium[place] = standing['team']
+            for place, number in zip(podium, (1, 2, 3)):
+                teams = [row['team'] for row in league_standings if row['rank'] == number]
+                podium[place] = teams[0] if len(teams) == 1 else None
 
         elif tournament.mode == Tournament.Mode.FFA:
             if ffa_participants is None:

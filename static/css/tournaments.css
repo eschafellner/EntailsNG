@@ -1,4 +1,8 @@
 /* Shared tournament/team controls; theme colors continue to come from the site. */
+.tournament-draft-form { margin: 0; display: inline-flex; }
+.tournament-draft-button { border: 1px solid var(--line); cursor: pointer; }
+.tournament-draft-button:hover { color: var(--ink); border-color: var(--signal); }
+.tournament-draft-button:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 .tournaments-ui main { min-width: 0; }
 .tournaments-ui main > div, .tournaments-ui .card { min-width: 0; }
 .tournaments-ui h1, .tournaments-ui h2, .tournaments-ui h3 { overflow-wrap: anywhere; }

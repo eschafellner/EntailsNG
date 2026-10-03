@@ -19,6 +19,18 @@ class ConfiguredSMTPBackend(BaseEmailBackend):
     """
 
     def send_messages(self, email_messages):
+        from backups.locking import access_guard
+        from backups.storage import root
+        from backups.errors import BackupError
+        if (root() / 'mail-paused.json').exists():
+            return 0
+        try:
+            with access_guard():
+                return self._send_messages(email_messages)
+        except BackupError:
+            return 0
+
+    def _send_messages(self, email_messages):
         if not email_messages:
             return 0
 
