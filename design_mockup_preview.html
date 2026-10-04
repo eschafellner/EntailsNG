@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entails-NG – Interaktives Design-Refinement Mock-up</title>
+  <!-- Lokale Fonts aus dem Projekt einbinden -->
+  <link rel="stylesheet" href="static/css/fonts.css">
+  <style>
+    /* ==========================================================================
+       THEME VARIABLES (Vollständige Entails-NG Presets)
+       ========================================================================== */
+    :root, [data-theme="WARM_AMBER"] {
+      --ink: #2b2115;
+      --muted: #6f6252;
+      --line: #e7dac8;
+      --paper: #fffaf2;
+      --panel: #ffffff;
+      --navy: #332719;
+      --signal: #f8ab2d;
+      --signal-deep: #8a4d00;
+      --signal-soft: #fff0d2;
+      --amber: #d97817;
+      --amber-soft: #ffead0;
+      --sidebar-text: #fffaf2;
+      --sidebar-nav-text: #eadfce;
+      --sidebar-nav-hover-bg: rgba(255, 255, 255, 0.08);
+      --sidebar-nav-hover-text: #ffffff;
+      --sidebar-nav-active-bg: #ffffff;
+      --sidebar-nav-active-text: #332719;
+      --sidebar-border: rgba(255, 255, 255, 0.1);
+      --warning-text: #b45309;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --warning-border: rgba(245, 158, 11, 0.35);
+      --info-text: #0369a1;
+      --info-bg: rgba(2, 132, 199, 0.08);
+      --info-border: rgba(2, 132, 199, 0.25);
+      --theme-name: "Warm Amber (Standard)";
+    }
+
+    [data-theme="CYBERPUNK"] {
+      --ink: #e2e8f0;
+      --muted: #94a3b8;
+      --line: #2a2d3d;
+      --paper: #0f111a;
+      --panel: #181b29;
+      --navy: #0b0d14;
+      --signal: #00f0ff;
+      --signal-deep: #ff0055;
+      --signal-soft: rgba(0, 240, 255, 0.15);
+      --amber: #ff0055;
+      --amber-soft: rgba(255, 0, 85, 0.15);
+      --sidebar-text: #e2e8f0;
+      --sidebar-nav-text: #94a3b8;
+      --sidebar-nav-hover-bg: rgba(0, 240, 255, 0.12);
+      --sidebar-nav-hover-text: #00f0ff;
+      --sidebar-nav-active-bg: #00f0ff;
+      --sidebar-nav-active-text: #0b0d14;
+      --sidebar-border: rgba(42, 45, 61, 0.6);
+      --warning-text: #facc15;
+      --warning-bg: rgba(234, 179, 8, 0.15);
+      --warning-border: rgba(234, 179, 8, 0.35);
+      --info-text: #38bdf8;
+      --info-bg: rgba(56, 189, 248, 0.12);
+      --info-border: rgba(56, 189, 248, 0.3);
+      --theme-name: "Cyberpunk Neon";
+    }
+
+    [data-theme="QUAKE_99"] {
+      --ink: #E4E4E7;
+      --muted: #A1A1AA;
+      --line: #3F3F46;
+      --paper: #18181B;
+      --panel: #27272A;
+      --navy: #121215;
+      --signal: #EA580C;
+      --signal-deep: #C2410C;
+      --signal-soft: rgba(234, 88, 12, 0.15);
+      --amber: #CA8A04;
+      --amber-soft: rgba(202, 138, 4, 0.15);
+      --sidebar-text: #E4E4E7;
+      --sidebar-nav-text: #A1A1AA;
+      --sidebar-nav-hover-bg: rgba(234, 88, 12, 0.15);
+      --sidebar-nav-hover-text: #ffffff;
+      --sidebar-nav-active-bg: #EA580C;
+      --sidebar-nav-active-text: #ffffff;
+      --sidebar-border: rgba(255, 255, 255, 0.1);
+      --warning-text: #facc15;
+      --warning-bg: rgba(234, 179, 8, 0.15);
+      --warning-border: rgba(234, 179, 8, 0.35);
+      --info-text: #38bdf8;
+      --info-bg: rgba(56, 189, 248, 0.12);
+      --info-border: rgba(56, 189, 248, 0.3);
+      --theme-name: "Quake 99";
+    }
+
+    [data-theme="SLATE_BLUE"] {
+      --ink: #1e293b;
+      --muted: #64748b;
+      --line: #cbd5e1;
+      --paper: #f8fafc;
+      --panel: #ffffff;
+      --navy: #0f172a;
+      --signal: #3b82f6;
+      --signal-deep: #1d4ed8;
+      --signal-soft: #dbeafe;
+      --amber: #2563eb;
+      --amber-soft: #eff6ff;
+      --sidebar-text: #f8fafc;
+      --sidebar-nav-text: #cbd5e1;
+      --sidebar-nav-hover-bg: rgba(59, 130, 246, 0.15);
+      --sidebar-nav-hover-text: #ffffff;
+      --sidebar-nav-active-bg: #3b82f6;
+      --sidebar-nav-active-text: #ffffff;
+      --sidebar-border: rgba(255, 255, 255, 0.1);
+      --warning-text: #b45309;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --warning-border: rgba(245, 158, 11, 0.35);
+      --info-text: #0369a1;
+      --info-bg: rgba(2, 132, 199, 0.08);
+      --info-border: rgba(2, 132, 199, 0.25);
+      --theme-name: "Slate Blue";
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.25s ease, color 0.25s ease;
+    }
+
+    /* ==========================================================================
+       PRESENTATION HEADER & CONTROLS (Mock-up Shell)
+       ========================================================================== */
+    .mockup-header-bar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: rgba(17, 24, 39, 0.94);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 12px 24px;
+      color: #ffffff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .mockup-title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mockup-badge {
+      background: #f8ab2d;
+      color: #111827;
+      font-size: 11px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .mockup-h1 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 22px;
+      margin: 0;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+    }
+
+    .mockup-controls-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .control-label {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase;
+      color: #9ca3af;
+    }
+
+    .btn-toggle-group {
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .btn-toggle {
+      background: transparent;
+      border: none;
+      color: #d1d5db;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-toggle:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .btn-toggle.active {
+      background: #f8ab2d;
+      color: #111827;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(248, 171, 45, 0.35);
+    }
+
+    .theme-select {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      outline: none;
+      cursor: pointer;
+    }
+    .theme-select option {
+      background: #111827;
+      color: #ffffff;
+    }
+
+    /* ==========================================================================
+       CONTAINER & ANNOTATION BANNER
+       ========================================================================== */
+    .mockup-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    .intro-banner {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--signal);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 36px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+    }
+
+    .intro-banner h2 {
+      margin: 0 0 6px 0;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 26px;
+      color: var(--ink);
+    }
+
+    .intro-banner p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ==========================================================================
+       SHOWCASE SECTION & COMPARISON CARDS
+       ========================================================================== */
+    .showcase-section {
+      margin-bottom: 48px;
+    }
+
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 28px;
+      margin: 0 0 8px 0;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-subtitle {
+      font-size: 14px;
+      color: var(--muted);
+      margin: 0 0 20px 0;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    /* Ansichts-Modi via Body-Klassen */
+    body.view-after-only .panel-before { display: none !important; }
+    body.view-after-only .comparison-grid { grid-template-columns: 1fr; max-width: 800px; margin: 0 auto; }
+
+    body.view-before-only .panel-after { display: none !important; }
+    body.view-before-only .comparison-grid { grid-template-columns: 1fr; max-width: 800px; margin: 0 auto; }
+
+    .comparison-panel {
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .panel-header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 8px 8px 0 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      align-self: flex-start;
+      margin-bottom: -1px;
+      z-index: 2;
+    }
+
+    .panel-before .panel-header-badge {
+      background: #ef4444;
+      color: #ffffff;
+    }
+
+    .panel-after .panel-header-badge {
+      background: #10b981;
+      color: #ffffff;
+    }
+
+    .panel-content-wrap {
+      border: 2px solid;
+      border-radius: 0 12px 12px 12px;
+      padding: 24px;
+      background: var(--paper);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .panel-before .panel-content-wrap {
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    .panel-after .panel-content-wrap {
+      border-color: rgba(16, 185, 129, 0.45);
+      box-shadow: 0 8px 30px rgba(16, 185, 129, 0.08);
+    }
+
+    .ux-critique-tag {
+      margin-top: 18px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .panel-before .ux-critique-tag {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #b91c1c;
+    }
+
+    .panel-after .ux-critique-tag {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: #047857;
+    }
+
+    /* ==========================================================================
+       SHOWCASE 1: DASHBOARD RECHTE SPALTE (SITZPLATZ & STATUS)
+       ========================================================================== */
+    .mock-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* VORHER: Kasten-in-Kasten & Border-Flut */
+    .before-nested-box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 14px 16px;
+      border-radius: 10px;
+    }
+
+    /* NACHHER: Luftiges Flächenlayout ohne Kasten-in-Kasten */
+    .after-clean-section {
+      background: var(--panel);
+      padding: 16px;
+      border-radius: 10px;
+      border: 1px solid transparent; /* keine störenden harten Innenränder */
+    }
+
+    /* ==========================================================================
+       SHOWCASE 2: ONBOARDING TICKET
+       ========================================================================== */
+    .mock-ticket {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #111827;
+      color: #f9fafb;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      position: relative;
+    }
+
+    .mock-ticket-left {
+      padding: 24px;
+      border-right: 2px dashed #374151;
+      position: relative;
+    }
+
+    .mock-ticket-right {
+      padding: 24px;
+      background: #1f2937;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    /* Ticket Kerben */
+    .notch-top {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      width: 20px;
+      height: 20px;
+      background: var(--paper);
+      border-radius: 50%;
+    }
+    .notch-bottom {
+      position: absolute;
+      bottom: -10px;
+      right: -10px;
+      width: 20px;
+      height: 20px;
+      background: var(--paper);
+      border-radius: 50%;
+    }
+
+    /* ==========================================================================
+       SHOWCASE 3: TOURNAMENT CARDS
+       ========================================================================== */
+    .mock-t-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* ==========================================================================
+       RESPONSIVENESS
+       ========================================================================== */
+    @media (max-width: 990px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+      .mock-ticket {
+        grid-template-columns: 1fr;
+      }
+      .mock-ticket-left {
+        border-right: none;
+        border-bottom: 2px dashed #374151;
+      }
+      .notch-top {
+        top: auto;
+        bottom: -10px;
+        left: -10px;
+        right: auto;
+      }
+      .notch-bottom {
+        bottom: -10px;
+        right: -10px;
+      }
+    }
+  </style>
+</head>
+<body data-theme="WARM_AMBER">
+
+  <!-- ==========================================================================
+       INTERAKTIVE STEUERUNGSLEISTE OBEN
+       ========================================================================== -->
+  <header class="mockup-header-bar">
+    <div class="mockup-title-group">
+      <span class="mockup-badge">Team-Preview</span>
+      <h1 class="mockup-h1">Entails-NG • UX/UI Refinement Mock-up</h1>
+    </div>
+
+    <div class="mockup-controls-group">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="control-label">Ansicht:</span>
+        <div class="btn-toggle-group">
+          <button type="button" class="btn-toggle active" onclick="setViewMode('split')">Side-by-Side (Vergleich)</button>
+          <button type="button" class="btn-toggle" onclick="setViewMode('after')">Nur Nachher (Vorschlag)</button>
+          <button type="button" class="btn-toggle" onclick="setViewMode('before')">Nur Vorher (Ist-Stand)</button>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="control-label">Live-Theme:</span>
+        <select class="theme-select" onchange="changeTheme(this.value)">
+          <option value="WARM_AMBER">Warm Amber (Standard)</option>
+          <option value="CYBERPUNK">Cyberpunk Neon</option>
+          <option value="QUAKE_99">Quake 99</option>
+          <option value="SLATE_BLUE">Slate Blue</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="mockup-container">
+
+    <!-- BRIEFING BANNER -->
+    <section class="intro-banner">
+      <h2>🎯 Ziel: Vorsichtige Entlastung ohne Design-Bruch</h2>
+      <p>
+        Das vom Team abgenommene Design und alle Geschäftslogiken bleiben zu <strong>100 % erhalten</strong>. 
+        Dieses Mock-up veranschaulicht, wie durch <em>gezielte Typografie</em> (DM Sans für Fließtexte), 
+        <em>Auflösung von Kasten-in-Kasten-Rahmen</em>, <em>harmonische Theme-Tokens</em> und 
+        <em>reduzierte Emojis</em> sofort ein ruhigeres, wertigeres Gesamtbild entsteht.
+      </p>
+    </section>
+
+    <!-- ======================================================================
+         SHOWCASE 1: DASHBOARD RECHTE SPALTE (SITZPLATZ & STATUS MODUL)
+         ====================================================================== -->
+    <section class="showcase-section">
+      <h2 class="section-title">1. Dashboard: Sitzplatz- & Status-Modul</h2>
+      <p class="section-subtitle">
+        Beseitigung der 4-fachen Kasten-in-Kasten-Verschachtelung und Monospace-Überlastung bei Fließtexten.
+      </p>
+
+      <div class="comparison-grid">
+
+        <!-- PANEL VORHER -->
+        <div class="comparison-panel panel-before">
+          <div class="panel-header-badge">❌ Vorher (Aktueller Ist-Zustand)</div>
+          <div class="panel-content-wrap">
+            <div class="mock-card">
+              <!-- Event Header mit harter Unterkante -->
+              <div style="padding-bottom: 12px; border-bottom: 1px solid var(--line);">
+                <p style="margin: 0 0 2px 0; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase;">VERANSTALTUNG</p>
+                <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">NorthCon LAN 2026</h3>
+                <p style="margin: 3px 0 0; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">📅 24.10.2026 – 26.10.2026</p>
+              </div>
+
+              <!-- Sitzplatz Label -->
+              <div>
+                <p style="margin: 0 0 2px 0; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase;">SITZPLATZ</p>
+                <h4 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">
+                  Dein Sitzplatz: <span style="color: #22c55e;">Reihe B • Platz 14</span>
+                </h4>
+              </div>
+
+              <!-- Belegungsquote (eigener Kasten mit eigenem Border) -->
+              <div class="before-nested-box">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                  <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase;">BELEGUNGSQUOTE</span>
+                  <strong style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--ink);">184 / 250 Plätze (73%)</strong>
+                </div>
+                <div style="width: 100%; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden;">
+                  <div style="width: 73%; height: 100%; background: linear-gradient(90deg, #0284c7, #22c55e);"></div>
+                </div>
+              </div>
+
+              <!-- Statusbox (erneut eigener Kasten mit eigenem Border) -->
+              <div class="before-nested-box">
+                <span style="display: block; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase; margin-bottom: 6px;">DEIN ANMELDESTATUS</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px; color: #22c55e; font-weight: bold; font-size: 11px; font-family: 'JetBrains Mono', monospace; background: rgba(34, 197, 94, 0.12); padding: 4px 8px; border-radius: 6px; border: 1px solid #22c55e;">
+                  <span style="width: 6px; height: 6px; background: #22c55e; border-radius: 50%;"></span>
+                  ✓ Eingecheckt am Einlass
+                </span>
+              </div>
+
+              <!-- Hinweistext & Buttons in JetBrains Mono mit harten Inline-Farben -->
+              <p style="margin: 0; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted);">
+                ℹ️ Bitte zeige dein QR-Ticket bei Ankunft vor.
+              </p>
+
+              <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px;">
+                <button type="button" style="background: var(--line); color: var(--ink); border: 1px solid var(--line); padding: 9px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+                  🗺️ Saalplan öffnen
+                </button>
+                <button type="button" style="background: #0284c7; color: #ffffff; border: none; padding: 9px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer;">
+                  💺 Sitzplatz ändern
+                </button>
+              </div>
+            </div>
+
+            <div class="ux-critique-tag">
+              ⚠️ <strong>Problem:</strong> 3 ineinander verschachtelte Rahmenlinien (`border`). Monospace-Schrift für ganze Sätze ermüdet das Auge. Hardcodiertes Blau (`#0284c7`) ignoriert warme/dunkle Themes.
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL NACHHER -->
+        <div class="comparison-panel panel-after">
+          <div class="panel-header-badge">✨ Nachher (Vorschlag: Ruhig & Aufgeräumt)</div>
+          <div class="panel-content-wrap">
+            <div class="mock-card">
+              <!-- Event Header: Dezenter Whitespace statt Trennlinie -->
+              <div>
+                <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: 700; color: var(--signal); text-transform: uppercase; letter-spacing: 0.5px;">Veranstaltung</p>
+                <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px; color: var(--ink);">NorthCon LAN 2026</h3>
+                <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted);">24. – 26. Oktober 2026</p>
+              </div>
+
+              <!-- Sitzplatz Highlight: Hochwertige Typografie -->
+              <div style="background: var(--panel); padding: 14px 16px; border-radius: 10px; border: 1px solid var(--line);">
+                <div style="font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Dein Sitzplatz</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 700; color: var(--ink);">Reihe B • Platz 14</span>
+                  <span style="display: inline-flex; align-items: center; gap: 5px; color: #16a34a; font-weight: 700; font-size: 12px; background: rgba(34, 197, 94, 0.12); padding: 3px 8px; border-radius: 6px;">
+                    <span style="width: 6px; height: 6px; background: #16a34a; border-radius: 50%;"></span>
+                    Eingecheckt
+                  </span>
+                </div>
+              </div>
+
+              <!-- Belegungsquote: Flächenintegriert ohne doppelten Rahmen -->
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                  <span style="font-size: 12px; color: var(--muted);">Hallenbelegung</span>
+                  <strong style="font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--ink);">184 / 250 (73%)</strong>
+                </div>
+                <div style="width: 100%; height: 7px; background: var(--line); border-radius: 4px; overflow: hidden;">
+                  <div style="width: 73%; height: 100%; background: var(--signal); border-radius: 4px; transition: width 0.3s;"></div>
+                </div>
+              </div>
+
+              <!-- Hinweistext in lesbarem DM Sans -->
+              <p style="margin: 0; font-size: 13px; color: var(--muted); line-height: 1.4;">
+                Bitte zeige dein digitales QR-Ticket bei der Ankunft am Einlass vor.
+              </p>
+
+              <!-- Buttons mit Theme-Konsistenz und ruhiger DM Sans Typografie -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 8px;">
+                <button type="button" style="background: var(--panel); color: var(--ink); border: 1px solid var(--line); padding: 10px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;">
+                  Saalplan öffnen
+                </button>
+                <button type="button" style="background: var(--signal); color: var(--navy); border: none; padding: 10px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                  Platz ändern
+                </button>
+              </div>
+            </div>
+
+            <div class="ux-critique-tag">
+              ✅ <strong>Vorteil:</strong> Ruhiges Schriftbild durch *DM Sans*, Ziffern in *JetBrains Mono*, keine Kasten-in-Kasten-Optik, Buttons nutzen echte Theme-Farben (`var(--signal)`).
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SHOWCASE 2: ONBOARDING TICKET & COUNTDOWN
+         ====================================================================== -->
+    <section class="showcase-section">
+      <h2 class="section-title">2. Onboarding-Ticket: Sanfter Hintergrund & Kontraste</h2>
+      <p class="section-subtitle">
+        Das bewährte Abrisskarten-Konzept mit Kerben bleibt zu 100 % erhalten – die Textur-Unruhe wird dezent gedämpft.
+      </p>
+
+      <div class="comparison-grid">
+
+        <!-- PANEL VORHER -->
+        <div class="comparison-panel panel-before">
+          <div class="panel-header-badge">❌ Vorher (Aktueller Ist-Zustand)</div>
+          <div class="panel-content-wrap">
+            <div class="mock-ticket" style="background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px); background-size: 20px 20px;">
+              <div class="mock-ticket-left">
+                <div class="notch-top"></div>
+                <div class="notch-bottom"></div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="color: #22c55e; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold;">● DEIN CHECK-IN TICKET</span>
+                  <span style="background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #86efac; font-size: 11px; padding: 4px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace;">● EINGECHECKT</span>
+                </div>
+
+                <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; margin: 0 0 10px 0; color: #ffffff;">LAN-FINALS 2026 WINTER</h2>
+                
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9ca3af; display: flex; gap: 16px;">
+                  <span>👤 <strong>Gast:</strong> edgar_99</span>
+                  <span>💺 <strong>Sitzplatz:</strong> B-14</span>
+                </div>
+              </div>
+
+              <div class="mock-ticket-right" style="background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 0); background-size: 10px 10px;">
+                <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #9ca3af; margin-bottom: 6px;">EVENT STARTET IN</span>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: bold; color: #ffffff;">
+                  14d : 08h : 32m
+                </div>
+              </div>
+            </div>
+
+            <div class="ux-critique-tag">
+              ⚠️ <strong>Problem:</strong> Starke Gitternetz- und Punktraster-Muster konkurrieren mit Texten und Buttons; Eyebrow und Statuszeilen wirken unruhig.
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL NACHHER -->
+        <div class="comparison-panel panel-after">
+          <div class="panel-header-badge">✨ Nachher (Vorschlag: Clean Tech)</div>
+          <div class="panel-content-wrap">
+            <div class="mock-ticket" style="background-image: linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px); background-size: 24px 24px;">
+              <div class="mock-ticket-left">
+                <div class="notch-top"></div>
+                <div class="notch-bottom"></div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="color: #4ade80; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">Ticket-Status</span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.15); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.3); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;">
+                    <span style="width: 6px; height: 6px; background: #4ade80; border-radius: 50%;"></span>
+                    Eingecheckt
+                  </span>
+                </div>
+
+                <h2 style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; margin: 0 0 10px 0; color: #ffffff; letter-spacing: 0.5px;">LAN-FINALS 2026 WINTER</h2>
+                
+                <div style="font-size: 13px; color: #9ca3af; display: flex; gap: 20px;">
+                  <span>Gast: <strong style="color: #f3f4f6;">edgar_99</strong></span>
+                  <span>Sitzplatz: <strong style="color: #f3f4f6; font-family: 'JetBrains Mono', monospace;">B-14</strong></span>
+                </div>
+              </div>
+
+              <div class="mock-ticket-right" style="background: #192231;">
+                <span style="font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Event-Start in</span>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 21px; font-weight: 800; color: #ffffff; letter-spacing: 1px;">
+                  14d : 08h : 32m
+                </div>
+              </div>
+            </div>
+
+            <div class="ux-critique-tag">
+              ✅ <strong>Vorteil:</strong> Subtile Rastertextur statt visueller Unruhe. Form und Perforation bleiben voll erhalten, aber die Texte stechen sofort klar hervor.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SHOWCASE 3: TURNIER-KACHELN
+         ====================================================================== -->
+    <section class="showcase-section">
+      <h2 class="section-title">3. Gaming-Turniere: Aufgeräumte Kacheln</h2>
+      <p class="section-subtitle">
+        Bündelung überflüssiger Badges und klare Strukturierung von Spielmodus, Anmeldeschluss und Turnierstart.
+      </p>
+
+      <div class="comparison-grid">
+
+        <!-- PANEL VORHER -->
+        <div class="comparison-panel panel-before">
+          <div class="panel-header-badge">❌ Vorher (Aktueller Ist-Zustand)</div>
+          <div class="panel-content-wrap">
+            <div class="mock-t-card">
+              <!-- 3 Badges nebeneinander -->
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 8px; flex-wrap: wrap;">
+                <div style="display: flex; gap: 6px;">
+                  <span style="background: var(--panel); border: 1px solid var(--line); padding: 2px 8px; font-size: 11px; font-weight: bold; border-radius: 4px;">Double Elimination</span>
+                  <span style="background: var(--panel); border: 1px solid var(--line); padding: 2px 8px; font-size: 11px; font-weight: bold; border-radius: 4px;">👥 5v5 Team</span>
+                </div>
+                <span style="background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #16a34a; padding: 2px 8px; font-size: 11px; font-weight: bold; border-radius: 4px;">🟢 Anmeldephase</span>
+              </div>
+
+              <!-- Spielinfo -->
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+                <div style="width: 44px; height: 44px; background: var(--navy); color: var(--signal); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">🎮</div>
+                <div>
+                  <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink);">Counter-Strike 2 Major</h3>
+                  <p style="margin: 0; font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace;">🎮 CS2 | 5v5 Competitive</p>
+                </div>
+              </div>
+
+              <!-- Gestrichelte Stats-Box mit Emoji-Überladung -->
+              <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 14px; font-size: 12px; font-family: 'DM Sans', sans-serif;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <span>👥 Angemeldete Teams</span>
+                  <strong>12 / 16</strong>
+                </div>
+                <div style="width: 100%; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+                  <div style="width: 75%; height: 100%; background: var(--signal);"></div>
+                </div>
+                <div style="border-top: 1px dashed var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; color: var(--muted);">
+                  <div>📅 Anmeldeschluss: <strong>24.10. 18:00 Uhr</strong></div>
+                  <div>🚀 Turnierstart: <strong>24.10. 20:00 Uhr</strong></div>
+                </div>
+              </div>
+
+              <!-- Button -->
+              <button type="button" style="width: 100%; background: #0284c7; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px;">
+                🎮 Jetzt anmelden →
+              </button>
+            </div>
+
+            <div class="ux-critique-tag">
+              ⚠️ <strong>Problem:</strong> 3 Badges nebeneinander erzeugen Header-Clutter. Gestrichelte Linien und Emojis vor fast jedem Label zerfasern die Lesbarkeit.
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL NACHHER -->
+        <div class="comparison-panel panel-after">
+          <div class="panel-header-badge">✨ Nachher (Vorschlag: Geordnet & Fokussiert)</div>
+          <div class="panel-content-wrap">
+            <div class="mock-t-card">
+              <!-- Aufgeräumter Header: Gebündelter Modus-Chip + Dezentes Status-Pill -->
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--muted); background: var(--panel); border: 1px solid var(--line); padding: 3px 10px; border-radius: 999px;">
+                  5v5 • Double Elimination
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 5px; color: #16a34a; font-size: 12px; font-weight: 700;">
+                  <span style="width: 7px; height: 7px; background: #16a34a; border-radius: 50%;"></span>
+                  Anmeldephase
+                </span>
+              </div>
+
+              <!-- Spielinfo -->
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+                <div style="width: 44px; height: 44px; background: var(--navy); color: var(--signal); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">🎮</div>
+                <div>
+                  <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">Counter-Strike 2 Major</h3>
+                  <p style="margin: 0; font-size: 13px; color: var(--muted);">Competitive Matchmaking</p>
+                </div>
+              </div>
+
+              <!-- Klare, zweizeilige Metadaten ohne zerschnittene Linien -->
+              <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px;">
+                  <span style="color: var(--muted);">Teilnehmer</span>
+                  <strong style="font-family: 'JetBrains Mono', monospace; color: var(--ink);">12 / 16 Teams</strong>
+                </div>
+                <div style="width: 100%; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 10px;">
+                  <div style="width: 75%; height: 100%; background: var(--signal);"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--muted);">
+                  <span>Schluss: <strong style="color: var(--ink);">24.10. 18:00</strong></span>
+                  <span>Start: <strong style="color: var(--ink);">24.10. 20:00</strong></span>
+                </div>
+              </div>
+
+              <!-- Primärer CTA Button mit klarem Fokus -->
+              <button type="button" style="width: 100%; background: var(--signal); color: var(--navy); border: none; padding: 11px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                Jetzt anmelden →
+              </button>
+            </div>
+
+            <div class="ux-critique-tag">
+              ✅ <strong>Vorteil:</strong> Ruhige Kachel, wichtige Fristen auf einen Blick, der Call-to-Action-Button sticht mit Markenfarbe hervor.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Ansichts-Umschaltung
+    function setViewMode(mode) {
+      document.body.classList.remove('view-after-only', 'view-before-only');
+      document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active'));
+      
+      if (mode === 'after') {
+        document.body.classList.add('view-after-only');
+        event.target.classList.add('active');
+      } else if (mode === 'before') {
+        document.body.classList.add('view-before-only');
+        event.target.classList.add('active');
+      } else {
+        event.target.classList.add('active');
+      }
+    }
+
+    // Theme-Umschaltung
+    function changeTheme(themeKey) {
+      document.body.setAttribute('data-theme', themeKey);
+    }
+  </script>
+</body>
+</html>

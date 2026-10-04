@@ -118,11 +118,23 @@
           <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; color: var(--ink);">
             {{ tournament.title }}
           </h1>
+<<<<<<< HEAD
           {% if restart_source %}<p>{% t 'restart_original' %} <a href="{% url 'tournament_detail' restart_source.slug %}">{{ restart_source.title }}</a></p>{% endif %}
           {% if restart_editions %}<p>{% t 'restart_editions' %}: {% for edition in restart_editions %}<a href="{% url 'tournament_detail' edition.slug %}">{{ edition.title }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
           <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 14px;">
             {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ tournament.event.title }} | {% t "tournament_detail_admin_label" "Orga-Admin:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.display_name }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %} | 📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr | 🚀 {% t "tournament_start_label" "Turnierstart:" %} {{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr
           </p>
+=======
+          <div style="margin: 6px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px;">
+            <span>{{ tournament.event.title }}</span>
+            <span style="color: var(--line);">•</span>
+            <span>{% t "tournament_detail_admin_label" "Leitung:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %}</span>
+            <span style="color: var(--line);">•</span>
+            <span>{% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong style="color: var(--ink);">{{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr</strong></span>
+            <span style="color: var(--line);">•</span>
+            <span>{% t "tournament_start_label" "Start:" %} <strong style="color: var(--ink);">{{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr</strong></span>
+          </div>
+>>>>>>> 9e3d60f (improved visuals)
         </div>
       </div>
 

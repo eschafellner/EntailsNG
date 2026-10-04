@@ -1062,63 +1062,66 @@ h3 {
 .badge-mode {
     background: var(--navy);
     color: var(--signal);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-family: 'DM Sans', sans-serif;
     font-size: 11px;
-    font-weight: bold;
+    font-weight: 700;
 }
 
 .badge-format {
     background: rgba(248, 171, 45, 0.15);
     color: var(--signal-deep);
     border: 1px solid rgba(248, 171, 45, 0.35);
-    padding: 4px 9px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-family: 'DM Sans', sans-serif;
     font-size: 11px;
-    font-weight: bold;
+    font-weight: 700;
 }
 
 .badge-status-open {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.12);
     color: #047857;
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-family: 'DM Sans', sans-serif;
     font-size: 11px;
-    font-weight: bold;
+    font-weight: 700;
 }
 
 .badge-status-running {
-    background: rgba(2, 132, 199, 0.15);
+    background: rgba(2, 132, 199, 0.12);
     color: #0284c7;
-    border: 1px solid rgba(2, 132, 199, 0.3);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid rgba(2, 132, 199, 0.25);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-family: 'DM Sans', sans-serif;
     font-size: 11px;
-    font-weight: bold;
+    font-weight: 700;
 }
 
 .badge-status-finished {
-    background: rgba(100, 116, 139, 0.15);
+    background: rgba(100, 116, 139, 0.12);
     color: #475569;
-    border: 1px solid rgba(100, 116, 139, 0.3);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid rgba(100, 116, 139, 0.25);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-family: 'DM Sans', sans-serif;
     font-size: 11px;
+    font-weight: 600;
 }
 
 .badge-status-default {
-    background: rgba(100, 116, 139, 0.15);
+    background: rgba(100, 116, 139, 0.12);
     color: var(--muted);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid var(--line);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-family: 'DM Sans', sans-serif;
     font-size: 11px;
+    font-weight: 600;
 }
 
 .badge-captain {
@@ -1169,13 +1172,19 @@ h3 {
     color: var(--navy);
     padding: 9px 18px;
     border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: bold;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-action-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .media-export-link {
@@ -1195,17 +1204,23 @@ h3 {
 }
 
 .btn-action-blue {
-    background: #0284c7;
-    color: white;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--line);
     padding: 9px 18px;
     border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: bold;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.btn-action-blue:hover {
+    background: var(--paper);
+    transform: translateY(-1px);
 }
 
 .btn-action-blue-sm {

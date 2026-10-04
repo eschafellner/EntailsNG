@@ -120,7 +120,7 @@
   <div class="sidebar-foot">
     {% if user.is_authenticated %}
       {% if user.is_staff %}
-        <a href="{% url 'checkin_scanner' %}" style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 10px; background: rgba(2, 132, 199, 0.2); color: #38bdf8; border: 1px solid #0284c7; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; font-family: 'JetBrains Mono', monospace; text-decoration: none; text-align: center;">
+        <a href="{% url 'checkin_scanner' %}" style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px; background: rgba(255, 255, 255, 0.08); color: var(--sidebar-nav-hover-text, #ffffff); border: 1px solid var(--sidebar-border, rgba(255, 255, 255, 0.15)); padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; font-family: 'DM Sans', sans-serif; text-decoration: none; text-align: center; transition: background 0.15s ease;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg> {% t "nav_scanner" %}
         </a>
       {% endif %}
