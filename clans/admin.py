@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Clan, ClanMembership
+from seating.clan_admin_forms import ClanQuotaForm
 
 
 class ClanMembershipInline(admin.TabularInline):
@@ -10,7 +11,22 @@ class ClanMembershipInline(admin.TabularInline):
 
 @admin.register(Clan)
 class ClanAdmin(admin.ModelAdmin):
-    list_display = ('name', 'tag', 'website', 'member_count', 'created_at')
+    form = ClanQuotaForm
+
+    def changeform_view(self, request, *args, **kwargs):
+        from django.db import transaction
+        from seating.clan_services import lock_configuration
+        if request.method == 'POST':
+            with transaction.atomic():
+                lock_configuration()
+                return super().changeform_view(request, *args, **kwargs)
+        return super().changeform_view(request, *args, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        form.apply_releases()
+
+    list_display = ('name', 'tag', 'website', 'member_count', 'seat_limit_override', 'created_at')
     search_fields = ('name', 'tag', 'website')
     prepopulated_fields = {'slug': ('name',)}
     inlines = [ClanMembershipInline]

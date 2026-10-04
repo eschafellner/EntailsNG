@@ -4,16 +4,21 @@ import logging
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
-from clans.models import ClanMembership
+from clans.models import Clan, ClanMembership
 from configuration.cache import invalidate_event_capacity_cache
 from configuration.translations import get_translation
 from events.models import Event, EventRegistration
 from .models import SeatingCell, SeatingPlan
 from .services import SeatingPlanService, SeatingPlanValidationError
+
+from .clan_services import (ClanSeatError, seating_write, update_selection,
+    selection_status, open_holds, check_clan_access, release_holds)
+from .models import ClanSeatHold
+from .clan_texts import TEXTS
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +114,9 @@ def get_event_seating_api(request, event_id):
     is_authenticated = request.user.is_authenticated
     user_clan_map = {}
     current_user_clan_name = None
+    user_clan_id = None
 
-    cells_qs = plan.cells.select_related('registration__user').all()
+    cells_qs = plan.cells.select_related('registration__user').order_by('y', 'x')
 
     if is_authenticated:
         # Performance: Nur User-IDs sammeln, die tatsächlich auf diesem Saalplan platziert sind + aktueller User
@@ -125,13 +131,16 @@ def get_event_seating_api(request, event_id):
             active_memberships = ClanMembership.objects.filter(
                 user_id__in=seated_user_ids,
                 status=ClanMembership.Status.ACCEPTED
-            ).values('user_id', 'clan__name')
+            ).values('user_id', 'clan__name', 'clan_id')
 
             for m in active_memberships:
                 user_clan_map[m['user_id']] = m['clan__name']
+                if m['user_id'] == request.user.id:
+                    user_clan_id = m['clan_id']
 
         current_user_clan_name = user_clan_map.get(request.user.id)
 
+    hold_map = {h.cell_id: h for h in open_holds(event_id).select_related('allocation__clan')}
     cells = []
     for c in cells_qs:
         username = None
@@ -160,7 +169,16 @@ def get_event_seating_api(request, event_id):
         else:
             computed_status = 'FREE'  # Grün / Frei
 
+        hold = hold_map.get(c.pk)
+        if hold and computed_status == 'FREE':
+            computed_status = 'CLAN_HELD'
         cells.append({
+            'id': c.pk,
+            'hold_clan_id': hold.allocation.clan_id if hold else None,
+            'hold_clan_name': hold.allocation.clan.name if hold else None,
+            'hold_clan_logo': hold.allocation.clan.logo.url if hold and hold.allocation.clan.logo else None,
+            'hold_clan_tag': (hold.allocation.clan.tag or hold.allocation.clan.name[:2]) if hold else None,
+            'can_claim_hold': bool(hold and is_authenticated and user_clan_id == hold.allocation.clan_id),
             'x': c.x,
             'y': c.y,
             'cell_type': c.cell_type,
@@ -172,7 +190,18 @@ def get_event_seating_api(request, event_id):
             'is_checked_in': is_checked_in,
         })
 
+    selection = None
+    if request.GET.get('clan'):
+        try:
+            clan_id = int(request.GET['clan'])
+        except (ValueError, TypeError):
+            return JsonResponse({'status': 'error', 'message': get_translation('clan_seat_invalid')}, status=400)
+        clan = get_object_or_404(Clan, pk=clan_id)
+        if not clan.is_admin(request.user):
+            return JsonResponse({'status': 'error', 'message': get_translation('clan_seat_permission')}, status=403)
+        selection = selection_status(clan, plan.event)
     return JsonResponse({
+        'clan_selection': selection,
         'status': 'success',
         'plan_id': plan.id,
         'name': plan.name,
@@ -185,7 +214,7 @@ def get_event_seating_api(request, event_id):
 
 @login_required
 @require_POST
-@transaction.atomic
+@seating_write
 def reserve_seat_api(request, event_id):
     """API fürs Frontend:
 
@@ -202,6 +231,9 @@ def reserve_seat_api(request, event_id):
 
     try:
         # 1. Prüfen, ob der User für das Event angemeldet ist (zentraler Sperrpunkt mit DB-Lock)
+        from django.contrib.auth import get_user_model
+        get_user_model().objects.select_for_update().get(pk=request.user.pk)
+        Event.objects.select_for_update().get(pk=event_id)
         registration = EventRegistration.objects.select_for_update().get(
             event_id=event_id, user=request.user
         )
@@ -282,7 +314,7 @@ def reserve_seat_api(request, event_id):
 
 @login_required
 @require_POST
-@transaction.atomic
+@seating_write
 def release_seat_api(request, event_id):
     """
     API fürs Frontend:
@@ -356,7 +388,7 @@ def release_seat_api(request, event_id):
 
 @staff_member_required
 @require_POST
-@transaction.atomic
+@seating_write
 def admin_assign_seat(request):
     """
     API für Admins:
@@ -381,6 +413,10 @@ def admin_assign_seat(request):
         )
 
     try:
+        from django.contrib.auth import get_user_model
+        user_id, event_id = EventRegistration.objects.values_list('user_id', 'event_id').get(pk=registration_id)
+        get_user_model().objects.select_for_update().get(pk=user_id)
+        Event.objects.select_for_update().get(pk=event_id)
         registration = EventRegistration.objects.select_for_update().get(pk=registration_id)
     except EventRegistration.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Anmeldung nicht gefunden.'}, status=404)
@@ -436,6 +472,10 @@ def admin_assign_seat(request):
                 status=400,
             )
 
+        allowed, reason = check_clan_access(target_cell, registration.user)
+        if not allowed:
+            return JsonResponse({'status': 'error', 'message': reason}, status=400)
+
         # 5. Bisherigen Platz des Users freigeben (falls vorhanden)
         SeatingCell.objects.select_for_update().filter(
             plan=plan, registration=registration
@@ -476,7 +516,7 @@ def admin_assign_seat(request):
 
 @staff_member_required
 @require_POST
-@transaction.atomic
+@seating_write
 def admin_toggle_block_seat(request):
     """
     API für Admins:
@@ -523,6 +563,7 @@ def admin_toggle_block_seat(request):
             cell.registration = None  # Keine Anmeldung nötig
             message = f"Platz '{cell.seat_label or f'Pos ({x},{y})'}' wurde GESPERRT."
 
+        release_holds(ClanSeatHold.objects.filter(cell=cell, protection_active=True))
         cell.save(update_fields=['reservation_status', 'registration'])
         invalidate_event_capacity_cache(event_id)
 
@@ -540,7 +581,7 @@ def admin_toggle_block_seat(request):
 
 @staff_member_required
 @require_POST
-@transaction.atomic
+@seating_write
 def admin_release_seat(request):
     """
     API für Admins:
@@ -597,6 +638,7 @@ def admin_release_seat(request):
             except (SeatingPlan.DoesNotExist, SeatingCell.DoesNotExist):
                 return JsonResponse({'status': 'error', 'message': 'Sitzplatz nicht gefunden.'}, status=404)
 
+            release_holds(ClanSeatHold.objects.filter(cell=cell, protection_active=True))
             cell.registration = None
             cell.reservation_status = SeatingCell.ReservationStatus.FREE
             cell.save(update_fields=['registration', 'reservation_status'])
@@ -618,3 +660,38 @@ def admin_release_seat(request):
 
 
 
+
+
+@login_required
+def clan_seat_selection(request, slug):
+    clan = get_object_or_404(Clan, slug=slug)
+    if not clan.is_admin(request.user):
+        return HttpResponseForbidden(get_translation('clan_seat_permission'))
+    event = Event.objects.get_active()
+    from django.urls import reverse
+    context = {'event': event, 'selection_clan': clan, 'clan_selection_config': {
+        'clanId': clan.pk, 'saveUrl': reverse('clan_seat_update', args=[clan.slug]),
+        'counter': get_translation('clan_seat_counter'), 'until': get_translation('clan_seat_until'),
+        'tooltip': get_translation('clan_seat_tooltip'),
+        'disabled': get_translation('clan_seat_disabled'), 'saved': get_translation('clan_seat_saved'),
+        'network': get_translation('clan_seat_network'), 'limitMessage': get_translation('clan_seat_limit'),
+    }}
+    return render(request, 'seating/seating.html', context)
+
+
+@login_required
+@require_POST
+def clan_seat_update(request, slug):
+    clan = get_object_or_404(Clan, slug=slug)
+    try:
+        data = json.loads(request.body)
+        if not isinstance(data, dict) or type(data.get('event_id')) is not int or not isinstance(data.get('revision'), str):
+            raise ClanSeatError('clan_seat_invalid')
+        result = update_selection(clan.pk, request.user.pk, data['event_id'], data.get('cell_ids'), expected_revision=data['revision'])
+        return JsonResponse({'status': 'success', 'clan_selection': result, 'message': get_translation('clan_seat_saved')})
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': get_translation('clan_seat_invalid')}, status=400)
+    except ClanSeatError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+    except (Clan.DoesNotExist, Event.DoesNotExist):
+        return JsonResponse({'status': 'error', 'message': get_translation('clan_seat_event')}, status=404)

@@ -32,12 +32,64 @@
   let targetSeatY = null;
 
   let config = {};
+  let selectedClanSeats = new Set();
+  let clanSelectionState = null;
+  let savingClanSeats = false;
+  let refreshTimer = null;
+
+  function formatText(raw, values) {
+    return raw.replace(/\{([a-z_]+)\}/g, (match, key) => Object.hasOwn(values, key) ? String(values[key]) : match);
+  }
+
+  function updateClanCounter() {
+    if (!config.clanMode || !clanSelectionState) return;
+    const consumedRemoved = (clanSelectionState.consumed_open || []).filter(id => !selectedClanSeats.has(id)).length;
+    const claimed = clanSelectionState.claimed + consumedRemoved;
+    const remaining = Math.max(0, clanSelectionState.limit - claimed - selectedClanSeats.size);
+    document.getElementById('clan-seat-counter').textContent = formatText(config.clanMode.counter, {
+      limit: clanSelectionState.limit, claimed, selected: selectedClanSeats.size, remaining,
+    });
+    document.getElementById('clan-seat-deadline').textContent = clanSelectionState.expires_at
+      ? formatText(config.clanMode.until, {date: new Date(clanSelectionState.expires_at).toLocaleString('de-AT', {timeZone: 'Europe/Vienna'})}) : '';
+    document.getElementById('clan-seat-confirm').disabled = savingClanSeats || !clanSelectionState.enabled;
+  }
+
+  async function saveClanSelection() {
+    if (savingClanSeats || !clanSelectionState?.enabled) return;
+    savingClanSeats = true;
+    updateClanCounter();
+    const feedback = document.getElementById('clan-seat-feedback');
+    try {
+      const response = await fetch(config.clanMode.saveUrl, {
+        method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': config.csrfToken},
+        body: JSON.stringify({event_id: Number(config.eventId), cell_ids: [...selectedClanSeats], revision: clanSelectionState.revision}),
+      });
+      const data = await response.json();
+      feedback.textContent = data.message || config.clanMode.network;
+      if (response.ok) loadSeatingData();
+    } catch (error) {
+      feedback.textContent = config.clanMode.network;
+    } finally {
+      savingClanSeats = false;
+      updateClanCounter();
+    }
+  }
+
   let isPanZoomInitialized = false;
   let panZoomAbortController = null;
   let viewerAbortController = null;
 
   function initSeatingViewer(cfg) {
     config = cfg || {};
+    const clanModeEl = document.getElementById('clan-selection-config');
+    if (clanModeEl) config.clanMode = JSON.parse(clanModeEl.textContent);
+    if (refreshTimer) clearInterval(refreshTimer);
+    // Normal viewers see expiries without reloading the page. Selection drafts stay intact.
+    if (!config.clanMode) refreshTimer = setInterval(loadSeatingData, 60000);
+    if (config.clanMode) {
+      document.getElementById('clan-seat-confirm').onclick = saveClanSelection;
+      document.getElementById('clan-seat-refresh').onclick = loadSeatingData;
+    }
     const eventId = config.eventId;
     if (!eventId) return;
 
@@ -72,13 +124,19 @@
 
   function loadSeatingData() {
     const eventId = config.eventId;
-    fetch(`/seating/api/plan/${eventId}/`)
+    fetch(`/seating/api/plan/${eventId}/${config.clanMode ? '?clan=' + config.clanMode.clanId : ''}`)
       .then(response => {
         if (!response.ok) throw new Error("Sitzplan konnte nicht geladen werden.");
         return response.json();
       })
       .then(data => {
         window.lastSeatingData = data;
+        if (config.clanMode) {
+          clanSelectionState = data.clan_selection;
+          selectedClanSeats = new Set(clanSelectionState.selected);
+          if (!clanSelectionState.enabled) document.getElementById('clan-seat-feedback').textContent = config.clanMode.disabled;
+          updateClanCounter();
+        }
         const statusEl = document.getElementById('seating-status');
         if (statusEl) statusEl.style.display = 'none';
         renderGrid(data);
@@ -181,7 +239,17 @@
               };
             }
 
-          } else if (cellData.status === 'PRE_RESERVED' || cellData.status === 'RESERVED') {
+          } else if (cellData.status === 'CLAN_HELD') {
+            cellEl.style.background = 'rgba(56, 189, 248, 0.18)';
+            cellEl.style.border = '2px dashed #38bdf8';
+            cellEl.style.color = '#7dd3fc';
+            statusIconHtml = SVG_ICONS.clan;
+            tooltipText = formatText(config.clanTooltip, {clan: cellData.hold_clan_name});
+            if (cellData.can_claim_hold && !config.clanMode) {
+              cellEl.style.cursor = 'pointer';
+              cellEl.onclick = (e) => {e.stopPropagation(); openReserveModal(x, y, seatLabel);};
+            }
+          } else if (cellData.status === 'PRE_RESERVED'  || cellData.status === 'RESERVED') {
             const currentUsername = config.username || '';
             const isOwnSeat = currentUsername && (cellData.occupied_by === currentUsername);
             const isSameClan = data.user_clan_name && cellData.clan_name && (data.user_clan_name === cellData.clan_name);
@@ -234,7 +302,67 @@
             tooltipText = 'Platz gesperrt';
           }
 
-          cellEl.innerHTML = `${statusIconHtml}<span>${seatLabel}</span>`;
+          cellEl.innerHTML = statusIconHtml;
+          const label = document.createElement('span');
+          label.textContent = seatLabel;
+          if (cellData.status === 'CLAN_HELD') {
+            if (cellData.hold_clan_logo) {
+              const logo = document.createElement('img');
+              logo.src = cellData.hold_clan_logo;
+              logo.alt = cellData.hold_clan_name;
+              logo.style.cssText = 'width:18px;height:18px;object-fit:contain;pointer-events:none';
+              cellEl.appendChild(logo);
+            } else {
+              const tag = document.createElement('span');
+              tag.textContent = cellData.hold_clan_tag;
+              tag.style.cssText = 'font-size:9px;line-height:10px';
+              cellEl.appendChild(tag);
+            }
+            cellEl.style.flexDirection = 'column';
+            label.style.cssText = 'font-size:9px;line-height:10px';
+          }
+          cellEl.appendChild(label);
+          if (config.clanMode) {
+            cellEl.onclick = null;
+            const selectable = clanSelectionState?.enabled && (cellData.status === 'FREE' ||
+              (cellData.status === 'CLAN_HELD' && cellData.hold_clan_id === config.clanMode.clanId));
+            if (selectable) {
+              cellEl.onclick = (e) => {
+                e.stopPropagation();
+                if (savingClanSeats) return;
+                if (selectedClanSeats.has(cellData.id)) selectedClanSeats.delete(cellData.id);
+                else {
+                  const consumedRemoved = (clanSelectionState.consumed_open || []).filter(id => !selectedClanSeats.has(id)).length;
+                  const isConsumed = (clanSelectionState.consumed_open || []).includes(cellData.id);
+                  if (!isConsumed && selectedClanSeats.size + clanSelectionState.claimed + consumedRemoved >= clanSelectionState.limit) {
+                    showSeatingToast(config.clanMode.limitMessage, true);
+                    return;
+                  }
+                  selectedClanSeats.add(cellData.id);
+                }
+                updateClanCounter();
+                renderGrid(window.lastSeatingData);
+              };
+              cellEl.style.cursor = 'pointer';
+              cellEl.setAttribute('aria-pressed', String(selectedClanSeats.has(cellData.id)));
+              if (selectedClanSeats.has(cellData.id)) {
+                cellEl.style.outline = '3px solid var(--signal)';
+                cellEl.style.background = 'var(--signal)';
+                cellEl.style.color = 'var(--navy)';
+              }
+            }
+          }
+          if (cellEl.onclick) {
+            cellEl.setAttribute('role', 'button');
+            cellEl.tabIndex = 0;
+            cellEl.onkeydown = (e) => {if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); cellEl.click();}};
+          } else if (cellData.status === 'CLAN_HELD') {
+            cellEl.onclick = () => showSeatingToast(tooltipText, false);
+            cellEl.tabIndex = 0;
+            cellEl.setAttribute('role', 'button');
+            cellEl.onkeydown = (e) => {if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); cellEl.click();}};
+          }
+          cellEl.setAttribute('aria-label', tooltipText || seatLabel);
 
           if (tooltipText) {
             cellEl.title = tooltipText;
@@ -318,7 +446,7 @@
     }
     toast.style.background = isError ? '#991b1b' : '#166534';
     toast.style.border = isError ? '1px solid #ef4444' : '1px solid #22c55e';
-    toast.innerHTML = (isError ? '⚠️ ' : '✓ ') + message;
+    toast.textContent = (isError ? '⚠️ ' : '✓ ') + message;
     toast.style.display = 'flex';
     toast.style.opacity = '1';
     toast.style.transform = 'translateY(0)';
@@ -383,6 +511,8 @@
       if (!currentData) return;
       const viewportWidth = viewport.clientWidth;
       const viewportHeight = viewport.clientHeight;
+      // Resizing can briefly hide the viewport; retain the last usable transform.
+      if (viewportWidth <= 0 || viewportHeight <= 0) return;
 
       let minX = 0, minY = 0, maxX = currentData.columns - 1, maxY = currentData.rows - 1;
       if (currentData.cells && currentData.cells.length > 0) {

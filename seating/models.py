@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.utils import timezone
 from configuration.cache import invalidate_event_capacity_cache
 from emails.services import send_system_email
 
@@ -57,9 +58,13 @@ class SeatingPlan(models.Model):
             })
 
         if self.pk:
+            from .clan_services import live_holds
             old_plan = SeatingPlan.objects.filter(pk=self.pk).first()
+            held_cells = self.cells.filter(pk__in=live_holds(old_plan.event_id if old_plan else self.event_id).values('cell_id'))
+            if held_cells.filter(models.Q(x__gt=self.columns) | models.Q(y__gt=self.rows)).exists():
+                raise ValidationError('Das Raster enthält außerhalb der neuen Größe Clan-Vormerkungen. Bitte zuerst freigeben.')
             if old_plan and old_plan.event_id and self.event_id != old_plan.event_id:
-                has_registrations = self.cells.filter(registration__isnull=False).exists()
+                has_registrations = self.cells.filter(registration__isnull=False).exists() or held_cells.exists()
                 if has_registrations:
                     raise ValidationError({
                         'event': (
@@ -221,6 +226,16 @@ class SeatingCell(models.Model):
 
     def clean(self):
         super().clean()
+        if self.pk:
+            from .clan_services import live_holds, check_clan_access
+            if live_holds().filter(cell_id=self.pk).exists():
+                old = SeatingCell.objects.get(pk=self.pk)
+                if self.plan_id != old.plan_id or self.cell_type != self.CellType.SEAT or self.reservation_status == self.ReservationStatus.BLOCKED:
+                    raise ValidationError('Bitte die Clan-Vormerkung vor dieser Änderung ausdrücklich freigeben.')
+                if self.registration:
+                    allowed, reason = check_clan_access(old, self.registration.user)
+                    if not allowed:
+                        raise ValidationError({'registration': reason})
         if self.registration and self.plan_id and self.plan and self.plan.event_id:
             if self.registration.event_id != self.plan.event_id:
                 raise ValidationError({
@@ -260,6 +275,11 @@ class SeatingCell(models.Model):
         if self.reservation_status == self.ReservationStatus.BLOCKED:
             return False, "Dieser Platz ist vom Admin gesperrt."
 
+        from .clan_services import check_clan_access
+        allowed, reason = check_clan_access(self, registration.user)
+        if not allowed:
+            return False, reason
+
         if self.reservation_status == self.ReservationStatus.RESERVED and self.registration != registration:
             return False, "Dieser Platz ist bereits fest reserviert und bezahlt."
 
@@ -279,6 +299,21 @@ class SeatingCell(models.Model):
 
 
     def reserve_for_user(self, registration):
+        from django.contrib.auth import get_user_model
+        from events.models import Event, EventRegistration
+        from .clan_services import lock_configuration
+        with transaction.atomic():
+            lock_configuration()
+            get_user_model().objects.select_for_update().get(pk=registration.user_id)
+            Event.objects.select_for_update().get(pk=registration.event_id)
+            registration = EventRegistration.objects.select_for_update().get(pk=registration.pk)
+            locked = SeatingCell.objects.select_for_update().get(pk=self.pk)
+            result = locked._reserve_for_user(registration)
+            self.registration = locked.registration
+            self.reservation_status = locked.reservation_status
+            return result
+
+    def _reserve_for_user(self, registration):
         can_res, msg = self.can_reserve_for_user(registration)
         if not can_res:
             return False, msg
@@ -340,3 +375,34 @@ class SeatingCell(models.Model):
         else:
             self.reservation_status = self.ReservationStatus.FREE
         self.save()
+
+
+class ClanSeatAllocation(models.Model):
+    clan = models.ForeignKey('clans.Clan', on_delete=models.CASCADE, related_name='seat_allocations')
+    event = models.ForeignKey('events.Event', on_delete=models.CASCADE, related_name='clan_seat_allocations')
+    created_by = models.ForeignKey('users.User', null=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(default=timezone.now)
+    duration = models.CharField(max_length=5)
+    expires_at = models.DateTimeField(db_index=True)
+    reminder_at = models.DateTimeField(null=True, blank=True)
+    expired_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['clan', 'event'], name='unique_clan_event_allocation')]
+
+
+class ClanSeatHold(models.Model):
+    class State(models.TextChoices):
+        OPEN = 'OPEN', 'Offen'
+        CLAIMED = 'CLAIMED', 'Übernommen'
+        RELEASED = 'RELEASED', 'Freigegeben'
+
+    allocation = models.ForeignKey(ClanSeatAllocation, on_delete=models.CASCADE, related_name='holds')
+    cell = models.ForeignKey(SeatingCell, null=True, on_delete=models.SET_NULL, related_name='clan_holds')
+    seat_label = models.CharField(max_length=40)
+    state = models.CharField(max_length=8, choices=State.choices, default=State.OPEN)
+    protection_active = models.BooleanField(default=True)
+    claimed_by = models.ForeignKey('users.User', null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['cell'], condition=models.Q(protection_active=True), name='unique_protected_clan_seat')]

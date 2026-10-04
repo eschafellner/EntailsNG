@@ -185,6 +185,9 @@ class SeatingPlanService:
             }
 
         with transaction.atomic():
+            from .clan_services import lock_configuration, live_holds
+            lock_configuration()
+            protected_ids = set(live_holds(plan.event_id).values_list('cell_id', flat=True)) if plan.event_id else set()
             # 1. Gemeinsame Plansperre für konkurrierende Layoutänderungen
             locked_plan = SeatingPlan.objects.select_for_update().get(pk=plan.pk)
 
@@ -211,6 +214,8 @@ class SeatingPlanService:
             coords_to_delete = set(existing_cells.keys()) - set(sent_coords.keys())
             for coord in coords_to_delete:
                 cell = existing_cells[coord]
+                if cell.pk in protected_ids:
+                    raise SeatingPlanValidationError('Offene Clan-Vormerkungen müssen vor dem Löschen ausdrücklich freigegeben werden.')
                 if cell.registration is not None or cell.reservation_status in [
                     SeatingCell.ReservationStatus.RESERVED,
                     SeatingCell.ReservationStatus.PRE_RESERVED,
@@ -238,6 +243,8 @@ class SeatingPlanService:
                 if coord in existing_cells:
                     cell = existing_cells[coord]
 
+                    if cell.pk in protected_ids and (cell_type != SeatingCell.CellType.SEAT or res_status == SeatingCell.ReservationStatus.BLOCKED):
+                        raise SeatingPlanValidationError('Clan-Vormerkungen müssen vor einer Typänderung oder Sperre ausdrücklich freigegeben werden.')
                     # Schutz vor destruktiver Typ-Änderung belegter Plätze
                     if cell.registration is not None and cell_type != SeatingCell.CellType.SEAT:
                         user_name = cell.registration.user.username

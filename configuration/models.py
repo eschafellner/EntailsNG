@@ -199,6 +199,53 @@ class SystemTranslation(models.Model):
         invalidate_system_translations_cache()
 
 
+class ClanSeatConfiguration(models.Model):
+    class Duration(models.TextChoices):
+        EVENT = 'EVENT', 'Veranstaltungszeitraum'
+        DAYS = 'DAYS', 'Zeitraum ab erster Vormerkung des Clans'
+        FIXED = 'FIXED', 'Fixer Zeitpunkt'
+
+    enabled = models.BooleanField(default=False, verbose_name='Aktiv', help_text='Deaktivieren gibt alle offenen Clan-Vormerkungen frei. Persönliche Buchungen bleiben erhalten.')
+    default_limit = models.PositiveIntegerField(default=8, verbose_name='Anzahl vormerkbarer Sitzplätze', help_text='Kontingent pro Clan und Veranstaltung. Bereits übernommene Plätze zählen mit.')
+    duration = models.CharField(max_length=5, choices=Duration.choices, default=Duration.EVENT, verbose_name='Dauer der Vormerkung')
+    days = models.PositiveIntegerField(default=14, verbose_name='Dauer in Tagen', help_text='Nur beim Tagesmodus; jeder Clan startet mit seiner ersten bestätigten Vormerkung.')
+    deadline = models.DateTimeField(null=True, blank=True, verbose_name='Gültig bis', help_text='Nur beim fixen Zeitpunkt. Zeitzone: Europe/Vienna.')
+
+    class Meta:
+        verbose_name = 'Clan Sitzplatz Vormerkung'
+        verbose_name_plural = 'Clan Sitzplatz Vormerkung'
+        constraints = [models.CheckConstraint(condition=models.Q(pk=1), name='clan_seat_config_singleton')]
+
+    def __str__(self):
+        return self._meta.verbose_name
+
+    def clean(self):
+        super().clean()
+        if self.duration == self.Duration.DAYS and not self.days:
+            raise ValidationError({'days': 'Bitte mindestens einen Tag angeben.'})
+        if self.duration == self.Duration.FIXED and not self.deadline:
+            raise ValidationError({'deadline': 'Bitte einen Ablaufzeitpunkt angeben.'})
+
+    def save(self, *args, **kwargs):
+        from django.db import transaction
+        with transaction.atomic():
+            self.pk = 1
+            # Coordinate direct model saves with booking and quota forms as well.
+            type(self).objects.select_for_update().filter(pk=1).first()
+            super().save(*args, **kwargs)
+            if not self.enabled or self.default_limit == 0:
+                from seating.models import ClanSeatHold
+                from seating.clan_services import release_holds
+                holds = ClanSeatHold.objects.filter(protection_active=True)
+                if self.enabled:
+                    holds = holds.filter(allocation__clan__seat_limit_override__isnull=True)
+                release_holds(holds)
+
+    @classmethod
+    def load(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+
 class GeneralConfiguration(models.Model):
     """
     Zentrale allgemeine Konfiguration für Systemeinstellungen (z. B. Ticket-Anzeige).
@@ -549,7 +596,6 @@ def _on_general_config_change(sender, **kwargs):
 def _on_site_customization_change(sender, **kwargs):
     safe_cache_delete('site_customization')
     invalidate_site_customization_cache()
-
 
 
 

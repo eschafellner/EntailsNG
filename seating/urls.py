@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('clan/<slug:slug>/', views.clan_seat_selection, name='clan_seat_selection'),
+    path('clan/<slug:slug>/save/', views.clan_seat_update, name='clan_seat_update'),
     # Hauptseite / Frontend-Ansicht für den Sitzplan (GEFEHLT)
     path('', views.seating_plan_view, name='seating_plan'),
 

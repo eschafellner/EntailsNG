@@ -7,6 +7,7 @@ from django.utils.text import slugify
 
 
 class Clan(models.Model):
+    seat_limit_override = models.PositiveIntegerField(null=True, blank=True, verbose_name='Sitzplatzkontingent (optional)', help_text='Leer: globaler Standard. 0: gesperrt und offene Vormerkungen freigeben. Nur durch die Orga änderbar.')
     name = models.CharField(
         max_length=32, unique=True, verbose_name="Clanname"
     )
@@ -76,6 +77,10 @@ class Clan(models.Model):
         ):
             self.password = make_password(self.password)
         super().save(*args, **kwargs)
+        if self.seat_limit_override == 0:
+            from seating.models import ClanSeatHold
+            from seating.clan_services import release_holds
+            release_holds(ClanSeatHold.objects.filter(allocation__clan=self, protection_active=True))
 
     def get_accepted_memberships(self):
         return self.memberships.filter(status=ClanMembership.Status.ACCEPTED).select_related('user')

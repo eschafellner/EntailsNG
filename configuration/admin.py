@@ -333,3 +333,32 @@ class SystemErrorLogAdmin(admin.ModelAdmin):
         self.message_user(request, f"{deleted} ausgewählte behobene(s) Fehlerprotokoll(e) erfolgreich gelöscht.")
 
 
+
+
+from .models import ClanSeatConfiguration
+from seating.clan_admin_forms import ClanSeatConfigurationForm
+
+
+@admin.register(ClanSeatConfiguration)
+class ClanSeatConfigurationAdmin(admin.ModelAdmin):
+    form = ClanSeatConfigurationForm
+    fields = ('enabled', 'default_limit', 'duration', 'days', 'deadline', 'release_seats', 'confirm_release')
+
+    def has_add_permission(self, request):
+        return not ClanSeatConfiguration.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changeform_view(self, request, *args, **kwargs):
+        from django.db import transaction
+        from seating.clan_services import lock_configuration
+        if request.method == 'POST':
+            with transaction.atomic():
+                lock_configuration()
+                return super().changeform_view(request, *args, **kwargs)
+        return super().changeform_view(request, *args, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        form.apply_releases()

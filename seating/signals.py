@@ -39,3 +39,25 @@ def invalidate_cache_on_cell_change(sender, instance, **kwargs):
         except Exception:
             pass
 
+
+
+@receiver(post_save, sender='seating.SeatingCell')
+def record_clan_seat_claim(sender, instance, **kwargs):
+    if instance.registration_id:
+        from .clan_services import claim_hold
+        claim_hold(instance)
+
+
+@receiver(post_save, sender='events.Event')
+def close_clan_holds_with_event(sender, instance, raw=False, **kwargs):
+    if raw:
+        return
+    from django.db import transaction
+    from django.utils import timezone
+    from events.models import Event
+    from .models import ClanSeatAllocation
+    from .clan_services import expire_allocation
+    if not instance.is_active or instance.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED):
+        with transaction.atomic():
+            for allocation in ClanSeatAllocation.objects.select_for_update().filter(event=instance, expired_at__isnull=True):
+                expire_allocation(allocation, timezone.now())

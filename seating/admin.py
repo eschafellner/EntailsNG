@@ -25,7 +25,17 @@ class SeatingPlanAdminForm(forms.ModelForm):
         return cleaned_data
 
 
+class ProtectedCellFormSet(forms.models.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        from .clan_services import live_holds
+        deleted_ids = [form.instance.pk for form in self.forms if form.cleaned_data.get('DELETE')]
+        if live_holds().filter(cell_id__in=deleted_ids).exists():
+            raise forms.ValidationError('Bitte Clan-Vormerkungen vor dem Löschen ausdrücklich freigeben.')
+
+
 class SeatingCellInline(admin.TabularInline):
+    formset = ProtectedCellFormSet
     model = SeatingCell
     extra = 0
     fields = (
@@ -41,6 +51,21 @@ class SeatingCellInline(admin.TabularInline):
 
 @admin.register(SeatingPlan)
 class SeatingPlanAdmin(admin.ModelAdmin):
+    def has_delete_permission(self, request, obj=None):
+        from .clan_services import live_holds
+        if obj is not None and live_holds().filter(cell__plan=obj).exists():
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def changeform_view(self, request, *args, **kwargs):
+        from django.db import transaction
+        from .clan_services import lock_configuration
+        if request.method == 'POST':
+            with transaction.atomic():
+                lock_configuration()
+                return super().changeform_view(request, *args, **kwargs)
+        return super().changeform_view(request, *args, **kwargs)
+
     form = SeatingPlanAdminForm
     list_display = (
         'name',
@@ -204,6 +229,21 @@ class SeatingPlanAdmin(admin.ModelAdmin):
 
 @admin.register(SeatingCell)
 class SeatingCellAdmin(admin.ModelAdmin):
+    def has_delete_permission(self, request, obj=None):
+        from .clan_services import live_holds
+        if obj is not None and live_holds().filter(cell=obj).exists():
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def changeform_view(self, request, *args, **kwargs):
+        from django.db import transaction
+        from .clan_services import lock_configuration
+        if request.method == 'POST':
+            with transaction.atomic():
+                lock_configuration()
+                return super().changeform_view(request, *args, **kwargs)
+        return super().changeform_view(request, *args, **kwargs)
+
     list_display = (
         'plan',
         'x',

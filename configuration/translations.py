@@ -9,7 +9,10 @@ from backups.texts import TEXTS as BACKUP_TEXTS
 from tournaments.team_texts import TEXTS as TEAM_TEXTS
 from clans.texts import TEXTS as CLAN_TEXTS
 
+from seating.clan_texts import TEXTS as CLAN_SEAT_TEXTS
+
 DEFAULT_TEXTS = {
+    **CLAN_SEAT_TEXTS,
     **BACKUP_TEXTS,
     **TEAM_TEXTS,
     **CLAN_TEXTS,

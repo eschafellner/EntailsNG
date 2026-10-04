@@ -34,6 +34,9 @@
       </div>
 
       <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        {% if clan_seats_available %}
+          <a class="btn-action-primary" href="{% url 'clan_seat_selection' slug=clan.slug %}">🪑 {% t "clan_seat_button" %}</a>
+        {% endif %}
         {% if is_clan_admin %}
           <a href="{% url 'clan_edit' slug=clan.slug %}" style="background: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
             ✏️ {% t "clan_edit_btn" "Clan bearbeiten" %}

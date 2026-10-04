@@ -122,8 +122,8 @@ class SeatingPlanTests(TestCase):
         SeatingCell.objects.bulk_create(cells)
 
 
-        # Teste API Performance & Query Count für 1000 Kacheln (anonym: 2 Queries; eingeloggt: 3 Queries)
-        with self.assertNumQueries(2):  # Plan fetch, Cells with select_related
+        # Querybudget bleibt unabhängig von der Rastergröße; die neue Clan-Konfiguration benötigt eine Abfrage.
+        with self.assertNumQueries(3):  # Plan, Clan-Konfiguration, Cells mit select_related
             response = self.client.get(
                 reverse('api_event_seating', kwargs={'event_id': large_event.id})
             )

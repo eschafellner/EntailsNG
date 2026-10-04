@@ -112,3 +112,30 @@ DEFAULT_EMAIL_TEMPLATES = {
 - {seating_url}: Link zum Sitzplan''',
     },
 }
+
+DEFAULT_EMAIL_TEMPLATES.update({
+    'clan_seat_reminder': {
+        'name': 'Clan-Sitzplatzvormerkung: Erinnerung',
+        'subject': 'Sitzplatzvormerkung für {clan_name} läuft am {expires_at} ab',
+        'content': '''<h2>Erinnerung an eure Sitzplatzvormerkung</h2>
+<p>Hallo {username},</p>
+<p>für euren Clan <strong>{clan_name}</strong> sind bei <strong>{event_title}</strong> noch <strong>{open_count}</strong> Plätze offen: {seat_labels}.</p>
+<p>Die Vormerkung gilt bis <strong>{expires_at} (Europe/Vienna)</strong>. Danach werden die noch offenen Plätze automatisch freigegeben. Bereits persönlich gebuchte Plätze bleiben erhalten.</p>
+<p>Bitte erinnert eure Mitglieder daran, ihre Plätze rechtzeitig zu reservieren.</p>
+<p><a href="{seating_url}">Sitzplan und Clan-Vormerkungen öffnen</a></p>''',
+        'is_active': True,
+        'placeholder_info': '{username}: Clan-Admin; {clan_name}: Clan; {event_title}: Veranstaltung; {expires_at}: Ablauf in Europe/Vienna; {open_count}: offene Plätze; {seat_labels}: Platzbezeichnungen; {seating_url}: vollständiger Link zum Sitzplan.',
+    },
+    'clan_seat_expired': {
+        'name': 'Clan-Sitzplatzvormerkung: abgelaufen',
+        'subject': 'Sitzplatzvormerkung für {clan_name} beendet – {event_title}',
+        'content': '''<h2>Eure Sitzplatzvormerkung wurde beendet</h2>
+<p>Hallo {username},</p>
+<p>die Vormerkung für <strong>{clan_name}</strong> bei <strong>{event_title}</strong> wurde beendet. Der hinterlegte Ablaufzeitpunkt war {expires_at} (Europe/Vienna).</p>
+<p>Es wurden <strong>{open_count}</strong> noch offene Plätze freigegeben: {seat_labels}.</p>
+<p>Bereits persönlich gebuchte Plätze bleiben erhalten. Eure Mitglieder können weiterhin regulär verfügbare Plätze wählen, sofern die Veranstaltung Buchungen zulässt.</p>
+<p><a href="{seating_url}">Sitzplan öffnen</a></p>''',
+        'is_active': True,
+        'placeholder_info': '{username}: Clan-Admin; {clan_name}: Clan; {event_title}: Veranstaltung; {expires_at}: hinterlegter Ablaufzeitpunkt; {open_count}: freigegebene Plätze; {seat_labels}: Platzbezeichnungen; {seating_url}: vollständiger Link zum Sitzplan.',
+    },
+})

@@ -3,7 +3,25 @@
 
 {% block title %}{% t "seat_page_title" "Sitzplan" %} – {{ event.title|default:site_customization.site_name }}{% endblock %}
 
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/clan-seat-holds.css' %}">{% endblock %}
+
 {% block content %}
+{% if selection_clan %}
+<div class="card clan-seat-panel">
+  <div class="clan-seat-panel-info">
+    <h2>{% t "clan_seat_button" %}: {{ selection_clan.name }}</h2>
+    <p>{% t "clan_seat_hint" %}</p>
+    <p id="clan-seat-counter" role="status" aria-live="polite"></p>
+    <p id="clan-seat-deadline"></p>
+    <p id="clan-seat-feedback" role="status" aria-live="polite"></p>
+  </div>
+  <div class="clan-seat-actions">
+  <button type="button" class="btn-action-primary" id="clan-seat-confirm" disabled>{% t "clan_seat_confirm" %}</button>
+  <button type="button" class="btn-action-blue" id="clan-seat-refresh">{% t "clan_seat_refresh" %}</button>
+  <a class="btn-action-blue" href="{% url 'clan_detail' slug=selection_clan.slug %}">{% t "clan_seat_back" %}</a>
+  </div>
+</div>
+{% endif %}
 <div class="card seating-page-card" style="padding: var(--card-padding, 20px); border-radius: var(--radius, 16px); position: relative; display: flex; flex-direction: column; min-height: calc(100vh - 130px);">
 
   {% if event %}
@@ -18,6 +36,7 @@
 
       <!-- Responsive Farb- & Symbol-Legende (100% Theme-reaktiv & Barrierefrei) -->
       <div class="seating-legend" style="display: flex; gap: 8px 14px; font-size: 12px; font-family: 'DM Sans', sans-serif; align-items: center; background: var(--paper); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); flex-wrap: wrap;">
+        <span style="display:flex;align-items:center;gap:5px"><span style="color:#38bdf8">▣</span>{% t "clan_seat_legend" %}</span>
         <!-- Frei -->
         <span style="display: flex; align-items: center; gap: 5px;">
           <span style="width: 14px; height: 14px; background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
@@ -141,6 +160,8 @@
 </div>
 
 {% if event %}
+{% if selection_clan %}{{ clan_selection_config|json_script:"clan-selection-config" }}{% endif %}
+{% t "clan_seat_tooltip" as clan_seat_tooltip %}
 {% t "seat_confirm_question" "Möchtest du den Sitzplatz {seat} verbindlich reservieren?" as seat_confirm_q %}
 {% t "seat_reserved_success" "Sitzplatz erfolgreich reserviert!" as seat_reserved_success %}
 {% t "seat_reserved_error" "Fehler bei der Reservierung." as seat_reserved_error %}
@@ -154,7 +175,8 @@
   "rawConfirmText": "{{ seat_confirm_q|escapejs }}",
   "msgSuccess": "{{ seat_reserved_success|escapejs }}",
   "msgError": "{{ seat_reserved_error|escapejs }}",
-  "msgNetworkError": "{{ seat_network_error|escapejs }}"
+  "msgNetworkError": "{{ seat_network_error|escapejs }}",
+  "clanTooltip": "{{ clan_seat_tooltip|escapejs }}"
 }
 </script>
 <script src="{% static 'js/seating.js' %}"></script>
