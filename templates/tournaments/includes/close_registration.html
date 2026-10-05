@@ -1,0 +1,11 @@
+{% if can_close_registration %}
+<details class="ux-close-registration">
+  <summary>{% t "tournament_close_registration" %}</summary>
+  <p>{% t "tournament_close_registration_hint" %}</p>
+  <form method="post" action="{% url 'tournament_close_registration' slug=tournament.slug %}">
+    {% csrf_token %}
+    <button type="submit">{% t "tournament_close_registration_confirm" %}</button>
+    <button type="button" onclick="const box = this.closest('details'); box.open = false; box.querySelector('summary').focus();">{% t "btn_cancel" %}</button>
+  </form>
+</details>
+{% endif %}

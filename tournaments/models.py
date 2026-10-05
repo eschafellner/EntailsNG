@@ -2,7 +2,7 @@ import uuid
 import secrets
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils.text import slugify
 from django.utils import timezone
 from configuration.translations import get_translation
@@ -93,6 +93,11 @@ class Tournament(models.Model):
         SHARED = 'SHARED', 'Punkte, Score-Differenz, Scores; geteilte Plätze'
         HEAD_TO_HEAD = 'HEAD_TO_HEAD', 'Punkte, direkter Vergleich, Score; geteilte Plätze'
 
+    class RosterRule(models.TextChoices):
+        STRICT = 'STRICT', 'Vollständiges Team erforderlich'
+        BY_START = 'BY_START', 'Team darf bis zum Start aufgefüllt werden'
+        ALLOW_INCOMPLETE = 'ALLOW_INCOMPLETE', 'Unvollständige Teams zugelassen'
+
     event = models.ForeignKey(
         'events.Event',
         on_delete=models.CASCADE,
@@ -119,6 +124,12 @@ class Tournament(models.Model):
     max_teams = models.PositiveIntegerField(
         default=16,
         verbose_name="Max. Teams / Teilnehmer",
+    )
+
+    roster_rule = models.CharField(
+        max_length=20, choices=RosterRule.choices, default=RosterRule.STRICT,
+        verbose_name='Regel zur Teamgröße',
+        help_text='Gilt für Anmeldung und Start. Die maximale Teamgröße bleibt bestehen; nach Turniergenerierung ist die Regel gesperrt.',
     )
 
     swiss_rounds = models.PositiveSmallIntegerField(default=4, verbose_name="Schweizer System: Runden",
@@ -226,6 +237,21 @@ class Tournament(models.Model):
                 self.Tiebreak.HEAD_TO_HEAD: 'format_tiebreak_head_to_head'}
         return get_translation(keys.get(self.standings_tiebreak, 'format_tiebreak_shared'))
 
+    def get_roster_rule_display(self):
+        return get_translation({
+            self.RosterRule.STRICT: 'roster_rule_strict',
+            self.RosterRule.BY_START: 'roster_rule_by_start',
+            self.RosterRule.ALLOW_INCOMPLETE: 'roster_rule_allow_incomplete',
+        }.get(self.roster_rule, 'roster_rule_strict'))
+
+    def roster_size_allowed(self, count, *, for_start=False):
+        """One rule for registration, start validation and UI readiness."""
+        if self.roster_rule not in self.RosterRule.values or not 1 <= count <= self.game.team_size:
+            return False
+        require_full = self.roster_rule == self.RosterRule.STRICT or (
+            for_start and self.roster_rule == self.RosterRule.BY_START)
+        return not require_full or count == self.game.team_size
+
     def __str__(self):
         return f"{self.title} ({self.get_mode_display()})"
 
@@ -237,7 +263,11 @@ class Tournament(models.Model):
         """
         return self.tournament_start or self.registration_end
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
+        if self.pk:
+            # Serialize rule changes with bracket generation and Swiss publication.
+            type(self).objects.select_for_update().filter(pk=self.pk).values_list('pk', flat=True).first()
         self._validate_format_settings()
         self._validate_swiss_settings()
         if not self.slug:
@@ -272,12 +302,14 @@ class Tournament(models.Model):
                     raise ValidationError('Das Schweizer Turnier kann erst nach Abschluss der letzten Runde beendet werden.')
 
     def _validate_format_settings(self):
+        if self.roster_rule not in self.RosterRule.values:
+            raise ValidationError({'roster_rule': get_translation('roster_rule_invalid')})
         if self.group_qualifiers_per_group not in (0, 1, 2):
             raise ValidationError({'group_qualifiers_per_group': get_translation('format_invalid_qualifiers')})
         if self.standings_tiebreak not in self.Tiebreak.values:
             raise ValidationError({'standings_tiebreak': get_translation('format_invalid_tiebreak')})
         if self.pk:
-            fields = ('play_third_place', 'group_qualifiers_per_group', 'standings_tiebreak')
+            fields = ('play_third_place', 'group_qualifiers_per_group', 'standings_tiebreak', 'roster_rule')
             old = type(self).objects.filter(pk=self.pk, is_generated=True).values(*fields).first()
             if old and any(getattr(self, field) != old[field] for field in fields):
                 raise ValidationError(get_translation('format_rules_frozen'))
@@ -332,7 +364,6 @@ class Tournament(models.Model):
             return False, f"Die Anmeldung für '{self.title}' ist aktuell nicht geöffnet (Status: {self.get_status_display()})."
 
         if self._event_is_closed():
-            from configuration.translations import get_translation
             return False, get_translation(
                 'msg_tournament_event_finished',
                 'Die Veranstaltung "{event_title}" ist beendet oder abgesagt. Eine Turnieranmeldung ist nicht mehr möglich.',
@@ -360,7 +391,9 @@ class Tournament(models.Model):
                 return False, f"Das Team '{team.name}' ist nicht für das Spiel '{self.game.name if self.game else ''}' registriert."
             if self.game:
                 accepted_count = team.get_accepted_members().count()
-                if accepted_count < self.game.team_size:
+                if accepted_count == 0:
+                    return False, get_translation('roster_empty', team=team.name)
+                if accepted_count < self.game.team_size and not self.roster_size_allowed(accepted_count):
                     return False, f"Das Team '{team.name}' hat nur {accepted_count} von {self.game.team_size} erforderlichen Mitgliedern."
                 if accepted_count > self.game.team_size:
                     return False, f"Das Team '{team.name}' hat {accepted_count} Mitglieder (erlaubt sind maximal {self.game.team_size})."

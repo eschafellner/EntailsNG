@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ article.title }} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
+
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/news.css' %}">{% endblock %}
+
+{% block content %}
+<article class="card news-detail">
+  <a class="news-back-link" href="{% url 'news_list' %}">← {% t "news_back_to_list" %}</a>
+  <header>
+    <p class="eyebrow">{% t "dash_news_eyebrow" %}</p>
+    <h1>{{ article.title }}</h1>
+    <div class="news-meta">
+      <time datetime="{{ article.created_at|date:'c' }}">{{ article.created_at|date:"d.m.Y H:i" }}</time>
+      {% if article.author %}<span>{% t "news_author_by" %} {{ article.author.display_name }}</span>{% endif %}
+      {% if article.is_pinned %}<span class="news-pinned">{% t "dash_news_pinned" %}</span>{% endif %}
+    </div>
+  </header>
+  {% if article.cover_image %}
+    {% include 'news/preview_image.html' with image=article.preview_image %}
+  {% endif %}
+  <div class="event-content news-content">{{ article.rendered_content }}</div>
+</article>
+{% endblock %}

@@ -38,7 +38,7 @@ from .services import RegistrationService
 logger = logging.getLogger(__name__)
 
 # Wie viele News auf dem Dashboard erscheinen. Eine Stelle, ein Wert.
-DASHBOARD_NEWS_LIMIT = 3
+DASHBOARD_NEWS_LIMIT = 5
 
 
 def get_active_event():
@@ -91,11 +91,12 @@ def dashboard_view(request):
         user_registration=registration,
     )
 
+    pinned_news = get_pinned_news()
     context = {
         'event': event,
         'upcoming_event': event,
-        'latest_news': get_latest_news(limit=DASHBOARD_NEWS_LIMIT),
-        'pinned_news': get_pinned_news(),
+        'latest_news': get_latest_news(limit=DASHBOARD_NEWS_LIMIT, exclude_id=pinned_news.pk if pinned_news else None),
+        'pinned_news': pinned_news,
         'registration': registration,
         'is_user_registered': registration is not None,
         'user_status_step': registration.status_step if registration else 1,

@@ -122,7 +122,6 @@
               </div>
             </div>
 
-<<<<<<< HEAD
             <div style="display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--muted); padding-top: 8px; border-top: 1px dashed var(--line);">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <span>📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong>{{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr</strong></span>
@@ -131,11 +130,6 @@
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <span>🚀 {% t "tournament_start_label" "Turnierstart:" %} <strong>{{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr</strong></span>
               </div>
-=======
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-family: 'DM Sans', sans-serif; color: var(--muted); padding-top: 8px;">
-              <span>{% t "tournament_reg_deadline_label" "Schluss:" %} <strong style="color: var(--ink);">{{ tournament.registration_end|date:"d.m. H:i" }} Uhr</strong></span>
-              <span>{% t "tournament_start_label" "Start:" %} <strong style="color: var(--ink);">{{ tournament.effective_tournament_start|date:"d.m. H:i" }} Uhr</strong></span>
->>>>>>> 9e3d60f (improved visuals)
             </div>
           </div>
           {% endif %}

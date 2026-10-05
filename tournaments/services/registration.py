@@ -35,19 +35,25 @@ def validate_start_roster(tournament):
     teams = {team.pk: team for team in Team.objects.select_for_update().filter(
         pk__in=[registration.team_id for registration in registrations]).order_by('pk')}
     seen_users = set()
+    problems = []
     for registration in registrations:
         team = teams[registration.team_id]
         members = list(team.get_accepted_members())
         member_ids = {member.user_id for member in members}
         valid = (not team.is_archived and team.game_id == tournament.game_id
             and team.event_id in (None, tournament.event_id)
-            and len(members) == tournament.game.team_size and team.captain_id in member_ids
+            and tournament.roster_size_allowed(len(members), for_start=True) and team.captain_id in member_ids
             and all(member.user.is_active and not member.user.deleted_at for member in members)
             and not member_ids.intersection(seen_users))
         if not valid:
-            raise TournamentBracketError(get_translation('audit_start_roster_invalid',
-                'Das Team "{team}" ist nicht startbereit. Bitte Spiel, Veranstaltung, Archivstatus und vollständigen Kader prüfen. Gäste dürfen nur für ein Team antreten.', team=team.name))
+            if not tournament.roster_size_allowed(len(members), for_start=True):
+                problems.append(get_translation('roster_start_size_problem', team=team.name,
+                    count=len(members), size=tournament.game.team_size))
+            else:
+                problems.append(get_translation('roster_start_team_invalid', team=team.name))
         seen_users.update(member_ids)
+    if problems:
+        raise TournamentBracketError(get_translation('roster_start_blocked', teams='; '.join(problems)))
 
 
 def check_user_event_checkin(user, event):
@@ -273,7 +279,9 @@ class TournamentRegistrationService:
                 accepted_members = list(team.get_accepted_members())
                 if any(member.user.deleted_at for member in accepted_members):
                     raise TournamentRegistrationError(get_translation('account_deleted_roster_blocked'))
-                if len(accepted_members) < tournament.game.team_size:
+                if not accepted_members:
+                    raise TournamentRegistrationError(get_translation('roster_empty', team=team.name))
+                if len(accepted_members) < tournament.game.team_size and not tournament.roster_size_allowed(len(accepted_members)):
                     raise TournamentRegistrationError(
                         f"Das Team '{team.name}' hat nur {len(accepted_members)} von {tournament.game.team_size} erforderlichen Mitgliedern."
                     )

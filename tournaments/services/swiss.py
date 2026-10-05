@@ -211,7 +211,7 @@ class SwissTournamentService:
         repeated = [(a, b) for a, b in pairs if (b is None and a in bye_winners)
                     or (b is not None and tuple(sorted((a, b))) in previous_pairs)]
         digest_data = {'round': number, 'seed': seed, 'allow_repeats': allow_repeats,
-                       'rules': [tournament.swiss_rounds, tournament.swiss_allow_draws],
+                       'rules': [tournament.swiss_rounds, tournament.swiss_allow_draws, tournament.roster_rule],
                        'registrations': [(r.pk, r.team_id, r.team.name, r.seed, r.is_forfeited) for r in registrations],
                        'history': history}
         digest = hashlib.sha256(json.dumps(digest_data, sort_keys=True).encode()).hexdigest()

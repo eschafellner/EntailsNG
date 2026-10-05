@@ -305,7 +305,8 @@ class TournamentRestartTests(RestartHelpers, TestCase):
         self.assertEqual(self.client.get(reverse('tournament_detail', args=[edition.slug])).status_code, 404)
         TournamentLifecycleService.open_registration(edition.pk, actor=self.staff)
         self.assertContains(self.client.get(url), edition.title)
-        self.assertContains(self.client.get(reverse('tournament_detail', args=[edition.slug])), 'Originalturnier:')
+        self.assertNotContains(self.client.get(reverse('tournament_detail', args=[edition.slug])), 'Originalturnier:')
+        self.assertEqual(edition.restarted_from_id, source.pk)
         source.status = Tournament.Status.DRAFT
         source.save()
         self.assertNotContains(self.client.get(reverse('tournament_detail', args=[edition.slug])), source.title)

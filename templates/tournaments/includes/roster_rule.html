@@ -1,0 +1,36 @@
+{% if tournament.game.team_size > 1 %}
+<section class="ux-card" aria-labelledby="roster-rule-heading">
+  <h2 id="roster-rule-heading">{% t "roster_rule_label" %}: {{ tournament.get_roster_rule_display }}</h2>
+  <p>
+    {% if tournament.roster_rule == 'BY_START' %}
+      {% t "roster_rule_by_start_hint" %}
+    {% elif tournament.roster_rule == 'ALLOW_INCOMPLETE' %}
+      {% t "roster_rule_allow_incomplete_hint" size=tournament.game.team_size %}
+    {% else %}
+      {% t "roster_rule_strict_hint" %}
+    {% endif %}
+  </p>
+</section>
+{% endif %}
+
+{% if user_roster_notice and not tournament.is_generated %}
+<section class="ux-card" aria-labelledby="own-roster-heading">
+  <h2 id="own-roster-heading">{{ user_roster_notice.team.name }} · {% t "roster_count" count=user_roster_notice.count size=tournament.game.team_size %}</h2>
+  <p>{% if user_roster_notice.start_allowed %}{% t "roster_incomplete_allowed" %}{% elif user_roster_notice.count > 0 and user_roster_notice.count < tournament.game.team_size %}{% t "roster_provisional" %}{% else %}{% t "roster_invalid_count" %}{% endif %}</p>
+  <a href="{% url 'team_detail' slug=user_roster_notice.team.slug %}">{% t "ux_prepare_team" %}</a>
+</section>
+{% endif %}
+
+{% if is_admin and not tournament.is_generated and roster_warnings %}
+<section class="ux-card" aria-labelledby="roster-start-heading">
+  <h2 id="roster-start-heading">{% t "roster_start_overview" %}</h2>
+  <ul>
+    {% for row in roster_warnings %}
+      <li>
+        <a href="{% url 'team_detail' slug=row.team.slug %}">{{ row.team.name }}</a> · {% t "roster_count" count=row.count size=tournament.game.team_size %}
+        — {% if row.start_allowed %}{% t "roster_incomplete_allowed" %}{% else %}{% t "roster_start_not_ready" %}{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}

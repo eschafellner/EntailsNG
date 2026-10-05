@@ -5,6 +5,7 @@
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'css/news.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -160,26 +161,26 @@
 <!-- ======================================================================
      DYNAMISCHE 4-STUFEN STATUSBAR
      ====================================================================== -->
-{% if upcoming_event and pinned_news %}
+{% if pinned_news %}
 <!-- ======================================================================
      STICKY ANKÜNDIGUNGS-BANNER (PUNKT 2)
      ====================================================================== -->
-<div class="card" style="padding: 16px 20px; margin-bottom: 24px; border-radius: 12px; background: rgba(248, 171, 45, 0.12); border: 1px solid var(--signal); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+<aside class="card news-announcement" aria-labelledby="news-announcement-title">
   <div style="display: flex; align-items: center; gap: 14px;">
     <span style="font-size: 24px;">📢</span>
     <div>
-      <strong style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; color: var(--ink); display: block;">
+      <strong id="news-announcement-title" style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; color: var(--ink); display: block;">
         {{ pinned_news.title }}
       </strong>
       <p style="margin: 2px 0 0 0; font-size: 13px; color: var(--muted); font-family: 'DM Sans', sans-serif;">
-        {{ pinned_news.content|striptags|truncatechars:120 }}
+        {{ pinned_news.preview_text|truncatechars:120 }}
       </p>
     </div>
   </div>
-  <a href="{% url 'news_list' %}" style="background: var(--signal); color: var(--navy); padding: 8px 14px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 700; text-decoration: none;">
+  <a href="{% url 'news_detail' pinned_news.pk %}" style="background: var(--signal); color: var(--navy); padding: 8px 14px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 700; text-decoration: none;">
     {% t "dash_news_details_link" "Details lesen →" %}
   </a>
-</div>
+</aside>
 {% endif %}
 
   <!-- ======================================================================
@@ -190,55 +191,48 @@
     <!-- ------------------------------------------------------------------
          LINKES ELEMENT: NEWS WIDGET (2/3 BREITE)
          ------------------------------------------------------------------ -->
-    <section class="card" style="display: flex; flex-direction: column; justify-content: space-between; padding: 24px;">
+    <section class="card news-widget" aria-labelledby="dashboard-news-title" data-news-carousel
+             data-pause-label="{% t 'news_rotation_pause' %}" data-start-label="{% t 'news_rotation_start' %}">
+      <header class="news-widget-header">
+        <div>
+          <p class="eyebrow">{% t "dash_news_eyebrow" %}</p>
+          <h3 id="dashboard-news-title">{% t "dash_news_title" %}</h3>
+        </div>
+        <a class="news-all-link" href="{% url 'news_list' %}">{% t "dash_news_all_link" %}</a>
+      </header>
 
-      <!-- Oberer Teil: Titel & Artikel -->
-      <div>
-        <p class="eyebrow" style="margin-bottom: 4px;">{% t "dash_news_eyebrow" %}</p>
-        <h3 style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; margin-top: 0; margin-bottom: 20px; color: var(--ink);">
-          {% t "dash_news_title" %}
-        </h3>
-
-        <div style="display: flex; flex-direction: column; gap: 20px;">
+      {% if latest_news %}
+        <div class="news-track" id="dashboard-news-track" data-news-track>
           {% for article in latest_news %}
-            <div style="border-bottom: 1px solid var(--line); padding-bottom: 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  {% if article.is_pinned %}
-                    <span style="background: rgba(248, 171, 45, 0.2); border: 1px solid var(--signal); color: var(--signal-deep); font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: bold; padding: 2px 6px; border-radius: 4px;">{% t "dash_news_pinned" %}</span>
-                  {% endif %}
-                  <strong style="font-size: 16px; color: var(--ink); font-family: 'Barlow Condensed', sans-serif;">
-                    {{ article.title }}
-                  </strong>
+            <article class="news-slide{% if not article.preview_image %} news-slide-text{% endif %}" data-news-slide
+                     aria-labelledby="news-title-{{ article.pk }}">
+              {% include 'news/preview_image.html' with image=article.preview_image preview=True %}
+              <div class="news-slide-body">
+                <div class="news-meta">
+                  <time datetime="{{ article.created_at|date:'c' }}">{{ article.created_at|date:"d.m.Y" }}</time>
+                  {% if article.is_pinned %}<span class="news-pinned">{% t "dash_news_pinned" %}</span>{% endif %}
                 </div>
-                {% if article.created_at %}
-                  <small style="color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace;">
-                    {{ article.created_at|date:"d.m.Y" }}
-                  </small>
-                {% endif %}
+                <h4 id="news-title-{{ article.pk }}"><a href="{% url 'news_detail' article.pk %}">{{ article.title }}</a></h4>
+                <p class="news-excerpt">{{ article.preview_text|truncatechars:180 }}</p>
+                <a class="news-read-more" href="{% url 'news_detail' article.pk %}">{% t "dash_news_read_more" %}</a>
               </div>
-              <p style="font-size: 14px; color: var(--muted); margin: 0 0 8px 0; line-height: 1.5;">
-                {{ article.content|striptags|truncatechars:180 }}
-              </p>
-              <a href="{% url 'news_list' %}" style="font-size: 13px; color: var(--signal-deep); font-weight: 600; text-decoration: underline; font-family: 'DM Sans', sans-serif;">
-                {% t "dash_news_read_more" %}
-              </a>
-            </div>
-          {% empty %}
-            <p style="color: var(--muted); font-size: 13px; margin: 0; font-family: 'DM Sans', sans-serif;">
-              {% t "dash_news_empty" %}
-            </p>
+            </article>
           {% endfor %}
         </div>
-      </div>
-
-      <!-- Unterer Teil: Alle News Link -->
-      <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--line);">
-        <a href="{% url 'news_list' %}" style="font-size: 12px; font-family: 'DM Sans', sans-serif; font-weight: 700; color: var(--muted); text-transform: uppercase; text-decoration: none; letter-spacing: 0.5px;">
-          {% t "dash_news_all_link" %}
-        </a>
-      </div>
-
+        {% if latest_news|length > 1 %}
+          <div class="news-controls" data-news-controls hidden>
+            <div class="news-navigation">
+              <button type="button" class="news-control" data-news-previous aria-controls="dashboard-news-track" aria-label="{% t 'news_previous' %}">←</button>
+              <span class="news-position" data-news-position aria-live="off" aria-atomic="true"
+                    data-position-label="{% t 'news_position_of' %}">1 {% t "news_position_of" %} {{ latest_news|length }}</span>
+              <button type="button" class="news-control" data-news-next aria-controls="dashboard-news-track" aria-label="{% t 'news_next' %}">→</button>
+            </div>
+            <button type="button" class="news-rotation" data-news-rotation hidden>{% t "news_rotation_pause" %}</button>
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="news-empty">{% t "dash_news_empty" %}</p>
+      {% endif %}
     </section>
 
 
@@ -569,5 +563,5 @@
 
 {% block extra_js %}
 <script src="{% static 'js/dashboard.js' %}"></script>
+<script src="{% static 'js/news-carousel.js' %}"></script>
 {% endblock %}
-

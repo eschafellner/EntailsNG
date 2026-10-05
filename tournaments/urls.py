@@ -7,6 +7,7 @@ urlpatterns = [
     path('', views.tournament_list, name='tournament_list'),
     path('<slug:slug>/', views.tournament_detail, name='tournament_detail'),
     path('<slug:slug>/open-registration/', views.tournament_open_registration, name='tournament_open_registration'),
+    path('<slug:slug>/close-registration/', views.tournament_close_registration, name='tournament_close_registration'),
     path('<slug:slug>/register/', views.tournament_register, name='tournament_register'),
     path('<slug:slug>/unregister/', views.tournament_unregister, name='tournament_unregister'),
     path('<slug:slug>/generate-bracket/', views.tournament_generate_bracket, name='tournament_generate_bracket'),

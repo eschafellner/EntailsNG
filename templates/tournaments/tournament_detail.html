@@ -114,27 +114,23 @@
             <span style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted);">
               {{ tournament.game.name }} ({% if tournament.game.team_size == 1 %}{% t "tournament_detail_format_solo" "1v1 Solo" %}{% else %}{% t "tournament_detail_format_team" "{size}v{size}" size=tournament.game.team_size %}{% endif %})
             </span>
+            <span class="ux-tournament-state" data-state="{{ tournament.status }}">
+              {% t "tournament_state_label" %}: <strong>{{ tournament.get_status_display }}</strong>
+            </span>
           </div>
           <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 36px; color: var(--ink);">
             {{ tournament.title }}
           </h1>
-<<<<<<< HEAD
-          {% if restart_source %}<p>{% t 'restart_original' %} <a href="{% url 'tournament_detail' restart_source.slug %}">{{ restart_source.title }}</a></p>{% endif %}
           {% if restart_editions %}<p>{% t 'restart_editions' %}: {% for edition in restart_editions %}<a href="{% url 'tournament_detail' edition.slug %}">{{ edition.title }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
-          <p style="margin: 4px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 14px;">
-            {% t "tournament_detail_event_label" "Veranstaltung:" %} {{ tournament.event.title }} | {% t "tournament_detail_admin_label" "Orga-Admin:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.display_name }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %} | 📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} {{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr | 🚀 {% t "tournament_start_label" "Turnierstart:" %} {{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr
-          </p>
-=======
-          <div style="margin: 6px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px;">
+          <div class="ux-tournament-meta" style="margin: 6px 0 0 0; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px;">
             <span>{{ tournament.event.title }}</span>
             <span style="color: var(--line);">•</span>
-            <span>{% t "tournament_detail_admin_label" "Leitung:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.username }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %}</span>
+            <span>{% t "tournament_detail_admin_label" "Leitung:" %} {% if tournament.tournament_admin %}{{ tournament.tournament_admin.display_name }}{% else %}{% t "tournament_director_default" "Turnierleitung" %}{% endif %}</span>
             <span style="color: var(--line);">•</span>
             <span>{% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong style="color: var(--ink);">{{ tournament.registration_end|date:"d.m.Y H:i" }} Uhr</strong></span>
             <span style="color: var(--line);">•</span>
             <span>{% t "tournament_start_label" "Start:" %} <strong style="color: var(--ink);">{{ tournament.effective_tournament_start|date:"d.m.Y H:i" }} Uhr</strong></span>
           </div>
->>>>>>> 9e3d60f (improved visuals)
         </div>
       </div>
 
@@ -142,14 +138,15 @@
       <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
         {% if is_admin %}
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            {% if request.user.is_staff %}
+            {% if request.user.is_staff and tournament.status == 'FINISHED' %}
               <a href="{% url 'media_template_list' %}" class="btn-action-primary media-export-link">
                 <span aria-hidden="true">🖨️</span><span>{% t "media_certificate_link" "Urkunden gestalten und exportieren" %}</span>
               </a>
             {% endif %}
-            {% if not tournament.is_generated and tournament.mode == 'SWISS' %}
+            {% include 'tournaments/includes/close_registration.html' %}
+            {% if can_generate_bracket and tournament.mode == 'SWISS' %}
               <a class="btn-action-primary" href="{% url 'tournament_swiss_preview' slug=tournament.slug %}">{% t "swiss_prepare_first" "Runde 1 vorbereiten" %}</a>
-            {% elif not tournament.is_generated %}
+            {% elif can_generate_bracket %}
               <div id="bracket-generate-container" style="display: inline-flex; align-items: center; gap: 8px;">
                 <button type="button" id="btn-show-generate-bracket" onclick="toggleGenerateBracketConfirm(true)" style="background: #047857; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; cursor: pointer;">
                   {% t "tournament_detail_generate_tree" "🚀 Baum jetzt generieren" %}
@@ -169,7 +166,7 @@
                   </button>
                 </div>
               </div>
-            {% else %}
+            {% elif tournament.is_generated and tournament.status != 'CANCELLED' %}
               <span style="background: rgba(16, 185, 129, 0.15); color: #047857; padding: 6px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold;">
                 {% if tournament.mode == 'SWISS' %}{% t "swiss_started" "Schweizer Turnier gestartet" %}{% else %}{% t "tournament_detail_tree_generated" "✓ Baum generiert" %}{% endif %}
               </span>
@@ -190,11 +187,14 @@
               {% t "tournament_detail_status_finished" "🏁 Turnier beendet" %}
             </span>
           </div>
+        {% elif tournament.status == 'CANCELLED' %}
+          <span class="ux-cancelled-notice">{% t "tournament_detail_status_cancelled" %}</span>
         {% elif is_registered %}
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 8px 14px; border-radius: 8px;">
             <span style="font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; color: #047857;">
               {% t "tournament_detail_registered_with" "✓ Angemeldet mit '{team_name}'" team_name=user_team.name %}
             </span>
+            {% include 'tournaments/includes/roster_status.html' with count=user_roster_count size=tournament.game.team_size %}
             {% if not tournament.is_generated %}
               <details class="ux-unregister">
                 <summary>{% t "tournament_detail_unregister_btn" "Abmelden" %}</summary>
@@ -401,6 +401,7 @@
     </div>
   {% endif %}
 
+  {% include "tournaments/includes/roster_rule.html" %}
   {% include "tournaments/includes/personal_status.html" %}
 
   <!-- Navigation Tabs -->
@@ -1019,14 +1020,19 @@
       </h3>
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 14px;">
         {% for reg in registrations %}
-          <div style="padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; align-items: center; justify-content: space-between;">
-            <div>
+          <div style="padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+            <div class="ux-registration-team">
               <strong style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink);">
                 {{ reg.team.name }}
               </strong>
               <div style="font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--muted);">
                 {% t "tournament_team_captain_label" "Kapitän:" %} {{ reg.team.captain.display_name }}
               </div>
+              <p class="ux-registration-label">{% t "tournament_registration_status_label" %}: {% if reg.is_forfeited %}{% t "format_withdrawn" %}{% else %}{% t "tournament_already_registered" %}{% endif %}</p>
+              {% include 'tournaments/includes/roster_status.html' with count=reg.roster_count size=tournament.game.team_size %}
+              {% if not reg.is_forfeited and reg.roster_count < tournament.game.team_size %}
+                <p>{% if reg.roster_count == 0 %}{% t "roster_invalid_count" %}{% elif tournament.roster_rule == 'ALLOW_INCOMPLETE' %}{% t "roster_incomplete_allowed" %}{% elif not tournament.is_generated %}{% t "roster_provisional" %}{% endif %}</p>
+              {% endif %}
             </div>
             <span style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted);">
               #{{ forloop.counter }}

@@ -12,7 +12,7 @@ from django.utils import timezone
 from events.models import Event
 from tournaments.exceptions import TournamentError
 from tournaments.models import Game, Team, TeamMember, Tournament, TournamentRegistration, TournamentMatch
-from tournaments.services import TournamentBracketService, TournamentMatchService, TournamentRegistrationService
+from tournaments.services import TournamentBracketService, TournamentMatchService, TournamentRegistrationService, TournamentLifecycleService
 
 
 @skipUnlessDBFeature('has_select_for_update')
@@ -67,6 +67,72 @@ class TournamentAuditConcurrencyTests(TransactionTestCase):
         client = Client()
         client.force_login(user)
         return client
+
+    def roster_rule_tournament(self):
+        now = timezone.now()
+        tournament = Tournament.objects.create(title='Roster rule race', event=self.event,
+            game=self.game, roster_rule=Tournament.RosterRule.ALLOW_INCOMPLETE,
+            status=Tournament.Status.REGISTRATION_OPEN,
+            registration_start=now, registration_end=now + timedelta(hours=1))
+        for team in self.teams:
+            TournamentRegistration.objects.create(tournament=tournament, team=team)
+        return tournament
+
+    def test_rule_change_blocks_waiting_start_with_partial_rosters(self):
+        tournament = self.roster_rule_tournament()
+        def tighten():
+            tournament.roster_rule = Tournament.RosterRule.STRICT
+            tournament.save(update_fields=['roster_rule'])
+        with self.assertRaises(TournamentError):
+            self.compete(tighten, lambda: TournamentBracketService.generate_bracket(
+                tournament.pk, actor=self.staff))
+        tournament.refresh_from_db()
+        self.assertEqual(tournament.roster_rule, Tournament.RosterRule.STRICT)
+        self.assertFalse(tournament.is_generated)
+        self.assertFalse(tournament.matches.exists())
+
+    def test_start_freezes_waiting_rule_change_from_stale_instance(self):
+        from django.core.exceptions import ValidationError
+        tournament = self.roster_rule_tournament()
+        def tighten():
+            # This instance was loaded before bracket generation began.
+            tournament.roster_rule = Tournament.RosterRule.STRICT
+            tournament.save(update_fields=['roster_rule'])
+        with self.assertRaises(ValidationError):
+            self.compete(lambda: TournamentBracketService.generate_bracket(
+                tournament.pk, actor=self.staff), tighten)
+        tournament.refresh_from_db()
+        self.assertEqual(tournament.roster_rule, Tournament.RosterRule.ALLOW_INCOMPLETE)
+        self.assertTrue(tournament.is_generated)
+        self.assertTrue(tournament.matches.exists())
+
+    def late_registration(self, tournament):
+        captain = get_user_model().objects.create_user('closing-lock-captain')
+        team = Team.objects.create(name='Closing late team', captain=captain, game=self.game, event=self.event)
+        TeamMember.objects.create(team=team, user=captain)
+        return lambda: TournamentRegistrationService.register_team(tournament.pk,
+            user=captain, team_id=team.pk, actor=self.staff)
+
+    def test_closure_blocks_waiting_registration(self):
+        tournament = self.roster_rule_tournament()
+        register = self.late_registration(tournament)
+        with self.assertRaises(TournamentError):
+            self.compete(lambda: TournamentLifecycleService.close_registration(
+                tournament.pk, actor=self.staff), register)
+        tournament.refresh_from_db()
+        self.assertEqual(tournament.status, Tournament.Status.REGISTRATION_CLOSED)
+        self.assertEqual(tournament.registrations.count(), 3)
+        self.assertFalse(tournament.matches.exists())
+
+    def test_registration_before_closure_is_preserved(self):
+        tournament = self.roster_rule_tournament()
+        self.compete(self.late_registration(tournament),
+            lambda: TournamentLifecycleService.close_registration(tournament.pk, actor=self.staff))
+        tournament.refresh_from_db()
+        self.assertEqual(tournament.status, Tournament.Status.REGISTRATION_CLOSED)
+        self.assertEqual(tournament.registrations.count(), 4)
+        self.assertFalse(tournament.is_generated)
+        self.assertFalse(tournament.matches.exists())
 
     def test_parallel_last_league_results_finish_the_tournament(self):
         tournament = Tournament.objects.create(title='Audit parallel league', event=self.event,

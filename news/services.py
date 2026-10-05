@@ -2,11 +2,12 @@
 from .models import NewsArticle
 
 
-def get_latest_news(limit=3):
+def get_latest_news(limit=5, exclude_id=None):
     """Liefert die neuesten veröffentlichten News-Beiträge (gemäß Meta-Sortierung: Angepinnt, Neueste)."""
-    return list(
-        NewsArticle.objects.filter(is_published=True)[:limit]
-    )
+    articles = NewsArticle.objects.filter(is_published=True)
+    if exclude_id is not None:
+        articles = articles.exclude(pk=exclude_id)
+    return list(articles[:limit])
 
 
 def get_pinned_news():

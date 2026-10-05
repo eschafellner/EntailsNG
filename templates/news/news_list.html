@@ -1,6 +1,9 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{% t "news_list_title" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
+
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/news.css' %}">{% endblock %}
 
 {% block content %}
 <div class="card">
@@ -10,13 +13,17 @@
 
   <div class="news-feed" style="display: flex; flex-direction: column; gap: 20px;">
     {% for article in articles %}
-      <article class="card" style="background: var(--paper); border: 1px solid var(--line); padding: 20px;">
+      <article class="card news-list-article" id="news-{{ article.pk }}">
         <header style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
-          <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px;">{{ article.title }}</h2>
+          <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px;"><a href="{% url 'news_detail' article.pk %}">{{ article.title }}</a></h2>
           <small style="color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px;">
-            {{ article.created_at|date:"d.m.Y H:i" }} Uhr {% if article.author %}von {{ article.author.display_name }}{% endif %}
+            {{ article.created_at|date:"d.m.Y H:i" }} {% if article.author %}{% t "news_author_by" %} {{ article.author.display_name }}{% endif %}
           </small>
         </header>
+        {% if article.is_pinned %}<span class="news-pinned">{% t "dash_news_pinned" %}</span>{% endif %}
+        {% if article.cover_image %}
+          {% include 'news/preview_image.html' with image=article.preview_image %}
+        {% endif %}
         <div class="event-content" style="font-size: 15px; line-height: 1.6; color: var(--ink);">
           {{ article.rendered_content }}
         </div>

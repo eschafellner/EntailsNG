@@ -87,7 +87,7 @@ jobs:
       - name: Install Dependencies
         run: python -m pip install -r requirements.txt
       - name: Test Account Deletion and Concurrent Tournament Actions
-        run: python manage.py test seating.test_clan_holds seating.test_clan_holds_concurrency users.test_account_deletion clans.test_admin_roles clans.test_admin_roles_concurrency tournaments.test_swiss tournaments.test_swiss_concurrency tournaments.test_audit tournaments.test_audit_concurrency tournaments.test_solo_reactivation tournaments.test_format_improvements tournaments.test_draft_visibility tournaments.test_restart tournaments.test_recruitment tournaments.test_recruitment_concurrency knowledge --noinput
+        run: python manage.py test seating.test_clan_holds seating.test_clan_holds_concurrency users.test_account_deletion clans.test_admin_roles clans.test_admin_roles_concurrency tournaments.test_swiss tournaments.test_swiss_concurrency tournaments.test_audit tournaments.test_audit_concurrency tournaments.test_solo_reactivation tournaments.test_format_improvements tournaments.test_draft_visibility tournaments.test_restart tournaments.test_recruitment tournaments.test_recruitment_concurrency tournaments.test_roster_rules tournaments.test_frontend_feedback knowledge --noinput
 
   test:
     name: Django Test Suite & Checks
@@ -132,8 +132,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Test Scanner Feedback and Tournament Views
-        run: node --test scripts/tests/checkin-scanner.test.cjs scripts/tests/tournaments.test.cjs scripts/tests/clan-seat-holds.test.cjs
+      - name: Test Browser Interactions
+        run: node --test scripts/tests/checkin-scanner.test.cjs scripts/tests/tournaments.test.cjs scripts/tests/clan-seat-holds.test.cjs scripts/tests/news-carousel.test.cjs
 
       - name: Run Django Security & Deployment Check
         env:

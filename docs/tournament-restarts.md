@@ -28,14 +28,15 @@ offene, laufende, abgeschlossene und abgesagte Turniere in allen sechs Modi.
 
 Die neue Ausgabe erhält eine eigene ID und URL. Gäste sehen ihren Entwurf auch
 über einen direkten Link nicht. Links auf neue Ausgaben im Frontend werden nach
-derselben Sichtbarkeitsregel gefiltert; nach Veröffentlichung sind Original und
-neue Ausgabe gegenseitig verlinkt. Im Backend sind neue Ausgaben bereits während
+derselben Sichtbarkeitsregel gefiltert; beim Original werden sichtbare neue
+Ausgaben verlinkt. Neue Ausgaben zeigen im Frontend keinen Originalverweis;
+die Herkunft bleibt im Backend erhalten. Im Backend sind neue Ausgaben bereits während
 der Vorbereitung beim Original aufgeführt.
 
 ## Übernahme und Historie
 
 Übernommen werden Spiel, Veranstaltung, Beschreibung, Modus, maximale
-Teilnehmerzahl, Schweizer Regeln, kleines Finale, Gruppenqualifikanten,
+Teilnehmerzahl, Teamgrößenregel, Schweizer Regeln, kleines Finale, Gruppenqualifikanten,
 Gleichstandsregel, Turnieradmin und Support sowie die gewählten Anmeldungen.
 Die vorhandenen Team-Datensätze werden weiterverwendet. Damit ändern sich deren
 Identität und bisherige Turnierhistorie nicht.
@@ -73,8 +74,8 @@ korrigiert; Endstand und Urkunden des Originals bleiben nachvollziehbar.
   eine versehentliche Absage. Die Sperrreihenfolge ist
   **Event → Originalturnier → Anmeldungen → Teams**.
 - Archivierte Teams werden nicht automatisch reaktiviert. Vor dem Start greift
-  die vorhandene Prüfung von Spiel, Veranstaltung, Archivstatus, vollständigem
-  Kader und aktiven Accounts. Teams mit Problemen müssen zuvor geklärt oder aus
+  die vorhandene Prüfung von Spiel, Veranstaltung, Archivstatus, Kader gemäß
+  der übernommenen [Teamgrößenregel](tournament-roster-rules.md) und aktiven Accounts. Teams mit Problemen müssen zuvor geklärt oder aus
   der Kopie entfernt werden.
 - Bei einem beendeten/abgesagten Event kann eine interne Kopie vorbereitet
   werden. Veröffentlichung und Start bleiben durch die bestehenden Event-Sperren

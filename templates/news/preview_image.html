@@ -1,0 +1,5 @@
+{% if image %}
+  <div class="news-image news-image-{{ article.image_fit }}{% if preview %} news-image-preview{% endif %}">
+    <img src="{{ image.url }}" alt="{{ image.alt }}" loading="{% if preview and forloop.first %}eager{% else %}lazy{% endif %}" decoding="async">
+  </div>
+{% endif %}

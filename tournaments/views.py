@@ -148,7 +148,15 @@ def tournament_detail(request, slug):
             models.Q(event=tournament.event) | models.Q(event__isnull=True)
         ).select_related('captain').first()
 
-    registrations = tournament.registrations.select_related('team', 'team__captain').all()
+    registrations = tournament.registrations.select_related('team', 'team__captain').annotate(
+        roster_count=models.Count('team__memberships', filter=models.Q(
+            team__memberships__status=TeamMember.Status.ACCEPTED), distinct=True),
+    )
+    roster_warnings = [{'team': reg.team, 'count': reg.roster_count,
+                       'start_allowed': tournament.roster_size_allowed(reg.roster_count, for_start=True)}
+                      for reg in registrations if not reg.is_forfeited and reg.roster_count != tournament.game.team_size]
+    user_roster_notice = next((row for row in roster_warnings if user_team and row['team'].pk == user_team.pk), None)
+    user_roster_count = next((reg.roster_count for reg in registrations if user_team and reg.team_id == user_team.pk), None)
     matches = tournament.matches.select_related('team1', 'team2', 'winner', 'loser', 'tournament',
         'next_match_winner', 'next_match_winner__next_match_winner').order_by('bracket_type', 'round_number', 'match_number')
 
@@ -156,6 +164,7 @@ def tournament_detail(request, slug):
     tournament_is_full = bool(tournament.max_teams and registrations.count() >= tournament.max_teams)
     registration_not_started_yet = bool(tournament.registration_start and now < tournament.registration_start)
     registration_ended = bool(tournament.registration_end and now > tournament.registration_end)
+    event_closed = tournament.event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED)
 
     # Vorschau-Daten generieren: Exklusiv für Turnier-Admins / Staff vor Bracket-Generierung (Variante B)
     preview_data = None
@@ -218,15 +227,16 @@ def tournament_detail(request, slug):
     checked_in_ids = set(EventRegistration.objects.filter(
         event=tournament.event,
         user_id__in=[m['user_id'] for m in memberships], is_checked_in=True,
-    ).values_list('user_id', flat=True)) if memberships else set()
+    ).exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED).values_list('user_id', flat=True)) if memberships else set()
     team_readiness = []
     for team in readiness_teams:
         ids = [m['user_id'] for m in memberships if m['team_id'] == team.id]
         team_readiness.append({
             'team': team, 'count': len(ids),
             'checked_in': sum(uid in checked_in_ids for uid in ids),
-            'size_ok': len(ids) == tournament.game.team_size,
-            'ready': len(ids) == tournament.game.team_size and (is_admin or all(uid in checked_in_ids for uid in ids)),
+            'size_ok': tournament.roster_size_allowed(len(ids)),
+            'full': len(ids) == tournament.game.team_size,
+            'ready': tournament.roster_size_allowed(len(ids)) and (is_admin or all(uid in checked_in_ids for uid in ids)),
         })
 
     match_list = list(matches)
@@ -290,6 +300,9 @@ def tournament_detail(request, slug):
             and m.round_number == swiss_current_round.number and user_team.pk in (m.team1_id, m.team2_id)), None),
         'next_match': next_match,
         'team_readiness': team_readiness,
+        'roster_warnings': roster_warnings,
+        'user_roster_notice': user_roster_notice,
+        'user_roster_count': user_roster_count,
         'team_registration_ready': any(row['ready'] for row in team_readiness),
         'match_list_cards': sorted(match_list, key=lambda m: (
             {TournamentMatch.Status.IN_PROGRESS: 0, TournamentMatch.Status.READY: 1,
@@ -303,12 +316,14 @@ def tournament_detail(request, slug):
         )),
         'score_matches': score_matches,
         'tournament': tournament,
-        'restart_source': Tournament.objects.visible_to(request.user).filter(pk=tournament.restarted_from_id).first()
-            if tournament.restarted_from_id else None,
         'restart_editions': tournament.restart_editions.visible_to(request.user).order_by('created_at'),
         'user_checkin': user_checkin,
         'has_event_ticket': has_event_ticket,
         'is_admin': is_admin,
+        'can_close_registration': is_admin and not tournament.is_generated and not event_closed
+            and tournament.status == Tournament.Status.REGISTRATION_OPEN,
+        'can_generate_bracket': is_admin and not tournament.is_generated and not event_closed
+            and tournament.status in (Tournament.Status.REGISTRATION_OPEN, Tournament.Status.REGISTRATION_CLOSED),
         'can_view_drafts': Tournament.can_view_drafts(request.user),
         'results_locked': tournament.status in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED)
             or tournament.event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED),
@@ -337,6 +352,21 @@ def tournament_detail(request, slug):
         'ffa_participants': ffa_participants,
     }
     return render(request, 'tournaments/tournament_detail.html', context)
+
+
+@login_required
+@require_POST
+def tournament_close_registration(request, slug):
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug)
+    if not tournament.is_managed_by(request.user):
+        return HttpResponseForbidden(get_translation('msg_tournament_close_permission'))
+    try:
+        TournamentLifecycleService.close_registration(tournament.pk, actor=request.user)
+        messages.success(request, get_translation('msg_tournament_close_success',
+            tournament_title=tournament.title))
+    except TournamentError as exc:
+        messages.error(request, str(exc))
+    return redirect('tournament_detail', slug=slug)
 
 
 @login_required
@@ -384,6 +414,9 @@ def tournament_register(request, slug):
                     tournament_title=tournament.title,
                 ),
             )
+            count = reg.team.get_accepted_members().count()
+            if count < tournament.game.team_size and tournament.roster_rule == Tournament.RosterRule.BY_START:
+                messages.info(request, get_translation('roster_provisional'))
         else:
             messages.info(
                 request,

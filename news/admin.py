@@ -11,6 +11,12 @@ class NewsArticleAdmin(admin.ModelAdmin):
     list_filter = ("is_published", "is_pinned", "created_at")
     search_fields = ("title", "content")
     readonly_fields = ("author", "created_at", "updated_at")
+    fieldsets = (
+        (None, {"fields": ("title", "content")}),
+        ("Titelbild", {"fields": ("cover_image", "cover_image_alt", "image_fit")}),
+        ("Veröffentlichung", {"fields": ("is_published", "is_pinned")}),
+        ("Beitragsinformationen", {"fields": ("author", "created_at", "updated_at")}),
+    )
     formfield_overrides = {
         models.TextField: {
             "widget": AdminTinyMCE(mce_attrs={

@@ -1,0 +1,10 @@
+<div class="ux-roster-status">
+  {% if count == size %}
+    <span class="ux-roster-badge" data-roster="full">{% t "roster_status_full" %}</span>
+  {% elif count > 0 and count < size %}
+    <span class="ux-roster-badge" data-roster="incomplete">{% t "roster_status_incomplete" %}</span>
+  {% else %}
+    <span class="ux-roster-badge" data-roster="invalid">{% t "roster_status_invalid" %}</span>
+  {% endif %}
+  <span>{% t "roster_count" count=count size=size %}</span>
+</div>

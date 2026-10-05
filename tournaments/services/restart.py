@@ -17,7 +17,7 @@ from .validation import identifier
 TOKEN_SALT = 'tournaments.restart.v1'
 COPY_FIELDS = ('event_id', 'game_id', 'description', 'mode', 'max_teams', 'swiss_rounds',
     'swiss_allow_draws', 'play_third_place', 'group_qualifiers_per_group', 'standings_tiebreak',
-    'tournament_admin_id', 'tournament_support_id')
+    'tournament_admin_id', 'tournament_support_id', 'roster_rule')
 CANCELLABLE = (Tournament.Status.DRAFT, Tournament.Status.REGISTRATION_OPEN,
                Tournament.Status.REGISTRATION_CLOSED, Tournament.Status.IN_PROGRESS)
 

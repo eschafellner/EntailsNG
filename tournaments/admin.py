@@ -73,7 +73,7 @@ class TournamentAdmin(admin.ModelAdmin):
         'title', 'event', 'game', 'mode', 'status',
         'registered_count', 'max_teams', 'is_generated', 'registration_start', 'registration_end', 'tournament_start'
     )
-    list_filter = ('event', 'mode', 'status', 'is_generated')
+    list_filter = ('event', 'mode', 'status', 'is_generated', 'roster_rule')
     search_fields = ('title', 'description', 'game__name')
     prepopulated_fields = {'slug': ('title',)}
     raw_id_fields = ('tournament_admin', 'tournament_support')
@@ -89,7 +89,7 @@ class TournamentAdmin(admin.ModelAdmin):
                    'restart_cancelled_source', 'restart_team_snapshot', 'restart_history', 'created_at')
         if obj and obj.is_generated:
             return ('mode', 'event', 'game', 'swiss_rounds', 'swiss_allow_draws', 'is_generated',
-                    'play_third_place', 'group_qualifiers_per_group', 'standings_tiebreak') + history
+                    'play_third_place', 'group_qualifiers_per_group', 'standings_tiebreak', 'roster_rule') + history
         return history
 
     def has_restart_permission(self, request, obj):
@@ -160,7 +160,10 @@ class TournamentAdmin(admin.ModelAdmin):
     registered_count.admin_order_field = 'reg_count'
 
     def formfield_for_choice_field(self, db_field, request, **kwargs):
-        if db_field.name == 'mode':
+        if db_field.name == 'roster_rule':
+            kwargs['choices'] = [(rule, Tournament(roster_rule=rule).get_roster_rule_display())
+                                 for rule in Tournament.RosterRule.values]
+        elif db_field.name == 'mode':
             from configuration.translations import get_translation
             kwargs['choices'] = [
                 (val, get_translation(key, default))
