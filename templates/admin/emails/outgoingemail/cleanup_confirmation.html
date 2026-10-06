@@ -1,0 +1,39 @@
+{% extends "admin/base_site.html" %}
+{% load admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Start</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural }}</a>
+  &rsaquo; Aufräumen
+</div>
+{% endblock %}
+
+{% block content %}
+  <p><strong>{{ count }} E-Mail-Einträge</strong> wurden vor dem {{ cutoff|date:"d.m.Y H:i:s T" }} erstellt und werden endgültig gelöscht.</p>
+  <p>Die Aktion gilt für alle passenden Einträge, unabhängig von deiner Auswahl, Suche oder den Listenfiltern.</p>
+  <p>Auch ausstehende und fehlgeschlagene E-Mails werden gelöscht. Sie stehen danach nicht mehr für den Versand oder einen erneuten Versand zur Verfügung. Bereits zugestellte Nachrichten in den Postfächern bleiben erhalten.</p>
+  <p>Gerade versendete oder während der Löschung gesperrte Einträge bleiben erhalten.{% if processing_count %} Aktuell werden {{ processing_count }} ältere E-Mail(s) versendet.{% endif %}</p>
+  <h2>Vorschau{% if count > 50 %} (die ersten 50 Einträge){% endif %}</h2>
+  <div class="results">
+    <table>
+      <thead><tr><th>Erstellt am</th><th>Empfänger</th><th>Betreff</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for email in preview %}
+        <tr><td>{{ email.created_at|date:"d.m.Y H:i" }}</td><td>{{ email.recipient_email }}</td><td>{{ email.subject }}</td><td>{{ email.get_status_display }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="{{ action }}">
+    <input type="hidden" name="cleanup_token" value="{{ cleanup_token }}">
+    <input type="hidden" name="confirm_cleanup" value="yes">
+    <div class="submit-row">
+      <input type="submit" value="{{ count }} E-Mail-Einträge endgültig löschen">
+      <a class="button" href="{{ cancel_url }}">Abbrechen</a>
+    </div>
+  </form>
+{% endblock %}

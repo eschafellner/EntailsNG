@@ -1,10 +1,18 @@
+from datetime import datetime, timedelta
+
 from django import forms
 from django.contrib import admin, messages
+from django.core import signing
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.shortcuts import redirect, render
+from django.template.response import TemplateResponse
 from django.urls import path, reverse
+from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from django.views.decorators.csrf import csrf_protect
 
 from .dns_checker import check_domain_dns_health
 from .models import EmailTemplate, GeneralEmailSettings, OutgoingEmail
@@ -330,7 +338,100 @@ class OutgoingEmailAdmin(admin.ModelAdmin):
         'last_error', 'body_text', 'body_html', 'scheduled_at',
         'expires_at', 'worker_id', 'lease_expires_at'
     )
-    actions = [retry_outgoing_emails, process_outgoing_emails_now]
+    cleanup_actions = {
+        'delete_older_than_30_days': 30,
+        'delete_older_than_90_days': 90,
+        'delete_older_than_180_days': 180,
+        'delete_older_than_365_days': 365,
+    }
+    actions = [retry_outgoing_emails, process_outgoing_emails_now, *cleanup_actions]
+
+    @method_decorator(csrf_protect)
+    def changelist_view(self, request, extra_context=None):
+        # These global actions intentionally work without selected rows. Other
+        # actions keep Django's normal selection and confirmation behaviour.
+        if request.method == 'POST' and '_save' not in request.POST:
+            try:
+                index = int(request.POST.get('index', 0))
+                action = request.POST.getlist('action')[index] if index >= 0 else None
+            except (ValueError, IndexError):
+                action = None
+            if action in self.cleanup_actions:
+                if not self.has_view_or_change_permission(request) or not self.has_delete_permission(request):
+                    raise PermissionDenied
+                return self._cleanup_old_emails(request, action)
+        return super().changelist_view(request, extra_context)
+
+    @admin.action(description="Alle Emails älter als 30 Tage löschen", permissions=['delete'])
+    def delete_older_than_30_days(self, request, queryset):
+        return self._cleanup_old_emails(request, 'delete_older_than_30_days')
+
+    @admin.action(description="Alle Emails älter als 90 Tage löschen", permissions=['delete'])
+    def delete_older_than_90_days(self, request, queryset):
+        return self._cleanup_old_emails(request, 'delete_older_than_90_days')
+
+    @admin.action(description="Alle Emails älter als 180 Tage löschen", permissions=['delete'])
+    def delete_older_than_180_days(self, request, queryset):
+        return self._cleanup_old_emails(request, 'delete_older_than_180_days')
+
+    @admin.action(description="Alle Emails älter als 365 Tage löschen", permissions=['delete'])
+    def delete_older_than_365_days(self, request, queryset):
+        return self._cleanup_old_emails(request, 'delete_older_than_365_days')
+
+    def _cleanup_old_emails(self, request, action):
+        if not self.has_delete_permission(request):
+            raise PermissionDenied
+        days = self.cleanup_actions[action]
+        cutoff = timezone.now() - timedelta(days=days)
+        token = signing.dumps({
+            'cutoff': cutoff.isoformat(), 'days': days, 'user': request.user.pk,
+        }, salt='emails.admin.cleanup')
+        if request.POST.get('confirm_cleanup') == 'yes':
+            try:
+                data = signing.loads(
+                    request.POST.get('cleanup_token', ''),
+                    salt='emails.admin.cleanup', max_age=3600,
+                )
+                if data['days'] != days or data['user'] != request.user.pk:
+                    raise signing.BadSignature
+                cutoff = datetime.fromisoformat(data['cutoff'])
+            except (signing.BadSignature, KeyError, ValueError, TypeError):
+                self.message_user(request, "Die Löschbestätigung ist ungültig oder abgelaufen. Bitte starte die Aktion erneut.", messages.ERROR)
+                return redirect(request.get_full_path())
+
+        old_emails = self.get_queryset(request).filter(created_at__lt=cutoff)
+        deletable = old_emails.exclude(status=OutgoingEmail.Status.PROCESSING)
+        if request.POST.get('confirm_cleanup') == 'yes':
+            with transaction.atomic():
+                # The worker claims rows under the same lock. Skip any it holds
+                # and never delete records for a send already in progress.
+                objects = list(deletable.select_for_update(skip_locked=True))
+                count = len(objects)
+                if count:
+                    self.log_deletions(request, objects)
+                    self.delete_queryset(request, self.get_queryset(request).filter(pk__in=[obj.pk for obj in objects]))
+            self.message_user(request, f"{count} E-Mail(s) älter als {days} Tage wurden gelöscht.", messages.SUCCESS)
+            return redirect(request.get_full_path())
+
+        count = deletable.count()
+        if not count:
+            self.message_user(request, f"Keine löschbaren E-Mails älter als {days} Tage vorhanden. Gerade versendete E-Mails bleiben erhalten.", messages.INFO)
+            return redirect(request.get_full_path())
+
+        request.current_app = self.admin_site.name
+        return TemplateResponse(request, 'admin/emails/outgoingemail/cleanup_confirmation.html', {
+            **self.admin_site.each_context(request),
+            'title': f"Alle Emails älter als {days} Tage löschen",
+            'opts': self.model._meta,
+            'days': days,
+            'cutoff': cutoff,
+            'count': count,
+            'processing_count': old_emails.filter(status=OutgoingEmail.Status.PROCESSING).count(),
+            'preview': deletable.order_by('created_at', 'pk')[:50],
+            'action': action,
+            'cleanup_token': token,
+            'cancel_url': request.get_full_path(),
+        })
 
     fieldsets = (
         ('Status & Metadaten', {

@@ -1,7 +1,14 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from .models import EventInfo
+from .models import EmbedProvider, EventInfo
+
+
+@admin.register(EmbedProvider)
+class EmbedProviderAdmin(admin.ModelAdmin):
+    list_display = ('name', 'origin', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'origin')
 
 
 @admin.register(EventInfo)
@@ -10,6 +17,7 @@ class EventInfoAdmin(admin.ModelAdmin):
         'order',
         'title',
         'slug',
+        'page_type',
         'show_in_nav_badge',
         'login_required_badge',
         'is_active',
@@ -18,7 +26,7 @@ class EventInfoAdmin(admin.ModelAdmin):
     )
     list_display_links = ('title', 'slug')
     list_editable = ('order', 'is_active')
-    list_filter = ('is_active', 'show_in_nav', 'login_required')
+    list_filter = ('page_type', 'is_active', 'show_in_nav', 'login_required')
     search_fields = ('title', 'subtitle', 'slug', 'content')
     prepopulated_fields = {'slug': ('title',)}
     readonly_fields = ('created_at', 'updated_at', 'nav_item_display')
@@ -29,8 +37,18 @@ class EventInfoAdmin(admin.ModelAdmin):
                 'title',
                 'subtitle',
                 'slug',
+                'page_type',
                 'content',
             )
+        }),
+        ('Externe Einbettung', {
+            'classes': ('info-embed-fields',),
+            'fields': ('embed_provider', 'embed_url', 'embed_profile', 'embed_height', 'embed_wide'),
+            'description': (
+                'Für den Seitentyp „Externe Einbettung“. Der Inhalt dient dann als optionaler '
+                'Einführungstext. Die externe Seite muss Einbettungen durch Entails-NG erlauben. '
+                'Der Login-Schutz dieser Seite schützt nicht die Adresse beim externen Anbieter.'
+            ),
         }),
         ('Navigation & Menü', {
             'fields': (
@@ -59,6 +77,9 @@ class EventInfoAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
+
+    class Media:
+        js = ('js/admin-info-embed.js',)
 
     @admin.display(description="Im Menü?")
     def show_in_nav_badge(self, obj):

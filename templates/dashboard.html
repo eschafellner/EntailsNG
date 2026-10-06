@@ -213,7 +213,8 @@
                   {% if article.is_pinned %}<span class="news-pinned">{% t "dash_news_pinned" %}</span>{% endif %}
                 </div>
                 <h4 id="news-title-{{ article.pk }}"><a href="{% url 'news_detail' article.pk %}">{{ article.title }}</a></h4>
-                <p class="news-excerpt">{{ article.preview_text|truncatechars:180 }}</p>
+                <p class="news-excerpt news-excerpt-mobile">{{ article.preview_text|truncatechars:180 }}</p>
+                <p class="news-excerpt news-excerpt-desktop">{{ article.preview_text|truncatechars:800 }}</p>
                 <a class="news-read-more" href="{% url 'news_detail' article.pk %}">{% t "dash_news_read_more" %}</a>
               </div>
             </article>

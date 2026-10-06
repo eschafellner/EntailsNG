@@ -3,7 +3,7 @@
 {% block title %}{{ event_info.title|default:"Veranstaltungsinformationen" }} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
 {% block content %}
-<div style="max-width: 900px; margin: 0 auto;">
+<div style="{% if not event_info.is_embed or not event_info.embed_wide %}max-width: 900px;{% endif %} margin: 0 auto; min-width: 0;">
 
   {% if all_pages and all_pages|length > 1 %}
     <nav class="info-tabs-nav" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 16px; scrollbar-width: thin;" aria-label="Informationsseiten">
@@ -45,10 +45,34 @@
       <div class="event-content" style="line-height: 1.7; color: var(--ink);">
         {% if event_info.content %}
           {{ event_info.content|safe }}
-        {% else %}
+        {% elif not event_info.is_embed %}
           <p style="color: var(--muted);">{% t "info_empty" "Zu diesem Thema wurden noch keine Informationen hinterlegt." %}</p>
         {% endif %}
       </div>
+      {% if event_info.is_embed %}
+        {% if embed_available %}
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0;">
+            <a href="{{ event_info.embed_url }}" target="_blank" rel="noopener noreferrer" class="btn-action-primary">
+              {% t "info_embed_open" "Externe Seite separat öffnen" %}
+            </a>
+            <span style="color: var(--muted); overflow-wrap: anywhere;">{{ event_info.embed_provider.name }}</span>
+          </div>
+          <iframe src="{{ event_info.embed_url }}"
+                  title="{{ event_info.title }}"
+                  sandbox="{{ event_info.embed_sandbox }}"
+                  {% if event_info.embed_profile == 'GALLERY' %}allow="fullscreen"{% endif %}
+                  referrerpolicy="no-referrer"
+                  style="display: block; width: 100%; height: {{ event_info.embed_height }}px; border: 1px solid var(--line); border-radius: 8px; background: var(--card-bg);">
+          </iframe>
+          <p style="color: var(--muted); font-size: 13px; margin-top: 12px;">
+            {% t "info_embed_help" "Falls die externe Seite nicht angezeigt wird, kannst du sie über den Link separat öffnen." %}
+          </p>
+        {% else %}
+          <p role="status" style="color: var(--muted); margin-top: 16px;">
+            {% t "info_embed_unavailable" "Diese externe Einbettung ist derzeit nicht freigegeben. Bitte wende dich an die Organisation." %}
+          </p>
+        {% endif %}
+      {% endif %}
     {% else %}
       <h1>{% t "info_title" "Veranstaltungsinformationen" %}</h1>
       <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">

@@ -756,6 +756,19 @@ DEFAULT_TEXTS = {
 
     # Info Modul
     'info_title': 'Event Information',
+    'info_embed_open': 'Externe Seite separat öffnen',
+    'info_embed_help': 'Falls die externe Seite nicht angezeigt wird, kannst du sie über den Link separat öffnen.',
+    'info_embed_unavailable': 'Diese externe Einbettung ist derzeit nicht freigegeben. Bitte wende dich an die Organisation.',
+    'info_embed_invalid_url': 'Bitte eine gültige HTTPS-Adresse ohne Leerzeichen angeben.',
+    'info_embed_url_credentials': 'Zugangsdaten dürfen nicht in der Adresse enthalten sein.',
+    'info_embed_url_port': 'Die Adresse enthält einen ungültigen Port.',
+    'info_embed_invalid_origin': 'Bitte nur die HTTPS-Origin ohne Pfad, abschließenden Schrägstrich oder Parameter angeben (z. B. https://galerie.example.com).',
+    'info_embed_provider_required': 'Bitte einen freigegebenen Anbieter auswählen.',
+    'info_embed_provider_disabled': 'Dieser Einbettungsanbieter ist deaktiviert.',
+    'info_embed_url_mismatch': 'Die Adresse muss zur freigegebenen Anbieter-Origin gehören.',
+    'info_embed_invalid_profile': 'Bitte ein gültiges Einbettungsprofil auswählen.',
+    'info_embed_invalid_height': 'Bitte eine ganze Zahl zwischen 320 und 2000 als Rahmenhöhe angeben.',
+    'info_text_content_required': 'Bitte einen Inhalt für die Textseite angeben.',
     'info_empty': 'Für dieses Event wurden noch keine Detail-Informationen hinterlegt.',
 
     # Sponsoren Modul

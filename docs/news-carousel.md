@@ -35,6 +35,28 @@ enthält weiterhin sämtliche veröffentlichten Beiträge.
 oder unbekannte Beiträge liefern 404, auch für Mitarbeiter. Das Admin-Formular
 bleibt der Ort zur Bearbeitung von Entwürfen.
 
+## Desktopdarstellung (6. Oktober 2026)
+
+Ab 901 Pixeln füllt das Karussell die verbleibende Höhe zwischen Kopfzeile und
+Steuerung aus. Die News-Karten wachsen dadurch mit der benachbarten
+Veranstaltungskarte; „Weiterlesen“ bleibt unten innerhalb der Karte. Auf Desktop
+stehen bis zu 800 Zeichen Vorschautext in 16-Pixel-Schrift zur Verfügung,
+begrenzt auf zwölf Zeilen und 70 Zeichen Textbreite (`70ch`). Die Vorschau ist
+weiterhin reiner, HTML-escaped Text. Der vollständige Beitrag bleibt über
+„Weiterlesen“ zugänglich.
+
+Bis einschließlich 900 Pixeln gelten weiterhin die bisherige Höhe,
+14-Pixel-Schrift und 180 Zeichen Vorschautext. Nur die zur Bildschirmgröße
+passende Vorschau ist sichtbar und im Accessibility-Baum enthalten.
+
+44 Django-Tests für News, Dashboard und Frontendsicherheit sowie neun
+JavaScript-Tests erfolgreich. Visuell mit getrennten PostgreSQL-Testdaten
+geprüft: langer/kurzer Text, Titelbild, ein/mehrere Beiträge, 1440- und
+901-Pixel-Desktop sowie 390-Pixel-Mobilansicht. Im mobilen Vorher-/Nachher-Vergleich
+sind Rahmen- und Kartenhöhen identisch; es gibt keinen horizontalen Überlauf.
+Keine Migration und keine neuen Übersetzungen erforderlich; nach dem Update
+`python manage.py collectstatic --noinput` ausführen und Webprozesse neu starten.
+
 ## Titelbilder im Admin
 
 News-Beiträge haben drei zusätzliche Felder:

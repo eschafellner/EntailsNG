@@ -22,6 +22,7 @@
 .news-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
 .news-pinned { display: inline-block; color: var(--ink); background: var(--panel); border: 1px solid var(--signal); padding: 3px 7px; border-radius: 4px; font-size: 11px; }
 .news-excerpt { font-size: 14px; color: var(--muted); line-height: 1.6; margin: 0; overflow-wrap: anywhere; }
+.news-excerpt-desktop { display: none; }
 .news-read-more { margin-top: auto; padding-top: 8px; color: var(--signal-deep); font-weight: 700; font-size: 13px; }
 .news-image { background: var(--panel); overflow: hidden; border-radius: 8px; }
 .news-image img { display: block; width: 100%; height: auto; }
@@ -52,6 +53,19 @@
 .news-detail > .news-image, .news-list-article > .news-image { max-width: 800px; width: 100%; }
 .news-content { font-size: 15px; line-height: 1.7; }
 [data-news-controls][hidden], [data-news-rotation][hidden] { display: none; }
+@media (min-width: 901px) {
+  /* Fill the height shared with the event card, keeping controls below the slide. */
+  .news-widget { min-width: 0; }
+  .news-widget-header, .news-controls { flex-shrink: 0; }
+  .news-track { flex: 1; min-height: 0; }
+  .news-controls { margin-top: 0; }
+  .news-slide-body > * { flex-shrink: 0; }
+  .news-excerpt-mobile { display: none; }
+  .news-excerpt-desktop {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 12;
+    overflow: hidden; max-width: 70ch; max-height: 19.2em; font-size: 16px;
+  }
+}
 @media (max-width: 900px) {
   .news-slide { flex-basis: 92%; grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .news-slide-text { grid-template-rows: 1fr; }
