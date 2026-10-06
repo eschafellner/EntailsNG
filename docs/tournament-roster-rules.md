@@ -1,5 +1,7 @@
 # Teamgrößenregel pro Turnier
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Stand: 5. Oktober 2026.
 
 Im Django-Admin unter **Turniere → gewünschtes Turnier → Regel zur Teamgröße**
@@ -77,7 +79,7 @@ ein Deployment wurde nicht ausgeführt.
 ## Prüfung
 
 ```sh
-DB_ENGINE=sqlite python manage.py test tournaments --noinput
+python manage.py test tournaments --noinput
 ```
 
 325 Tests: 303 erfolgreich, 22 PostgreSQL-Parallelfälle auf SQLite übersprungen.

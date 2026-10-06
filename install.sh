@@ -70,12 +70,12 @@ echo -e "${YELLOW}[4/5] Richte Datenbank-Struktur ein...${NC}"
 
 # Automatische Erkennung ob PostgreSQL erreichbar ist
 PG_RUNNING=false
-if python3 -c "import socket; s = socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 5432)); s.close()" 2>/dev/null; then
+if python3 scripts/wait_for_postgres.py --timeout 0 2>/dev/null; then
     PG_RUNNING=true
 fi
 
 # Falls PostgreSQL nicht läuft, versuche Container über Podman/Docker zu starten
-if [ "$PG_RUNNING" = false ] && [ "${DB_ENGINE:-postgresql}" != "sqlite" ]; then
+if [ "$PG_RUNNING" = false ]; then
     if command -v podman-compose &> /dev/null || command -v podman &> /dev/null; then
         echo -e "${YELLOW}   Starte lokale PostgreSQL & Redis über Podman...${NC}"
         systemctl --user enable --now podman.socket 2>/dev/null || true
@@ -88,13 +88,8 @@ if [ "$PG_RUNNING" = false ] && [ "${DB_ENGINE:-postgresql}" != "sqlite" ]; then
     fi
 fi
 
-if python3 -c "import socket; s = socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 5432)); s.close()" 2>/dev/null; then
-    export DB_ENGINE=postgresql
-    echo -e "${GREEN}✓ PostgreSQL Datenbank auf Port 5432 erkannt.${NC}"
-else
-    export DB_ENGINE=sqlite
-    echo -e "${YELLOW}ℹ️ PostgreSQL nicht auf Port 5432 erreichbar. Nutze SQLite Entwicklungs-Fallback.${NC}"
-fi
+# PostgreSQL ist erforderlich; bei Verbindungsfehlern den Start abbrechen.
+python3 scripts/wait_for_postgres.py --timeout 30
 
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput --quiet 2>/dev/null || python manage.py collectstatic --noinput

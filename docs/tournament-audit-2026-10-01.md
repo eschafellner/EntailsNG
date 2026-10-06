@@ -1,5 +1,7 @@
 # Prüfung des Turniermoduls – 1. Oktober 2026
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Geprüft wurden Anmeldung, Teamverwaltung, alle sechs Formate, Ergebnisdienste,
 Aufgaben, Berechtigungen, Adminformulare, Frontend und Urkundendaten. Die unten
 aufgeführten Fehler sind korrigiert und durch Regressionstests abgesichert.

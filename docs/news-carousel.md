@@ -1,5 +1,7 @@
 # News-Karussell und Titelbilder
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Stand: 5. Oktober 2026.
 
 ## Darstellung und Bedienung
@@ -74,9 +76,9 @@ ihre Inhalte und Veröffentlichungszustände werden nicht verändert.
 ## Prüfungen
 
 ```bash
-DB_ENGINE=sqlite python manage.py test news events.tests.EventDashboardTests configuration.tests_frontend_security --noinput
+python manage.py test news events.tests.EventDashboardTests configuration.tests_frontend_security --noinput
 node scripts/tests/news-carousel.test.cjs
-DB_ENGINE=sqlite python manage.py makemigrations news --check --dry-run
+python manage.py makemigrations news --check --dry-run
 ```
 
 44 Django-Tests und neun JavaScript-Tests erfolgreich. Abgedeckt sind Upload,

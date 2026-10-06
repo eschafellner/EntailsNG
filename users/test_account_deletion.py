@@ -379,7 +379,7 @@ class AccountDeletionTests(TestCase):
 @skipUnlessDBFeature('has_select_for_update')
 @override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
 class AccountDeletionConcurrencyTests(TransactionTestCase):
-    """Separate PostgreSQL-Verbindungen; SQLite kann diese Sperren nicht prüfen."""
+    """Prüft Zeilensperren mit getrennten PostgreSQL-Verbindungen."""
 
     def setUp(self):
         cache.clear()

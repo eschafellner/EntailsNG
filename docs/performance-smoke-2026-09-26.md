@@ -39,7 +39,7 @@ und lässt andere Datenbanken unberührt, legt aber bei jedem Lauf neue Testdate
 in der Perf-Datenbank an. Beispiel:
 
 ```sh
-ENTAILS_PERF_TEST=1 REDIS_URL= DB_ENGINE=postgresql DB_NAME=entails_perf_db \
+ENTAILS_PERF_TEST=1 REDIS_URL= DB_NAME=entails_perf_db \
 DB_USER=entails_test DB_HOST=/tmp DB_PORT=55432 DEBUG=True \
 .venv/bin/python scripts/performance_smoke.py --label nachher
 ```

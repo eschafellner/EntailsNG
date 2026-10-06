@@ -360,7 +360,7 @@ class KnowledgeTests(TestCase):
         restore_revision(actor=self.staff, page_id=page.pk, revision_id=revision.pk, expected_version=page.version)
         response = self.client.get(attachment.get_absolute_url())
         self.assertEqual(response.status_code, 200)
-        response.close()
+        self.assertEqual(b''.join(response.streaming_content), b'%PDF-1.4 test')
 
     def test_missing_attachment_is_404(self):
         attachment = self.upload()

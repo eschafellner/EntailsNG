@@ -1,5 +1,7 @@
 # Einzelprüfung der sechs Turniermodi – 1. Oktober 2026
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 > **Historischer Prüfstand vor den Verbesserungen.** Die anschließend
 > beauftragten Korrekturen und Erweiterungen sind umgesetzt; aktuelle Regeln,
 > Installation und erfolgreiche Regressionen stehen im
@@ -240,7 +242,6 @@ dem Lauf entfernten Testdatenbank. Die App-Datenbank wurde nicht migriert oder
 mit Turnierdaten befüllt.
 
 ```powershell
-$env:DB_ENGINE = 'sqlite'
 $env:DEBUG = 'True'
 $env:SECRET_KEY = 'local-mode-review-test-key'
 $env:ALLOWED_HOSTS = 'localhost,127.0.0.1,testserver'

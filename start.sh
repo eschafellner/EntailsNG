@@ -20,7 +20,7 @@ fi
 source .venv/bin/activate
 
 # Prüfen ob Abhängigkeiten vollständig sind (z. B. nach git pull)
-if ! python3 -c "import whitenoise, qrcode, cryptography" 2>/dev/null; then
+if ! python3 -c "import whitenoise, qrcode, cryptography, psycopg" 2>/dev/null; then
     echo -e "${YELLOW}📦 Aktualisiere Python-Pakete aus requirements.txt...${NC}"
     pip install -r requirements.txt --quiet 2>/dev/null || python3 -m pip install -r requirements.txt --quiet
 fi
@@ -32,14 +32,14 @@ if [ -f ".env" ]; then
     set +a
 fi
 
-# Prüfe, ob PostgreSQL auf 127.0.0.1:5432 erreichbar ist
+# Prüfe die konfigurierte PostgreSQL-Verbindung
 PG_RUNNING=false
-if python3 -c "import socket; s = socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 5432)); s.close()" 2>/dev/null; then
+if python3 scripts/wait_for_postgres.py --timeout 0 2>/dev/null; then
     PG_RUNNING=true
 fi
 
 # Falls PostgreSQL nicht erreichbar ist, prüfe ob Podman oder Docker Compose gestartet werden kann
-if [ "$PG_RUNNING" = false ] && [ "${DB_ENGINE:-postgresql}" != "sqlite" ]; then
+if [ "$PG_RUNNING" = false ]; then
     if command -v podman-compose &> /dev/null || command -v podman &> /dev/null; then
         echo -e "${YELLOW}🐘 PostgreSQL läuft nicht. Starte DB & Redis über Podman...${NC}"
         systemctl --user enable --now podman.socket 2>/dev/null || true
@@ -52,14 +52,8 @@ if [ "$PG_RUNNING" = false ] && [ "${DB_ENGINE:-postgresql}" != "sqlite" ]; then
     fi
 fi
 
-# Automatische Erkennung der PostgreSQL Datenbank
-if [ -z "$DB_ENGINE" ]; then
-    if python3 -c "import socket; s = socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 5432)); s.close()" 2>/dev/null; then
-        export DB_ENGINE=postgresql
-    else
-        export DB_ENGINE=sqlite
-    fi
-fi
+# PostgreSQL ist erforderlich; bei Verbindungsfehlern den Start abbrechen.
+python3 scripts/wait_for_postgres.py --timeout 30
 
 echo -e "${BLUE}=====================================================${NC}"
 echo -e "${GREEN} 🚀 EntailsNG Server wird gestartet...               ${NC}"

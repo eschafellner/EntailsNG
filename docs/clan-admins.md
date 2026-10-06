@@ -1,5 +1,7 @@
 # Clan-Admins verwalten
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Stand: 3. Oktober 2026.
 
 Ein Clan kann beliebig viele gleichberechtigte Admins haben. Im Clanprofil zeigt
@@ -59,7 +61,6 @@ weiterhin Werkzeuge der Betreiber und müssen konsistente Clanrollen erhalten.
 SQLite-Regression mit deaktivierter HTTPS-Umleitung für den lokalen Testclient:
 
 ```powershell
-$env:DB_ENGINE = 'sqlite'
 $env:SECURE_SSL_REDIRECT = 'False'
 python manage.py test clans users.test_account_deletion tournaments.test_recruitment --noinput
 ```

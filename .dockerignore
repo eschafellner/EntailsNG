@@ -5,7 +5,6 @@ __pycache__
 .env
 .env.local
 .env.production
-*.sqlite3
 *.log
 media
 private_media

@@ -1,6 +1,6 @@
 """Reproduzierbarer Lasttest auf einer ausdrücklich freigegebenen Wegwerf-Datenbank.
 
-Aufruf: ENTAILS_PERF_TEST=1 DB_ENGINE=postgresql DB_NAME=entails_perf_db \
+Aufruf: ENTAILS_PERF_TEST=1 DB_NAME=entails_perf_db \
     .venv/bin/python scripts/performance_smoke.py --label baseline
 
 Erzeugt je Größe eine neue Veranstaltung mit Testkonten. Diese Datenbank darf

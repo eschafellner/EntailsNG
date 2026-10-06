@@ -253,15 +253,20 @@ class FormatImprovementsTests(TestCase):
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
 
     def blocked_swiss(self):
-        import random
         tournament = self.make(Tournament.Mode.SWISS, 6, swiss_rounds=4)
-        rng = random.Random(0)
-        with patch('tournaments.services.swiss.secrets.randbits', return_value=0):
-            for number in range(1, 4):
+        # All cross-group opponents have met after three rounds. The remaining
+        # opponents form two odd triangles, so round four requires a repeat.
+        # Explicit history keeps the fixture independent of database sequence IDs.
+        rounds = (((0, 3), (1, 4), (2, 5)),
+                  ((0, 4), (1, 5), (2, 3)),
+                  ((0, 5), (1, 3), (2, 4)))
+        with patch.object(SwissPairingService, 'pair') as pairing:
+            for number, pairs in enumerate(rounds, 1):
+                pairing.return_value = [(self.teams[a].pk, self.teams[b].pk) for a, b in pairs]
                 plan = SwissTournamentService.preview(tournament.pk, actor=self.staff)
                 SwissTournamentService.publish(tournament.pk, actor=self.staff, token=plan['token'])
                 for match in tournament.matches.filter(round_number=number).order_by('match_number'):
-                    self.play(match, bool(rng.randrange(2)))
+                    self.play(match)
         return tournament
 
     def test_swiss_exception_requires_separate_approval_and_finishes(self):

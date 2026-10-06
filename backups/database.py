@@ -4,9 +4,7 @@ import logging
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
-import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -88,91 +86,6 @@ def post_restore_cleanup(connection):
         connection.commit()
     finally:
         cursor.close()
-
-
-class SQLiteAdapter:
-    engine = 'sqlite'
-    filename = 'database/sqlite.sqlite3'
-
-    def __init__(self):
-        self.path = Path(settings.DATABASES['default']['NAME']).resolve()
-
-    def preflight(self, restore=False):
-        if not self.path.is_file() or self.path.stat().st_size == 0:
-            raise BackupError('backup_err_database')
-        return sqlite3.sqlite_version.split('.')[0]
-
-    @contextmanager
-    def connect(self, path=None):
-        connection = sqlite3.connect(path or self.path)
-        try:
-            yield connection
-        finally:
-            connection.close()
-
-    def capture(self, snapshot):
-        destination = snapshot / self.filename
-        destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        require_space(snapshot, self.path.stat().st_size * 2)
-        try:
-            with self.connect() as source, self.connect(destination) as target:
-                source.backup(target, pages=256)
-            os.chmod(destination, 0o600)
-            return self.inspect(destination, verify_secrets=False)
-        except sqlite3.Error:
-            logger.exception('SQLite snapshot failed')
-            raise BackupError('backup_err_database') from None
-
-    def inspect(self, path, *, verify_secrets=True):
-        try:
-            with self.connect(path) as connection:
-                if connection.execute('PRAGMA integrity_check').fetchall() != [('ok',)]:
-                    raise BackupError('backup_err_database')
-                if connection.execute('PRAGMA foreign_key_check').fetchone():
-                    raise BackupError('backup_err_database')
-                return inspect_database(connection, verify_secrets=verify_secrets)
-        except sqlite3.Error:
-            logger.exception('SQLite verification failed')
-            raise BackupError('backup_err_database') from None
-
-    def stage(self, snapshot, job):
-        candidate = snapshot.parent / 'candidate.sqlite3'
-        if not candidate.exists():
-            shutil.copyfile(snapshot / self.filename, candidate)
-        self.inspect(candidate)
-        with self.connect(candidate) as connection:
-            post_restore_cleanup(connection)
-        return {'candidate': str(candidate)}
-
-    def apply(self, stage):
-        require_space(self.path.parent, Path(stage['candidate']).stat().st_size * 2)
-        deadline = time.monotonic() + settings.BACKUP_OPERATION_TIMEOUT
-
-        def progress(status, remaining, total):
-            if time.monotonic() >= deadline:
-                raise BackupError('backup_err_timeout')
-
-        # SQLite commits the complete destination in one transaction. Keeping the file
-        # permits idle handles on Windows and preserves SQLite's journal/WAL semantics.
-        # Managed readers have drained; an unmanaged lock must not wait indefinitely.
-        try:
-            with self.connect(stage['candidate']) as source, self.connect() as target:
-                source.backup(target, pages=256, progress=progress, sleep=0.05)
-        except sqlite3.Error:
-            logger.exception('SQLite restore failed')
-            raise BackupError('backup_err_database') from None
-
-    def rollback(self, stage, safety_snapshot):
-        self.apply({'candidate': str(safety_snapshot / self.filename)})
-
-    def finish(self, stage):
-        pass
-
-    def discard(self, stage):
-        pass
-
-    def verify_live(self, *, verify_secrets=True):
-        return self.inspect(self.path, verify_secrets=verify_secrets)
 
 
 class PostgreSQLAdapter:
@@ -314,8 +227,6 @@ class PostgreSQLAdapter:
 
 def adapter():
     engine = settings.DATABASES['default']['ENGINE']
-    if engine.endswith('sqlite3'):
-        return SQLiteAdapter()
     if engine.endswith('postgresql'):
         return PostgreSQLAdapter()
     raise BackupError('backup_err_database')

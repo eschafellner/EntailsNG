@@ -3,17 +3,20 @@
 > **Stand:** Oktober 2026
 > **Repository:** `entails-ng`  
 > **Git-Branch:** Aktuellen Arbeitsstand mit `git status` prüfen
-> **Test-Status:** Vollständiger Projektlauf am **1. Oktober 2026: 715 Tests, 695 erfolgreich, 20 PostgreSQL-Fälle auf SQLite übersprungen**, keine Fehler. Anschließend alle **38 Knowledge-Tests: 35 erfolgreich, 3 PostgreSQL-Fälle übersprungen**, einschließlich eines ergänzten Vergleichsfalls. Frühere Turnierprüfung: **12 JavaScript-Tests erfolgreich**. Details und Grenzen: [Interne Wissensbasis](docs/internal-knowledge-base.md), [Turnierprüfung](docs/tournament-audit-2026-10-01.md). Weitere Erweiterungen: [Solo-Reaktivierung](docs/solo-team-reactivation.md), [Schweizer Turniere](docs/swiss-tournaments.md). Der globale Migrationscheck meldet weiterhin die bereits dokumentierten Theme-Farbdefaults.
+> **Aktueller Prüfstand (5. Oktober 2026, PostgreSQL-Umstellung):** Vollständige Suite mit **994 Python-Tests erfolgreich, keine Überspringungen**, gegen eine isolierte PostgreSQL-18.6-Instanz mit passenden nativen Backup-Programmen. **24 JavaScript-Tests** sowie Python-/Shell-Syntax, Compose-Konfiguration und Diff-Prüfung erfolgreich. Verbindungscheck für erreichbare und fehlende PostgreSQL-Instanz geprüft. CI ist auf einen vollständigen PostgreSQL-16-Lauf umgestellt; GitHub-CI und Docker-Imagebau wurden lokal nicht ausgeführt. Der bisherige Unterschied bei den drei Farbvalidatoren ist durch `configuration.0022_sitecustomization_color_validators` behoben; der globale Migrationsabgleich ist erfolgreich. Die PostgreSQL-Umstellung selbst benötigt keine Migration.
+> **Historischer Test-Status:** Vollständiger Projektlauf am **1. Oktober 2026: 715 Tests, 695 erfolgreich, 20 PostgreSQL-Fälle auf SQLite übersprungen**, keine Fehler. Anschließend alle **38 Knowledge-Tests: 35 erfolgreich, 3 PostgreSQL-Fälle übersprungen**, einschließlich eines ergänzten Vergleichsfalls. Frühere Turnierprüfung: **12 JavaScript-Tests erfolgreich**. Details und Grenzen: [Interne Wissensbasis](docs/internal-knowledge-base.md), [Turnierprüfung](docs/tournament-audit-2026-10-01.md). Weitere Erweiterungen: [Solo-Reaktivierung](docs/solo-team-reactivation.md), [Schweizer Turniere](docs/swiss-tournaments.md). Der damals offene Migrationscheck zu den drei Farbvalidatoren wurde am 5. Oktober 2026 durch `configuration.0022_sitecustomization_color_validators` behoben.
+> **Umstellung vom 5. Oktober 2026:** Nur PostgreSQL in allen Umgebungen. Die SQLite-Integration einschließlich Backup-Adapter, automatischem Fallback und spezifischem Test wurde entfernt; die lokale Datenbank wurde ohne Datenübernahme gelöscht. `DB_ENGINE` entfällt. Historische Testergebnisse unten und in den Fachberichten beschreiben frühere Softwarestände.
+>
 > **Python / Django:** Python 3.12+ (kompatibel mit 3.14) / Django 6.0  
 
-> **Aktuelle Regression vom 3. Oktober 2026:** Vollständiger SQLite-Projektlauf:
+> **Historische Regression vom 3. Oktober 2026:** Vollständiger SQLite-Projektlauf:
 > **822 Tests, 799 erfolgreich, 23 übersprungen**, keine Fehler. Backup-Modul
 > zusätzlich nativ gegen PostgreSQL 16.15: **47 Tests, 45 erfolgreich, zwei
 > übersprungen** (POSIX-Dateirechte unter Windows und SQLite-Dateiverbindungen).
 > **12 JavaScript-Tests** und
 > Syntaxprüfung des Backup-JavaScripts erfolgreich. Docker-Imagebau und CI wurden
-> lokal nicht ausgeführt. Der bekannte globale Migrationscheck zu drei
-> Theme-Farbdefaults besteht weiterhin; das Backup-Modul benötigt keine Migration.
+> lokal nicht ausgeführt. Der damals offene globale Migrationscheck zu drei
+> Farbvalidatoren ist seit `configuration.0022_sitecustomization_color_validators` behoben; das Backup-Modul benötigt keine Migration.
 
 ---
 
@@ -41,14 +44,14 @@ graph TD
     Nginx -->|Statics / Media / Fonts| StaticFiles["WhiteNoise & Nginx Cache"]
     Nginx -->|App Requests| Gunicorn["Gunicorn WSGI (3 Worker, per WEB_CONCURRENCY konfigurierbar)"]
     Gunicorn --> Django["Django 6 App-Server"]
-    Django --> Postgres["PostgreSQL 16 (oder SQLite Dev)"]
+    Django --> Postgres["PostgreSQL 16"]
     Django --> Redis["Redis 7 (Sitzplan & Cache)"]
 ```
 
 | Komponente | Technologie | Zweck & Besonderheiten |
 |---|---|---|
 | **Backend** | Python 3.12+ / Django 6.0 | Robuster Monolith mit domänenspezifischem Service-Layer (Turniere, Zahlungen, E-Mail Outbox) |
-| **Datenbank** | PostgreSQL 16 (Prod) / SQLite 3 (Dev/Test) | Umschaltbar über `DB_ENGINE=sqlite` oder `DB_ENGINE=postgres` |
+| **Datenbank** | PostgreSQL 16 | Verbindlich für Produktion, lokale Entwicklung, Offline-Betrieb und Tests; Konfiguration über `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` |
 | **Caching & Queue** | Redis 7 / Django Cache Framework | Sitzplan-Reservierungs-Cache, Session-Store, Translations-Cache |
 | **Webserver** | Nginx & WhiteNoise | Gunicorn-Proxy mit Cloudflare-Tunnel-Erkennung & Fallback-Certs |
 | **Frontend** | Vanilla ES6 JS + Semantic CSS Variables | Kein schweres JS-Framework (React/Vue), dadurch blitzschnelle Ladezeiten |
@@ -153,7 +156,7 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Bedienung:** `/admin/backups/` und Link auf der Admin-Startseite, ausschließlich
   für aktive Superuser mit Mitarbeiterstatus. Manuelle Sicherung, verschlüsselter
   Download, Upload/Vorprüfung und vollständiger Datenersatz nach Passwortbestätigung.
-* **Umfang:** Native PostgreSQL-/SQLite-Sicherung sowie öffentliche und private
+* **Umfang:** Native PostgreSQL-Sicherung sowie öffentliche und private
   Medien, AES-256-GCM mit separatem `BACKUP_ENCRYPTION_KEY`. `.env`, Schlüssel,
   Quellcode, Zertifikate und Redis werden separat gesichert.
 * **Betrieb:** Ein eigener Prozess `process_backup_jobs --daemon`, optionales
@@ -173,7 +176,7 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 * **Aktivierung:** `BACKUP_ENCRYPTION_KEY` setzen und separat aufbewahren,
   `docker compose --profile backups up -d --build`, `seed_translations` ausführen.
   Keine zusätzliche Datenbankmigration erforderlich. Tests: `backups/tests.py`,
-  eigener PostgreSQL-16-Job in CI; beide nativen Datenbankverfahren lokal geprüft.
+  vollständiger PostgreSQL-16-Testlauf in CI einschließlich nativer Backups und Wiederherstellung.
 
 ---
 
@@ -181,7 +184,8 @@ Das Projekt ist in saubere Django-Apps unterteilt:
 
 ### Voraussetzungen
 * Python 3.12 oder 3.13 / 3.14
-* SQLite (Dev) oder Docker/Podman (PostgreSQL 16 + Redis 7)
+* PostgreSQL 16 + Redis 7, nativ oder über Docker/Podman
+* Für native Backups: `pg_dump` und `pg_restore` in derselben Hauptversion wie der Server
 
 ### Schritt-für-Schritt Einrichtung
 
@@ -200,7 +204,9 @@ pip install -r requirements.txt
 
 # 4. Umgebungskonfiguration (.env) anlegen
 cp .env.example .env
-# Für SQLite Development: Sicherstellen, dass DB_ENGINE=sqlite gesetzt ist
+# .env bearbeiten: Schlüssel setzen, DEBUG=True, DB_HOST=127.0.0.1, BEHIND_PROXY=False
+# PostgreSQL und Redis starten (alternativ native Installation):
+docker compose up -d db redis
 
 # 5. Datenbank migrieren
 python manage.py migrate
@@ -226,38 +232,44 @@ python manage.py runserver
 
 ## 🧪 5. Testing & Qualitätssicherung
 
-Das Projekt verfügt über eine umfassende automatisierte Testsuite (**537 Tests** über alle Module, auf SQLite und PostgreSQL bestanden; Stand 26.09.2026).
+Nachtrag vom 5. Oktober 2026: `configuration.0022_sitecustomization_color_validators`
+zeichnet die bereits vorhandene Hex-Farbvalidierung für Akzent-, Haupt- und
+Hintergrundfarbe im Migrationsstand nach. Keine SQL-Änderung an den drei
+Spalten und keine Datenumschreibung. Auf isoliertem PostgreSQL 18.6 angewendet;
+`makemigrations --check --dry-run` meldet keine Änderungen, alle **69
+Konfigurationstests** erfolgreich. Die lokale PostgreSQL-Datenbank `entails`
+wurde nach Freigabe von `configuration.0015` auf `0022` aktualisiert; alle sieben
+Migrationen `0016` bis `0022` sind angewendet. Der vorhandene Podman-Container
+`entailsng_postgres` ist dafür gestartet worden und läuft. In weiteren
+Deployment-Umgebungen `python manage.py migrate` ausführen.
 
-> [!NOTE]
-> Die 537 Tests stellen den Testumfang dar. Zur Ermittlung der metrischen Zeilen- und Verzweigungsabdeckung (Code Coverage) wird das Tool `coverage` empfohlen:
-> ```bash
-> coverage run manage.py test
-> coverage report
-> ```
+Die verbleibenden Modultests verwenden ausschließlich PostgreSQL. Zeilensperren
+und Parallelität werden mit `TransactionTestCase` und getrennten Verbindungen
+geprüft. Der vollständige CI-Lauf verwendet PostgreSQL 16, passende native
+Backup-Programme und Redis. Die Datenbankrolle muss Testdatenbanken anlegen
+können (`CREATEDB`); die Backup-Tests benötigen außerdem Eigentümerrechte.
 
-> **Wichtiger Hinweis zu Parallelitätstests & Zeilensperren:**  
-> SQLite prüft `select_for_update()` nicht (`has_select_for_update = False`). Während logische Datenbank-Constraints (wie `UniqueConstraint`) auch auf SQLite greifen, sollten Zeilensperren-Konflikte (`FOR UPDATE`) gezielt unter **PostgreSQL** mit `TransactionTestCase` und getrennten Datenbankverbindungen getestet werden.
-
-Die manuelle Browser-Simulation wurde mit einer getrennten PostgreSQL-Testdatenbank durchgeführt: Event-Entwurf und Bereitschaftsprüfung, Öffnung der Anmeldung, Gastregistrierung mit E-Mail-Code, Eventanmeldung, Zahlung und Check-in, zwei Solo-Turnieranmeldungen, Turnierbaum und Finale sowie Eventabschluss.
-
-### Tests ausführen
+Für PostgreSQL wurden zwei bestehende Testvorbereitungen korrigiert: Der
+Knowledge-Downloadtest konsumiert den Stream über den Testclient, damit die
+Testtransaktion offen bleibt. Die Schweizer Ausnahmefälle verwenden eine
+explizite Spielhistorie statt einer Auslosung, die von Datenbank-IDs abhängt.
+Der ausschließlich für SQLite bestimmte Backup-Test wurde entfernt; die
+übrigen Modultests bleiben erhalten.
 
 ```bash
-# Gesamte Testsuite ausführen (SQLite im Speicher):
-DB_ENGINE=sqlite python manage.py test
-
-# Gezielt nur das Turniermodul testen:
-DB_ENGINE=sqlite python manage.py test tournaments
-
-# Gezielt Sitzplan & Events testen:
-DB_ENGINE=sqlite python manage.py test seating events
-
-# Testlauf mit Failfast (bricht beim ersten Fehler ab):
-DB_ENGINE=sqlite python manage.py test --failfast
-
-# PostgreSQL (mit eigener lokalen Testinstanz und passenden DB_*-Variablen):
-DB_ENGINE=postgresql python manage.py test --noinput
+# Mit konfigurierter PostgreSQL-Verbindung:
+python manage.py test --noinput
+python manage.py test tournaments --noinput
+python manage.py test seating events --noinput
+python manage.py test backups --noinput
+node --test scripts/tests/*.test.cjs
 ```
+
+Die frühere manuelle Browser-Simulation wurde mit einer getrennten
+PostgreSQL-Testdatenbank durchgeführt: Event-Entwurf und Bereitschaftsprüfung,
+Öffnung der Anmeldung, Gastregistrierung mit E-Mail-Code, Eventanmeldung,
+Zahlung und Check-in, zwei Solo-Turnieranmeldungen, Turnierbaum und Finale
+sowie Eventabschluss.
 
 ---
 

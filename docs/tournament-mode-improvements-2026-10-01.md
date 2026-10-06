@@ -1,5 +1,7 @@
 # Verbesserungen der sechs Turniermodi – 1. Oktober 2026
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Die Befunde aus der [Einzelprüfung](tournament-mode-review-2026-10-01.md) und die
 anschließend beauftragten Erweiterungen sind umgesetzt. Der historische Bericht
 und seine JSON-Ergebnisse dokumentieren den Zustand vor diesen Änderungen.
@@ -114,7 +116,6 @@ App-Datenbank nicht migriert und kein Deployment durchgeführt.
   `makemigrations tournaments --check --dry-run` ohne fehlende Migration.
 
 ```powershell
-$env:DB_ENGINE = 'sqlite'
 $env:DEBUG = 'True'
 $env:SECRET_KEY = 'local-format-improvements-test'
 .\.venv\Scripts\python.exe manage.py test tournaments media_designer events --noinput

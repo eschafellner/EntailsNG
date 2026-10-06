@@ -17,7 +17,6 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-os.environ.setdefault('DB_ENGINE', 'sqlite')
 os.environ.setdefault('SECRET_KEY', 'disposable-tournament-mode-review')
 os.environ.setdefault('DEBUG', 'True')
 os.environ.setdefault('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')

@@ -45,10 +45,6 @@ def validate_paths():
             raise BackupError('backup_err_paths')
     if any(root() == p or root().is_relative_to(p) for p in public):
         raise BackupError('backup_err_paths')
-    db = settings.DATABASES['default']
-    if db['ENGINE'].endswith('sqlite3'):
-        if Path(db['NAME']).resolve().is_relative_to(root()):
-            raise BackupError('backup_err_paths')
 
 
 def initialize():

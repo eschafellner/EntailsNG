@@ -1,4 +1,4 @@
-"""Real row-lock tests; SQLite cannot verify concurrent recruitment."""
+"""Concurrent recruitment tests using PostgreSQL row locks."""
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase, skipUnlessDBFeature
 from django.urls import reverse

@@ -1,5 +1,7 @@
 # Turnieransichten und Anmeldung schließen
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Stand: 5. Oktober 2026. Umsetzung des Testerfeedbacks zur Turnieroberfläche.
 
 ## Anzeigen
@@ -62,7 +64,7 @@ der vorhandene Status `CLOSED` wird verwendet. Übersetzungstexte und statische
 Dateien wurden lokal aktualisiert. Kein Deployment ausgeführt.
 
 ```sh
-DB_ENGINE=sqlite python manage.py test tournaments --noinput
+python manage.py test tournaments --noinput
 ```
 
 346 Tests: 322 erfolgreich, 24 PostgreSQL-Fälle auf SQLite übersprungen.

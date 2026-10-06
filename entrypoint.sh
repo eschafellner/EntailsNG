@@ -12,8 +12,8 @@ if [ "${SKIP_ENTRYPOINT_INIT:-0}" = "1" ]; then
     exec "$@"
 fi
 
-# 1. Auf PostgreSQL warten (falls nicht SQLite und nicht SKIP_ENTRYPOINT_WAIT=1)
-if [ "${SKIP_ENTRYPOINT_WAIT:-0}" != "1" ] && [ "${DB_ENGINE:-postgresql}" != "sqlite" ]; then
+# 1. Auf PostgreSQL warten (falls nicht SKIP_ENTRYPOINT_WAIT=1)
+if [ "${SKIP_ENTRYPOINT_WAIT:-0}" != "1" ]; then
     DB_HOST_VAL="${DB_HOST:-db}"
     DB_PORT_VAL="${DB_PORT:-5432}"
     echo "⏳ Warte auf PostgreSQL ($DB_HOST_VAL:$DB_PORT_VAL)..."

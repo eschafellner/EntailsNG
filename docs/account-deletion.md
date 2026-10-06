@@ -1,5 +1,7 @@
 # Selbstlöschung von Gast-Accounts
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Stand: 30. September 2026.
 
 ## Verhalten im Profil
@@ -90,9 +92,8 @@ Bestehende Accounts bleiben aktiv wie bisher.
 ## Prüfung
 
 ```bash
-DB_ENGINE=sqlite python manage.py test users.test_account_deletion --noinput
 # Mit einer konfigurierten PostgreSQL-Testinstanz:
-DB_ENGINE=postgresql python manage.py test users.test_account_deletion --noinput
+python manage.py test users.test_account_deletion --noinput
 ```
 
 26 Funktionstests bestehen lokal unter SQLite. Fünf zusätzliche Parallelitätstests

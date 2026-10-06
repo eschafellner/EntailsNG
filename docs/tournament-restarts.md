@@ -1,5 +1,7 @@
 # Turnier-Neustarts im Backend
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Stand: 2. Oktober 2026. Im Django-Admin kann für jedes vorhandene Turnier eine
 unabhängige neue Ausgabe vorbereitet werden. Dies funktioniert für Entwürfe,
 offene, laufende, abgeschlossene und abgesagte Turniere in allen sechs Modi.
@@ -94,7 +96,6 @@ Anschließend die Web-Prozesse neu starten. Migration:
 nicht migriert und kein Deployment ausgeführt.
 
 ```powershell
-$env:DB_ENGINE = 'sqlite'
 $env:DEBUG = 'True'
 $env:SECRET_KEY = 'local-restart-test'
 .\.venv\Scripts\python.exe manage.py test tournaments.test_restart --noinput

@@ -124,7 +124,6 @@ nano .env
 * **`BEHIND_PROXY`**: Im Docker- und Reverse-Proxy-Betrieb (Nginx / Cloudflare) auf `True` belassen (`HTTP_X_FORWARDED_PROTO: https`).
 
 #### 2. Datenbank (PostgreSQL) & Redis
-* **`DB_ENGINE`**: `postgresql` (oder `sqlite` für lokalen Offline-Betrieb)
 * **`DB_NAME`**: `entailsng_db` (Name der Datenbank)
 * **`DB_USER`**: `entailsng_user` (Benutzername)
 * **`DB_PASSWORD`**: Ein starkes, frei erfundenes Passwort (z. B. `MeinGeheimesDBPasswort2026!`).
@@ -210,7 +209,7 @@ Das Skript erstellt die Zertifikate automatisch, bindet sie ein und startet alle
 Für lokales Testen oder Vor-Ort-Betrieb in einer Halle ohne Internetverbindung:
 
 * **100% Offline-fähig:** EntailsNG benötigt im Betrieb keinen Internetzugang. Alle Schriften (*Inter* und *JetBrains Mono*) sind als WOFF2 direkt unter `/static/fonts/` lokal im Projekt abgelegt (keine Abrufe von Google Fonts). Auch QR-Codes und Tickets werden rein server- bzw. clientseitig erzeugt.
-* **Automatische Datenbank-Erkennung:** `start.sh` und `install.sh` prüfen automatisch, ob PostgreSQL und Redis laufen (oder starten sie via Podman/Docker). Falls keine Container-Engine vorhanden ist, wird nahtlos die integrierte SQLite-Entwicklungsdatenbank genutzt.
+* **PostgreSQL erforderlich:** Auch Entwicklung und Offline-Betrieb verwenden PostgreSQL. `start.sh` und `install.sh` prüfen die konfigurierte Datenbankverbindung und versuchen bei Bedarf, PostgreSQL und Redis via Podman/Docker zu starten. Ist PostgreSQL nicht erreichbar, brechen sie mit einer Fehlermeldung ab. Bei einer nativen Installation PostgreSQL vorher starten und `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST` und `DB_PORT` in `.env` setzen; für lokale Container `DB_HOST=127.0.0.1` verwenden.
 
 ```bash
 # 1. Setup ausführen (einmalig; optional mit Flag '--demo' für Test-Events, Sitzplan & Accounts)

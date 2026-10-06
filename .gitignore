@@ -3,13 +3,10 @@ staticfiles/
 media/
 private_media/
 backups_data/
-db.sqlite3
 __pycache__/
 *.pyc
 .venv/
 
-# SQLite Datenbank
-*.sqlite3
 
 # Django-Geheimnisse / Umgebungsvariablen
 .env

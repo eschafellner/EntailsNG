@@ -7,63 +7,22 @@ on:
     branches: [ main, master ]
 
 jobs:
-  backups-postgresql:
-    name: Native Backups and Restore (PostgreSQL 16)
+  test:
+    name: PostgreSQL Test Suite & Checks
     runs-on: ubuntu-24.04
-    env:
-      DEBUG: "True"
-      ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
-      SECRET_KEY: "ci-backup-tests-only"
-      FIELD_ENCRYPTION_KEY: "ci-field-backup-tests-only"
-      DB_ENGINE: "postgresql"
-      DB_NAME: "entailsng_backups_test"
-      DB_USER: "entailsng_backups_test"
-      DB_PASSWORD: "ci-backups-only"
-      DB_HOST: "127.0.0.1"
-      DB_PORT: "5432"
-      BACKUP_PG_BIN_DIR: "/usr/lib/postgresql/16/bin"
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: entailsng_backups_test
-          POSTGRES_USER: entailsng_backups_test
-          POSTGRES_PASSWORD: ci-backups-only
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U entailsng_backups_test -d entailsng_backups_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-      - name: Install native PostgreSQL tools and Python dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-16
-          python -m pip install -r requirements.txt
-      - name: Test native capture, restore and recovery
-        run: python manage.py test backups --noinput
-
-  account-deletion-postgresql:
-    name: Account Deletion & Tournaments (PostgreSQL Row Locks)
-    runs-on: ubuntu-latest
     env:
       DEBUG: "False"
       SECURE_SSL_REDIRECT: "False"
       ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
-      SECRET_KEY: "ci-account-deletion-tests-only"
-      DB_ENGINE: "postgresql"
+      SECRET_KEY: "ci-insecure-dummy-key-for-tests-only-long-enough-for-django"
+      FIELD_ENCRYPTION_KEY: "ci-field-tests-only"
       DB_NAME: "entailsng_test"
       DB_USER: "entailsng_test"
       DB_PASSWORD: "ci-tests-only"
       DB_HOST: "127.0.0.1"
       DB_PORT: "5432"
+      BACKUP_PG_BIN_DIR: "/usr/lib/postgresql/16/bin"
+      REDIS_URL: "redis://localhost:6379/1"
     services:
       postgres:
         image: postgres:16-alpine
@@ -75,33 +34,9 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U entailsng_test -d entailsng_test"
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-      - name: Install Dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Test Account Deletion and Concurrent Tournament Actions
-        run: python manage.py test seating.test_clan_holds seating.test_clan_holds_concurrency users.test_account_deletion clans.test_admin_roles clans.test_admin_roles_concurrency tournaments.test_swiss tournaments.test_swiss_concurrency tournaments.test_audit tournaments.test_audit_concurrency tournaments.test_solo_reactivation tournaments.test_format_improvements tournaments.test_draft_visibility tournaments.test_restart tournaments.test_recruitment tournaments.test_recruitment_concurrency tournaments.test_roster_rules tournaments.test_frontend_feedback knowledge --noinput
-
-  test:
-    name: Django Test Suite & Checks
-    env:
-       # Für CI-Testläufe explizit setzen:
-      DEBUG: "False"
-      SECURE_SSL_REDIRECT: "False"
-      ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
-      SECRET_KEY: "ci-insecure-dummy-key-for-tests-only"
-      DB_ENGINE: "sqlite"
-      REDIS_URL: "redis://localhost:6379/1"
-    runs-on: ubuntu-latest
-
-    services:
+          --health-retries 10
       redis:
         image: redis:7-alpine
         ports:
@@ -111,51 +46,28 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
-
-      - name: Install Dependencies
+      - name: Install PostgreSQL Tools and Python Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Set up Node for Scanner Tests
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          python -m pip install -r requirements.txt
+      - name: Set up Node for Browser Tests
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
       - name: Test Browser Interactions
-        run: node --test scripts/tests/checkin-scanner.test.cjs scripts/tests/tournaments.test.cjs scripts/tests/clan-seat-holds.test.cjs scripts/tests/news-carousel.test.cjs
-
+        run: node --test scripts/tests/*.test.cjs
       - name: Run Django Security & Deployment Check
-        env:
-          SECRET_KEY: 'ci-secret-key-for-testing-purposes-only'
-          DEBUG: 'False'
-          DB_ENGINE: 'sqlite'
-          REDIS_URL: 'redis://localhost:6379/1'
-          ALLOWED_HOSTS: 'localhost,127.0.0.1'
-        run: |
-          python manage.py check --deploy
-
+        run: python manage.py check --deploy
+      - name: Run Full Test Suite Including Row Locks and Native Backups
+        run: python manage.py test --noinput
       - name: Check Missing Migrations
-        env:
-          SECRET_KEY: 'ci-secret-key-for-testing-purposes-only'
-          DB_ENGINE: 'sqlite'
-        run: |
-          python manage.py makemigrations --check --dry-run
-
-      - name: Run Test Suite
-        env:
-          SECRET_KEY: 'ci-secret-key-for-testing-purposes-only'
-          DB_ENGINE: 'sqlite'
-          REDIS_URL: 'redis://localhost:6379/1'
-        run: |
-          python manage.py test
+        run: python manage.py makemigrations --check --dry-run

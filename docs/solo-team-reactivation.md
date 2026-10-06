@@ -1,5 +1,7 @@
 # Automatische Solo-Team-Reaktivierung
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Bei der normalen Anmeldung zu einem Einzelspieler-Turnier wird das Team des
 Spielers für das betreffende Spiel automatisch ausgewählt. Eine zusätzliche
 Aktion im Teammanager ist dafür nicht erforderlich.

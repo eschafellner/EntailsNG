@@ -2,12 +2,10 @@ import base64
 import io
 import json
 import os
-import sqlite3
 import stat
 import tempfile
 import threading
 import zipfile
-from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -16,7 +14,6 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.db import connection
 from django.http import HttpResponse
 from django.test import Client, RequestFactory, SimpleTestCase, TransactionTestCase, override_settings
 from django.urls import reverse
@@ -66,7 +63,7 @@ class ArchiveTests(PrivateStorageMixin, SimpleTestCase):
         return encrypted
 
     def test_authenticated_round_trip_preserves_both_media_areas(self):
-        encrypted = self.make_archive({'database/sqlite.sqlite3': b'db', 'media/logo.png': b'public',
+        encrypted = self.make_archive({'database/postgresql.dump': b'db', 'media/logo.png': b'public',
                                        'private_media/wiki/manual.pdf': b'private'})
         target = self.base / 'unpacked'
         manifest = archive.unpack(encrypted, target)
@@ -328,29 +325,20 @@ class NativeRoundTripTests(PrivateStorageMixin, TransactionTestCase):
         Session.objects.create(session_key='s' * 32, session_data='expired-after-restore', expire_date=timezone.now() + timedelta(days=1))
         from users.models import EmailVerificationCode
         EmailVerificationCode.objects.create(user=self.admin, code='123456', expires_at=timezone.now() + timedelta(hours=1))
-        if connection.vendor == 'sqlite':
-            self.native_path = self.base / 'live.sqlite3'
-            with closing(sqlite3.connect(self.native_path)) as destination:
-                connection.ensure_connection()
-                connection.connection.backup(destination)
-            def initialize_adapter(adapter):
-                adapter.path = self.native_path
-            patcher = mock.patch.object(database.SQLiteAdapter, '__init__', initialize_adapter)
-        else:
-            from psycopg import sql
-            original = database.PostgreSQLAdapter()
-            original.preflight(restore=True)  # A PostgreSQL CI run must fail if native tools are missing.
-            self.native_name = 'entailsng_test_source_' + storage.new_id()
-            with original.connect('postgres', autocommit=True) as pg:
-                pg.execute(sql.SQL('CREATE DATABASE {} TEMPLATE template0').format(sql.Identifier(self.native_name)))
-            self.addCleanup(self.cleanup_postgresql, original)
-            dump = self.base / 'fixture.dump'
-            original.run('pg_dump', '--format=custom', '--file', dump)
-            original.run('pg_restore', '--no-owner', '--no-acl', '--dbname', self.native_name, dump, database=self.native_name)
-            def initialize_adapter(adapter):
-                adapter.config = dict(settings.DATABASES['default'], NAME=self.native_name)
-                adapter.name = self.native_name
-            patcher = mock.patch.object(database.PostgreSQLAdapter, '__init__', initialize_adapter)
+        from psycopg import sql
+        original = database.PostgreSQLAdapter()
+        original.preflight(restore=True)  # A PostgreSQL CI run must fail if native tools are missing.
+        self.native_name = 'entailsng_test_source_' + storage.new_id()
+        with original.connect('postgres', autocommit=True) as pg:
+            pg.execute(sql.SQL('CREATE DATABASE {} TEMPLATE template0').format(sql.Identifier(self.native_name)))
+        self.addCleanup(self.cleanup_postgresql, original)
+        dump = self.base / 'fixture.dump'
+        original.run('pg_dump', '--format=custom', '--file', dump)
+        original.run('pg_restore', '--no-owner', '--no-acl', '--dbname', self.native_name, dump, database=self.native_name)
+        def initialize_adapter(adapter):
+            adapter.config = dict(settings.DATABASES['default'], NAME=self.native_name)
+            adapter.name = self.native_name
+        patcher = mock.patch.object(database.PostgreSQLAdapter, '__init__', initialize_adapter)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -423,34 +411,6 @@ class NativeRoundTripTests(PrivateStorageMixin, TransactionTestCase):
         self.assertEqual((Path(settings.PRIVATE_MEDIA_ROOT) / 'wiki/manual.pdf').read_bytes(), b'changed-private')
         self.assertFalse((storage.root() / 'maintenance.json').exists())
         self.assertFalse((storage.root() / 'mail-paused.json').exists())
-
-    def test_sqlite_restore_and_rollback_with_an_idle_connection_to_the_live_file(self):
-        if connection.vendor != 'sqlite':
-            self.skipTest('SQLite idle file handles are exercised in the SQLite test run.')
-        value = self.create_backup()
-        self.mutate()
-        self.process('prepare', value)
-        with database.adapter().connect() as idle:
-            self.assertEqual(idle.execute('SELECT name FROM tournaments_game').fetchone()[0], 'Changed Game')
-            job = self.process('restore', value)
-            self.assertEqual(job['state'], 'completed', job.get('error'))
-            self.assertEqual(idle.execute('SELECT name FROM tournaments_game').fetchone()[0], 'Saved Game')
-            self.mutate()
-            self.process('prepare', value)
-            original = services.replace_media
-            calls = []
-
-            def fail_once(snapshot):
-                calls.append(snapshot)
-                if len(calls) == 1:
-                    raise OSError('simulated media failure with an idle SQLite handle')
-                return original(snapshot)
-
-            with mock.patch('backups.services.replace_media', side_effect=fail_once):
-                failed = self.process('restore', value)
-            self.assertEqual(failed['state'], 'failed')
-            self.assertEqual(idle.execute('SELECT name FROM tournaments_game').fetchone()[0], 'Changed Game')
-        self.assertFalse((storage.root() / 'maintenance.json').exists())
 
     def test_public_media_permissions_allow_nginx_after_restore(self):
         if os.name == 'nt':

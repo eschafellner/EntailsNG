@@ -132,48 +132,38 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # -----------------------------------------------------------------------------
-# Datenbank-Konfiguration
+# PostgreSQL-Konfiguration (alle Umgebungen)
 # -----------------------------------------------------------------------------
-DB_ENGINE = os.environ.get('DB_ENGINE', 'postgresql')
+db_name = os.environ.get('DB_NAME')
+db_user = os.environ.get('DB_USER')
+db_password = os.environ.get('DB_PASSWORD')
+db_host = os.environ.get('DB_HOST', 'db')
+db_port = os.environ.get('DB_PORT', '5432')
 
-if DB_ENGINE == 'sqlite':
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+if not DEBUG and 'test' not in sys.argv:
+    missing_db_vars = []
+    if not db_name:
+        missing_db_vars.append('DB_NAME')
+    if not db_user:
+        missing_db_vars.append('DB_USER')
+    if not db_password:
+        missing_db_vars.append('DB_PASSWORD')
+    if missing_db_vars:
+        raise ImproperlyConfigured(
+            f"Folgende Datenbank-Umgebungsvariablen fehlen für den Produktionsbetrieb: {', '.join(missing_db_vars)}"
+        )
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': db_name or 'entailsng_db',
+        'USER': db_user or 'entailsng',
+        'PASSWORD': db_password or '',
+        'HOST': db_host,
+        'PORT': db_port,
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '600')),
     }
-else:
-    db_name = os.environ.get('DB_NAME')
-    db_user = os.environ.get('DB_USER')
-    db_password = os.environ.get('DB_PASSWORD')
-    db_host = os.environ.get('DB_HOST', 'db')
-    db_port = os.environ.get('DB_PORT', '5432')
-
-    if not DEBUG and 'test' not in sys.argv:
-        missing_db_vars = []
-        if not db_name:
-            missing_db_vars.append('DB_NAME')
-        if not db_user:
-            missing_db_vars.append('DB_USER')
-        if not db_password:
-            missing_db_vars.append('DB_PASSWORD')
-        if missing_db_vars:
-            raise ImproperlyConfigured(
-                f"Folgende Datenbank-Umgebungsvariablen fehlen für den Produktionsbetrieb: {', '.join(missing_db_vars)}"
-            )
-
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': db_name or 'entailsng_db',
-            'USER': db_user or 'entailsng',
-            'PASSWORD': db_password or '',
-            'HOST': db_host,
-            'PORT': db_port,
-            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '600')),
-        }
-    }
+}
 
 
 # -----------------------------------------------------------------------------

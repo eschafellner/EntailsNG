@@ -1,5 +1,7 @@
 # Vollständige Backups im Backend
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Die Administration bietet unter `/admin/backups/` manuelle Sicherungen,
 Downloads, Uploads mit Vorprüfung und vollständige Wiederherstellung. Ein Link
 steht auf der Admin-Startseite. Nur aktive Superuser mit Mitarbeiterstatus haben
@@ -59,7 +61,7 @@ behalten ihre bisherigen Grenzen. Vorgeschaltete Proxies können niedrigere
 Grenzen haben; große Sicherungen lassen sich dann über die CLI vorbereiten.
 Der zusätzliche Worker startet nur mit dem Compose-Profil `backups`.
 
-## Lokaler Betrieb und SQLite
+## Lokaler Betrieb mit PostgreSQL
 
 Den Worker in einem separaten Terminal derselben Umgebung starten:
 
@@ -67,11 +69,11 @@ Den Worker in einem separaten Terminal derselben Umgebung starten:
 python manage.py process_backup_jobs --daemon
 ```
 
-Unter Windows bei PostgreSQL optional `BACKUP_PG_BIN_DIR` auf das
-`bin`-Verzeichnis der passenden PostgreSQL-Installation setzen. SQLite benötigt
-keine zusätzlichen Programme. Sicherung und Wiederherstellung verwenden die native
-Backup-API von SQLite. Die Übernahme erfolgt in einer SQLite-Transaktion und
-funktioniert auch mit noch offenen, inaktiven Dateiverbindungen unter Windows.
+Lokal müssen `pg_dump` und `pg_restore` in derselben Hauptversion wie der
+PostgreSQL-Server installiert sein. Optional `BACKUP_PG_BIN_DIR` auf das
+`bin`-Verzeichnis der passenden PostgreSQL-Installation setzen, insbesondere
+unter Windows. Die Datenbankrolle benötigt `CREATEDB` und Eigentümerrechte
+an der Anwendungsdatenbank für Vorprüfung und Wiederherstellung.
 Ein noch nicht gestarteter Worker wird im Backend angezeigt;
 Webanfragen führen keine langen Sicherungsprozesse selbst aus.
 
@@ -168,7 +170,7 @@ und die Sicherung vor einer Wiederherstellung werden ausdrücklich gelöscht.
 `BACKUP_MAX_UPLOAD_BYTES` (1 GiB), `BACKUP_MAX_UNPACKED_BYTES` (10 GiB),
 `BACKUP_MAX_FILES` (50.000), `BACKUP_MIN_FREE_BYTES` (256 MiB),
 `BACKUP_DRAIN_TIMEOUT` (60 s) und `BACKUP_OPERATION_TIMEOUT` (1.800 s für native
-PostgreSQL-Programme und die SQLite-Übernahme) sind konfigurierbar. Bei Änderungen der Upload-Grenze auch
+PostgreSQL-Programme) sind konfigurierbar. Bei Änderungen der Upload-Grenze auch
 Nginx und vorgeschaltete Proxies anpassen.
 
 Speicherprüfungen berücksichtigen temporäre Kopien; trotzdem ausreichend Reserve
@@ -178,15 +180,15 @@ erfolgt in 1-MiB-Blöcken. Auch Datenbankserver und Festplatte tragen während e
 Auftrags Last; Containergrenzen begrenzen ausschließlich den Backup-Worker.
 
 ```bash
-DB_ENGINE=sqlite python manage.py test backups emails configuration --noinput
-DB_ENGINE=postgresql python manage.py test backups --noinput
+python manage.py test backups emails configuration --noinput
+python manage.py test backups --noinput
 ```
 
 Die Tests verwenden getrennte temporäre Verzeichnisse beziehungsweise eigens
 erstellte PostgreSQL-Testdatenbanken. Sie prüfen Berechtigungen, CSRF,
 Authentifizierung der Archive, Pfade, Größenlimits, Parallelität, beide Medien-
 bereiche, native Wiederherstellung, Mailpause, Session-/Code-Invalidierung und
-Rücksetzung einschließlich Prozessunterbrechung. CI enthält einen eigenen Lauf
+Rücksetzung einschließlich Prozessunterbrechung. Die vollständige CI-Suite läuft
 mit PostgreSQL 16 und echten `pg_dump`-/`pg_restore`-Programmen.
 
 Prüfstand vom 3. Oktober 2026: Die vollständige SQLite-Projektsuite umfasst
@@ -202,7 +204,8 @@ nicht ausgeführt.
 Die Bedienprüfung in einer getrennten lokalen SQLite-Umgebung hat Erstellung,
 Download, erneuten Upload, Vorprüfung, vollständige Wiederherstellung, erneute
 Anmeldung, Mailpause und bestätigtes Löschen geprüft. Ein dabei gefundener
-Windows-Konflikt mit offenen SQLite-Dateiverbindungen ist korrigiert und durch
-einen zusätzlichen Test einschließlich Rücksetzung abgedeckt.
+Windows-Konflikt mit offenen SQLite-Dateiverbindungen ist korrigiert und war durch
+einen zusätzlichen Test einschließlich Rücksetzung abgedeckt. Dieser ausschließlich
+für SQLite bestimmte Test wurde bei der PostgreSQL-Umstellung entfernt.
 Eine [Bildschirmaufnahme nach der Wiederherstellung](screenshots/backup-admin.jpg)
 zeigt die Backup-Seite und die aktive Mailpause.

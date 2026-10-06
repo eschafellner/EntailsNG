@@ -1,5 +1,7 @@
 # Schweizer Turniere
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Die anschließende modulweite Prüfung und die aktuellen Testergebnisse sind im
 [Prüfbericht vom 1. Oktober 2026](tournament-audit-2026-10-01.md) dokumentiert.
 Die spätere [Verbesserungsrunde](tournament-mode-improvements-2026-10-01.md)

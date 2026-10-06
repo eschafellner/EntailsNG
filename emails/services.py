@@ -7,7 +7,7 @@ import uuid
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
-from django.db import connection, models, transaction
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.html import escape, strip_tags
 
@@ -169,7 +169,6 @@ def process_email_queue(limit=50, email_ids=None):
     recover_stale_processing_emails()
 
     now = timezone.now()
-    supports_skip_locked = getattr(connection.features, 'has_select_for_update_skip_locked', False)
     lease_timeout = getattr(settings, 'EMAIL_QUEUE_LEASE_TIMEOUT_SECONDS', 300)
     worker_uuid = uuid.uuid4().hex
 
@@ -192,10 +191,7 @@ def process_email_queue(limit=50, email_ids=None):
 
         qs = qs.order_by('scheduled_at')[:limit]
 
-        if supports_skip_locked:
-            emails = list(qs.select_for_update(skip_locked=True))
-        else:
-            emails = list(qs)
+        emails = list(qs.select_for_update(skip_locked=True))
 
         selected_ids = [e.id for e in emails]
         if selected_ids:

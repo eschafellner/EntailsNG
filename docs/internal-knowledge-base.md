@@ -1,5 +1,7 @@
 # Interne Wissensbasis
 
+> Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
+
 Die native Django-App `knowledge` ergänzt EntailsNG um einen internen
 Dokumentationsbereich unter `/knowledge/`. Sie verwendet vorhandene Logins,
 Themes und den lokal mitgelieferten TinyMCE-Editor. Es gibt keine zusätzlichen

@@ -53,7 +53,6 @@ Dockerfile  text eol=lf
 *.ico       binary
 *.svg       text eol=lf
 *.pdf       binary
-*.sqlite3   binary
 *.db        binary
 *.pyc       binary
 *.whl       binary

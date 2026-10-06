@@ -24,6 +24,11 @@ Stack: **Python 3.12+ / Django 6, PostgreSQL 16, Redis 7, Nginx, Gunicorn, White
 
 ## ⚡ Schnellstart für lokale Entwicklung (Dev-Setup)
 
+PostgreSQL ist in allen Umgebungen erforderlich. Die Verbindung wird über
+`DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST` und `DB_PORT` konfiguriert. Für den
+Entwicklungsserver auf dem Host `DB_HOST=127.0.0.1` verwenden; in Compose ist der
+Host `db`. Lokale Startskripte brechen bei fehlender Datenbankverbindung ab.
+
 ### 🐧 Linux (Fedora / Ubuntu / Debian)
 
 EntailsNG unterstützt sowohl **Podman** (Standard auf Fedora/RHEL) als auch **Docker** (Ubuntu/Debian):
@@ -64,13 +69,18 @@ python -m venv .venv
 # 2. Abhängigkeiten installieren
 pip install -r requirements.txt
 
-# 3. Datenbank strukturieren & Seeds ausführen
+# 3. Konfiguration anlegen und PostgreSQL starten
+Copy-Item .env.example .env
+# .env bearbeiten: Schlüssel setzen, DEBUG=True, DB_HOST=127.0.0.1, BEHIND_PROXY=False
+docker compose up -d db redis
+
+# 4. Datenbank strukturieren & Seeds ausführen
 python manage.py migrate
 python manage.py seed_translations
 python manage.py seed_features
 python manage.py seed_email_templates
 
-# 4. Server starten
+# 5. Server starten
 python manage.py runserver
 ```
 
