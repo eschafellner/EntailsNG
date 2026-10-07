@@ -261,6 +261,11 @@ class SeatingCell(models.Model):
         if not registration:
             return False, "Keine gültige Anmeldung vorhanden."
 
+        from django.contrib.auth import get_user_model
+        if get_user_model().objects.filter(pk=registration.user_id, is_banned=True).exists():
+            from configuration.translations import get_translation
+            return False, get_translation('ban_access_failed')
+
         if registration.payment_status == EventRegistration.PaymentStatus.CANCELLED:
             return False, "Deine Anmeldung ist storniert. Bitte melde dich erneut an."
 

@@ -187,6 +187,8 @@ class RegistrationService:
         from django.contrib.auth import get_user_model
         from configuration.translations import get_translation
         user = get_user_model().objects.select_for_update(no_key=True).get(pk=user.pk)
+        if user.is_banned:
+            raise RegistrationError(get_translation('ban_access_failed'))
         if user.deleted_at or not user.is_active:
             raise RegistrationError(get_translation('account_deleted_registration_blocked'))
 
@@ -369,6 +371,9 @@ class CheckInService:
     @transaction.atomic
     def check_in(registration_id: int, target_event=None, actor=None):
         from django.core.exceptions import ValidationError
+        from django.contrib.auth import get_user_model
+        user_id = EventRegistration.objects.values_list('user_id', flat=True).get(pk=registration_id)
+        get_user_model().objects.select_for_update(no_key=True).get(pk=user_id)
         event_id = EventRegistration.objects.values_list('event_id', flat=True).get(pk=registration_id)
         Event.objects.select_for_update().get(pk=event_id)
         reg = EventRegistration.objects.select_for_update(of=('self',)).select_related('event', 'user').get(pk=registration_id)

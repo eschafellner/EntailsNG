@@ -1,0 +1,42 @@
+{% extends 'admin/base_site.html' %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .results-editor { --ink:var(--body-fg); --muted:var(--body-quiet-color); --line:var(--hairline-color); --panel:var(--darkened-bg); }
+  .results-editor input, .results-editor select { max-width:100%; box-sizing:border-box; }
+  .results-editor summary { cursor:pointer; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="results-editor">
+<h2>{{ tournament.title }} · {{ tournament.get_status_display }}</h2>
+<p><a href="{% url 'admin:tournaments_tournament_change' tournament.pk %}">{{ tournament.title }}</a></p>
+{% if error %}<p class="errornote" role="alert">{{ error }}</p>{% endif %}
+{% include 'tournaments/includes/result_actions.html' with admin_results=True %}
+{% for match in result_matches %}
+<section class="module" id="match-{{ match.pk }}" style="padding:16px; margin-bottom:20px;">
+  <h3>{{ match }} · {{ match.get_status_display }}</h3>
+  {% if match.lock_reason %}
+    <p>{{ match.lock_reason }}</p>
+    <p>{{ match.score_team1|default_if_none:'—' }} : {{ match.score_team2|default_if_none:'—' }} · {{ match.winner|default_if_none:'—' }}</p>
+  {% else %}
+    {% if match.status == 'READY' %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="start"><input type="hidden" name="match_id" value="{{ match.pk }}"><input type="hidden" name="expected_state" value="{{ match.result_version }}"><button type="submit">{% t 'results_start' %}</button></form>
+    {% endif %}
+    <form method="post" style="max-width:720px;">
+      {% csrf_token %}<input type="hidden" name="match_id" value="{{ match.pk }}">
+      {% if match.bracket_type == 'FFA' %}
+        <input type="hidden" name="action" value="ffa"><input type="hidden" name="expected_state" value="{{ match.result_version }}">
+        {% include 'tournaments/includes/ffa_fields.html' with ffa_participants=match.participants.all ffa_match=match %}
+      {% else %}
+        <input type="hidden" name="action" value="score">
+        {{ match.score_form.as_p }}
+        {% if match.bracket_type == 'GROUP' and tournament.mode == 'GROUP_STAGE' %}<p>{% t 'results_group_hint' %}</p>{% elif tournament.mode != 'LEAGUE' and tournament.mode != 'SWISS' %}<p>{% t 'results_score_only_hint' %}</p>{% endif %}
+      {% endif %}
+      <button type="submit">{% if match.status == 'COMPLETED' %}{% t 'results_correct' %}{% else %}{% t 'results_edit' %}{% endif %}</button>
+    </form>
+  {% endif %}
+</section>
+{% endfor %}
+{% include 'tournaments/includes/result_history.html' %}
+</div>
+{% endblock %}

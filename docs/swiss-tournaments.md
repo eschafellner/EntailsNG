@@ -7,7 +7,9 @@ Die anschließende modulweite Prüfung und die aktuellen Testergebnisse sind im
 Die spätere [Verbesserungsrunde](tournament-mode-improvements-2026-10-01.md)
 ergänzt einen explizit genehmigten Rettungsweg für blockierte Auslosungen.
 
-Stand: 1. Oktober 2026. Das Schweizer System ist der sechste Turniermodus und
+Stand: 7. Oktober 2026. Die gemeinsame [Ergebnisverwaltung](tournament-result-management.md)
+ergänzt Backend-Korrekturen, Änderungshistorie und die endgültige Abschlussbestätigung.
+Das Schweizer System ist der sechste Turniermodus und
 funktioniert sowohl für Einzelspieler als auch für Teams. Es endet mit einer
 Rangliste; eine anschließende K.-o.-Phase gehört nicht zu diesem Modus.
 
@@ -25,8 +27,10 @@ Rangliste; eine anschließende K.-o.-Phase gehört nicht zu diesem Modus.
 4. Sobald sämtliche Matches der aktuellen Runde abgeschlossen sind, erscheint
    für die Turnierleitung **Nächste Runde auslosen**. Paarungen prüfen und explizit
    veröffentlichen. Eine neue Runde wird nie automatisch angelegt.
-5. Nach dem letzten Ergebnis der letzten vorgesehenen Runde wird das Turnier
-   automatisch beendet. Abschlusstabelle, geteilte Podiumsplätze und Urkunden
+5. Nach dem letzten Ergebnis der letzten vorgesehenen Runde wechselt das Turnier
+   auf **Ergebnisse prüfen**. Die Orga kann die letzte Runde noch korrigieren und
+   schließt das Turnier mit **Ergebnisse endgültig bestätigen** ab.
+   Abschlusstabelle, geteilte Podiumsplätze und Urkunden
    verwenden dieselbe Rangfolge. Schweizer Urkunden haben auch jenseits der ersten
    drei Plätze einen Rang; zurückgezogene Teilnehmer erhalten keinen Rang.
 
@@ -97,7 +101,8 @@ und Ergebnisse. Änderungen oder eine bereits erfolgte Freigabe machen die Vorsc
 ungültig. Eine erneute Vorschau ist dann erforderlich.
 
 Ergebnisse der aktuellen Runde können durch die Orga korrigiert werden, bis die
-nächste Runde veröffentlicht wird. Ein abgeschlossenes Turnier ist gesperrt.
+nächste Runde veröffentlicht wird. Die letzte Runde bleibt bis zur endgültigen
+Abschlussbestätigung korrigierbar; danach ist das Turnier gesperrt.
 Freilose und kampflose Ergebnisse können nicht als gespieltes Match überschrieben
 werden. Ein Reset ist regulär nur vor dem ersten gespielten/gewerteten Match möglich.
 

@@ -201,6 +201,11 @@ class LanEventSimulationTests(TestCase):
             self.assertEqual(tournament.matches.count(), expected_matches)
 
             while tournament.status != Tournament.Status.FINISHED:
+                if tournament.status == Tournament.Status.RESULTS_REVIEW:
+                    from tournaments.services import TournamentLifecycleService
+                    TournamentLifecycleService.confirm_results(tournament.pk, actor=organizer)
+                    tournament.refresh_from_db()
+                    break
                 ready = tournament.matches.filter(status=TournamentMatch.Status.READY).order_by(
                     "round_number", "match_number",
                 ).first()

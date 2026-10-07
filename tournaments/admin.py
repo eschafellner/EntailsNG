@@ -10,10 +10,10 @@ from django.template.response import TemplateResponse
 from configuration.translations import get_translation
 from tournaments.exceptions import TournamentError
 from tournaments.models import (
-    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration, SwissRound
+    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration, SwissRound, TournamentResultLog
 )
 from tournaments.services import TournamentBracketService, TournamentRestartService
-from tournaments.forms import TournamentMatchAdminForm, TournamentRestartForm
+from tournaments.forms import TournamentMatchAdminForm, TournamentRestartForm, MatchResultForm, TournamentAdminForm
 
 
 @admin.register(Game)
@@ -53,6 +53,7 @@ class TournamentMatchInline(admin.TabularInline):
     model = TournamentMatch
     extra = 0
     can_delete = False
+    show_change_link = True
     fields = (
         'bracket_type', 'round_number', 'match_number', 'team1', 'team2',
         'score_team1', 'score_team2', 'winner', 'status'
@@ -68,6 +69,7 @@ class TournamentMatchInline(admin.TabularInline):
 
 @admin.register(Tournament)
 class TournamentAdmin(admin.ModelAdmin):
+    form = TournamentAdminForm
     change_form_template = 'admin/tournaments/tournament/change_form.html'
     list_display = (
         'title', 'event', 'game', 'mode', 'status',
@@ -97,14 +99,84 @@ class TournamentAdmin(admin.ModelAdmin):
                 and self.has_add_permission(request) and request.user.has_perm('tournaments.add_tournamentregistration'))
 
     def get_urls(self):
-        return [path('<int:object_id>/restart/', self.admin_site.admin_view(self.restart_view),
+        return [path('<int:object_id>/results/', self.admin_site.admin_view(self.results_view),
+                     name='tournaments_tournament_results'),
+                path('<int:object_id>/restart/', self.admin_site.admin_view(self.restart_view),
                      name='tournaments_tournament_restart')] + super().get_urls()
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         obj = self.get_object(request, object_id)
         context = dict(extra_context or {})
         context['can_restart'] = bool(obj and self.has_restart_permission(request, obj))
+        context['can_manage_results'] = bool(obj and obj.is_generated and self.has_change_permission(request, obj)
+            and request.user.has_perm('tournaments.change_tournamentmatch'))
         return super().change_view(request, object_id, form_url, context)
+
+    def results_view(self, request, object_id):
+        from .services import TournamentMatchService, FFAMatchService, TournamentLifecycleService
+        from .services.results import result_lock_reason, match_version, tournament_version
+        tournament = self.get_object(request, str(object_id))
+        if tournament is None:
+            raise Http404
+        if (not self.has_change_permission(request, tournament)
+                or not request.user.has_perm('tournaments.change_tournamentmatch')
+                or not tournament.is_managed_by(request.user)):
+            raise PermissionDenied
+        if request.method not in ('GET', 'POST'):
+            return HttpResponseNotAllowed(['GET', 'POST'])
+        bound_form, error = None, ''
+        matches = list(tournament.matches.select_related('team1', 'team2', 'winner', 'loser').prefetch_related('participants__team')
+                       .order_by('bracket_type', 'round_number', 'match_number'))
+        if request.method == 'POST':
+            action = request.POST.get('action')
+            match = next((m for m in matches if str(m.pk) == request.POST.get('match_id')), None)
+            try:
+                if action == 'confirm':
+                    TournamentLifecycleService.confirm_results(tournament.pk, actor=request.user,
+                        expected_state=request.POST.get('expected_state', ''))
+                elif action == 'release':
+                    TournamentLifecycleService.release_playoffs(tournament.pk, actor=request.user,
+                        expected_state=request.POST.get('expected_state', ''))
+                elif match and action == 'start':
+                    TournamentLifecycleService.start_match(match.pk, actor=request.user,
+                        expected_state=request.POST.get('expected_state', ''))
+                elif match and action == 'score':
+                    bound_form = MatchResultForm(request.POST, match=match)
+                    if bound_form.is_valid():
+                        TournamentMatchService.update_match_score(match.pk, actor=request.user,
+                            score1=bound_form.cleaned_data['score_team1'], score2=bound_form.cleaned_data['score_team2'],
+                            winner_id=bound_form.cleaned_data['winner_id'], decision_reason=bound_form.cleaned_data['decision_reason'],
+                            expected_state=bound_form.cleaned_data['expected_state'])
+                    else:
+                        raise TournamentError(get_translation('results_invalid_form'))
+                elif match and action == 'ffa':
+                    from .views import ffa_post_scores
+                    FFAMatchService.update_ffa_scores(match.pk, ffa_post_scores(request.POST, match),
+                        actor=request.user, decision_reason=request.POST.get('decision_reason'),
+                        expected_state=request.POST.get('expected_state', ''))
+                else:
+                    raise Http404
+            except TournamentError as exc:
+                error = str(exc)
+            else:
+                self.message_user(request, get_translation('results_action_success'), messages.SUCCESS)
+                return redirect('admin:tournaments_tournament_results', tournament.pk)
+        for match in matches:
+            match.tournament = tournament
+            match.lock_reason = result_lock_reason(match, tournament,
+                latest_swiss_round=max((m.round_number for m in matches), default=0))
+            match.result_version = match_version(match)
+            match.score_form = bound_form if bound_form and str(match.pk) == request.POST.get('match_id') else MatchResultForm(match=match)
+        context = {**self.admin_site.each_context(request), 'opts': self.model._meta, 'original': tournament,
+            'tournament': tournament, 'title': get_translation('results_manage'), 'result_matches': matches,
+            'error': error, 'result_version': tournament_version(tournament, matches),
+            'can_confirm_results': tournament.status == Tournament.Status.RESULTS_REVIEW and not tournament._event_is_closed(),
+            'can_release_playoffs': tournament.mode == Tournament.Mode.GROUP_STAGE and not tournament.playoffs_released_at
+                and tournament.status == Tournament.Status.IN_PROGRESS and not tournament._event_is_closed()
+                and tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GROUP).exists()
+                and not tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GROUP).exclude(status=TournamentMatch.Status.COMPLETED).exists(),
+            'result_logs': tournament.result_logs.select_related('actor')[:100]}
+        return TemplateResponse(request, 'admin/tournaments/tournament/results.html', context)
 
     def restart_history(self, obj):
         if not obj.pk:
@@ -185,6 +257,7 @@ class TournamentAdmin(admin.ModelAdmin):
                     (Tournament.Status.REGISTRATION_OPEN, 'tournament_status_open', 'Anmeldung geöffnet'),
                     (Tournament.Status.REGISTRATION_CLOSED, 'tournament_status_closed', 'Anmeldung geschlossen'),
                     (Tournament.Status.IN_PROGRESS, 'tournament_status_running', 'Turnier läuft'),
+                    (Tournament.Status.RESULTS_REVIEW, 'results_review', 'Ergebnisse prüfen'),
                     (Tournament.Status.FINISHED, 'tournament_status_finished', 'Beendet'),
                     (Tournament.Status.CANCELLED, 'tournament_status_cancelled', 'Abgesagt'),
                 ]
@@ -400,17 +473,14 @@ class TournamentMatchAdmin(admin.ModelAdmin):
 
     @admin.display(description='Turnieransicht')
     def result_editor(self, obj):
-        return format_html('<a href="{}">{}</a>', reverse('tournament_detail', args=[obj.tournament.slug]),
-                           get_translation('tournament_match_admin_open', 'Turnier öffnen und Ergebnisse eintragen'))
+        return format_html('<a href="{}#match-{}">{}</a>', reverse('admin:tournaments_tournament_results', args=[obj.tournament_id]),
+                           obj.pk, get_translation('results_manage'))
 
     def get_readonly_fields(self, request, obj=None):
         extra = ('team1', 'team2', 'swiss_round', 'result_type')
-        if obj and obj.bracket_type == TournamentMatch.BracketType.FFA:
-            extra += ('score_team1', 'score_team2', 'winner', 'decision_reason')
-        if obj and obj.bracket_type == TournamentMatch.BracketType.SWISS:
-            if (obj.result_type != TournamentMatch.ResultType.PLAYED
-                or obj.tournament.status != Tournament.Status.IN_PROGRESS
-                or obj.tournament.swiss_round_records.filter(number__gt=obj.round_number).exists()):
+        if obj:
+            from .services.results import result_lock_reason
+            if obj.bracket_type == TournamentMatch.BracketType.FFA or result_lock_reason(obj, obj.tournament):
                 extra += ('score_team1', 'score_team2', 'winner', 'decision_reason')
         return self.readonly_fields + extra
 
@@ -466,6 +536,7 @@ class TournamentMatchAdmin(admin.ModelAdmin):
                             winner_id=selected_winner_id,
                             decision_reason=obj.decision_reason,
                             actor=request.user,
+                            expected_state=form.cleaned_data.get('result_version') or None,
                         )
                         obj.status = match.status
                         obj.winner = match.winner
@@ -498,6 +569,22 @@ class SwissRoundAdmin(admin.ModelAdmin):
     readonly_fields = ('tournament', 'number', 'published_at', 'published_by', 'input_digest', 'standings_snapshot', 'repeat_pairings_approved')
 
     def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(TournamentResultLog)
+class TournamentResultLogAdmin(admin.ModelAdmin):
+    list_display = ('tournament', 'match_label', 'actor', 'action', 'created_at')
+    list_filter = ('tournament', 'action')
+    readonly_fields = ('tournament', 'match', 'match_label', 'actor', 'action', 'reason', 'before', 'after', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):

@@ -1,0 +1,12 @@
+{% if result_logs %}
+<details style="margin:20px 0;">
+  <summary>{% t 'results_history' %}</summary>
+  {% for entry in result_logs %}
+  <details style="margin:12px 0;">
+    <summary>{{ entry.created_at|date:'d.m.Y H:i:s' }} · {{ entry.actor|default_if_none:'—' }} · {{ entry.match_label }} · {{ entry.get_action_display }}</summary>
+    <p>{{ entry.reason }}</p>
+    <pre style="white-space:pre-wrap; overflow-wrap:anywhere;">{{ entry.before_display }} → {{ entry.after_display }}</pre>
+  </details>
+  {% endfor %}
+</details>
+{% endif %}

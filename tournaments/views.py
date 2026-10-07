@@ -7,6 +7,7 @@ from django.http import JsonResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST, require_GET
 from django.utils import timezone
+from .services.results import result_lock_reason, match_version, tournament_version
 from .services.validation import identifier
 from .services.rosters import roster_action
 from .services.recruitment import received_invitations, current_recruitment_teams
@@ -257,10 +258,17 @@ def tournament_detail(request, slug):
                 name = first.round_name
             bracket_rounds.append({'name': name, 'matches': round_matches})
     for match in match_list:
-        match.swiss_editable = bool(is_admin and tournament.mode == Tournament.Mode.SWISS
-            and tournament.status == Tournament.Status.IN_PROGRESS and swiss_current_round
-            and match.round_number == swiss_current_round.number
-            and match.result_type == TournamentMatch.ResultType.PLAYED)
+        match.tournament = tournament
+        match.lock_reason = result_lock_reason(match, tournament,
+            latest_swiss_round=swiss_current_round.number if swiss_current_round else None)
+        match.result_editable = not match.lock_reason
+        match.result_version = match_version(match)
+    # Reuse these annotated instances in every bracket view.
+    wb_matches = [m for m in match_list if m.bracket_type == TournamentMatch.BracketType.WINNERS]
+    lb_matches = [m for m in match_list if m.bracket_type == TournamentMatch.BracketType.LOSERS]
+    grand_final_matches = sorted([m for m in match_list if m.bracket_type in (TournamentMatch.BracketType.GRAND_FINAL, TournamentMatch.BracketType.GRAND_FINAL_RESET)], key=lambda m: (m.round_number, m.pk))
+    if ffa_match:
+        ffa_match = next(m for m in match_list if m.pk == ffa_match.pk)
     next_match = None
     if user_team and tournament.status == Tournament.Status.IN_PROGRESS:
         personal_matches = [m for m in match_list if not m.is_bye
@@ -281,12 +289,20 @@ def tournament_detail(request, slug):
             'team1Id': match.team1_id, 'team2Id': match.team2_id,
             'score1': match.score_team1, 'score2': match.score_team2,
             'winner': match.winner_id, 'reason': match.decision_reason,
+            'version': match.result_version, 'correction': match.status == TournamentMatch.Status.COMPLETED and is_admin,
             'isAdmin': is_admin, 'role': role,
             'allowsDraw': tournament.mode == Tournament.Mode.LEAGUE or match.bracket_type == TournamentMatch.BracketType.GROUP
                 or (tournament.mode == Tournament.Mode.SWISS and tournament.swiss_allow_draws),
         }
 
     context = {
+        'result_version': tournament_version(tournament, match_list),
+        'result_logs': tournament.result_logs.select_related('actor')[:100] if is_admin else [],
+        'can_confirm_results': is_admin and not event_closed and tournament.status == Tournament.Status.RESULTS_REVIEW,
+        'can_release_playoffs': is_admin and not event_closed and tournament.mode == Tournament.Mode.GROUP_STAGE
+            and tournament.status == Tournament.Status.IN_PROGRESS and not tournament.playoffs_released_at
+            and tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GROUP).exists()
+            and not tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GROUP).exclude(status=TournamentMatch.Status.COMPLETED).exists(),
         'swiss_standings': swiss_standings,
         'swiss_rounds': [{'number': record.number, 'published_at': record.published_at,
                           'repeat_pairings_approved': record.repeat_pairings_approved,
@@ -327,7 +343,7 @@ def tournament_detail(request, slug):
         'can_view_drafts': Tournament.can_view_drafts(request.user),
         'results_locked': tournament.status in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED)
             or tournament.event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED),
-        'ffa_editable': is_admin and tournament.status != Tournament.Status.CANCELLED
+        'ffa_editable': is_admin and tournament.status in (Tournament.Status.IN_PROGRESS, Tournament.Status.RESULTS_REVIEW)
             and tournament.event.effective_status not in (Event.Status.FINISHED, Event.Status.CANCELLED),
         'user_team': user_team,
         'is_registered': is_registered,
@@ -572,6 +588,7 @@ def match_update_score(request, match_id):
             winner_id=winner_id,
             decision_reason=decision_reason,
             actor=request.user,
+            expected_state=request.POST.get('expected_state'),
         )
 
         if winner_team:
@@ -626,22 +643,7 @@ def match_update_ffa_score(request, match_id):
         return redirect('tournament_detail', slug=tournament.slug)
 
     try:
-        participant_scores = []
-        participants = match_obj.participants.all()
-        for p in participants:
-            if f'rank_{p.id}' not in request.POST or f'score_{p.id}' not in request.POST:
-                raise TournamentMatchError(get_translation('audit_ffa_complete_results', 'Bitte die Ergebnisse aller Teilnehmer gemeinsam übermitteln.'))
-            rank_val = request.POST.get(f'rank_{p.id}')
-            score_val = request.POST.get(f'score_{p.id}', 0)
-            notes_val = request.POST.get(f'notes_{p.id}', '')
-            is_dq = bool(request.POST.get(f'dq_{p.id}'))
-            participant_scores.append({
-                'participant_id': p.id,
-                'rank': rank_val,
-                'score': score_val,
-                'notes': notes_val,
-                'is_disqualified': is_dq,
-            })
+        participant_scores = ffa_post_scores(request.POST, match_obj)
 
         decision_reason = request.POST.get('decision_reason', '')
 
@@ -650,6 +652,7 @@ def match_update_ffa_score(request, match_id):
             participant_scores=participant_scores,
             decision_reason=decision_reason,
             actor=request.user,
+            expected_state=request.POST.get('expected_state'),
         )
 
         messages.success(
@@ -672,6 +675,56 @@ def match_update_ffa_score(request, match_id):
 # =============================================================================
 # TEAMMANAGER VIEWS
 # =============================================================================
+
+
+def ffa_post_scores(data, match):
+    scores = []
+    for p in match.participants.all():
+        if f'rank_{p.pk}' not in data or f'score_{p.pk}' not in data:
+            raise TournamentMatchError(get_translation('audit_ffa_complete_results'))
+        scores.append({'participant_id': p.pk, 'rank': data.get(f'rank_{p.pk}'),
+            'score': data.get(f'score_{p.pk}'), 'notes': data.get(f'notes_{p.pk}', ''),
+            'is_disqualified': bool(data.get(f'dq_{p.pk}'))})
+    return scores
+
+
+@login_required
+@require_POST
+def tournament_confirm_results(request, slug):
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug)
+    try:
+        TournamentLifecycleService.confirm_results(tournament.pk, actor=request.user,
+            expected_state=request.POST.get('expected_state', ''))
+        messages.success(request, get_translation('results_confirm_success'))
+    except TournamentError as exc:
+        messages.error(request, str(exc))
+    return redirect('tournament_detail', slug=slug)
+
+
+@login_required
+@require_POST
+def tournament_release_playoffs(request, slug):
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug)
+    try:
+        TournamentLifecycleService.release_playoffs(tournament.pk, actor=request.user,
+            expected_state=request.POST.get('expected_state', ''))
+        messages.success(request, get_translation('results_release_success'))
+    except TournamentError as exc:
+        messages.error(request, str(exc))
+    return redirect('tournament_detail', slug=slug)
+
+
+@login_required
+@require_POST
+def match_start(request, match_id):
+    match = get_object_or_404(TournamentMatch.objects.filter(tournament__in=Tournament.objects.visible_to(request.user)), pk=match_id)
+    try:
+        TournamentLifecycleService.start_match(match.pk, actor=request.user,
+            expected_state=request.POST.get('expected_state', ''))
+        messages.success(request, get_translation('results_start_success'))
+    except TournamentError as exc:
+        messages.error(request, str(exc))
+    return redirect('tournament_detail', slug=match.tournament.slug)
 
 
 def team_list(request):

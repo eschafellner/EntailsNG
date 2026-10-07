@@ -35,6 +35,7 @@ if not SECRET_KEY:
     )
 
 FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', '')
+USER_BAN_HMAC_KEY = os.environ.get('USER_BAN_HMAC_KEY', '')
 if not FIELD_ENCRYPTION_KEY and not DEBUG and 'test' not in sys.argv:
     import warnings
     warnings.warn(

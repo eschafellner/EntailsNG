@@ -1,4 +1,5 @@
 """Swiss tournament lifecycle, fairness, publication and shared placements."""
+from tournaments.testing import confirm_results
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -80,7 +81,7 @@ class SwissTests(TestCase):
                 self.assertIsNone(match.next_match_winner_id)
             self.score_round()
             self.assertEqual(self.tournament.swiss_round_records.count(), number)
-            self.assertEqual(self.tournament.status, Tournament.Status.FINISHED if number == 3 else Tournament.Status.IN_PROGRESS)
+            self.assertEqual(self.tournament.status, Tournament.Status.RESULTS_REVIEW if number == 3 else Tournament.Status.IN_PROGRESS)
         self.assertEqual(sum(r['points'] for r in SwissStandingService.calculate(self.tournament)), 36)
         with self.assertRaises(TournamentError):
             SwissTournamentService.preview(self.tournament.pk, actor=self.staff)
@@ -107,6 +108,7 @@ class SwissTests(TestCase):
             self.publish(tournament)
             self.score_round(tournament)
         self.assertEqual(tournament.matches.filter(is_bye=False).count(), 3)
+        confirm_results(tournament)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
 
     def test_preview_is_read_only_and_publishes_exact_pairings_and_seeds(self):
@@ -132,12 +134,12 @@ class SwissTests(TestCase):
         self.score_round()
         plan = SwissTournamentService.preview(self.tournament.pk, actor=self.staff)
         match = record.matches.first()
-        TournamentMatchService.update_match_score(match.pk, 0, 1, actor=self.staff)
+        TournamentMatchService.update_match_score(match.pk, 0, 1, actor=self.staff, decision_reason='Testkorrektur')
         with self.assertRaisesMessage(TournamentError, 'seit der Vorschau geändert'):
             SwissTournamentService.publish(self.tournament.pk, actor=self.staff, token=plan['token'])
         self.publish()
-        with self.assertRaisesMessage(TournamentError, 'frühere Ergebnis ist gesperrt'):
-            TournamentMatchService.update_match_score(match.pk, 1, 0, actor=self.staff)
+        with self.assertRaisesMessage(TournamentError, 'Dieses Ergebnis ist gesperrt'):
+            TournamentMatchService.update_match_score(match.pk, 1, 0, actor=self.staff, decision_reason='Testkorrektur')
 
     def test_token_cannot_be_replayed_or_used_for_another_tournament(self):
         _, plan = self.publish()
@@ -259,8 +261,10 @@ class SwissTests(TestCase):
         self.score_round(tournament, draw=True)
         standings = SwissStandingService.calculate(tournament)
         self.assertEqual([(r['points'], r['buchholz'], r['sonneborn_berger'], r['rank']) for r in standings], [(1, 1, 1, 1)] * 4)
+        confirm_results(tournament, self.staff)
         self.assertEqual(len(TournamentPodiumService.placements(tournament)), 4)
         self.assertEqual(TournamentPodiumService.calculate(tournament), {'first': None, 'second': None, 'third': None})
+        confirm_results(tournament, self.staff)
         rows = certificate_rows(self.teams[:4], tournament, '')
         self.assertEqual([r['team.placement'] for r in rows], ['1. Platz'] * 4)
         response = self.client.get(reverse('tournament_detail', args=[tournament.slug]))
@@ -341,6 +345,7 @@ class SwissTests(TestCase):
         rows = SwissStandingService.calculate(tournament)
         self.assertEqual([(r['points'], r['buchholz'], r['sonneborn_berger'], r['rank']) for r in rows],
                          [(9, 9, 27, 1), (6, 12, 9, 2), (3, 15, 0, 3), (0, 18, 0, 4)])
+        confirm_results(tournament, self.staff)
         self.assertEqual([p['rank'] for p in TournamentPodiumService.placements(tournament)], [1, 2, 3, 4])
         self.assertEqual([r['team.placement'] for r in certificate_rows(self.teams[:4], tournament, '')],
                          ['1. Platz', '2. Platz', '3. Platz', '4. Platz'])
@@ -359,7 +364,7 @@ class SwissTests(TestCase):
         self.publish()
         response = self.client.get(reverse('tournament_detail', args=[self.tournament.slug]))
         old = [m for m in response.context['match_list_cards'] if m.round_number == 1]
-        self.assertTrue(all(not m.swiss_editable for m in old))
+        self.assertTrue(all(not m.result_editable for m in old))
         self.client.logout()
         response = self.client.get(reverse('tournament_detail', args=[self.tournament.slug]))
         self.assertContains(response, 'Aktuelle Rangliste')

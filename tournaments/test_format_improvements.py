@@ -1,4 +1,5 @@
 """Regression coverage for the six-format review and optional tournament rules."""
+from tournaments.testing import confirm_results, release_for_match
 from datetime import timedelta
 from importlib import import_module
 from types import SimpleNamespace
@@ -56,11 +57,12 @@ class FormatImprovementsTests(TestCase):
         return tournament
 
     def play(self, match, first=True):
-        return TournamentMatchService.update_match_score(match.pk, 2 if first else 0, 0 if first else 2, actor=self.staff)
+        release_for_match(match, self.staff)
+        return TournamentMatchService.update_match_score(match.pk, 2 if first else 0, 0 if first else 2, actor=self.staff, decision_reason='Testkorrektur')
 
     def finish(self, tournament):
         for _ in range(512):
-            tournament.refresh_from_db()
+            confirm_results(tournament, self.staff)
             if tournament.status == Tournament.Status.FINISHED:
                 return
             match = tournament.matches.filter(status=TournamentMatch.Status.READY, is_bye=False).first()
@@ -76,6 +78,7 @@ class FormatImprovementsTests(TestCase):
         self.assertTrue(tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GRAND_FINAL_RESET).exists())
         self.play(final)
         tournament.refresh_from_db()
+        confirm_results(tournament)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
         self.assertFalse(tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists())
 
@@ -113,6 +116,7 @@ class FormatImprovementsTests(TestCase):
                     self.play(last)
                     tournament.refresh_from_db()
                     bronze.refresh_from_db()
+                    confirm_results(tournament)
                     self.assertEqual(tournament.status, Tournament.Status.FINISHED)
                     self.assertEqual(TournamentPodiumService.calculate(tournament)['third'], bronze.winner)
                     self.assertEqual(certificate_rows([bronze.winner], tournament, '')[0]['team.placement'], '3. Platz')
@@ -199,6 +203,7 @@ class FormatImprovementsTests(TestCase):
         for match in tournament.matches.all():
             self.play(match, match.team1_id < match.team2_id)
         tournament.refresh_from_db()
+        confirm_results(tournament, self.staff)
         placements = TournamentPodiumService.placements(tournament)
         self.assertEqual([p['rank'] for p in placements], list(range(1, 7)))
         self.assertEqual(certificate_rows([placements[-1]['team']], tournament, '')[0]['team.placement'], '6. Platz')
@@ -210,6 +215,7 @@ class FormatImprovementsTests(TestCase):
         tournament.refresh_from_db()
         self.assertEqual([r['rank'] for r in LeagueStandingService.calculate_league_standings(tournament)], [1, 1, 1, 1])
         self.assertIsNone(TournamentPodiumService.calculate(tournament)['first'])
+        confirm_results(tournament, self.staff)
         self.assertEqual(len(TournamentPodiumService.placements(tournament)), 4)
 
     def test_migration_retains_historical_ranking_and_new_tournaments_use_shared_ranks(self):
@@ -250,6 +256,7 @@ class FormatImprovementsTests(TestCase):
             entry['is_disqualified'] = True
         FFAMatchService.update_ffa_scores(match.pk, entries, actor=self.staff)
         tournament.refresh_from_db()
+        confirm_results(tournament)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
 
     def blocked_swiss(self):

@@ -369,8 +369,15 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
         return response
 
+    @transaction.atomic
     def save_model(self, request, obj, form, change):
-        """Setzt den Zeitstempel automatisch, wenn im Admin das Häkchen manuell gesetzt wird, prüft den Bezahlstatus und delegiert Zahlungs- und Stornierungslogik an mark_as_paid / mark_as_cancelled."""
+        """Prüft Orga-Sperren, Check-in und Zahlungsstatus unter derselben Usersperre."""
+        from django.contrib.auth import get_user_model
+        owner = get_user_model().objects.select_for_update(no_key=True).get(pk=obj.user_id)
+        if owner.is_banned and obj.is_checked_in:
+            messages.error(request, get_translation('ban_checkin_failed'))
+            obj.is_checked_in = False
+            obj.checked_in_at = None
         became_paid = (
             obj.payment_status == EventRegistration.PaymentStatus.PAID
             and (not change or 'payment_status' in form.changed_data)
@@ -466,8 +473,8 @@ class EventRegistrationAdmin(admin.ModelAdmin):
             try:
                 reg.check_in()
                 success_count += 1
-            except ValidationError:
-                failed_users.append(reg.user.username)
+            except ValidationError as exc:
+                failed_users.append(f'{reg.user.username}: {"; ".join(exc.messages)}')
 
         if success_count > 0:
             self.message_user(
@@ -476,7 +483,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         if failed_users:
             self.message_user(
                 request,
-                f"Check-in für folgende {len(failed_users)} Gast/Gäste verweigert (nicht bezahlt): {', '.join(failed_users)}.",
+                f"Check-in für folgende {len(failed_users)} Gast/Gäste verweigert: {', '.join(failed_users)}.",
                 level=messages.ERROR
             )
 

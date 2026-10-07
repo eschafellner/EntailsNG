@@ -8,6 +8,54 @@ from django.utils import timezone
 from configuration.translations import get_translation
 
 
+class TournamentResultLog(models.Model):
+    tournament = models.ForeignKey('Tournament', on_delete=models.CASCADE, related_name='result_logs')
+    match = models.ForeignKey('TournamentMatch', null=True, blank=True, on_delete=models.SET_NULL, related_name='result_logs')
+    match_label = models.CharField(max_length=255, blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    action = models.CharField(max_length=20, default='RESULT')
+    reason = models.CharField(max_length=255, blank=True)
+    before = models.JSONField(default=dict)
+    after = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def get_action_display(self):
+        return get_translation({'RESULT': 'results_save', 'DEPENDENCY': 'results_dependency_action',
+            'START': 'results_start', 'RELEASE': 'results_release', 'CONFIRM': 'results_confirm'}.get(self.action, 'results_save'))
+
+    @property
+    def before_display(self):
+        return self._display_snapshot(self.before)
+
+    @property
+    def after_display(self):
+        return self._display_snapshot(self.after)
+
+    @staticmethod
+    def _display_snapshot(data):
+        if data.get('removed'):
+            return get_translation('results_removed')
+        if 'participants' in data:
+            return '\n'.join(get_translation('results_ffa_history', team=p.get('team__name', p['team_id']),
+                rank=p['rank'] if p['rank'] is not None else '—', score=p['score'],
+                disqualified=get_translation('tournament_ffa_dq_label') if p['is_disqualified'] else '')
+                for p in data['participants'])
+        if 'score_team1' in data:
+            return get_translation('ux_score_summary', team1=data.get('team1', '—'), team2=data.get('team2', '—'),
+                score1=data['score_team1'] if data['score_team1'] is not None else '—',
+                score2=data['score_team2'] if data['score_team2'] is not None else '—', winner=data.get('winner') or '—')
+        if 'status' in data:
+            return Tournament(status=data['status']).get_status_display()
+        if 'playoffs_released_at' in data:
+            return get_translation('results_release_success')
+        return '—'
+
+    class Meta:
+        ordering = ('-created_at', '-pk')
+        verbose_name = 'Ergebnisprotokoll'
+        verbose_name_plural = 'Ergebnisprotokolle'
+
+
 class Game(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="Spielname")
     slug = models.SlugField(max_length=100, unique=True, blank=True, verbose_name="URL-Slug")
@@ -85,6 +133,7 @@ class Tournament(models.Model):
         REGISTRATION_OPEN = 'OPEN', 'Anmeldung geöffnet'
         REGISTRATION_CLOSED = 'CLOSED', 'Anmeldung geschlossen'
         IN_PROGRESS = 'IN_PROGRESS', 'Turnier läuft'
+        RESULTS_REVIEW = 'RESULTS_REVIEW', 'Ergebnisse prüfen'
         FINISHED = 'FINISHED', 'Beendet'
         CANCELLED = 'CANCELLED', 'Abgesagt'
 
@@ -184,6 +233,11 @@ class Tournament(models.Model):
         help_text="Zeigt an, ob der Turnierbaum für dieses Turnier offiziell generiert wurde.",
     )
 
+    playoffs_released_at = models.DateTimeField(null=True, blank=True, editable=False)
+    results_confirmed_at = models.DateTimeField(null=True, blank=True, editable=False)
+    results_confirmed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='confirmed_tournaments', editable=False)
+
     restarted_from = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
         related_name='restart_editions', editable=False, verbose_name='Neustart von')
     restart_source_title = models.CharField(max_length=150, blank=True, editable=False, verbose_name='Originaltitel beim Neustart')
@@ -224,6 +278,7 @@ class Tournament(models.Model):
             self.Status.REGISTRATION_OPEN: ('tournament_status_open', 'Anmeldung geöffnet'),
             self.Status.REGISTRATION_CLOSED: ('tournament_status_closed', 'Anmeldung geschlossen'),
             self.Status.IN_PROGRESS: ('tournament_status_running', 'Turnier läuft'),
+            self.Status.RESULTS_REVIEW: ('results_review', 'Ergebnisse prüfen'),
             self.Status.FINISHED: ('tournament_status_finished', 'Beendet'),
             self.Status.CANCELLED: ('tournament_status_cancelled', 'Abgesagt'),
         }
@@ -294,7 +349,7 @@ class Tournament(models.Model):
                 raise ValidationError('Bitte zum Zurücksetzen die Turnieraktion verwenden.')
             if original.status in (self.Status.FINISHED, self.Status.CANCELLED) and self.status != original.status:
                 raise ValidationError('Ein abgeschlossenes Schweizer Turnier kann nicht wieder geöffnet werden.')
-            if self.status not in (self.Status.IN_PROGRESS, self.Status.FINISHED, self.Status.CANCELLED):
+            if self.status not in (self.Status.IN_PROGRESS, self.Status.RESULTS_REVIEW, self.Status.FINISHED, self.Status.CANCELLED):
                 raise ValidationError(get_translation('audit_swiss_registration_frozen', 'Die Anmeldung eines gestarteten Schweizer Turniers kann nur über die Turnieraktion wieder geöffnet werden.'))
             if self.status == self.Status.FINISHED:
                 last = self.swiss_round_records.order_by('-number').first()

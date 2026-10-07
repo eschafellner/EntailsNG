@@ -80,7 +80,7 @@ class SwissConcurrencyTests(TransactionTestCase):
         return SwissTournamentService.publish(self.tournament.pk, actor=self.staff, token=self.token)
 
     def correct_previous(self):
-        return TournamentMatchService.update_match_score(self.old_match.pk, 0, 1, actor=self.staff)
+        return TournamentMatchService.update_match_score(self.old_match.pk, 0, 1, actor=self.staff, decision_reason='Testkorrektur')
 
     def test_two_publications_create_exactly_one_round(self):
         self.compete(self.publish_next, self.publish_next, TournamentError)
@@ -111,5 +111,5 @@ class SwissConcurrencyTests(TransactionTestCase):
         self.compete(lambda: TournamentMatchService.update_match_score(a.pk, 1, 0, actor=self.staff),
             lambda: TournamentMatchService.update_match_score(b.pk, 1, 0, actor=self.staff))
         self.tournament.refresh_from_db()
-        self.assertEqual(self.tournament.status, Tournament.Status.FINISHED)
+        self.assertEqual(self.tournament.status, Tournament.Status.RESULTS_REVIEW)
         self.assertFalse(self.tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists())

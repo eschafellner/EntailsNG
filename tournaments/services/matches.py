@@ -2,6 +2,9 @@ import math
 from django.db import transaction
 from .locking import lock_tournament, event_is_closed
 from .validation import integer, identifier, note
+from .results import (snapshot, log_result, require_editable, require_correction_reason,
+                      repair_descendants, sync_review, qualification, check_version, match_version,
+                      playoffs_locked, reset_unreleased_playoffs)
 
 from configuration.translations import get_translation
 from tournaments.models import (
@@ -178,7 +181,7 @@ def check_and_advance_bye_or_walkover(match):
 
 class TournamentMatchService:
     @staticmethod
-    def update_match_score(match_id, score1, score2, winner_id=None, decision_reason=None, actor=None):
+    def update_match_score(match_id, score1, score2, winner_id=None, decision_reason=None, actor=None, expected_state=None, automatic_result=False):
         """
         Trägt das Spielergebnis für ein Match ein, validiert Berechtigungen, Scores & Sieger
         atomar unter Row-Locks, und rückt Sieger/Verlierer in die Folgematches vor.
@@ -189,6 +192,8 @@ class TournamentMatchService:
         score2 = integer(score2, error=InvalidScoreError, label='Punktestand')
         winner_id = identifier(winner_id, error=InvalidWinnerError) if winner_id not in (None, '') else None
         decision_reason = note(decision_reason, error=InvalidScoreError)
+        if automatic_result and actor is not None:
+            raise MatchPermissionDeniedError(get_translation('results_automatic_locked'))
 
         with transaction.atomic():
             swiss_tournament = None
@@ -204,8 +209,11 @@ class TournamentMatchService:
                 raise MatchAlreadyCompletedError(get_translation('audit_score_closed', 'Für beendete oder abgesagte Veranstaltungen und abgesagte Turniere können keine Ergebnisse eingetragen werden.'))
             if match.bracket_type == TournamentMatch.BracketType.FFA:
                 raise TournamentMatchError(get_translation('audit_ffa_use_scoring', 'FFA-Ergebnisse müssen über die FFA-Wertung eingetragen werden.'))
-            if swiss_tournament:
-                SwissTournamentService.validate_score_change(match, tournament)
+            require_editable(match, tournament)
+            check_version(expected_state, match_version(match))
+            before = snapshot(match)
+            old_winner_id = match.winner_id
+            old_qualification = qualification(tournament) if match.bracket_type == TournamentMatch.BracketType.GROUP and tournament.mode == Tournament.Mode.GROUP_STAGE else None
 
             allows_draw = (
                 match.bracket_type == TournamentMatch.BracketType.GROUP
@@ -264,45 +272,6 @@ class TournamentMatchService:
             if not match.is_bye and (not match.team1 or not match.team2):
                 raise MatchNotReadyError("Das Match ist noch nicht vollständig mit Teams besetzt.")
 
-            # 1. Schutz für bereits abgeschlossene Turniere
-            if tournament.status == Tournament.Status.FINISHED:
-                raise MatchAlreadyCompletedError(
-                    "Das Turnier ist bereits abgeschlossen. Ergebnisse können nicht mehr geändert werden."
-                )
-
-            # 2. Folgematch-Schutz bei nachträglicher Änderung
-            if match.status == TournamentMatch.Status.COMPLETED:
-                if match.next_match_winner:
-                    next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
-                    if next_w.status in [TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]:
-                        raise MatchAlreadyCompletedError(
-                            "Das Folgematch wurde bereits gespielt und gewertet. Das Ergebnis kann nicht mehr geändert werden."
-                        )
-                if match.next_match_loser:
-                    next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
-                    if next_l.status in [TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]:
-                        raise MatchAlreadyCompletedError(
-                            "Das Folgematch im Loser-Bracket wurde bereits gespielt. Das Ergebnis kann nicht mehr geändert werden."
-                        )
-                # Schutz für Gruppenphase: wenn Finalphase bereits begonnen hat
-                if match.bracket_type == TournamentMatch.BracketType.GROUP:
-                    if tournament.matches.filter(
-                        bracket_type=TournamentMatch.BracketType.FINAL,
-                        status__in=[TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]
-                    ).exists():
-                        raise MatchAlreadyCompletedError(
-                            "Die Finalspiele wurden bereits begonnen oder beendet. Das Gruppenergebnis kann nicht mehr geändert werden."
-                        )
-                # Schutz für Grand Final: wenn Grand Final Reset bereits begonnen hat
-                if match.bracket_type == TournamentMatch.BracketType.GRAND_FINAL:
-                    if tournament.matches.filter(
-                        bracket_type=TournamentMatch.BracketType.GRAND_FINAL_RESET,
-                        status__in=[TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]
-                    ).exists():
-                        raise MatchAlreadyCompletedError(
-                            "Das Grand Final Reset Match wurde bereits begonnen oder beendet. Das Grand Final Ergebnis kann nicht mehr geändert werden."
-                        )
-
             # 3. Sieger bestimmen und plausibilisieren
             allows_draw = (
                 match.bracket_type == TournamentMatch.BracketType.GROUP
@@ -352,6 +321,11 @@ class TournamentMatchService:
                         "Bitte gib einen Entscheidungsgrund an (z. B. Disqualifikation, Forfeit oder Admin-Entscheidung)."
                     )
 
+            correcting = match.status == TournamentMatch.Status.COMPLETED
+            changed_winner = correcting and old_winner_id != (winner_team.pk if winner_team else None)
+            if correcting:
+                require_correction_reason(match, actor, decision_reason)
+
             # 4. Match aktualisieren
             match.score_team1 = score1
             match.score_team2 = score2
@@ -362,11 +336,28 @@ class TournamentMatchService:
                 match.loser = None
             match.decision_reason = str(decision_reason).strip() if decision_reason else ""
             match.status = TournamentMatch.Status.COMPLETED
+            if automatic_result:
+                match.result_type = TournamentMatch.ResultType.WALKOVER
             match.save()
 
+            if old_qualification is not None and playoffs_locked(tournament):
+                if qualification(tournament) != old_qualification:
+                    raise MatchAlreadyCompletedError(get_translation('results_qualification_locked'))
+                log_result(match, before, actor, match.decision_reason)
+                sync_review(tournament)
+                return match, winner_team
+            if old_qualification is not None and correcting and qualification(tournament) != old_qualification:
+                reset_unreleased_playoffs(tournament, actor, match.decision_reason)
             if swiss_tournament:
+                log_result(match, before, actor, match.decision_reason)
                 SwissTournamentService.sync_completion(tournament)
                 return match, winner_team
+            if correcting and not changed_winner and old_qualification is None:
+                log_result(match, before, actor, match.decision_reason)
+                sync_review(tournament)
+                return match, winner_team
+            if changed_winner:
+                repair_descendants(match, actor, match.decision_reason)
 
             # 5. Sieger ins Folgematch vorrücken (unter Lock)
             if match.next_match_winner:
@@ -418,8 +409,7 @@ class TournamentMatchService:
                 if match.winner == match.team1:
                     tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GRAND_FINAL_RESET,
                         status__in=(TournamentMatch.Status.PENDING, TournamentMatch.Status.READY)).delete()
-                    tournament.status = Tournament.Status.FINISHED
-                    tournament.save(update_fields=['status'])
+                    sync_review(tournament)
                 else:
                     reset_match, _ = TournamentMatch.objects.get_or_create(
                         tournament=tournament,
@@ -433,8 +423,7 @@ class TournamentMatchService:
                         }
                     )
             elif match.bracket_type == TournamentMatch.BracketType.GRAND_FINAL_RESET:
-                tournament.status = Tournament.Status.FINISHED
-                tournament.save(update_fields=['status'])
+                sync_review(tournament)
             elif match.bracket_type == TournamentMatch.BracketType.FINAL:
                 # Completion is checked below, including an optional bronze match.
                 pass
@@ -442,19 +431,15 @@ class TournamentMatchService:
                 if tournament.mode == Tournament.Mode.GROUP_STAGE:
                     GroupStageStandingService.check_and_advance_group_stage(tournament)
 
-            # Globale Abschlussprüfung: Wenn keine offenen Spiele mehr existieren, ist das Turnier beendet
-            if tournament.status != Tournament.Status.FINISHED:
-                has_open_matches = tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists()
-                if not has_open_matches and tournament.matches.exists():
-                    tournament.status = Tournament.Status.FINISHED
-                    tournament.save(update_fields=['status'])
+            sync_review(tournament)
+            log_result(match, before, actor, match.decision_reason)
 
             return match, winner_team
 
 
 class FFAMatchService:
     @staticmethod
-    def update_ffa_scores(match_id, participant_scores, decision_reason=None, actor=None):
+    def update_ffa_scores(match_id, participant_scores, decision_reason=None, actor=None, expected_state=None):
         """
         Trägt Ränge und Scores für alle Teilnehmer eines FFA-Matches ein.
         participant_scores: List of dicts, z.B.:
@@ -476,6 +461,10 @@ class FFAMatchService:
             if match.bracket_type != TournamentMatch.BracketType.FFA:
                 raise TournamentMatchError(get_translation('tournament_ffa_error_wrong_match', 'Dieses Match ist kein Free-For-All (FFA) Match.'))
 
+            require_editable(match, tournament)
+            check_version(expected_state, match_version(match))
+            before = snapshot(match)
+            require_correction_reason(match, actor, note(decision_reason, error=TournamentMatchError))
             participants = {p.id: p for p in match.participants.select_for_update()}
             withdrawn = set(tournament.registrations.filter(is_forfeited=True).values_list('team_id', flat=True))
             if not participants:
@@ -548,9 +537,8 @@ class FFAMatchService:
             match.save(update_fields=['status', 'winner', 'decision_reason'])
 
             tournament = match.tournament
-            if winner_participant:
-                tournament.status = Tournament.Status.FINISHED
-                tournament.save(update_fields=['status'])
+            sync_review(tournament)
+            log_result(match, before, actor, decision_reason)
 
             return match, winner_participant.team if winner_participant else None
 

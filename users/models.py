@@ -10,6 +10,7 @@ class UserManager(BaseUserManager):
         if not email:
             email = f"{str(username).lower()}@entailsng.local"
         email = self.normalize_email(email).strip().lower()
+        extra_fields.setdefault('email_verified', extra_fields.get('is_active', True))
         return super()._create_user(username, email, password, **extra_fields)
 
 
@@ -66,6 +67,16 @@ class User(AbstractUser):
     deleted_at = models.DateTimeField(
         null=True, blank=True, editable=False, verbose_name="Account gelöscht am"
     )
+    is_banned = models.BooleanField(default=False, editable=False, verbose_name='Durch Orga gesperrt')
+    email_verified = models.BooleanField(default=False, editable=False, verbose_name='E-Mail bestätigt')
+    session_version = models.PositiveIntegerField(default=0, editable=False)
+
+    def _get_session_auth_hash(self, secret=None):
+        if not self.session_version:
+            return super()._get_session_auth_hash(secret=secret)
+        from django.utils.crypto import salted_hmac
+        return salted_hmac('users.User.session_auth_hash', f'{self.password}:{self.session_version}',
+                           secret=secret, algorithm='sha256').hexdigest()
 
     @property
     def display_name(self):
@@ -78,6 +89,13 @@ class User(AbstractUser):
         super().clean()
         if self.username and '@' in self.username:
             raise ValidationError({'username': 'Der Benutzername darf kein @-Zeichen enthalten.'})
+        if self.email and not self.is_banned:
+            from .moderation import assert_registration_allowed
+            from .exceptions import RegistrationBlockedError
+            try:
+                assert_registration_allowed(self.email)
+            except RegistrationBlockedError as exc:
+                raise ValidationError({'email': str(exc)}) from exc
 
     def save(self, *args, **kwargs):
         from django.db import transaction
@@ -85,10 +103,20 @@ class User(AbstractUser):
         # wieder mit persönlichen Daten oder einem Passwort beschreiben.
         with transaction.atomic():
             if self.pk:
-                deleted_at = type(self).objects.select_for_update(no_key=True).filter(pk=self.pk).values_list('deleted_at', flat=True).first()
-                if deleted_at:
+                current = type(self).objects.select_for_update(no_key=True).filter(pk=self.pk).values(
+                    'deleted_at', 'is_banned', 'session_version', 'email_verified').first()
+                if current and current['deleted_at']:
                     from configuration.translations import get_translation
                     raise ValidationError(get_translation('account_delete_immutable'))
+                if current:
+                    # Read-only security fields cannot be restored by stale forms.
+                    self.is_banned = current['is_banned']
+                    self.session_version = current['session_version']
+                    self.email_verified = current['email_verified']
+                    if self.is_banned:
+                        self.is_active = False
+                        if kwargs.get('update_fields') is not None:
+                            kwargs['update_fields'] = set(kwargs['update_fields']) | {'is_active'}
             if self.email:
                 self.email = self.email.strip().lower()
             else:
@@ -192,6 +220,52 @@ class User(AbstractUser):
             self.locked_until = None
 
 
+class UserBan(models.Model):
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='orga_bans')
+    reason = models.TextField(max_length=1000, verbose_name='Interne Begründung')
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
+    was_active = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    revoke_reason = models.TextField(max_length=1000, blank=True)
+
+    class Meta:
+        verbose_name = 'Orga-Sperre'
+        verbose_name_plural = 'Orga-Sperren'
+        ordering = ('-created_at', '-pk')
+        permissions = [('manage_user_bans', 'Benutzer global sperren und Sperren aufheben')]
+        constraints = [models.UniqueConstraint(fields=['user'], condition=models.Q(revoked_at__isnull=True, user__isnull=False), name='one_active_orga_ban_per_user')]
+
+    def __str__(self):
+        return f'Sperre #{self.pk}'
+
+    @property
+    def is_active(self):
+        return self.revoked_at is None
+
+
+class BannedEmail(models.Model):
+    ban = models.ForeignKey(UserBan, on_delete=models.CASCADE, related_name='email_identities')
+    fingerprint = models.CharField(max_length=64)
+    key_id = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['ban', 'fingerprint'], name='unique_email_identity_per_ban')]
+
+
+class UserBanLog(models.Model):
+    ban = models.ForeignKey(UserBan, on_delete=models.PROTECT, related_name='logs')
+    actor = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
+    action = models.CharField(max_length=12, choices=[('BAN', 'Sperren'), ('UNBAN', 'Aufheben'), ('ADD_EMAIL', 'Adresse ergänzen')])
+    reason = models.TextField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-created_at', '-pk')
+
+
 class EmailVerificationCode(models.Model):
     """Modell für den 6-stelligen Double Opt-In Verifizierungscode"""
 
@@ -240,9 +314,15 @@ class EmailVerificationCode(models.Model):
         with transaction.atomic():
             locked_user = User.objects.select_for_update(no_key=True).get(pk=user.pk)
 
-            if locked_user.deleted_at:
+            if locked_user.deleted_at or locked_user.is_banned:
                 from configuration.translations import get_translation
                 raise ValidationError(get_translation('account_delete_verification_blocked'))
+            from .moderation import assert_registration_allowed
+            from .exceptions import RegistrationBlockedError
+            try:
+                assert_registration_allowed(new_email or locked_user.email)
+            except RegistrationBlockedError as exc:
+                raise ValidationError(str(exc)) from exc
 
             # 1. Zentraler Cooldown-Schutz & Stundenlimit
             if enforce_cooldown:
@@ -344,9 +424,19 @@ class EmailVerificationCode(models.Model):
         is_valid_format = bool(code_input.isascii() and re.fullmatch(r'^[0-9]{6}$', code_input))
 
         with transaction.atomic():
+            from .moderation import lock_email, assert_registration_allowed
+            from .exceptions import RegistrationBlockedError
+            target = cls.objects.filter(user_id=user.pk, is_used=False,
+                new_email__isnull=not is_email_change).order_by('-created_at').values_list('new_email', flat=True).first()
+            address = target if is_email_change else User.objects.values_list('email', flat=True).get(pk=user.pk)
+            lock_email(address)
             # Gleiche Sperrreihenfolge wie Account-Löschung und Code-Erzeugung.
             locked_user = User.objects.select_for_update(no_key=True).get(pk=user.pk)
-            if locked_user.deleted_at:
+            if locked_user.deleted_at or locked_user.is_banned:
+                return ('invalid_or_expired', None, 0)
+            try:
+                assert_registration_allowed(address)
+            except RegistrationBlockedError:
                 return ('invalid_or_expired', None, 0)
             query = cls.objects.select_for_update().filter(user=user, is_used=False)
             if is_email_change:
@@ -357,6 +447,8 @@ class EmailVerificationCode(models.Model):
             code_obj = query.order_by('-created_at').first()
             if not code_obj or not code_obj.is_valid():
                 return ('invalid_or_expired', code_obj, 0)
+            if (code_obj.new_email if is_email_change else locked_user.email) != address:
+                return ('invalid_or_expired', None, 0)
 
             if is_valid_format and secrets.compare_digest(code_obj.code, code_input):
                 if is_email_change:
@@ -366,11 +458,13 @@ class EmailVerificationCode(models.Model):
                     # Neue E-Mail auf User übertragen und Code verbrauchen
                     locked_user.email = code_obj.new_email
                     locked_user.save(update_fields=['email'])
+                    User.objects.filter(pk=user.pk).update(email_verified=True)
                     user.email = locked_user.email
                 else:
                     # Benutzer aktivieren und Code verbrauchen
                     locked_user.is_active = True
                     locked_user.save(update_fields=['is_active'])
+                    User.objects.filter(pk=user.pk).update(email_verified=True)
                     user.is_active = True
 
                 code_obj.is_used = True
@@ -384,5 +478,3 @@ class EmailVerificationCode(models.Model):
                 remaining = max(0, 5 - code_obj.failed_attempts)
                 status = 'locked' if code_obj.failed_attempts >= 5 else 'wrong_code'
                 return (status, code_obj, remaining)
-
-

@@ -401,6 +401,9 @@ class EventRegistration(models.Model):
         Rückgabe: CheckInResult (entpackbar als: allowed, reason) mit .code
         """
         from django.contrib.auth import get_user_model
+        if get_user_model().objects.filter(pk=self.user_id, is_banned=True).exists():
+            from configuration.translations import get_translation
+            return CheckInResult(False, get_translation('ban_checkin_failed'), code='user_banned')
         if get_user_model().objects.filter(pk=self.user_id, deleted_at__isnull=False).exists():
             from configuration.translations import get_translation
             return CheckInResult(False, get_translation('account_deleted_checkin_blocked'), code='account_deleted')
@@ -448,6 +451,8 @@ class EventRegistration(models.Model):
         Prüft zwingend den Bezahlstatus und die Gültigkeit der Anmeldung vor der Zustandsänderung.
         Nutzt select_for_update() für Concurrency-Schutz gegen Race Conditions mit Stornierungen.
         """
+        from django.contrib.auth import get_user_model
+        get_user_model().objects.select_for_update(no_key=True).get(pk=self.user_id)
         Event.objects.select_for_update().get(pk=self.event_id)
         locked_reg = EventRegistration.objects.select_for_update(of=('self',)).select_related('event', 'user').get(pk=self.pk)
         result = locked_reg.can_check_in(target_event=target_event, actor=actor)
@@ -583,6 +588,5 @@ class EventRegistration(models.Model):
             send_system_email('payment_confirmation', self.user.email, context_data)
         except Exception as e:
             logger.exception("Fehler beim Auslösen der Zahlungsbestätigung für Anmeldung %s: %s", self.id, e)
-
 
 

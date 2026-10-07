@@ -1,0 +1,5 @@
+{% extends 'admin/change_form.html' %}
+{% block object-tools-items %}
+  {% if can_manage_bans %}<li><a href="{% url 'admin:users_user_moderation' original.pk %}">{% t 'ban_manage' %}</a></li>{% endif %}
+  {{ block.super }}
+{% endblock %}

@@ -159,6 +159,10 @@
     if (!current || saving) return;
     form.reset();
     form.action = button.dataset.scoreUrl;
+    document.getElementById('result_version').value = current.version;
+    reason.required = Boolean(current.correction);
+    reason.value = '';
+    reason.setCustomValidity('');
     document.getElementById('modal_match_id').value = current.id;
     first.value = current.score1 ?? ''; second.value = current.score2 ?? '';
     document.getElementById('lbl_team1').textContent = current.team1;
@@ -174,7 +178,7 @@
       winner.add(new Option(current.team1, current.team1Id));
       winner.add(new Option(current.team2, current.team2Id));
       winner.value = current.winner ?? '';
-      reason.value = current.reason || '';
+      reason.value = current.correction ? '' : current.reason || '';
     } else {
       const loserName = current.role === 1 ? current.team1 : current.team2;
       const winnerName = current.role === 1 ? current.team2 : current.team1;

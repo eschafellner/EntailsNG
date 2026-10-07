@@ -496,10 +496,15 @@ class MediaDesignerTests(TestCase):
         match.save(update_fields=['status'])
         scores.update({f'rank_{participant.pk}': number
                        for number, participant in enumerate(participants, 1)})
+        scores['decision_reason'] = 'Historische unvollständige Wertung berichtigt'
         self.client.post(score_url, scores)
         match.refresh_from_db()
         tournament.refresh_from_db()
         self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
+        self.assertEqual(tournament.status, Tournament.Status.RESULTS_REVIEW)
+        from tournaments.services import TournamentLifecycleService
+        TournamentLifecycleService.confirm_results(tournament.pk, actor=self.staff)
+        tournament.refresh_from_db()
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
         self.assertContains(self.client.get(export_url), 'FFA Export Cup')
         response = self.client.post(export_url, {

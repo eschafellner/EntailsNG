@@ -1,4 +1,5 @@
 """Regression cases found during the review of all tournament formats."""
+from tournaments.testing import confirm_results, release_for_match
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -233,7 +234,7 @@ class TournamentAuditTests(TestCase):
 
     def finish_legacy_matches(self, tournament, *, reverse=False):
         for step in range(300):
-            tournament.refresh_from_db()
+            confirm_results(tournament, self.staff)
             if tournament.status == Tournament.Status.FINISHED:
                 break
             ready = tournament.matches.filter(status=TournamentMatch.Status.READY, is_bye=False).order_by('round_number', 'pk').first()
@@ -245,8 +246,10 @@ class TournamentAuditTests(TestCase):
             # Exercise the grand-final reset for the second DE path.
             if reverse and ready.bracket_type == TournamentMatch.BracketType.GRAND_FINAL:
                 second_wins = True
+            release_for_match(ready, self.staff)
             TournamentMatchService.update_match_score(ready.pk,
                 0 if second_wins else 1, 1 if second_wins else 0, actor=self.staff)
+        confirm_results(tournament)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
         self.assertFalse(tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists())
 
@@ -404,6 +407,7 @@ class TournamentAuditTests(TestCase):
              for p, rank in zip(participants, (1, 2, 2, 4))], actor=self.staff)
         tournament.refresh_from_db()
         self.assertIsNone(TournamentPodiumService.calculate(tournament)['second'])
+        confirm_results(tournament, self.staff)
         rows = certificate_rows([p.team for p in participants], tournament, 'Audit')
         self.assertEqual([row['team.placement'] for row in rows], ['1. Platz', '2. Platz', '2. Platz', '4. Platz'])
 
@@ -423,6 +427,7 @@ class TournamentAuditTests(TestCase):
                 else:
                     self.finish_legacy_matches(tournament)
                 tournament.refresh_from_db()
+                confirm_results(tournament, self.staff)
                 rows = certificate_rows(self.teams[:4], tournament, 'Audit')
                 self.assertTrue(any(row['team.placement'] == '1. Platz' for row in rows))
                 self.assertTrue(all(row['tournament.title'] == tournament.title for row in rows))

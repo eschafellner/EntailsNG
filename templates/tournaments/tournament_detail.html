@@ -285,6 +285,8 @@
             <span style="background: rgba(100, 116, 139, 0.15); color: #475569; border: 1px solid rgba(100, 116, 139, 0.3); padding: 6px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold;">
               {% t "tournament_detail_status_finished" "🏁 Turnier beendet" %}
             </span>
+          {% elif tournament.status == 'RESULTS_REVIEW' %}
+            <span>{% t 'results_review' %}</span>
           {% elif tournament.is_generated or tournament.status == 'IN_PROGRESS' %}
             <span style="background: rgba(2, 132, 199, 0.15); color: #0284c7; padding: 6px 12px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold;">
               {% t "tournament_detail_status_running" "⚔️ Turnier läuft" %}
@@ -310,6 +312,9 @@
       </div>
     </div>
   </div>
+
+  {% include 'tournaments/includes/result_actions.html' %}
+  {% if is_admin %}{% include 'tournaments/includes/result_history.html' %}{% endif %}
 
   <!-- Siegerehrung / Podium Card bei beendetem Turnier -->
   {% if tournament.status == 'FINISHED' and podium.first and tournament.mode != 'SWISS' %}
@@ -1083,6 +1088,7 @@
     <form id="scoreForm" onsubmit="submitScore(event)">
       {% csrf_token %}
       <input type="hidden" id="modal_match_id" name="match_id">
+      <input type="hidden" id="result_version" name="expected_state">
 
       <div id="scoreFormError" role="alert" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #dc2626; padding: 10px 14px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; margin-bottom: 14px; line-height: 1.4;"></div>
 
@@ -1106,7 +1112,7 @@
 
         <div>
           <label for="decision_reason" style="display: block; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); margin-bottom: 4px;">{% t "tournament_modal_reason_label" "Entscheidungsgrund / Notiz:" %}</label>
-          <input type="text" id="decision_reason" name="decision_reason" placeholder="{% t 'tournament_modal_reason_placeholder' 'z. B. Forfeit, Niederlage bestätigt, Admin-Entscheidung' %}" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--line); font-family: 'DM Sans', sans-serif; font-size: 14px; box-sizing: border-box;">
+          <input maxlength="255" type="text" id="decision_reason" name="decision_reason" placeholder="{% t 'tournament_modal_reason_placeholder' 'z. B. Forfeit, Niederlage bestätigt, Admin-Entscheidung' %}" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--line); font-family: 'DM Sans', sans-serif; font-size: 14px; box-sizing: border-box;">
         </div>
       </div>
 
@@ -1136,33 +1142,15 @@
         {% t "format_ffa_complete_hint" %}
       </p>
 
-      <div style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; padding-right: 4px;">
-        {% for p in ffa_participants %}
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel);">
-            <div style="flex: 2; font-family: 'DM Sans', sans-serif; font-size: 14px;">
-              <strong>{{ p.team.name }}</strong>
-            </div>
-            <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
-              <label for="rank_{{ p.id }}" style="font-size: 14px; color: var(--muted);">{% t "tournament_ffa_rank_label" "Rang:" %}</label>
-              <input type="number" id="rank_{{ p.id }}" name="rank_{{ p.id }}" aria-label="{{ p.team.name }} — {% t 'tournament_ffa_rank_label' %}" value="{{ p.rank|default:'' }}" min="1" max="{{ ffa_participants|length }}" placeholder="1" style="width: 50px; padding: 4px; border-radius: 4px; border: 1px solid var(--line); font-family: 'DM Sans', sans-serif; text-align: center;">
-            </div>
-            <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
-              <label for="score_{{ p.id }}" style="font-size: 14px; color: var(--muted);">{% t "tournament_ffa_points_label" "Pkt:" %}</label>
-              <input type="number" id="score_{{ p.id }}" name="score_{{ p.id }}" aria-label="{{ p.team.name }} — {% t 'tournament_ffa_points_label' %}" value="{{ p.score|default:0 }}" style="width: 55px; padding: 4px; border-radius: 4px; border: 1px solid var(--line); font-family: 'DM Sans', sans-serif; text-align: center;">
-            </div>
-            <label style="flex-basis: 100%; font-size: 14px;"><input type="checkbox" name="dq_{{ p.id }}" {% if p.is_disqualified %}checked{% endif %}> {{ p.team.name }} — {% t 'tournament_ffa_dq_label' 'Disqualifiziert' %}</label>
-            <label for="notes_{{ p.id }}" style="flex-basis: 100%; font-size: 14px;">{{ p.team.name }} — {% t 'tournament_ffa_notes_label' 'Notiz' %}</label>
-            <input type="text" id="notes_{{ p.id }}" name="notes_{{ p.id }}" maxlength="255" value="{{ p.notes }}" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px;">
-          </div>
-        {% endfor %}
-      </div>
+      <input type="hidden" name="expected_state" value="{{ ffa_match.result_version }}">
+      {% include 'tournaments/includes/ffa_fields.html' %}
 
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
         <button type="button" onclick="closeFfaScoreModal()" style="background: var(--line); color: var(--ink); border: none; padding: 8px 16px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer;">
           {% t "btn_cancel" "Abbrechen" %}
         </button>
         <button type="submit" style="background: #047857; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; cursor: pointer;">
-          {% t "tournament_ffa_modal_save_btn" "Wertung speichern & abschließen" %}
+          {% t 'results_save' %}
         </button>
       </div>
     </form>

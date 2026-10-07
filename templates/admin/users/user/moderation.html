@@ -1,0 +1,19 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+{% if target_user %}<h2>{{ target_user }}</h2>{% endif %}
+{% if active_ban %}<p><strong>Aktive globale Sperre #{{ active_ban.pk }}</strong></p><p>{{ active_ban.reason }}</p>{% endif %}
+<p>{% t 'ban_hint' %}</p>
+<p>{% t 'ban_identity_hint' %}</p>
+<form method="post" style="max-width:720px;">
+  {% csrf_token %}{{ form.as_p }}
+  <input type="hidden" name="action" value="{% if active_ban %}revoke{% else %}ban{% endif %}">
+  <details>
+    <summary>{% if active_ban %}{% t 'ban_revoke' %}{% else %}{% t 'ban_confirm' %}{% endif %}</summary>
+    <p>Bitte die Entscheidung und Begründung prüfen.</p>
+    <button type="submit">{% if active_ban %}{% t 'ban_revoke' %}{% else %}{% t 'ban_confirm' %}{% endif %}</button>
+  </details>
+</form>
+{% if ban_logs %}<h2>Änderungshistorie</h2>{% for ban in ban_logs %}{% for entry in ban.logs.all %}
+<p>{{ entry.created_at|date:'d.m.Y H:i:s' }} · {{ entry.actor|default_if_none:'—' }} · {{ entry.get_action_display }}<br>{{ entry.reason }}</p>
+{% endfor %}{% endfor %}{% endif %}
+{% endblock %}

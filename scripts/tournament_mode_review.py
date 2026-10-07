@@ -35,6 +35,7 @@ from django.utils import timezone
 from events.models import Event
 from media_designer.data import certificate_rows
 from tournaments.exceptions import TournamentError, SwissPairingError
+from tournaments.testing import confirm_results, release_for_match
 from tournaments.models import Game, Team, TeamMember, Tournament, TournamentMatch, TournamentRegistration
 from tournaments.services import (
     FFAMatchService, TournamentBracketService, TournamentMatchService,
@@ -99,11 +100,11 @@ class FormatAudit(TestCase):
             entries = [{'participant_id': p.pk, 'rank': index, 'score': 100 - index}
                        for index, p in enumerate(match.participants.order_by('pk'), 1)]
             FFAMatchService.update_ffa_scores(match.pk, entries, actor=self.staff)
-            tournament.refresh_from_db()
+            confirm_results(tournament, self.staff)
             self.assertEqual(tournament.status, Tournament.Status.FINISHED)
             return
         for step in range(2048):
-            tournament.refresh_from_db()
+            confirm_results(tournament, self.staff)
             if tournament.status == Tournament.Status.FINISHED:
                 break
             ready = list(tournament.matches.filter(status=TournamentMatch.Status.READY, is_bye=False))
@@ -118,6 +119,7 @@ class FormatAudit(TestCase):
             second_wins = bool(rng.randrange(2))
             if match.bracket_type == TournamentMatch.BracketType.GRAND_FINAL:
                 second_wins = True  # Always exercise reset.
+            release_for_match(match, self.staff)
             TournamentMatchService.update_match_score(
                 match.pk, 0 if second_wins else 2, 2 if second_wins else 0, actor=self.staff,
             )
@@ -220,7 +222,7 @@ class SingleEliminationAudit(FormatAudit):
         tournament = self.make()
         semi = tournament.matches.filter(status=TournamentMatch.Status.READY).first()
         TournamentMatchService.update_match_score(semi.pk, 1, 0, actor=self.staff)
-        TournamentMatchService.update_match_score(semi.pk, 0, 1, actor=self.staff)
+        TournamentMatchService.update_match_score(semi.pk, 0, 1, actor=self.staff, decision_reason='Testkorrektur')
         final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.FINAL)
         self.assertIn(semi.team2_id, (final.team1_id, final.team2_id))
         self.assertNotIn(semi.team1_id, (final.team1_id, final.team2_id))
@@ -237,8 +239,8 @@ class DoubleEliminationAudit(FormatAudit):
         final = tournament.matches.get(bracket_type=TournamentMatch.BracketType.GRAND_FINAL)
         TournamentMatchService.update_match_score(final.pk, 0, 1, actor=self.staff)
         self.assertTrue(tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GRAND_FINAL_RESET).exists())
-        TournamentMatchService.update_match_score(final.pk, 1, 0, actor=self.staff)
-        tournament.refresh_from_db()
+        TournamentMatchService.update_match_score(final.pk, 1, 0, actor=self.staff, decision_reason='Testkorrektur')
+        confirm_results(tournament, self.staff)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
         self.assertFalse(tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists(),
                          'Finished tournament still contains an unplayable READY reset final')
@@ -267,7 +269,7 @@ class LeagueAudit(FormatAudit):
             TournamentMatchService.update_match_score(match.pk,
                 2 if match.team1_id < match.team2_id else 0,
                 2 if match.team2_id < match.team1_id else 0, actor=self.staff)
-        tournament.refresh_from_db()
+        confirm_results(tournament, self.staff)
         fourth = LeagueStandingService.calculate_league_standings(tournament)[3]['team']
         self.assertEqual(certificate_rows([fourth], tournament, '')[0]['team.placement'], '4. Platz')
 

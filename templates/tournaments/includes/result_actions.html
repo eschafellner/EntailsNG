@@ -1,0 +1,20 @@
+{% if tournament.status == 'RESULTS_REVIEW' %}<p role="status">{% t 'results_review_hint' %}</p>{% endif %}
+{% if can_confirm_results %}
+<details style="margin:16px 0;">
+  <summary>{% t 'results_confirm' %}</summary>
+  <p>{% t 'results_confirm_hint' %}</p>
+  <form method="post" {% if not admin_results %}action="{% url 'tournament_confirm_results' tournament.slug %}"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="action" value="confirm"><input type="hidden" name="expected_state" value="{{ result_version }}">
+    <button type="submit" class="btn-action-primary">{% t 'results_confirm' %}</button>
+  </form>
+</details>
+{% endif %}
+{% if can_release_playoffs %}
+<details style="margin:16px 0;">
+  <summary>{% t 'results_release' %}</summary>
+  <p>{% t 'results_release_hint' %}</p>
+  <form method="post" {% if not admin_results %}action="{% url 'tournament_release_playoffs' tournament.slug %}"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="action" value="release"><input type="hidden" name="expected_state" value="{{ result_version }}"><button type="submit" class="btn-action-primary">{% t 'results_release' %}</button>
+  </form>
+</details>
+{% endif %}

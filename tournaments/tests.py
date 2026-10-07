@@ -1,3 +1,4 @@
+from tournaments.testing import confirm_results, release_for_match
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
@@ -213,6 +214,7 @@ class TournamentModelTests(TestCase):
             event=self.event,
             game=self.game,
             mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.IN_PROGRESS,
             registration_start=timezone.now(),
             registration_end=timezone.now() + timedelta(days=1),
         )
@@ -248,6 +250,7 @@ class TournamentModelTests(TestCase):
             event=self.event,
             game=self.game,
             mode=Tournament.Mode.SINGLE_ELIMINATION,
+            status=Tournament.Status.IN_PROGRESS,
             registration_start=timezone.now(),
             registration_end=timezone.now() + timedelta(days=1),
         )
@@ -685,10 +688,11 @@ class TournamentHardeningServiceTests(TestCase):
 
         # 4. Wenn das Folgematch beendet ist, darf semi_match nicht mehr modifiziert werden
         final_match.status = TournamentMatch.Status.COMPLETED
+        final_match.is_bye = False
         final_match.save()
 
         with self.assertRaises(MatchAlreadyCompletedError):
-            TournamentMatchService.update_match_score(semi_match.id, score1=16, score2=14)
+            TournamentMatchService.update_match_score(semi_match.id, score1=16, score2=14, winner_id=self.team1.id)
 
 
 class DoubleEliminationTests(TestCase):
@@ -796,6 +800,7 @@ class DoubleEliminationTests(TestCase):
         # Grand Final spielen: Team 1 gewinnt -> Turnier beendet, kein Reset
         TournamentMatchService.update_match_score(gf_match.id, score1=16, score2=12)
         t_no_reset.refresh_from_db()
+        confirm_results(t_no_reset)
         self.assertEqual(t_no_reset.status, Tournament.Status.FINISHED)
         self.assertEqual(t_no_reset.matches.count(), 2)
 
@@ -823,6 +828,7 @@ class DoubleEliminationTests(TestCase):
         # Reset Match spielen: Team 2 gewinnt das Turnier
         TournamentMatchService.update_match_score(reset_match.id, score1=10, score2=16)
         t_reset.refresh_from_db()
+        confirm_results(t_reset)
         self.assertEqual(t_reset.status, Tournament.Status.FINISHED)
         self.assertEqual(t_reset.matches.count(), 3)
 
@@ -880,6 +886,7 @@ class DoubleEliminationTests(TestCase):
         TournamentMatchService.update_match_score(grand_final.id, score1=16, score2=9)
 
         tournament.refresh_from_db()
+        confirm_results(tournament)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
         self.assertFalse(tournament.matches.filter(bracket_type=TournamentMatch.BracketType.GRAND_FINAL_RESET).exists())
 
@@ -986,6 +993,7 @@ class DoubleEliminationTests(TestCase):
         # 5. Grand Final: T1 schlägt T3
         TournamentMatchService.update_match_score(grand_final.id, score1=16, score2=11)
         tournament.refresh_from_db()
+        confirm_results(tournament)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
 
     def test_double_elimination_bye_handling_three_teams_wb_final_early(self):
@@ -1288,8 +1296,10 @@ class GroupStageTournamentTests(TestCase):
         self.assertEqual(final_match.team2, match_b.team1)
 
         # Finale spielen -> Turnier FINISHED
+        release_for_match(final_match)
         TournamentMatchService.update_match_score(final_match.id, score1=2, score2=1, winner_id=final_match.team1_id)
         self.tournament_4.refresh_from_db()
+        confirm_results(self.tournament_4)
         self.assertEqual(self.tournament_4.status, Tournament.Status.FINISHED)
 
     def test_group_stage_8_teams_flow_with_semifinals(self):
@@ -1323,6 +1333,7 @@ class GroupStageTournamentTests(TestCase):
         # Halbfinals spielen
         s1 = semis[0]
         s2 = semis[1]
+        release_for_match(s1)
         TournamentMatchService.update_match_score(s1.id, score1=16, score2=10, winner_id=s1.team1_id)
         TournamentMatchService.update_match_score(s2.id, score1=16, score2=12, winner_id=s2.team1_id)
 
@@ -1333,8 +1344,10 @@ class GroupStageTournamentTests(TestCase):
         self.assertEqual(final.team2, s2.team1)
 
         # Finale spielen -> Turnier FINISHED
+        release_for_match(final)
         TournamentMatchService.update_match_score(final.id, score1=16, score2=14, winner_id=final.team1_id)
         self.tournament_8.refresh_from_db()
+        confirm_results(self.tournament_8)
         self.assertEqual(self.tournament_8.status, Tournament.Status.FINISHED)
 
 
@@ -1394,6 +1407,7 @@ class LeagueTournamentTests(TestCase):
 
         # Turnier sollte automatisch FINISHED sein
         self.tournament.refresh_from_db()
+        confirm_results(self.tournament)
         self.assertEqual(self.tournament.status, Tournament.Status.FINISHED)
 
         final_standings = LeagueStandingService.calculate_league_standings(self.tournament)
@@ -1453,6 +1467,7 @@ class FFATournamentTests(TestCase):
         self.assertEqual(match.winner, participants[0].team)
 
         self.tournament.refresh_from_db()
+        confirm_results(self.tournament)
         self.assertEqual(self.tournament.status, Tournament.Status.FINISHED)
 
         p1 = match.participants.get(rank=1)
@@ -2143,6 +2158,7 @@ class TournamentResultReportingAndBracketSeparationTests(TestCase):
 
         # Turnier muss automatisch FINISHED sein
         self.tournament.refresh_from_db()
+        confirm_results(self.tournament)
         self.assertEqual(self.tournament.status, Tournament.Status.FINISHED)
 
         # Detailseite aufrufen
@@ -3375,7 +3391,7 @@ class TournamentAndTeamHardeningTests(TestCase):
         match.refresh_from_db()
         self.assertEqual(match.winner, team1)
         tournament.refresh_from_db()
-        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
+        self.assertEqual(tournament.status, Tournament.Status.RESULTS_REVIEW)
 
         # A correction without a valid winner must not complete or erase a finished match.
         with self.assertRaisesMessage(TournamentMatchError, 'Rang 1'):
@@ -3385,12 +3401,12 @@ class TournamentAndTeamHardeningTests(TestCase):
                     {'participant_id': p1.id, 'rank': 1, 'score': 100, 'is_disqualified': True},
                     {'participant_id': p2.id, 'rank': 2, 'score': 80},
                 ],
-                actor=self.admin,
+                actor=self.admin, decision_reason='Testkorrektur',
             )
         match.refresh_from_db()
         self.assertEqual(match.winner, team1)
         tournament.refresh_from_db()
-        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
+        self.assertEqual(tournament.status, Tournament.Status.RESULTS_REVIEW)
 
     def test_ffa_scores_without_rank_one_do_not_complete_match(self):
         tournament = self._create_tournament(
@@ -3428,6 +3444,7 @@ class TournamentAndTeamHardeningTests(TestCase):
         tournament.refresh_from_db()
         self.assertEqual(match.status, TournamentMatch.Status.COMPLETED)
         self.assertEqual(match.winner, teams[0])
+        confirm_results(tournament)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
 
     def test_is_in_active_tournament_and_status(self):
@@ -3589,6 +3606,7 @@ class TournamentAndTeamHardeningTests(TestCase):
         self.assertEqual(match.loser, team2)
 
         tournament.refresh_from_db()
+        confirm_results(tournament)
         self.assertEqual(tournament.status, Tournament.Status.FINISHED)
 
     def test_tournament_admin_registered_count_annotation(self):

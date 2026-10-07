@@ -22,3 +22,11 @@ class AccountDeletionError(Exception):
     def __init__(self, message, code):
         super().__init__(message)
         self.code = code
+
+
+class UserBanError(Exception):
+    """Expected moderation failure; internal messages are only for organizers."""
+
+
+class RegistrationBlockedError(Exception):
+    """Public registration rejection with a neutral message."""

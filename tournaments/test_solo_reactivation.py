@@ -1,4 +1,5 @@
 """Solo teams retain their identity and historical results across events."""
+from tournaments.testing import confirm_results
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -70,6 +71,7 @@ class SoloReactivationTests(TestCase):
         record = SwissTournamentService.publish(old_tournament.pk, actor=self.staff, token=preview['token'])
         match = record.matches.get()
         TournamentMatchService.update_match_score(match.pk, 2, 0, actor=self.staff)
+        confirm_results(old_tournament, self.staff)
         EventLifecycleService.finish_event(self.old_event.pk)
         before_registration = TournamentRegistration.objects.filter(pk=old_registration.pk).values().get()
         before_match = record.matches.values().get()
@@ -85,6 +87,7 @@ class SoloReactivationTests(TestCase):
         self.assertEqual([(r['team'].pk, r['points'], r['rank']) for r in SwissStandingService.calculate(old_tournament)], before_standings)
         old_tournament.refresh_from_db()
         self.assertEqual(old_tournament.event_id, self.old_event.pk)
+        confirm_results(old_tournament)
         self.assertEqual(old_tournament.status, Tournament.Status.FINISHED)
 
     def test_previous_forfeit_is_not_carried_to_new_registration(self):

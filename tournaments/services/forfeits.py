@@ -81,6 +81,7 @@ def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
                     score2=1 if match.team1 == team else 0,
                     winner_id=opponent.id,
                     decision_reason=reason,
+                    automatic_result=True,
                 )
             else:
                 # Noch kein Gegner vorhanden: Slot des forfeiting Teams leeren
@@ -97,5 +98,5 @@ def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
             if tournament.mode == Tournament.Mode.GROUP_STAGE:
                 GroupStageStandingService.check_and_advance_group_stage(tournament)
             if tournament.is_generated and tournament.matches.exists() and not tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists():
-                tournament.status = Tournament.Status.FINISHED
-                tournament.save(update_fields=['status'])
+                from .results import sync_review
+                sync_review(tournament)

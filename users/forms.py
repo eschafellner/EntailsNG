@@ -9,6 +9,22 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+class UserBanActionForm(forms.Form):
+    reason = forms.CharField(max_length=1000, strip=True, widget=forms.Textarea(attrs={'rows': 3}))
+    expected_state = forms.CharField(widget=forms.HiddenInput, required=False)
+    email = forms.EmailField(required=False)
+
+    def __init__(self, *args, email_action=False, **kwargs):
+        from configuration.translations import get_translation
+        super().__init__(*args, **kwargs)
+        self.fields['reason'].label = get_translation('ban_reason')
+        if not email_action:
+            self.fields.pop('email')
+        else:
+            self.fields['email'].required = True
+            self.fields['email'].label = 'Bekannte E-Mail-Adresse'
+
+
 class AccountDeletionForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput(attrs={
         'class': 'form-control', 'autocomplete': 'current-password',
@@ -72,6 +88,21 @@ class CustomUserCreationForm(UserCreationForm):
             raise forms.ValidationError("Dieser Benutzername entspricht einer bereits registrierten E-Mail-Adresse.")
         return username
 
+    def full_clean(self):
+        # Reject before username/email uniqueness validation can reveal a ban.
+        if self.is_bound:
+            from .moderation import assert_registration_allowed
+            from .exceptions import RegistrationBlockedError
+            try:
+                assert_registration_allowed(self.data.get('email'))
+            except RegistrationBlockedError as exc:
+                from django.forms.utils import ErrorDict
+                self._errors = ErrorDict()
+                self.cleaned_data = {}
+                self.add_error(None, forms.ValidationError(str(exc), code='registration_blocked'))
+                return
+        super().full_clean()
+
     def clean_email(self):
         email = self.cleaned_data.get('email', '').strip().lower()
         if User.objects.filter(email__iexact=email).exists():
@@ -120,6 +151,12 @@ class UserProfileForm(forms.ModelForm):
 
     def clean_email(self):
         email = self.cleaned_data.get('email', '').strip().lower()
+        from .moderation import assert_registration_allowed
+        from .exceptions import RegistrationBlockedError
+        try:
+            assert_registration_allowed(email)
+        except RegistrationBlockedError as exc:
+            raise forms.ValidationError(str(exc)) from exc
         query = User.objects.filter(email__iexact=email)
         if self.instance and self.instance.pk:
             query = query.exclude(pk=self.instance.pk)
@@ -199,7 +236,7 @@ class CustomPasswordResetForm(forms.Form):
     )
 
     def save(self, domain_override=None, subject_template_name=None, email_template_name=None, use_https=False, token_generator=None, from_email=None, request=None, html_email_template_name=None, extra_email_context=None):
-        from django.contrib.auth.tokens import default_token_generator
+        from .tokens import password_reset_token_generator
         from django.utils.encoding import force_bytes
         from django.utils.http import urlsafe_base64_encode
         from emails.services import queue_system_email
@@ -233,9 +270,9 @@ class CustomPasswordResetForm(forms.Form):
             pass
 
         if token_generator is None:
-            token_generator = default_token_generator
+            token_generator = password_reset_token_generator
 
-        active_users = User.objects.filter(email__iexact=email, is_active=True, deleted_at__isnull=True)
+        active_users = User.objects.filter(email__iexact=email, is_active=True, is_banned=False, deleted_at__isnull=True)
         for user in active_users:
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = token_generator.make_token(user)
@@ -250,7 +287,3 @@ class CustomPasswordResetForm(forms.Form):
                 "reset_link": reset_link,
             }
             queue_system_email("password_reset", user.email, context_data)
-
-
-
-

@@ -130,7 +130,8 @@ class TournamentBracketService:
             tournament.is_generated = False
             tournament.status = Tournament.Status.REGISTRATION_OPEN
             tournament.swiss_pairing_seed = None
-            tournament.save(update_fields=['is_generated', 'status', 'swiss_pairing_seed'])
+            tournament.playoffs_released_at = None
+            tournament.save(update_fields=['is_generated', 'status', 'swiss_pairing_seed', 'playoffs_released_at'])
             return True
 
     @staticmethod

@@ -20,7 +20,7 @@ def _dispatch_email(template_key, recipient_email, context_data, user_id=None):
     """Sendet System-E-Mails nach erfolgreichem DB-Commit oder direkt bei aktivem Versand."""
     def dispatch():
         # Ein vor der Löschung vorbereiteter Callback darf keine Mail nachreichen.
-        if user_id and not User.objects.filter(pk=user_id, deleted_at__isnull=True).exists():
+        if user_id and not User.objects.filter(pk=user_id, deleted_at__isnull=True, is_banned=False).exists():
             return
         send_system_email(template_key, recipient_email, context_data)
 
@@ -40,7 +40,11 @@ class UserService:
         """
         with transaction.atomic():
             user = user_creation_form.save(commit=False)
+            from .moderation import lock_email, assert_registration_allowed
+            lock_email(user.email)
+            assert_registration_allowed(user.email)
             user.is_active = False
+            user.email_verified = False
             user.save()
 
             code_obj = EmailVerificationCode.generate_for_user(user, valid_minutes=15)

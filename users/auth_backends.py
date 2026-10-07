@@ -105,7 +105,7 @@ class EmailOrUsernameBackend(ModelBackend):
     """
 
     def user_can_authenticate(self, user):
-        return not user.deleted_at and super().user_can_authenticate(user)
+        return not user.deleted_at and not user.is_banned and super().user_can_authenticate(user)
 
     def authenticate(self, request, username=None, password=None, **kwargs):
         if username is None or password is None:
@@ -139,7 +139,7 @@ class EmailOrUsernameBackend(ModelBackend):
             _record_ip_failed_attempt(client_ip)
             return None
 
-        if user.deleted_at:
+        if user.deleted_at or user.is_banned:
             return None
 
         # 3. Inaktive Konten (z. B. vor Double Opt-In E-Mail-Verifizierung)
@@ -168,7 +168,7 @@ class EmailOrUsernameBackend(ModelBackend):
         if user.check_password(password):
             authenticated_hash = user.password
             # Vor erfolgreichem Login prüfen, ob zwischenzeitlich durch parallele Requests gesperrt wurde
-            user.refresh_from_db(fields=['locked_until', 'failed_login_attempts', 'deleted_at', 'is_active', 'password'])
+            user.refresh_from_db(fields=['locked_until', 'failed_login_attempts', 'deleted_at', 'is_active', 'is_banned', 'password', 'session_version'])
             if not self.user_can_authenticate(user) or user.password != authenticated_hash:
                 return None
             if user.locked_until:
@@ -187,5 +187,4 @@ class EmailOrUsernameBackend(ModelBackend):
                 setattr(request, 'account_locked', True)
                 setattr(request, 'locked_user', user)
             return None
-
 

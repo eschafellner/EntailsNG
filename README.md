@@ -113,6 +113,7 @@ nano .env
 
 Wichtige Parameter:
 * **`SECRET_KEY`**: Neuer kryptografisch sicherer Schlüssel (`python3 -c "import secrets; print(secrets.token_urlsafe(50))"`).
+* **`USER_BAN_HMAC_KEY`**: Eigener dauerhafter zufälliger Schlüssel mit mindestens 32 Zeichen für globale Orga-Sperren. Vor der ersten Sperre setzen, getrennt sichern und bei aktiven Sperren nicht ändern. Bedienung, Rechte und Migration: [Globale Orga-Sperren](docs/user-bans.md).
 * **`DEBUG`**: `False`.
 * **`DOMAIN_NAME`**: Deine Domain (z. B. `lan.meinedomain.de`).
 * **`ALLOWED_HOSTS`**: `lan.meinedomain.de,localhost,127.0.0.1`.

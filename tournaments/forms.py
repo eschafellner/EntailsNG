@@ -14,6 +14,14 @@ class TournamentMatchAdminForm(forms.ModelForm):
         model = TournamentMatch
         fields = '__all__'
 
+    result_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            from .services.results import match_version
+            self.fields['result_version'].initial = match_version(self.instance)
+
     def clean(self):
         data = super().clean()
         if self.errors or not self.instance.pk or self.instance.bracket_type == TournamentMatch.BracketType.FFA:
@@ -33,11 +41,55 @@ class TournamentMatchAdminForm(forms.ModelForm):
                     TournamentMatchService.update_match_score(self.instance.pk,
                         data['score_team1'], data['score_team2'],
                         winner_id=winner.pk if winner else None,
-                        decision_reason=data.get('decision_reason'), actor=self.actor)
+                        decision_reason=data.get('decision_reason'), actor=self.actor,
+                        expected_state=data.get('result_version') or None)
                     transaction.set_rollback(True)
         except TournamentError as error:
             raise forms.ValidationError(str(error))
         return data
+
+
+class MatchResultForm(forms.Form):
+    score_team1 = forms.IntegerField(min_value=0, max_value=2**31-1)
+    score_team2 = forms.IntegerField(min_value=0, max_value=2**31-1)
+    winner_id = forms.ChoiceField(required=False)
+    decision_reason = forms.CharField(required=False, max_length=255)
+    expected_state = forms.CharField(widget=forms.HiddenInput)
+
+    def __init__(self, *args, match, **kwargs):
+        from .services.results import match_version
+        kwargs.setdefault('auto_id', f'match_{match.pk}_%s')
+        super().__init__(*args, **kwargs)
+        for name in ('score_team1', 'score_team2'):
+            self.fields[name].label = match.team1.name if name == 'score_team1' and match.team1 else match.team2.name if match.team2 else name
+            self.fields[name].initial = getattr(match, name)
+        self.fields['winner_id'].choices = [('', get_translation('tournament_modal_winner_auto'))] + [
+            (str(team.pk), team.name) for team in (match.team1, match.team2) if team]
+        self.fields['winner_id'].initial = match.winner_id or ''
+        self.fields['winner_id'].label = get_translation('tournament_modal_select_winner_label')
+        self.fields['decision_reason'].label = get_translation('results_reason' if match.status == TournamentMatch.Status.COMPLETED else 'tournament_modal_reason_label')
+        self.fields['decision_reason'].required = match.status == TournamentMatch.Status.COMPLETED
+        self.fields['expected_state'].initial = match_version(match)
+
+
+class TournamentAdminForm(forms.ModelForm):
+    class Meta:
+        from .models import Tournament
+        model = Tournament
+        fields = '__all__'
+
+    def clean_status(self):
+        from .models import Tournament
+        status = self.cleaned_data['status']
+        if self.instance.pk:
+            old = Tournament.objects.get(pk=self.instance.pk).status
+            if status != old and (status in (Tournament.Status.RESULTS_REVIEW, Tournament.Status.FINISHED)
+                    or old in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED)
+                    or (old == Tournament.Status.RESULTS_REVIEW and status != Tournament.Status.CANCELLED)):
+                raise forms.ValidationError(get_translation('results_use_actions'))
+        elif status in (Tournament.Status.RESULTS_REVIEW, Tournament.Status.FINISHED):
+            raise forms.ValidationError(get_translation('results_use_actions'))
+        return status
 
 
 class TournamentRestartForm(forms.Form):

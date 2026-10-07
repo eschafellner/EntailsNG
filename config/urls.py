@@ -7,6 +7,7 @@ from django.urls import include, path
 from django.views.generic import RedirectView
 from users import views
 from users.forms import CustomAuthenticationForm, CustomPasswordResetForm
+from users.tokens import password_reset_token_generator
 
 urlpatterns = [
     # 1. Startseite / Haupt-Dashboard
@@ -38,6 +39,7 @@ urlpatterns = [
         auth_views.PasswordResetView.as_view(
             template_name='auth/password_reset.html',
             form_class=CustomPasswordResetForm,
+            token_generator=password_reset_token_generator,
         ),
         name='password_reset',
     ),
@@ -92,4 +94,3 @@ def custom_500_handler(request):
 
 
 handler500 = custom_500_handler
-

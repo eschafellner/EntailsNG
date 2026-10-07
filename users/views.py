@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.views import PasswordResetConfirmView
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,10 +18,11 @@ from emails.models import GeneralEmailSettings
 from events.models import EventRegistration
 from configuration.translations import get_translation
 from .auth_backends import get_client_ip
-from .exceptions import AccountDeletionError, VerificationCodeCooldownError, VerificationCodeLimitError
+from .exceptions import AccountDeletionError, RegistrationBlockedError, VerificationCodeCooldownError, VerificationCodeLimitError
 from .forms import AccountDeletionForm, CustomUserCreationForm, UserProfileForm
 from .models import EmailVerificationCode
 from .services import UserService
+from .tokens import password_reset_token_generator
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -28,11 +30,23 @@ User = get_user_model()
 
 class CustomPasswordResetConfirmView(PasswordResetConfirmView):
     template_name = 'auth/password_reset_confirm.html'
+    token_generator = password_reset_token_generator
+
+    def get_user(self, uidb64):
+        user = super().get_user(uidb64)
+        return user if user and not user.is_banned and not user.deleted_at else None
 
     def form_valid(self, form):
-        # form.save() nur einmal aufrufen (kein zweiter Aufruf via super().form_valid)
-        user = form.save()
-        user.reset_lockout()
+        # Serialize old reset tokens with organizer bans and refresh the user.
+        with transaction.atomic():
+            user = User.objects.select_for_update(no_key=True).get(pk=form.user.pk)
+            if (user.is_banned or user.deleted_at or user.session_version != form.user.session_version
+                    or user.password != form.user.password):
+                form.add_error(None, get_translation('ban_access_failed'))
+                return self.form_invalid(form)
+            form.user = user
+            user = form.save()
+            user.reset_lockout()
         return HttpResponseRedirect(self.get_success_url())
 
 
@@ -51,7 +65,11 @@ def register_view(request):
     if request.method == "POST":
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            user, code_obj = UserService.register_user(form)
+            try:
+                user, code_obj = UserService.register_user(form)
+            except RegistrationBlockedError as exc:
+                form.add_error(None, str(exc))
+                return render(request, 'auth/register.html', {'form': form})
             # Session merken & zur Verifizierungsmaske umleiten
             request.session['pending_verification_user_id'] = user.id
             return redirect("verify_email")
@@ -71,7 +89,7 @@ def verify_email_view(request):
         return redirect("login")
 
     try:
-        user = User.objects.get(pk=user_id, deleted_at__isnull=True)
+        user = User.objects.get(pk=user_id, deleted_at__isnull=True, is_banned=False)
     except User.DoesNotExist:
         return redirect("login")
 
@@ -171,7 +189,7 @@ def resend_verification_code_view(request):
         return redirect("login")
 
     try:
-        user = User.objects.get(pk=user_id, deleted_at__isnull=True)
+        user = User.objects.get(pk=user_id, deleted_at__isnull=True, is_banned=False)
     except User.DoesNotExist:
         return redirect("login")
 
@@ -180,7 +198,7 @@ def resend_verification_code_view(request):
         messages.success(request, "Ein neuer Bestätigungscode wurde an deine E-Mail-Adresse gesendet.")
     except VerificationCodeCooldownError as e:
         messages.warning(request, str(e))
-    except VerificationCodeLimitError as e:
+    except (VerificationCodeLimitError, ValidationError) as e:
         messages.error(request, str(e))
 
     return redirect("verify_email")
@@ -210,9 +228,9 @@ def request_activation_code_view(request):
 
         email_input = request.POST.get("email", "").strip().lower()
         if email_input:
-            user = User.objects.filter(email__iexact=email_input, is_active=False, deleted_at__isnull=True).first()
+            user = User.objects.filter(email__iexact=email_input, is_active=False, deleted_at__isnull=True, is_banned=False).first()
             if not user:
-                user = User.objects.filter(username__iexact=email_input, is_active=False, deleted_at__isnull=True).first()
+                user = User.objects.filter(username__iexact=email_input, is_active=False, deleted_at__isnull=True, is_banned=False).first()
 
             if user:
                 has_code = user.verification_codes.filter(new_email__isnull=True).exists()
@@ -229,7 +247,7 @@ def request_activation_code_view(request):
                         request.session['pending_verification_user_id'] = user.id
                         messages.warning(request, str(e))
                         return redirect("verify_email")
-                    except VerificationCodeLimitError as e:
+                    except (VerificationCodeLimitError, ValidationError) as e:
                         messages.error(request, str(e))
                         return redirect("login")
 
@@ -299,7 +317,7 @@ def profile_view(request, deletion_form=None):
                                 )
                         except VerificationCodeCooldownError as e:
                             messages.warning(request, str(e))
-                        except VerificationCodeLimitError as e:
+                        except (VerificationCodeLimitError, ValidationError) as e:
                             messages.error(request, str(e))
                 else:
                     messages.success(
@@ -392,7 +410,7 @@ def profile_view(request, deletion_form=None):
                     )
             except VerificationCodeCooldownError as e:
                 messages.warning(request, str(e))
-            except VerificationCodeLimitError as e:
+            except (VerificationCodeLimitError, ValidationError) as e:
                 messages.error(request, str(e))
             return redirect("profile")
 

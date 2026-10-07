@@ -60,7 +60,7 @@ def check_user_event_checkin(user, event):
     """
     Prüft, ob der angegebene Benutzer für das aktive Event eingecheckt ist.
     """
-    if not user or not user.is_authenticated or not user.is_active or user.deleted_at or not event:
+    if not user or not user.is_authenticated or not user.is_active or user.is_banned or user.deleted_at or not event:
         return False
     return EventRegistration.objects.filter(
         user=user,
@@ -182,7 +182,7 @@ def get_or_create_solo_team(user, game, event=None):
     from django.contrib.auth import get_user_model
     from configuration.translations import get_translation
     user = get_user_model().objects.select_for_update(no_key=True).get(pk=user.pk)
-    if user.deleted_at or not user.is_active:
+    if user.deleted_at or user.is_banned or not user.is_active:
         raise TournamentRegistrationError(get_translation('account_deleted_registration_blocked'))
     locked_events = _lock_solo_events(user, game.pk, event.pk if event else None)
     event = locked_events[event.pk] if event else None
@@ -202,7 +202,7 @@ class TournamentRegistrationService:
             from django.contrib.auth import get_user_model
             from configuration.translations import get_translation
             user = get_user_model().objects.select_for_update(no_key=True).get(pk=user.pk)
-            if user.deleted_at or not user.is_active:
+            if user.deleted_at or user.is_banned or not user.is_active:
                 raise TournamentRegistrationError(get_translation('account_deleted_registration_blocked'))
             # Nach dem User sperren Turnieranmeldungen dieselbe Event-Zeile wie der Eventabschluss.
             # So kann keine Turnieranmeldung zwischen Abschlussprüfung und Archivierung erfolgen.
@@ -277,7 +277,7 @@ class TournamentRegistrationService:
 
                 # 3.5 Roster-Vollständigkeit & Check-in aller Mitglieder prüfen
                 accepted_members = list(team.get_accepted_members())
-                if any(member.user.deleted_at for member in accepted_members):
+                if any(member.user.deleted_at or member.user.is_banned for member in accepted_members):
                     raise TournamentRegistrationError(get_translation('account_deleted_roster_blocked'))
                 if not accepted_members:
                     raise TournamentRegistrationError(get_translation('roster_empty', team=team.name))

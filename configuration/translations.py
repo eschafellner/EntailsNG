@@ -11,7 +11,12 @@ from clans.texts import TEXTS as CLAN_TEXTS
 
 from seating.clan_texts import TEXTS as CLAN_SEAT_TEXTS
 
+from tournaments.result_texts import TEXTS as RESULT_TEXTS
+from users.ban_texts import TEXTS as BAN_TEXTS
+
 DEFAULT_TEXTS = {
+    **BAN_TEXTS,
+    **RESULT_TEXTS,
     'tournament_state_label': 'Turnierstatus',
     'tournament_registration_status_label': 'Anmeldestatus',
     'roster_status_full': 'Vollzählig',

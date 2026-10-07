@@ -287,17 +287,15 @@ class SwissTournamentService:
     def validate_score_change(match, tournament):
         if match.result_type != TournamentMatch.ResultType.PLAYED:
             raise MatchAlreadyCompletedError('Freilose und kampflose Ergebnisse können nicht als gespieltes Match geändert werden.')
-        if tournament.status != Tournament.Status.IN_PROGRESS:
+        if tournament.status not in (Tournament.Status.IN_PROGRESS, Tournament.Status.RESULTS_REVIEW):
             raise MatchAlreadyCompletedError('Das Schweizer Turnier läuft nicht.')
         if tournament.swiss_round_records.filter(number__gt=match.round_number).exists():
             raise MatchAlreadyCompletedError('Die nächste Runde ist bereits veröffentlicht. Das frühere Ergebnis ist gesperrt.')
 
     @staticmethod
     def sync_completion(tournament):
-        last = tournament.swiss_round_records.order_by('-number').first()
-        if last and last.number == tournament.swiss_rounds and not last.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists():
-            tournament.status = Tournament.Status.FINISHED
-            tournament.save(update_fields=['status'])
+        from .results import sync_review
+        sync_review(tournament)
 
     @staticmethod
     @transaction.atomic

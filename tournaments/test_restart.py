@@ -1,4 +1,5 @@
 """Independent editions, admin workflow, provenance and PostgreSQL publication races."""
+from tournaments.testing import confirm_results, release_for_match
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import timedelta
 from threading import Event as ThreadEvent
@@ -69,13 +70,15 @@ class RestartHelpers:
             entries = [{'participant_id': p.pk, 'rank': i, 'score': 100-i,
                 'is_disqualified': False, 'notes': ''} for i, p in enumerate(match.participants.all(), 1)]
             FFAMatchService.update_ffa_scores(match.pk, entries, actor=self.staff)
+            confirm_results(source, self.staff)
             return
         for _ in range(100):
-            source.refresh_from_db()
+            confirm_results(source, self.staff)
             if source.status == Tournament.Status.FINISHED:
                 return
             match = source.matches.filter(status=TournamentMatch.Status.READY, is_bye=False).first()
             if match:
+                release_for_match(match, self.staff)
                 TournamentMatchService.update_match_score(match.pk, 2, 0, actor=self.staff)
             elif source.mode == Tournament.Mode.SWISS:
                 token = SwissTournamentService.preview(source.pk, actor=self.staff)['token']
@@ -107,6 +110,7 @@ class TournamentRestartTests(RestartHelpers, TestCase):
                 previous_rounds = source.swiss_round_records.count()
                 edition = self.copy(source)
                 source.refresh_from_db()
+                confirm_results(source)
                 self.assertEqual(source.status, Tournament.Status.FINISHED)
                 self.assertEqual(list(source.matches.values()), before)
                 self.assertEqual(source.swiss_round_records.count(), previous_rounds)
@@ -121,6 +125,7 @@ class TournamentRestartTests(RestartHelpers, TestCase):
                 TournamentLifecycleService.open_registration(edition.pk, actor=self.staff)
                 self.finish(edition)
                 edition.refresh_from_db()
+                confirm_results(edition)
                 self.assertEqual(edition.status, Tournament.Status.FINISHED)
                 self.assertEqual(list(source.matches.values()), before)
 

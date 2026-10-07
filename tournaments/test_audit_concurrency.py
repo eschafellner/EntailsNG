@@ -148,7 +148,7 @@ class TournamentAuditConcurrencyTests(TransactionTestCase):
         self.compete(lambda: TournamentMatchService.update_match_score(second.pk, 1, 0, actor=self.staff),
             lambda: TournamentMatchService.update_match_score(third.pk, 1, 0, actor=self.staff))
         tournament.refresh_from_db()
-        self.assertEqual(tournament.status, Tournament.Status.FINISHED)
+        self.assertEqual(tournament.status, Tournament.Status.RESULTS_REVIEW)
         self.assertFalse(tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists())
 
     def test_parallel_joins_keep_one_team_per_game(self):

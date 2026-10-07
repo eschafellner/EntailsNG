@@ -31,10 +31,14 @@
   {% if match.bracket_type == 'SWISS' and match.result_type != 'PLAYED' %}
     <p class="swiss-match-note">{{ match.get_result_type_display }}{% if match.decision_reason %} · {{ match.decision_reason }}{% endif %}</p>
   {% endif %}
-  {% if not results_locked and match.status == 'COMPLETED' and match.swiss_editable %}
-    <button type="button" class="btn-action-primary" onclick="openScoreModal(this)" data-match-id="{{ match.id }}" data-score-url="{% url 'match_update_score' match_id=match.id %}">{% t "swiss_correct_result" "Ergebnis korrigieren" %}</button>
+  {% if is_admin and not results_locked and match.status == 'COMPLETED' and match.result_editable %}
+    <button type="button" class="btn-action-primary" onclick="openScoreModal(this)" data-match-id="{{ match.id }}" data-score-url="{% url 'match_update_score' match_id=match.id %}">{% t 'results_correct' %}</button>
   {% endif %}
-  {% if not results_locked and match.status != 'COMPLETED' and not match.is_bye and match.team1 and match.team2 %}
+  {% if is_admin and match.lock_reason %}<p class="swiss-match-note">{{ match.lock_reason }}</p>{% endif %}
+  {% if is_admin and match.result_editable and match.status == 'READY' %}
+    <form method="post" action="{% url 'match_start' match.pk %}">{% csrf_token %}<input type="hidden" name="expected_state" value="{{ match.result_version }}"><button type="submit" class="btn-action-primary">{% t 'results_start' %}</button></form>
+  {% endif %}
+  {% if not results_locked and match.result_editable and match.status != 'COMPLETED' and not match.is_bye and match.team1 and match.team2 %}
     {% if is_admin %}
       <button type="button" onclick="openScoreModal(this)" data-match-id="{{ match.id }}" data-score-url="{% url 'match_update_score' match_id=match.id %}" style="margin-top: 6px; background: #0284c7; color: white; border: none; padding: 5px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 14px; cursor: pointer; width: 100%;">
         {% t "tournament_match_enter_score_btn" "✏️ Ergebnis eintragen" %}

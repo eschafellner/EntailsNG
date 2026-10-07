@@ -215,6 +215,9 @@ class GroupStageStandingService:
         if group_matches.exclude(status=TournamentMatch.Status.COMPLETED).exists():
             return False
 
+        if tournament.playoffs_released_at:
+            return False
+
         # Wenn Finalspiele bereits begonnen oder abgeschlossen wurden, nicht erneut überschreiben
         playoff_matches = tournament.matches.filter(bracket_type=TournamentMatch.BracketType.FINAL)
         if playoff_matches.filter(status__in=[TournamentMatch.Status.IN_PROGRESS, TournamentMatch.Status.COMPLETED]).exists():
