@@ -2,7 +2,9 @@
 
 > Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
 
-Stand: 4. Oktober 2026.
+Stand: 7. Oktober 2026. Die folgenden Freigaberegeln betreffen klassische
+Vormerkungen und persönliche Einzelzahlungen. Finanzierte Plätze eines
+[Clan-Sammelauftrags](clan-seat-payments.md) sind gesondert geschützt.
 
 Clan-Admins können im Clanprofil **Sitzplätze für Clan vormerken** öffnen,
 freie Plätze per Klick auswählen und die Auswahl gemeinsam bestätigen.
@@ -135,9 +137,11 @@ Frontend-Auswahlen vor dem Überschreiben zwischenzeitlicher Änderungen.
 Buchungsberechtigung und Kontingent werden weiterhin serverseitig geprüft.
 Sitzplan-Editor, Verkleinerung, Eventwechsel, administrative Typänderung und
 Löschung geschützter Zellen verlangen vorherige Freigabe. Klone übernehmen
-keine Clan-Vormerkungen. Clanlöschung entfernt Vormerkungen und lässt persönliche
-Buchungen bestehen. Kapazitätsanzeigen zählen weiterhin persönliche Buchungen;
-Clan-Vormerkungen sind keine verkauften Tickets.
+keine Clan-Vormerkungen. Clanlöschung entfernt klassische Vormerkungen und lässt
+persönliche Buchungen bestehen; vorhandene Sammelaufträge verhindern die Löschung.
+Klassische Vormerkungen sind keine verkauften Tickets. Offene und bestätigte
+Sammelaufträge reservieren dagegen Teilnehmerkapazität für noch nicht zugewiesene
+Plätze; siehe [Clan-Sammelzahlungen](clan-seat-payments.md).
 
 Direkte ORM-/Datenbankänderungen sind Betreiberwerkzeuge. Insbesondere positive
 Kontingentreduzierungen müssen über die Backendformulare erfolgen, damit die
@@ -181,11 +185,12 @@ Scanner- und Turnier-JavaScriptprüfungen sind erfolgreich. Drei neue JavaScript
 prüfen sichere Textdarstellung, die Übernahme durch Clanmitglieder und Kontingent/Mehrfachbestätigung.
 
 Die API-Abfragen bleiben unabhängig von der Anzahl der Rasterzellen:
-anonym drei Abfragen bei deaktivierter Funktion und vier bei aktiven Vormerkungen.
+seit der Sammelzahlungserweiterung vier Abfragen auch bei deaktivierter Funktion,
+weil finanzierte Plätze weiterhin geschützt werden müssen.
 Desktop- und 390-Pixel-Browserprüfung bestätigen Auswahl, Speicherung, Logos,
 Kontingentanzeige und gezielte Backendfreigabe. Die schmale Ansicht hat keinen
 horizontalen Seitenüberlauf. Screenshots liegen unter `docs/screenshots/clan-seat-*`.
 Die Browserprüfung nutzt eine getrennte Vorschau-Datenbank und Testkonten.
 
-Der bekannte globale Migrationscheck zu drei Theme-Farbdefaults bleibt bestehen;
-die zugehörigen Felder wurden mit dieser Erweiterung nicht geändert.
+Der damalige globale Migrationsunterschied zu drei Theme-Farbdefaults wurde am
+5. Oktober 2026 durch `configuration.0022_sitecustomization_color_validators` behoben.

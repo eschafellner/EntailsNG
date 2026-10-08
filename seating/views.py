@@ -140,7 +140,7 @@ def get_event_seating_api(request, event_id):
 
         current_user_clan_name = user_clan_map.get(request.user.id)
 
-    hold_map = {h.cell_id: h for h in open_holds(event_id).select_related('allocation__clan')}
+    hold_map = {h.cell_id: h for h in open_holds(event_id).select_related('allocation__clan', 'payment')}
     cells = []
     for c in cells_qs:
         username = None
@@ -171,14 +171,15 @@ def get_event_seating_api(request, event_id):
 
         hold = hold_map.get(c.pk)
         if hold and computed_status == 'FREE':
-            computed_status = 'CLAN_HELD'
+            computed_status = ('CLAN_PAID' if hold.payment.status == 'PAID' else 'CLAN_PAYMENT_PENDING') if hold.payment_id else 'CLAN_HELD'
         cells.append({
             'id': c.pk,
             'hold_clan_id': hold.allocation.clan_id if hold else None,
+            'hold_tooltip': get_translation('clan_payment_paid_tooltip' if hold.payment.status == 'PAID' else 'clan_payment_pending_tooltip', clan=hold.allocation.clan.name) if hold and hold.payment_id else None,
             'hold_clan_name': hold.allocation.clan.name if hold else None,
             'hold_clan_logo': hold.allocation.clan.logo.url if hold and hold.allocation.clan.logo else None,
             'hold_clan_tag': (hold.allocation.clan.tag or hold.allocation.clan.name[:2]) if hold else None,
-            'can_claim_hold': bool(hold and is_authenticated and user_clan_id == hold.allocation.clan_id),
+            'can_claim_hold': bool(hold and not hold.payment_id and is_authenticated and user_clan_id == hold.allocation.clan_id),
             'x': c.x,
             'y': c.y,
             'cell_type': c.cell_type,
@@ -427,6 +428,9 @@ def admin_assign_seat(request):
             status=400,
         )
 
+    if ClanSeatHold.objects.filter(funded_registration=registration).exists():
+        return JsonResponse({'status': 'error', 'message': get_translation('clan_payment_managed_hint')}, status=400)
+
     try:
         plan = SeatingPlan.objects.get(event=registration.event)
     except SeatingPlan.DoesNotExist:
@@ -553,6 +557,10 @@ def admin_toggle_block_seat(request):
                 status=400,
             )
 
+        from .clan_payments import committed_holds
+        if committed_holds().filter(cell=cell).exists():
+            return JsonResponse({'status': 'error', 'message': get_translation('clan_payment_managed_hint')}, status=400)
+
         # Switchen zwischen BLOCKED und FREE
         if cell.reservation_status == SeatingCell.ReservationStatus.BLOCKED:
             cell.reservation_status = SeatingCell.ReservationStatus.FREE
@@ -608,6 +616,9 @@ def admin_release_seat(request):
             except EventRegistration.DoesNotExist:
                 return JsonResponse({'status': 'error', 'message': 'Anmeldung nicht gefunden.'}, status=404)
 
+            if ClanSeatHold.objects.filter(funded_registration=registration).exists():
+                return JsonResponse({'status': 'error', 'message': get_translation('clan_payment_managed_hint')}, status=400)
+
             seats = list(
                 SeatingCell.objects.select_for_update().filter(
                     registration=registration,
@@ -637,6 +648,10 @@ def admin_release_seat(request):
                 cell = SeatingCell.objects.select_for_update().get(plan=plan, x=x_coord, y=y_coord)
             except (SeatingPlan.DoesNotExist, SeatingCell.DoesNotExist):
                 return JsonResponse({'status': 'error', 'message': 'Sitzplatz nicht gefunden.'}, status=404)
+
+            from .clan_payments import committed_holds
+            if committed_holds().filter(cell=cell).exists():
+                return JsonResponse({'status': 'error', 'message': get_translation('clan_payment_managed_hint')}, status=400)
 
             release_holds(ClanSeatHold.objects.filter(cell=cell, protection_active=True))
             cell.registration = None

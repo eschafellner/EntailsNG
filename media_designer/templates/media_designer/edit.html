@@ -7,8 +7,8 @@
 <div class="card" style="padding:24px;margin-bottom:20px;">
   <p class="eyebrow">{% t "media_title" "Mediendesigner" %}</p>
   <h1>{{ template.name }}</h1>
-  <p><a href="{% url 'media_template_list' %}">{% t "media_back" "← Alle Vorlagen" %}</a> · <a href="{% url 'media_template_export' template.pk %}">{% t "media_export" "Exportieren" %}</a></p>
-  {% if perms.media_designer.view_mediafont or perms.media_designer.change_mediafont %}<p><a href="{% url 'admin:media_designer_mediafont_changelist' %}">{% t "media_manage_fonts" "Schriftarten verwalten" %}</a></p>{% endif %}
+  <p><a href="{% url 'media_template_list' %}" class="text-link">{% t "media_back" "← Alle Vorlagen" %}</a> · <a href="{% url 'media_template_export' template.pk %}" class="text-link">{% t "media_export" "Exportieren" %}</a></p>
+  {% if perms.media_designer.view_mediafont or perms.media_designer.change_mediafont %}<p><a href="{% url 'admin:media_designer_mediafont_changelist' %}" class="text-link">{% t "media_manage_fonts" "Schriftarten verwalten" %}</a></p>{% endif %}
   <p>{% t "media_edit_hint" "Textfelder auf der Vorschau verschieben; rechts Inhalt und Darstellung bearbeiten. Die Vorschau zeigt Beispieldaten." %}</p>
 </div>
 

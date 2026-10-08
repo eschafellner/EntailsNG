@@ -7,15 +7,7 @@
   <title>{% t "auth_register_title" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}</title>
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
   <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
-  <style>
-    :root {
-{{ theme_css_vars|safe }}
-    }
-    {% if custom_css %}
-    /* Custom CSS Injection */
-    {{ custom_css|safe }}
-    {% endif %}
-  </style>
+  {% include "includes/theme.html" %}
 </head>
 <body>
   <div class="auth-wrapper">
@@ -81,7 +73,7 @@
       {% endif %}
 
       <div class="auth-footer">
-        {% t "auth_already_have_account" "Du hast bereits ein Konto?" %} <a href="{% url 'login' %}">{% t "auth_login_link" "Hier anmelden" %}</a>
+        {% t "auth_already_have_account" "Du hast bereits ein Konto?" %} <a href="{% url 'login' %}" class="text-link">{% t "auth_login_link" "Hier anmelden" %}</a>
       </div>
     </div>
   </div>

@@ -168,7 +168,7 @@ class RegistrationService:
 
     @staticmethod
     @transaction.atomic
-    def register_user(user, event_id: int, ticket_type_id: int = None):
+    def register_user(user, event_id: int, ticket_type_id: int = None, *, clan_seat_hold_id=None):
         """
         Meldet den Benutzer für ein Event an.
         Prüft alle geschäftlichen Regeln:
@@ -198,6 +198,15 @@ class RegistrationService:
         except Event.DoesNotExist:
             raise EventNotOpenError("Das angeforderte Event existiert nicht oder ist inaktiv.")
 
+        reserved_clan_slot = False
+        if clan_seat_hold_id is not None:
+            from seating.models import ClanSeatHold
+            reserved_clan_slot = ClanSeatHold.objects.filter(pk=clan_seat_hold_id,
+                allocation__event=event, payment__status='PAID', funded_registration__isnull=True,
+                protection_active=True).exists()
+            if not reserved_clan_slot:
+                raise RegistrationError(get_translation('clan_payment_not_paid'))
+
         # 2. Idempotenz: Bestehende Registrierung prüfen
         existing_reg = EventRegistration.objects.filter(user=user, event=event).first()
         if existing_reg and existing_reg.payment_status != EventRegistration.PaymentStatus.CANCELLED:
@@ -205,6 +214,10 @@ class RegistrationService:
 
         # 3. Zentrale fachliche Prüfung via Single Source of Truth
         can_reg, reason = event.can_register(user=None)
+        if reserved_clan_slot and event.is_active and event.effective_status in (Event.Status.REGISTRATION_OPEN, Event.Status.RUNNING) and not event.is_expired:
+            # This registration consumes a prepaid slot, rather than a new slot.
+            from seating.clan_payments import reserved_ticket_count
+            can_reg = event.active_registrations_count + reserved_ticket_count(event.pk) <= event.max_guests
         if not can_reg:
             now = timezone.now()
             if event.end_date and now > event.end_date:
@@ -220,9 +233,13 @@ class RegistrationService:
         if ticket_type_id:
             try:
                 ticket_type_id_int = int(ticket_type_id)
-                selected_ticket = TicketType.objects.filter(
-                    pk=ticket_type_id_int, event=event, is_active=True
-                ).first()
+                ticket_query = TicketType.objects.filter(pk=ticket_type_id_int, event=event)
+                if reserved_clan_slot:
+                    if not ClanSeatHold.objects.filter(pk=clan_seat_hold_id, payment__ticket_type_id=ticket_type_id_int).exists():
+                        raise InvalidTicketTypeError(get_translation('clan_payment_ticket_mismatch'))
+                else:
+                    ticket_query = ticket_query.filter(is_active=True)
+                selected_ticket = ticket_query.first()
                 if not selected_ticket:
                     raise InvalidTicketTypeError("Der gewählte Tickettyp existiert nicht oder ist für dieses Event inaktiv.")
             except (ValueError, TypeError):
@@ -264,7 +281,7 @@ class PaymentService:
 
     @staticmethod
     @transaction.atomic
-    def mark_paid(registration, amount=None, send_email=True, allow_overbooking=False):
+    def mark_paid(registration, amount=None, send_email=True, allow_overbooking=False, *, clan_seat_hold_id=None):
         from seating.models import SeatingCell
         from configuration.cache import invalidate_event_capacity_cache
         from django.contrib.auth import get_user_model
@@ -282,11 +299,17 @@ class PaymentService:
             raise ValidationError(get_translation('account_deleted_registration_blocked'))
         Event.objects.select_for_update().get(pk=event_id)
         reg = EventRegistration.objects.select_for_update().get(pk=registration.pk)
+        from seating.models import ClanSeatHold
+        funding = ClanSeatHold.objects.filter(funded_registration=reg).select_related('payment').first()
+        if funding and funding.pk != clan_seat_hold_id:
+            raise ValidationError(get_translation('clan_payment_managed_hint'))
+        if clan_seat_hold_id is not None and (not funding or funding.payment.status != 'PAID' or amount != funding.payment.unit_price):
+            raise ValidationError(get_translation('clan_payment_not_paid'))
 
         # Überbuchungsschutz: Reaktivierung einer stornierten Anmeldung prüft Kapazität
         if reg.payment_status == EventRegistration.PaymentStatus.CANCELLED and reg.event_id:
             event = Event.objects.select_for_update().get(pk=reg.event_id)
-            if event.is_full and not allow_overbooking:
+            if event.is_full and not allow_overbooking and not funding:
                 raise EventFullError(
                     f"Die Veranstaltung '{event.title}' ist mit {event.max_guests} Teilnehmern bereits ausgebucht. "
                     f"Die stornierte Anmeldung von {reg.user.username} kann nicht als bezahlt reaktiviert werden."
@@ -294,7 +317,7 @@ class PaymentService:
 
         reg.payment_status = EventRegistration.PaymentStatus.PAID
         if not reg.paid_at:
-            reg.paid_at = timezone.now()
+            reg.paid_at = funding.payment.received_at if funding else timezone.now()
         if amount is not None:
             reg.paid_amount = amount
         elif not reg.paid_amount or reg.paid_amount == 0:
@@ -335,8 +358,20 @@ class PaymentService:
         if not registration.pk:
             registration.save()
 
-        # Lock registration first to establish lock hierarchy: EventRegistration -> SeatingCell
+        from django.contrib.auth import get_user_model
+        user_id, event_id = EventRegistration.objects.values_list('user_id', 'event_id').get(pk=registration.pk)
+        get_user_model().objects.select_for_update(no_key=True).get(pk=user_id)
+        Event.objects.select_for_update().get(pk=event_id)
         reg = EventRegistration.objects.select_for_update().get(pk=registration.pk)
+        from seating.models import ClanSeatHold
+        from seating.clan_payments import log
+        funding = ClanSeatHold.objects.filter(funded_registration=reg).select_related('payment').first()
+        if funding:
+            log(funding.payment, None, 'TICKET_CANCELLED', details={'registration_id': reg.pk, 'hold_id': funding.pk})
+            ClanSeatHold.objects.filter(pk=funding.pk).update(funded_registration=None,
+                registration_snapshot={}, state='OPEN', claimed_by=None)
+            reg.paid_amount = 0
+            reg.paid_at = None
         reg.payment_status = EventRegistration.PaymentStatus.CANCELLED
         reg.is_checked_in = False
         reg.checked_in_at = None

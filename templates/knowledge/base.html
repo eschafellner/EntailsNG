@@ -4,7 +4,7 @@
 {% block content %}
 <div class="knowledge">
   <header class="knowledge-header">
-    <div><p class="eyebrow">{% t "knowledge_internal" "Intern · Nur für Mitarbeiter" %}</p><a href="{% url 'knowledge:home' %}" class="knowledge-brand">{% t "knowledge_title" "Wissensbasis" %}</a></div>
+    <div><p class="eyebrow">{% t "knowledge_internal" "Intern · Nur für Mitarbeiter" %}</p><a href="{% url 'knowledge:home' %}" class="knowledge-brand link-title">{% t "knowledge_title" "Wissensbasis" %}</a></div>
     <form action="{% url 'knowledge:home' %}" method="get" class="knowledge-search" role="search">
       <label class="sr-only" for="knowledge-search">{% t "knowledge_search" "Dokumentation durchsuchen" %}</label>
       <input id="knowledge-search" type="search" name="q" value="{{ query }}" maxlength="200" placeholder="{% t 'knowledge_search' 'Dokumentation durchsuchen' %}">

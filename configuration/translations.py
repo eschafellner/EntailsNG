@@ -10,11 +10,19 @@ from tournaments.team_texts import TEXTS as TEAM_TEXTS
 from clans.texts import TEXTS as CLAN_TEXTS
 
 from seating.clan_texts import TEXTS as CLAN_SEAT_TEXTS
+from seating.clan_payment_texts import TEXTS as CLAN_PAYMENT_TEXTS
 
 from tournaments.result_texts import TEXTS as RESULT_TEXTS
+from tournaments.external_texts import TEXTS as EXTERNAL_TOURNAMENT_TEXTS
+from tournaments.draw_texts import TEXTS as DRAW_TEXTS
 from users.ban_texts import TEXTS as BAN_TEXTS
+from contact.texts import CONTACT_TEXTS
 
 DEFAULT_TEXTS = {
+    **CONTACT_TEXTS,
+    **DRAW_TEXTS,
+    **EXTERNAL_TOURNAMENT_TEXTS,
+    **CLAN_PAYMENT_TEXTS,
     **BAN_TEXTS,
     **RESULT_TEXTS,
     'tournament_state_label': 'Turnierstatus',

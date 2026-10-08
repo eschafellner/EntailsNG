@@ -6,7 +6,7 @@
 <div class="card" style="padding:24px;margin-bottom:20px;">
   <p class="eyebrow">{% t "media_export" "Exportieren" %}</p>
   <h1>{{ template.name }}</h1>
-  <p><a href="{% url 'media_template_edit' template.pk %}">{% t "media_edit" "Gestalten" %}</a> · <a href="{% url 'media_template_list' %}">{% t "media_back" "← Alle Vorlagen" %}</a></p>
+  <p><a href="{% url 'media_template_edit' template.pk %}" class="text-link">{% t "media_edit" "Gestalten" %}</a> · <a href="{% url 'media_template_list' %}" class="text-link">{% t "media_back" "← Alle Vorlagen" %}</a></p>
   {% if capacity %}<p>{% t "media_sheet_capacity" "Auf einen A4-Bogen passen {capacity} Badges in Originalgröße mit Schnittmarken." capacity=capacity %}</p>{% endif %}
 </div>
 
@@ -29,7 +29,7 @@
       </select>
     </label>
     <button type="submit">{% t "media_filter_apply" "Filter anwenden" %}</button>
-    <a href="{% url 'media_template_export' template.pk %}">{% t "media_filter_reset" "Filter zurücksetzen" %}</a>
+    <a href="{% url 'media_template_export' template.pk %}" class="text-link">{% t "media_filter_reset" "Filter zurücksetzen" %}</a>
   </form>
 {% endif %}
 

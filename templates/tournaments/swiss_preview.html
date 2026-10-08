@@ -2,12 +2,12 @@
 {% block title %}{% t "swiss_preview_title" "Schweizer Runde vorbereiten" %} – {{ tournament.title }}{% endblock %}
 {% block content %}
 <div class="swiss-preview-page">
-  <a href="{% url 'tournament_detail' slug=tournament.slug %}">← {{ tournament.title }}</a>
+  <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="text-link">← {{ tournament.title }}</a>
   <section class="ux-card">
     <h1>{% t "swiss_preview_title" "Schweizer Runde vorbereiten" %}</h1>
     {% if error %}
       <p role="status">{{ error }}</p>
-      <a href="{% url 'tournament_swiss_preview' slug=tournament.slug %}">{% t "swiss_refresh_preview" "Vorschau erneut prüfen" %}</a>
+      <a href="{% url 'tournament_swiss_preview' slug=tournament.slug %}" class="text-link">{% t "swiss_refresh_preview" "Vorschau erneut prüfen" %}</a>
       {% if can_rescue %}
         <p>{% t "format_swiss_rescue_hint" %}</p>
         <a class="btn-action-primary" href="{% url 'tournament_swiss_preview' slug=tournament.slug %}?allow_repeats=1">{% t "format_swiss_rescue_preview" %}</a>

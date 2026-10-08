@@ -27,18 +27,21 @@
           </h1>
           {% if clan.website %}
             <p style="margin: 4px 0 0 0; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
-              🌐 <a href="{{ clan.website }}" target="_blank" rel="noopener" style="color: var(--signal-deep); text-decoration: underline;">{{ clan.website }}</a>
+              🌐 <a href="{{ clan.website }}" target="_blank" rel="noopener" class="text-link">{{ clan.website }}</a>
             </p>
           {% endif %}
         </div>
       </div>
 
       <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        {% if clan_payment_available %}
+          <a class="btn-action-primary" href="{% url 'clan_payment_detail' slug=clan.slug %}">{% t "clan_payment_manage" %}</a>
+        {% endif %}
         {% if clan_seats_available %}
           <a class="btn-action-primary" href="{% url 'clan_seat_selection' slug=clan.slug %}">🪑 {% t "clan_seat_button" %}</a>
         {% endif %}
         {% if is_clan_admin %}
-          <a href="{% url 'clan_edit' slug=clan.slug %}" style="background: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+          <a href="{% url 'clan_edit' slug=clan.slug %}" class="btn-action-blue">
             ✏️ {% t "clan_edit_btn" "Clan bearbeiten" %}
           </a>
         {% endif %}
@@ -80,6 +83,15 @@
       {% for admin in clan_admins %}<li>{{ admin.user.username }}</li>{% endfor %}
     </ul>
   </section>
+  {% if clan_payment_history %}
+    <section class="card clan-admin-overview">
+      <h2>{% t 'clan_payment_title' %}</h2>
+      <ul>{% for payment in clan_payment_history %}<li>
+        <a href="{% url 'clan_payment_detail' slug=clan.slug %}?event={{ payment.allocation.event_id }}" class="text-link">{{ payment.reference }} · {{ payment.allocation.event.title }} · {{ payment.total_amount|floatformat:2 }} €</a>
+        · {{ payment.get_status_display }}
+      </li>{% endfor %}</ul>
+    </section>
+  {% endif %}
 
   <!-- PENDING REQUESTS SECTION FOR CLAN ADMINS -->
   {% if is_clan_admin and pending_memberships %}

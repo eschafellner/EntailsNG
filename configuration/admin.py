@@ -39,11 +39,20 @@ from django.contrib import messages
 from django.core.management import call_command
 from django.utils.safestring import mark_safe
 from .models import GeneralConfiguration, SiteCustomization
+from .contact_admin import ContactCategoryInline
 
 
 @admin.register(GeneralConfiguration)
 class GeneralConfigurationAdmin(admin.ModelAdmin):
+    inlines = (ContactCategoryInline,)
     fieldsets = (
+        (
+            'Kontaktformular',
+            {
+                'fields': ('contact_enabled', 'contact_recipient_emails'),
+                'description': 'Betreffkategorien und ihre Empfänger werden unten auf dieser Seite gepflegt. Eigene Kategorieempfänger ersetzen die Standardempfänger.',
+            },
+        ),
         (
             'Ticket-Anzeige Steuerung',
             {
@@ -342,7 +351,8 @@ from seating.clan_admin_forms import ClanSeatConfigurationForm
 @admin.register(ClanSeatConfiguration)
 class ClanSeatConfigurationAdmin(admin.ModelAdmin):
     form = ClanSeatConfigurationForm
-    fields = ('enabled', 'default_limit', 'duration', 'days', 'deadline', 'release_seats', 'confirm_release')
+    fields = ('enabled', 'default_limit', 'duration', 'days', 'deadline', 'payment_ticket_type',
+              'payment_days', 'payment_review_days', 'release_seats', 'confirm_release')
 
     def has_add_permission(self, request):
         return not ClanSeatConfiguration.objects.exists()

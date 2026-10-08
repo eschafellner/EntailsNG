@@ -293,13 +293,13 @@ class SwissTests(TestCase):
         self.assertEqual(self.client.post(preview_url).status_code, 405)
         self.client.post(publish_url)
         self.assertFalse(self.tournament.matches.exists())
-        response = self.client.get(preview_url)
+        response = self.client.get(preview_url, follow=True)
         token = response.context['plan']['token']
         self.client.force_login(self.teams[0].captain)
         self.assertEqual(self.client.get(preview_url).status_code, 403)
         self.assertEqual(self.client.post(publish_url, {'preview_token': token}).status_code, 403)
         self.client.force_login(self.staff)
-        self.client.post(publish_url, {'preview_token': token})
+        self.client.post(reverse('tournament_generate_bracket', args=[self.tournament.slug]), {'preview_token': token})
         self.assertEqual(self.tournament.swiss_round_records.count(), 1)
 
     def test_unique_round_entry_prevents_double_participation(self):
@@ -407,9 +407,8 @@ class SwissTests(TestCase):
         request = RequestFactory().post('/')
         request.user = self.staff
         admin = TournamentAdmin(Tournament, AdminSite())
-        with patch.object(admin, 'message_user') as message:
-            admin.action_close_registration_and_generate_bracket(request, [self.tournament])
-        self.assertIn('/swiss/preview/', str(message.call_args.args[1]))
+        response = admin.action_close_registration_and_generate_bracket(request, [self.tournament])
+        self.assertEqual(response.url, reverse('tournament_draw_preview', args=[self.tournament.slug]))
         self.assertFalse(self.tournament.matches.exists())
         self.publish()
         self.score_round()

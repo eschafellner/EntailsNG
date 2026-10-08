@@ -170,7 +170,9 @@ class SwissPairingService:
 
 class SwissTournamentService:
     @staticmethod
-    def _plan(tournament, seed, *, allow_repeats=False):
+    def _plan(tournament, seed, *, allow_repeats=False, initial_order=None, initial_pairs=None):
+        if tournament.is_generated and (initial_order is not None or initial_pairs is not None):
+            raise TournamentBracketError(get_translation('draw_unavailable'))
         if tournament.is_generated:
             if tournament.status != Tournament.Status.IN_PROGRESS:
                 raise TournamentBracketError('Das Turnier läuft nicht.')
@@ -195,7 +197,13 @@ class SwissTournamentService:
                 raise TournamentBracketError('Die vorhandenen Seeds müssen eindeutig sein.')
             unseeded = [r for r in registrations if not r.is_forfeited and r.seed is None]
             random.Random(seed).shuffle(unseeded)
-            order = {r.pk: index for index, r in enumerate(seeded + unseeded, 1)}
+            ordered_ids = [r.pk for r in seeded + unseeded]
+            if initial_order is not None:
+                if (not isinstance(initial_order, list) or len(initial_order) != len(ordered_ids)
+                        or set(initial_order) != set(ordered_ids)):
+                    raise TournamentBracketError(get_translation('draw_invalid_teams'))
+                ordered_ids = initial_order
+            order = {registration_id: index for index, registration_id in enumerate(ordered_ids, 1)}
             for row in standings:
                 row['seed'] = order.get(row['registration'].pk, len(registrations) + row['registration'].pk)
             standings.sort(key=lambda r: (r['withdrawn'], r['seed']))
@@ -204,7 +212,16 @@ class SwissTournamentService:
         previous_pairs = {tuple(sorted((m['team1_id'], m['team2_id']))) for m in history if m['team1_id'] and m['team2_id']}
         bye_winners = {m['winner_id'] for m in history if m['status'] == TournamentMatch.Status.COMPLETED
                        and m['result_type'] in (TournamentMatch.ResultType.BYE, TournamentMatch.ResultType.WALKOVER)}
-        pairs = SwissPairingService.pair(standings, previous_pairs, bye_winners, seed, number, allow_repeats=allow_repeats)
+        if initial_pairs is None:
+            pairs = SwissPairingService.pair(standings, previous_pairs, bye_winners, seed, number, allow_repeats=allow_repeats)
+        else:
+            active_ids = {r['team'].pk for r in standings if not r['withdrawn']}
+            paired_ids = [value for pair in initial_pairs for value in pair if value is not None]
+            if (len(paired_ids) != len(active_ids) or set(paired_ids) != active_ids
+                    or sum(b is None for a, b in initial_pairs) != len(active_ids) % 2
+                    or any(a is None for a, b in initial_pairs)):
+                raise TournamentBracketError(get_translation('draw_invalid_teams'))
+            pairs = initial_pairs
         snapshot = [{'registration_id': r['registration'].pk, 'team_id': r['team'].pk, 'seed': r['seed'],
                      'points': r['points'], 'buchholz': r['buchholz'], 'sonneborn_berger': r['sonneborn_berger'],
                      'withdrawn': r['withdrawn']} for r in standings]
@@ -235,8 +252,10 @@ class SwissTournamentService:
 
     @staticmethod
     @transaction.atomic
-    def publish(tournament_id, actor=None, token=None, *, approve_repeats=False):
+    def publish(tournament_id, actor=None, token=None, *, approve_repeats=False, initial_draw=None):
         tournament = _locked_tournament(tournament_id, actor)
+        if initial_draw is not None and (tournament.is_generated or token is not None):
+            raise TournamentBracketError(get_translation('draw_unavailable'))
         if token:
             try:
                 claim = signing.loads(token, salt=TOKEN_SALT, max_age=600)
@@ -251,9 +270,11 @@ class SwissTournamentService:
         else:
             if tournament.is_generated:
                 raise TournamentBracketError('Bitte zuerst die nächste Runde in der Vorschau prüfen.')
-            seed = secrets.randbits(31)
+            seed = initial_draw['random_seed'] if initial_draw is not None else secrets.randbits(31)
             allow_repeats = False
-        plan = SwissTournamentService._plan(tournament, seed, allow_repeats=allow_repeats)
+        plan = SwissTournamentService._plan(tournament, seed, allow_repeats=allow_repeats,
+            initial_order=initial_draw['order'] if initial_draw is not None else None,
+            initial_pairs=initial_draw['pairs'] if initial_draw is not None else None)
         if plan['has_repeats'] and approve_repeats is not True:
             raise TournamentBracketError(get_translation('format_swiss_approval_required'))
         if token and (claim['number'] != plan['number'] or claim['digest'] != plan['digest']):

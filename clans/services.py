@@ -121,6 +121,10 @@ def leave_clan(clan_id, actor_id):
         ).first()
         if membership is None:
             raise ClanManagementError('msg_clan_not_member')
+        from seating.models import ClanSeatPayment
+        if not clan.memberships.filter(status=ClanMembership.Status.ACCEPTED).exclude(pk=membership.pk).exists() and ClanSeatPayment.objects.filter(allocation__clan=clan).exists():
+            from configuration.translations import get_translation
+            raise ClanManagementError('clan_payment_clan_delete_blocked')
         was_admin = membership.role == ClanMembership.Role.ADMIN
         membership.delete()
         if not clan.memberships.filter(status=ClanMembership.Status.ACCEPTED).exists():

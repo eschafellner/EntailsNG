@@ -329,6 +329,19 @@ def build_css_variables(theme_preset, ui_scale, primary_color=None, secondary_co
     scale_vars = SCALE_MAP.get(ui_scale, SCALE_MAP.get('MD'))
     base_vars.update(scale_vars)
 
+    # Keep action labels readable with presets and custom accent colors.
+    def luminance(hex_color):
+        channels = [int(hex_color.lstrip('#')[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return sum(c * weight for c, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+
+    def contrast(hex_color):
+        light, dark = sorted((luminance(base_vars['--signal']), luminance(hex_color)), reverse=True)
+        return (light + 0.05) / (dark + 0.05)
+
+    navy = base_vars['--navy']
+    base_vars['--signal-ink'] = navy if contrast(navy) >= 4.5 else max(('#111827', '#ffffff'), key=contrast)
+
     paper_hex = base_vars.get('--paper', '#fffaf2').lstrip('#')
     is_dark = False
     try:

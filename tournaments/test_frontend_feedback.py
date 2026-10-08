@@ -81,7 +81,7 @@ class TournamentFrontendFeedbackTests(TestCase):
             header = self.header(response)
             self.assertIn('Turnier abgesagt', header)
             self.assertNotIn('Angemeldet mit', header)
-            self.assertNotIn('Baum jetzt generieren', header)
+            self.assertNotIn('Auslosung vorbereiten', header)
             self.assertNotIn('Läuft aktuell', header)
             self.assertNotIn('Jetzt Anmeldung schließen', header)
 
@@ -177,7 +177,7 @@ class TournamentFrontendFeedbackTests(TestCase):
         self.assertEqual(list(self.tournament.registrations.values_list('pk', flat=True)), ids)
         self.assertEqual((self.tournament.registration_start, self.tournament.registration_end), dates)
         self.assertNotContains(response, 'Jetzt Anmeldung schließen')
-        self.assertContains(response, 'Baum jetzt generieren')
+        self.assertContains(response, 'Auslosung vorbereiten')
 
     def test_close_blocks_new_registrations_and_start_remains_possible_after_filling_roster(self):
         TournamentLifecycleService.close_registration(self.tournament.pk, actor=self.staff)
@@ -258,7 +258,7 @@ class TournamentFrontendFeedbackTests(TestCase):
                 self.set_status(status)
                 response = self.client.get(self.detail_url)
                 self.assertFalse(response.context['can_generate_bracket'])
-                self.assertNotContains(response, 'Baum jetzt generieren')
+                self.assertNotContains(response, 'Auslosung vorbereiten')
                 self.assertNotContains(response, 'Jetzt Anmeldung schließen')
         self.set_status(Tournament.Status.REGISTRATION_OPEN)
         self.assertContains(self.client.get(self.detail_url), 'Jetzt Anmeldung schließen')
@@ -285,6 +285,6 @@ class TournamentFrontendFeedbackTests(TestCase):
         self.tournament.save()
         self.client.force_login(self.staff)
         response = self.client.post(self.close_url, follow=True)
-        self.assertContains(response, 'Runde 1 vorbereiten')
+        self.assertContains(response, 'Auslosung vorbereiten')
         self.assertFalse(self.tournament.swiss_round_records.exists())
         self.assertFalse(self.tournament.matches.exists())

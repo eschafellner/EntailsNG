@@ -92,6 +92,8 @@ def clan_detail_view(request, slug):
         else None
     )
     is_clan_admin = clan.is_admin(request.user)
+    from seating.models import ClanSeatPayment
+    payment_history = ClanSeatPayment.objects.filter(allocation__clan=clan).select_related('allocation__event').order_by('-created_at') if is_clan_admin else []
 
     accepted_memberships = list(clan.get_accepted_memberships())
     clan_admins = [m for m in accepted_memberships if m.role == ClanMembership.Role.ADMIN
@@ -130,6 +132,8 @@ def clan_detail_view(request, slug):
         'current_clan_membership': current_clan_membership,
         'is_clan_admin': is_clan_admin,
         'clan_seats_available': bool(is_clan_admin and active_event and selection_status(clan, active_event)['enabled']),
+        'clan_payment_available': bool(is_clan_admin and (active_event or payment_history)),
+        'clan_payment_history': payment_history,
         'clan_admins': clan_admins,
         'admin_count': admin_count,
         'is_last_member': len(accepted_memberships) <= 1,

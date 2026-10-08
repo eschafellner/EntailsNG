@@ -1,5 +1,33 @@
 import re
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+
+
+def parse_contact_recipients(value):
+    """Validate semicolon-separated mailboxes and return unique normalized addresses."""
+    recipients = []
+    for item in (value or '').split(';'):
+        address = item.strip().lower()
+        if not address:
+            continue
+        try:
+            validate_email(address)
+        except ValidationError as exc:
+            raise ValidationError(
+                'Ungültige Empfängeradresse: %(address)s. Mehrere Adressen mit ; trennen.',
+                params={'address': address}, code='invalid_contact_recipient',
+            ) from exc
+        if len(address) > 254:
+            raise ValidationError('Eine Empfängeradresse darf höchstens 254 Zeichen enthalten.')
+        if address not in recipients:
+            recipients.append(address)
+    if len(recipients) > 20:
+        raise ValidationError('Bitte höchstens 20 unterschiedliche Empfängeradressen angeben.')
+    return recipients
+
+
+def validate_contact_recipients(value):
+    parse_contact_recipients(value)
 
 
 def validate_iban(value):
@@ -72,4 +100,3 @@ def validate_hex_color(value):
         raise ValidationError(
             f"'{value}' ist kein gültiger Hex-Farbcode. Erwartet wird ein Format wie '#fff', '#f8ab2d' oder '#ffffff'."
         )
-

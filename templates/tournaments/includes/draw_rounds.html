@@ -1,0 +1,5 @@
+<div class="draw-rounds">
+  {% for round in rounds %}<section class="draw-round"><h3>{{ round.name }}</h3>
+    {% for match in round.matches %}<article class="draw-match"><strong>#{{ match.match_number }}</strong><p>{{ match.team1 }}</p><p>{{ match.team2 }}</p>{% if match.is_bye %}<small>{% t 'draw_bye' %}</small>{% endif %}</article>{% endfor %}
+  </section>{% endfor %}
+</div>

@@ -180,7 +180,7 @@
                 <!-- 3. Clan -->
                 <td class="col-clan" style="padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
                   {% if reg.cached_clan %}
-                    <a href="{% url 'clan_detail' slug=reg.cached_clan.slug %}" class="clan-badge-link" style="display: inline-flex; align-items: center; gap: 6px; color: #0284c7; text-decoration: none; font-weight: bold; white-space: nowrap;" title="{{ reg.cached_clan.name }}">
+                    <a href="{% url 'clan_detail' slug=reg.cached_clan.slug %}" class="clan-badge-link text-link" title="{{ reg.cached_clan.name }}">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                       </svg>
@@ -195,14 +195,13 @@
                 <td class="col-seat" style="padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
                   {% if reg.seat_label %}
                     <a href="{% url 'seating_plan' %}?seat={{ reg.seat_label|urlencode }}" 
-                       class="seat-badge-link"
-                       title="Platz {{ reg.seat_label }} im Saalplan anzeigen"
-                       style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; color: #0284c7; font-weight: bold; text-decoration: none; white-space: nowrap; transition: transform 0.15s ease, background 0.15s ease;">
+                       class="seat-badge-link link-badge"
+                       title="Platz {{ reg.seat_label }} im Saalplan anzeigen">
                       🪑 {{ reg.seat_label }}
                     </a>
                   {% else %}
                     {% if user.is_authenticated and reg.user_id == user.id %}
-                      <a href="{% url 'seating_plan' %}" style="color: var(--signal, #f8ab2d); font-size: 12px; font-weight: bold; text-decoration: underline; white-space: nowrap;">
+                      <a href="{% url 'seating_plan' %}" class="text-link">
                         {% t "guest_list_choose_seat" "👉 Platz wählen" %}
                       </a>
                     {% else %}
@@ -566,11 +565,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.seat-badge-link:hover {
-  transform: scale(1.04);
-  background: rgba(56, 189, 248, 0.22) !important;
-  border-color: #0284c7 !important;
-}
+.clan-badge-link { display: inline-flex; align-items: center; gap: 6px; }
 
 .guest-row:hover {
   background: rgba(110, 72, 24, 0.03) !important;

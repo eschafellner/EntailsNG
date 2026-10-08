@@ -1,0 +1,8 @@
+<details class="card" style="padding: 16px; margin-bottom: 16px;">
+  <summary>{% t 'draw_history' %}</summary>
+  {% for log in draw_logs %}
+    <p><strong>{{ log.created_at|date:'d.m.Y H:i' }}</strong> · {{ log.actor|default:'—' }} · {{ log.get_method_display }} · {% t 'draw_conflicts' count=log.conflict_count %}</p>
+    {% if log.reason %}<p>{{ log.reason }}</p>{% endif %}
+    <ol>{% for participant in log.snapshot.participants %}<li>{{ participant.team }}{% if participant.clan %} · {{ participant.clan }}{% endif %}</li>{% endfor %}</ol>
+  {% endfor %}
+</details>

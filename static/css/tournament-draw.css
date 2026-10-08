@@ -1,0 +1,27 @@
+.draw-page { max-width: 1160px; margin: 0 auto; padding: 24px 16px; color: var(--ink); }
+.draw-page h1, .draw-page h2, .draw-page h3 { overflow-wrap: anywhere; }
+.draw-panel { padding: 20px; margin: 20px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); min-width: 0; }
+.draw-team-grid, .draw-pair-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 14px; }
+.draw-team-row, .draw-swap { margin: 0; border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+.draw-team-row legend { max-width: 100%; overflow-wrap: anywhere; font-weight: 700; }
+.draw-team-meta { color: var(--muted); font-size: 14px; }
+.draw-page select, .draw-page textarea { width: 100%; min-width: 0; max-width: 100%; margin: 6px 0 12px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; box-sizing: border-box; }
+.draw-page button { padding: 10px 14px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel); color: var(--ink); font: inherit; white-space: normal; }
+.draw-page button:disabled { opacity: .55; cursor: default; }
+.draw-page button:focus-visible, .draw-page select:focus-visible, .draw-page textarea:focus-visible { outline: 3px solid var(--signal); outline-offset: 3px; }
+.draw-option { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; }
+.draw-option input { margin-top: 5px; flex-shrink: 0; }
+.draw-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.draw-swap { margin-top: 18px; }
+.draw-notice { padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow-wrap: anywhere; }
+.draw-warning { border-color: var(--signal); border-inline-start: 4px solid var(--signal); }
+.draw-error { border-color: var(--danger, #b91c1c); }
+.draw-match { padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow-wrap: anywhere; }
+.draw-match.draw-warning { border-color: var(--signal); }
+.draw-match p { margin: 8px 0; }
+.draw-clan-label { display: block; color: var(--muted); font-size: 14px; }
+.draw-rounds { display: flex; overflow-x: auto; gap: 16px; padding-bottom: 12px; margin: 14px 0; }
+.draw-round { flex: 0 0 240px; min-width: 0; }
+.draw-round .draw-match { margin-bottom: 12px; }
+.draw-page [hidden] { display: none !important; }
+@media (max-width: 480px) { .draw-page { padding: 16px 8px; } .draw-panel { padding: 14px; } .draw-actions button { width: 100%; } }

@@ -13,7 +13,7 @@ class QuotaReleaseForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        qs = open_holds().select_related('allocation__clan', 'allocation__event')
+        qs = open_holds().filter(payment__isnull=True).select_related('allocation__clan', 'allocation__event')
         if isinstance(self.instance, Clan):
             qs = qs.filter(allocation__clan_id=self.instance.pk)
         self.available_holds = list(qs.order_by('allocation_id', 'pk'))
@@ -25,7 +25,7 @@ class QuotaReleaseForm(forms.ModelForm):
         )
         self.fields['confirm_release'] = forms.BooleanField(
             required=False, label='Freigabe der angezeigten bzw. ausgewählten offenen Clan-Vormerkungen bestätigen',
-            help_text='Bei Deaktivierung oder Kontingent 0 werden alle betroffenen offenen Vormerkungen freigegeben.',
+            help_text='Bei Deaktivierung oder Kontingent 0 werden offene Vormerkungen ohne Sammelauftrag freigegeben. Festgeschriebene Sammelaufträge bleiben erhalten.',
         )
 
     def clean(self):
@@ -60,6 +60,18 @@ class QuotaReleaseForm(forms.ModelForm):
 
 
 class ClanSeatConfigurationForm(QuotaReleaseForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in ('payment_days', 'payment_review_days'):
+            self.fields[field].required = False
+
+    def clean(self):
+        data = super().clean()
+        for field in ('payment_days', 'payment_review_days'):
+            if data.get(field) is None:
+                data[field] = getattr(self.instance, field)
+        return data
+
     class Meta:
         model = ClanSeatConfiguration
         fields = '__all__'

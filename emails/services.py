@@ -7,6 +7,7 @@ import uuid
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core.validators import validate_email
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.html import escape, strip_tags
@@ -73,12 +74,14 @@ def render_system_email(template_key, recipient_email, context_data):
     return template, subject, text_content, html_content
 
 
-def queue_system_email(template_key, recipient_email, context_data, trigger_worker=True, expires_at=None):
+def queue_system_email(template_key, recipient_email, context_data, trigger_worker=True, expires_at=None, *, reply_to_email='', submitted_by=None):
     """
     Stellt eine System-E-Mail in die persistente Versandwarteschlange (OutgoingEmail / Outbox).
     Wird innerhalb der aktuellen DB-Transaktion gespeichert (Transactional Outbox).
     Triggert nach Commit automatisch die Hintergrundverarbeitung.
     """
+    if reply_to_email:
+        validate_email(reply_to_email)
     template, subject, text_content, html_content = render_system_email(
         template_key, recipient_email, context_data
     )
@@ -88,6 +91,8 @@ def queue_system_email(template_key, recipient_email, context_data, trigger_work
     outgoing = OutgoingEmail.objects.create(
         template_key=template_key,
         recipient_email=recipient_email,
+        reply_to_email=reply_to_email,
+        submitted_by=submitted_by,
         subject=subject,
         body_text=text_content,
         body_html=html_content,
@@ -231,6 +236,7 @@ def process_email_queue(limit=50, email_ids=None):
             subject=outgoing.subject,
             body=outgoing.body_text,
             to=[outgoing.recipient_email],
+            reply_to=[outgoing.reply_to_email] if outgoing.reply_to_email else None,
         )
         msg.attach_alternative(outgoing.body_html, "text/html")
 
@@ -263,7 +269,7 @@ def process_email_queue(limit=50, email_ids=None):
 
 
 
-def send_system_email(template_key, recipient_email, context_data, immediate=None):
+def send_system_email(template_key, recipient_email, context_data, immediate=None, *, reply_to_email='', submitted_by=None):
     """
     Versendet eine System-E-Mail auf Basis eines Templates.
     Bei immediate=True wird die Mail direkt synchron versendet.
@@ -285,9 +291,14 @@ def send_system_email(template_key, recipient_email, context_data, immediate=Non
             immediate = not async_enabled
 
     if not immediate:
-        outgoing = queue_system_email(template_key, recipient_email, context_data)
+        outgoing = queue_system_email(
+            template_key, recipient_email, context_data,
+            reply_to_email=reply_to_email, submitted_by=submitted_by,
+        )
         return outgoing is not None
 
+    if reply_to_email:
+        validate_email(reply_to_email)
     template, subject, text_content, html_content = render_system_email(
         template_key, recipient_email, context_data
     )
@@ -298,6 +309,7 @@ def send_system_email(template_key, recipient_email, context_data, immediate=Non
         subject=subject,
         body=text_content,
         to=[recipient_email],
+        reply_to=[reply_to_email] if reply_to_email else None,
     )
     msg.attach_alternative(html_content, "text/html")
 

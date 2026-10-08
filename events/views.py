@@ -21,6 +21,7 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_POST
 
 from clans.models import ClanMembership
+from seating.models import ClanSeatHold
 from configuration.cache import invalidate_active_event_cache
 from configuration.translations import DEFAULT_TEXTS, get_translation
 from configuration.models import GeneralConfiguration
@@ -98,6 +99,7 @@ def dashboard_view(request):
         'latest_news': get_latest_news(limit=DASHBOARD_NEWS_LIMIT, exclude_id=pinned_news.pk if pinned_news else None),
         'pinned_news': pinned_news,
         'registration': registration,
+        'clan_funded_ticket': bool(registration and ClanSeatHold.objects.filter(funded_registration=registration).exists()),
         'is_user_registered': registration is not None,
         'user_status_step': registration.status_step if registration else 1,
         'user_seat_label': registration.seat_label if registration else None,

@@ -1,6 +1,18 @@
 # emails/defaults.py
 
 DEFAULT_EMAIL_TEMPLATES = {
+    'contact_request': {
+        'name': 'Kontaktanfrage an das Orga-Team',
+        'subject': '[Kontakt] {category}',
+        'content': '''<h2>Neue Kontaktanfrage</h2>
+<p><strong>Thema:</strong> {category}</p>
+<p><strong>Antwortadresse des Gastes:</strong> {email}</p>
+<p><strong>Eingang:</strong> {submitted_at}</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere; font-family: Arial, sans-serif;">{message}</pre>
+<p>Mit der Antwortfunktion deines E-Mail-Programms erreichst du den Gast direkt.</p>''',
+        'is_active': True,
+        'placeholder_info': '{category}: Betreffkategorie; {email}: Antwortadresse des Gastes; {message}: Nachricht; {submitted_at}: Eingangszeitpunkt (Europe/Vienna).',
+    },
     'payment_confirmation': {
         'name': 'Zahlungsbestätigung',
         'subject': 'Zahlungseingang bestätigt für {event_title}',
@@ -137,5 +149,50 @@ DEFAULT_EMAIL_TEMPLATES.update({
 <p><a href="{seating_url}">Sitzplan öffnen</a></p>''',
         'is_active': True,
         'placeholder_info': '{username}: Clan-Admin; {clan_name}: Clan; {event_title}: Veranstaltung; {expires_at}: hinterlegter Ablaufzeitpunkt; {open_count}: freigegebene Plätze; {seat_labels}: Platzbezeichnungen; {seating_url}: vollständiger Link zum Sitzplan.',
+    },
+})
+
+DEFAULT_EMAIL_TEMPLATES.update({
+    'clan_payment_created': {
+        'name': 'Clan-Sammelzahlung: Zahlungsauftrag',
+        'subject': 'Clan-Zahlungsauftrag {reference} – {event_title}',
+        'content': '''<p>Hallo {username},</p><p>für {clan_name} wurden {seat_count} Plätze verbindlich festgeschrieben. Bitte <strong>{amount} €</strong> mit dem Verwendungszweck <strong>{reference}</strong> überweisen.</p><p>Zahlungseingang spätestens: <strong>{payment_due_at}</strong>. Ohne bestätigte Zahlung werden die Plätze am <strong>{release_at}</strong> automatisch freigegeben. Alle Zeiten: Europe/Vienna.</p><p>Auftrag und enthaltene Plätze können durch Clanadmins nicht mehr geändert werden. Spätere Zahlungen müssen mit der Orga geklärt werden.</p><p><a href="{payment_url}">Überweisungsdaten und Auftrag öffnen</a></p>''',
+        'is_active': True,
+        'placeholder_info': '{username}, {clan_name}, {event_title}, {reference}, {amount}, {seat_count}, {payment_due_at}, {release_at}, {payment_url}',
+    },
+    'clan_payment_reminder': {
+        'name': 'Clan-Sammelzahlung: Zahlungserinnerung',
+        'subject': 'Zahlungsfrist für {reference}: {payment_due_at}',
+        'content': '''<p>Hallo {username},</p><p>für den Clan-Zahlungsauftrag {reference} ({clan_name}, {event_title}) ist noch keine Zahlung bestätigt. Betrag: {amount} €.</p><p>Zahlungseingang spätestens: <strong>{payment_due_at}</strong>. Automatische Platzfreigabe ohne Bestätigung: <strong>{release_at}</strong>. Alle Zeiten: Europe/Vienna.</p><p>Falls ihr bereits überwiesen habt, kontaktiert bitte die Orga.</p><p><a href="{payment_url}">Auftrag öffnen</a></p>''',
+        'is_active': True,
+        'placeholder_info': '{username}, {clan_name}, {event_title}, {reference}, {amount}, {payment_due_at}, {release_at}, {payment_url}',
+    },
+    'clan_payment_confirmed': {
+        'name': 'Clan-Sammelzahlung: Zahlung bestätigt',
+        'subject': 'Clan-Zahlung {reference} bestätigt – {event_title}',
+        'content': '''<p>Hallo {username},</p><p>die Orga hat {amount} € für {reference} bestätigt. Eure {seat_count} Plätze bei {event_title} sind jetzt bezahlt und bleiben unabhängig von der bisherigen Vormerkfrist geschützt.</p><p>Ihr könnt jetzt bestätigte Clanmitglieder zuweisen. Gäste mit bereits bezahlten Tickets können nicht zugewiesen werden.</p><p><a href="{payment_url}">Clanplätze verwalten</a></p>''',
+        'is_active': True,
+        'placeholder_info': '{username}, {event_title}, {reference}, {amount}, {seat_count}, {payment_url}',
+    },
+    'clan_payment_cancelled': {
+        'name': 'Clan-Sammelzahlung: storniert',
+        'subject': 'Clan-Zahlungsauftrag {reference} storniert – {event_title}',
+        'content': '''<p>Hallo {username},</p><p>der Auftrag {reference} für {clan_name} bei {event_title} wurde storniert. Seine {seat_count} Plätze sind freigegeben.</p><p>Bitte nicht mehr auf diesen Auftrag überweisen. Bereits überwiesene, verspätete oder erst später erkannte Zahlungen müssen mit der Orga geklärt werden; Plätze werden nicht automatisch wiederhergestellt.</p><p><a href="{payment_url}">Auftrag öffnen</a></p>''',
+        'is_active': True,
+        'placeholder_info': '{username}, {clan_name}, {event_title}, {reference}, {seat_count}, {payment_url}',
+    },
+    'clan_payment_assigned': {
+        'name': 'Clan-Sammelzahlung: Mitglied zugewiesen',
+        'subject': 'Dein Clanplatz {seat_label} – {event_title}',
+        'content': '''<p>Hallo {username},</p><p>dein Clan {clan_name} hat dir den bezahlten Platz <strong>{seat_label}</strong> bei {event_title} zugewiesen. Deine Veranstaltungsanmeldung ist bezahlt. Du brauchst keine eigene Überweisung für dieses Ticket.</p><p>Der Ticketanteil {amount} € ist durch die bestätigte Sammelzahlung {reference} gedeckt. Den Einlasscode findest du auf deinem Dashboard. Platzwechsel und Änderungen der Clan-Zahlungsdeckung verwalten eure Clanadmins.</p>''',
+        'is_active': True,
+        'placeholder_info': '{username}, {clan_name}, {event_title}, {seat_label}, {reference}, {amount}',
+    },
+    'clan_payment_removed': {
+        'name': 'Clan-Sammelzahlung: Zuweisung aufgehoben',
+        'subject': 'Clanplatz {seat_label} aufgehoben – {event_title}',
+        'content': '''<p>Hallo {username},</p><p>deine Zuweisung auf den Clanplatz {seat_label} bei {event_title} wurde aufgehoben. Dein Ticket wird nicht mehr durch die Clan-Sammelzahlung gedeckt.</p><p>Der Status deiner Anmeldung lautet jetzt: <strong>{registration_status}</strong>. Prüfe bitte dein Dashboard und kläre deine weitere Teilnahme mit euren Clanadmins oder der Orga.</p>''',
+        'is_active': True,
+        'placeholder_info': '{username}, {event_title}, {seat_label}, {registration_status}',
     },
 })

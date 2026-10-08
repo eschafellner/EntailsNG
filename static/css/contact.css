@@ -1,0 +1,27 @@
+.contact-card {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 36px);
+  box-sizing: border-box;
+}
+.contact-card h1 { margin: 4px 0 12px; }
+.contact-intro { color: var(--muted); margin-bottom: 28px; line-height: 1.6; }
+.contact-card .form-control { width: 100%; box-sizing: border-box; min-width: 0; }
+.contact-card textarea { resize: vertical; min-height: 180px; height: auto; padding: 12px 14px; line-height: 1.6; }
+.contact-help { display: block; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.contact-privacy { color: var(--muted); font-size: 0.875rem; line-height: 1.6; margin: 24px 0; }
+.contact-errors {
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+.contact-errors p { margin: 8px 0 0; }
+.contact-field-error { color: var(--danger); font-size: 0.875rem; margin: 6px 0 0; }
+.contact-submit { cursor: pointer; }
+@media (max-width: 480px) {
+  .contact-submit { width: 100%; }
+}

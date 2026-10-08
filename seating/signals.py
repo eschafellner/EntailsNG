@@ -59,5 +59,7 @@ def close_clan_holds_with_event(sender, instance, raw=False, **kwargs):
     from .clan_services import expire_allocation
     if not instance.is_active or instance.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED):
         with transaction.atomic():
+            from .clan_payments import process_payments
+            process_payments(event_id=instance.pk)
             for allocation in ClanSeatAllocation.objects.select_for_update().filter(event=instance, expired_at__isnull=True):
                 expire_allocation(allocation, timezone.now())

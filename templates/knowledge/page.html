@@ -2,12 +2,12 @@
 {% block knowledge_content %}
 <div class="knowledge-layout">{% include 'knowledge/includes/tree.html' %}<article class="card knowledge-document">
   {% include 'knowledge/includes/breadcrumbs.html' %}
-  {% if reading_draft %}<div class="knowledge-notice">{% t "knowledge_reading_draft" "Du liest den aktuellen Entwurf." %}{% if page.published_revision_id %} <a href="{{ page.get_absolute_url }}">{% t "knowledge_read_published" "Veröffentlichte Version ansehen" %}</a>{% endif %}</div>
-  {% elif page.has_draft %}<div class="knowledge-notice">{% t "knowledge_new_draft" "Zu dieser Seite gibt es einen neueren Entwurf." %} <a href="{{ page.get_absolute_url }}?draft=1">{% t "knowledge_read_draft" "Entwurf ansehen" %}</a></div>{% endif %}
+  {% if reading_draft %}<div class="knowledge-notice">{% t "knowledge_reading_draft" "Du liest den aktuellen Entwurf." %}{% if page.published_revision_id %} <a href="{{ page.get_absolute_url }}" class="text-link">{% t "knowledge_read_published" "Veröffentlichte Version ansehen" %}</a>{% endif %}</div>
+  {% elif page.has_draft %}<div class="knowledge-notice">{% t "knowledge_new_draft" "Zu dieser Seite gibt es einen neueren Entwurf." %} <a href="{{ page.get_absolute_url }}?draft=1" class="text-link">{% t "knowledge_read_draft" "Entwurf ansehen" %}</a></div>{% endif %}
   <h1>{{ reading_title }}</h1><p class="knowledge-muted">{% t "knowledge_version" "Version" %} {{ reading_revision.number }} · {{ reading_revision.created_at|date:'d.m.Y H:i' }} · {{ reading_revision.author.display_name|default:'—' }}</p>
   <div class="knowledge-actions"><a class="btn btn-primary" href="{% url 'knowledge:edit' page.pk %}">{% t "knowledge_edit" "Bearbeiten" %}</a><a class="btn" href="{% url 'knowledge:create' space.pk %}?parent={{ page.pk }}">{% t "knowledge_new_child" "Unterseite anlegen" %}</a><a class="btn" href="{% url 'knowledge:history' page.pk %}">{% t "knowledge_history" "Versionshistorie" %}</a>
     {% if page.has_draft %}<form method="post" action="{% url 'knowledge:publish' page.pk %}">{% csrf_token %}<input type="hidden" name="expected_version" value="{{ page.version }}"><button class="btn" type="submit">{% t "knowledge_publish_draft" "Aktuellen Entwurf veröffentlichen" %}</button></form>{% endif %}
   </div>
   <div class="knowledge-content">{{ reading_content|safe }}</div>
-  {% if attachments %}<section class="knowledge-attachments"><h2>{% t "knowledge_attachments" "Anhänge" %}</h2><ul>{% for attachment in attachments %}<li><a href="{{ attachment.get_absolute_url }}">{{ attachment.original_name }}</a> <small>{{ attachment.size|filesizeformat }}</small></li>{% endfor %}</ul></section>{% endif %}
+  {% if attachments %}<section class="knowledge-attachments"><h2>{% t "knowledge_attachments" "Anhänge" %}</h2><ul>{% for attachment in attachments %}<li><a href="{{ attachment.get_absolute_url }}" class="text-link">{{ attachment.original_name }}</a> <small>{{ attachment.size|filesizeformat }}</small></li>{% endfor %}</ul></section>{% endif %}
 </article></div>{% endblock %}

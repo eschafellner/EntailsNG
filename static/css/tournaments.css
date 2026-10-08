@@ -1,4 +1,16 @@
 /* Shared tournament/team controls; theme colors continue to come from the site. */
+/* External listings use the same card system without internal tournament actions. */
+.external-tournament-card { min-width: 0; overflow-wrap: anywhere; }
+.external-tournament-badges { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.external-tournament-card > div:first-child > .external-tournament-badges { margin-bottom: 16px; }
+.external-tournament-identity { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.external-tournament-heading { min-width: 0; }
+.external-tournament-heading h2 { margin: 0 0 4px; font-family: 'Barlow Condensed', sans-serif; font-size: 26px; line-height: 1.15; color: var(--ink); }
+.external-tournament-heading p { color: var(--muted); }
+.external-tournament-card p { margin: 0; font-family: 'DM Sans', sans-serif; font-size: 14px; }
+.external-tournament-dates { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 14px; color: var(--muted); }
+.external-tournament-footer { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.external-tournament-footer a { max-width: 100%; box-sizing: border-box; }
 .tournament-draft-form { margin: 0; display: inline-flex; }
 .tournament-draft-button { border: 1px solid var(--line); cursor: pointer; }
 .tournament-draft-button:hover { color: var(--ink); border-color: var(--signal); }
@@ -8,8 +20,7 @@
 .tournaments-ui h1, .tournaments-ui h2, .tournaments-ui h3 { overflow-wrap: anywhere; }
 .tournaments-ui p { line-height: 1.6; }
 .tournaments-ui input, .tournaments-ui select { max-width: 100%; box-sizing: border-box; font-size: 16px !important; background: var(--paper); color: var(--ink); }
-.tournaments-ui button, .tournaments-ui .btn-login,
-.tournaments-ui [class*="btn-action"] { min-height: 44px; font-size: 14px !important; }
+.tournaments-ui button { min-height: max(44px, var(--btn-height, 42px)); }
 .tournaments-ui button { white-space: normal; }
 .tournaments-ui button:disabled { opacity: .65; cursor: not-allowed; }
 .tournaments-ui [aria-busy="true"] button { cursor: wait; }
@@ -40,7 +51,6 @@
 .tournaments-ui .ux-unregister button[type="submit"] { background: #b91c1c; color: white; }
 .tournaments-ui .ux-unregister form { display: flex; gap: 12px; }
 .tournaments-ui .ux-view-toggle button[aria-pressed="true"] { border: 2px solid var(--signal); }
-.tournaments-ui .ux-checklist a, .tournaments-ui .ux-card > a { color: var(--ink); text-decoration: underline; }
 .ux-tournament-state { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font-size: 13px; }
 .ux-tournament-state[data-state="IN_PROGRESS"] { background: var(--info-bg); color: var(--info-text); border-color: var(--info-border); }
 .ux-tournament-state[data-state="CANCELLED"], .ux-cancelled-notice { color: var(--danger); }

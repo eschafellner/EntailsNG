@@ -1,5 +1,6 @@
 from datetime import timedelta
 import logging
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -325,6 +326,22 @@ class OutgoingEmail(models.Model):
         verbose_name="Empfängeradresse",
         help_text="Zieladresse der Nachricht",
     )
+    reply_to_email = models.EmailField(
+        blank=True, default='', db_index=True, verbose_name='Antwortadresse',
+        help_text='Individuelles Reply-To; leer verwendet die allgemeine E-Mail-Konfiguration.',
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, editable=False,
+        on_delete=models.SET_NULL, related_name='submitted_emails',
+        verbose_name='Anfragender Benutzer',
+    )
+    contact_submission_id = models.UUIDField(
+        null=True, blank=True, editable=False, db_index=True, verbose_name='Kontaktanfrage-ID',
+    )
+    contact_ip_hash = models.CharField(
+        max_length=64, blank=True, default='', editable=False, db_index=True,
+        verbose_name='Kontakt-IP-Kennung',
+    )
     subject = models.CharField(
         max_length=255,
         verbose_name="Betreffzeile",
@@ -410,6 +427,9 @@ class OutgoingEmail(models.Model):
             models.Index(fields=['status', 'updated_at'], name='email_queue_status_upd_idx'),
             models.Index(fields=['status', 'lease_expires_at'], name='email_queue_status_lease_idx'),
         ]
+        constraints = [models.UniqueConstraint(
+            fields=['contact_submission_id', 'recipient_email'], name='unique_contact_email_recipient',
+        )]
 
     def __str__(self):
         return f"[{self.get_status_display()}] {self.template_key} an {self.recipient_email} (#{self.pk})"
@@ -530,4 +550,3 @@ class OutgoingEmail(models.Model):
             self.attempts = 0
             update_fields.append('attempts')
         self.save(update_fields=update_fields)
-

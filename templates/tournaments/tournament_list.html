@@ -32,7 +32,7 @@
             ⚠️ {% t "tournament_checkin_needed" "Nicht eingecheckt (Check-in am Einlass nötig)" %}
           </span>
         {% endif %}
-        <a href="{% url 'team_list' %}" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; text-decoration: none;">
+        <a href="{% url 'team_list' %}" class="btn-action-primary">
           👥 {% t "tournament_teammanager_btn" "Teammanager öffnen" %}
         </a>
       </div>
@@ -155,11 +155,15 @@
           {% endif %}
         </div>
       </div>
-    {% empty %}
+    {% endfor %}
+    {% for external_tournament in external_tournaments %}
+      {% include 'tournaments/includes/external_card.html' %}
+    {% endfor %}
+    {% if not tournaments and not external_tournaments %}
       <div class="card" style="grid-column: 1 / -1; padding: 48px; text-align: center; color: var(--muted); font-family: 'DM Sans', sans-serif; border-radius: 14px;">
         {% t "tournament_empty_list" "🕹️ Aktuell sind keine Turniere für diese Veranstaltung angelegt." %}
       </div>
-    {% endfor %}
+    {% endif %}
   </div>
 
 </div>

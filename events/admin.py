@@ -276,6 +276,19 @@ class TicketTypeAdmin(admin.ModelAdmin):
 
 @admin.register(EventRegistration)
 class EventRegistrationAdmin(admin.ModelAdmin):
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        from seating.models import ClanSeatHold
+        if obj and ClanSeatHold.objects.filter(funded_registration=obj).exists():
+            return tuple(dict.fromkeys((*fields, 'user', 'event', 'ticket_type', 'booking_price', 'payment_status', 'paid_amount')))
+        return fields
+
+    def has_delete_permission(self, request, obj=None):
+        from seating.models import ClanSeatHold
+        if obj and ClanSeatHold.objects.filter(funded_registration=obj).exists():
+            return False
+        return super().has_delete_permission(request, obj)
+
     list_display = (
         'user',
         'short_code',
@@ -296,6 +309,9 @@ class EventRegistrationAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'user__first_name', 'user__last_name', 'short_code')
     readonly_fields = ('short_code', 'checkin_token', 'assigned_seat_picker', 'checked_in_at', 'paid_at', 'cancelled_at')
     actions = ['action_mark_as_paid', 'action_check_in_guests', 'action_check_out_guests', 'export_as_csv']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('clan_funding__payment')
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "ticket_type":
@@ -337,9 +353,10 @@ class EventRegistrationAdmin(admin.ModelAdmin):
             'Eingecheckt',
             'Check-in Zeit',
             'Angemeldet am',
+            'Clan-Zahlungsreferenz (zugeordneter Ticketanteil)',
         ])
 
-        for reg in queryset.select_related('user', 'event', 'ticket_type').prefetch_related('seats'):
+        for reg in queryset.select_related('user', 'event', 'ticket_type', 'clan_funding__payment').prefetch_related('seats'):
             seat = reg.seats.first()
             seat_label = (
                 seat.seat_label or f'Pos ({seat.x},{seat.y})'
@@ -365,6 +382,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
                 'Ja' if reg.is_checked_in else 'Nein',
                 checked_in_time,
                 reg.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                reg.clan_funding.payment.reference if hasattr(reg, 'clan_funding') else '',
             ])
 
         return response

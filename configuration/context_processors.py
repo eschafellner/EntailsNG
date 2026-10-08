@@ -1,7 +1,7 @@
 from django.utils.functional import SimpleLazyObject
 
 from configuration.cache import safe_cache_get_or_set
-from configuration.models import NavigationItem, SiteCustomization
+from configuration.models import GeneralConfiguration, NavigationItem, SiteCustomization
 from events.models import Event, EventRegistration
 from seating.services import (
     get_event_capacity_stats,
@@ -67,6 +67,10 @@ def feature_flags(request):
     )
     viewer = getattr(request, 'user', None)
     nav_items = [item for item in nav_items if item.is_visible_to(viewer)]
+    contact_targets = {'contact:form', 'contact', 'kontakt', '/kontakt/'}
+    if any(item.url_name in contact_targets for item in nav_items):
+        if not GeneralConfiguration.load().contact_enabled:
+            nav_items = [item for item in nav_items if item.url_name not in contact_targets]
 
     site_customization = SiteCustomization.load()
     css_vars = site_customization.get_css_variables()

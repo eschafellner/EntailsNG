@@ -1,4 +1,5 @@
 TEXTS = {
+    'clan_payment_clan_delete_blocked': 'Dieser Clan hat dokumentierte Sammelzahlungen. Bitte die Auflösung zuerst mit der Orga klären.',
     'clan_admins_title': 'Clan-Admins',
     'clan_admins_description': 'Alle Clan-Admins haben dieselben Rechte. Die Anzahl ist unbegrenzt.',
     'clan_demote_btn': 'Als Mitglied setzen',

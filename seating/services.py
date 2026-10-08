@@ -1,5 +1,6 @@
 # seating/services.py
 from django.core.cache import cache
+from django.db.models import Q
 from configuration.cache import invalidate_event_capacity_cache, safe_cache_get_or_set
 from .models import SeatingCell, SeatingPlan
 
@@ -20,16 +21,17 @@ def get_event_capacity_stats(upcoming_event):
     cache_key = f"{CAPACITY_CACHE_KEY_PREFIX}{event_id}"
 
     def _calculate():
+        from .clan_payments import committed_holds
         seat_cells = SeatingCell.objects.filter(
             plan__event_id=event_id,
             cell_type=SeatingCell.CellType.SEAT,
         )
         total_seats = seat_cells.count()
         reserved_seats = seat_cells.filter(
-            reservation_status__in=[
+            Q(reservation_status__in=[
                 SeatingCell.ReservationStatus.PRE_RESERVED,
                 SeatingCell.ReservationStatus.RESERVED,
-            ]
+            ]) | Q(pk__in=committed_holds(event_id).values('cell_id'))
         ).count()
         capacity_percent = (
             int((reserved_seats / total_seats) * 100) if total_seats > 0 else 0
@@ -188,6 +190,8 @@ class SeatingPlanService:
             from .clan_services import lock_configuration, live_holds
             lock_configuration()
             protected_ids = set(live_holds(plan.event_id).values_list('cell_id', flat=True)) if plan.event_id else set()
+            from .clan_payments import committed_holds
+            funded_ids = set(committed_holds(plan.event_id).values_list('cell_id', flat=True)) if plan.event_id else set()
             # 1. Gemeinsame Plansperre für konkurrierende Layoutänderungen
             locked_plan = SeatingPlan.objects.select_for_update().get(pk=plan.pk)
 
@@ -245,6 +249,10 @@ class SeatingPlanService:
 
                     if cell.pk in protected_ids and (cell_type != SeatingCell.CellType.SEAT or res_status == SeatingCell.ReservationStatus.BLOCKED):
                         raise SeatingPlanValidationError('Clan-Vormerkungen müssen vor einer Typänderung oder Sperre ausdrücklich freigegeben werden.')
+                    if cell.pk in funded_ids and (
+                            seat_label != cell.seat_label or res_status != cell.reservation_status):
+                        from configuration.translations import get_translation
+                        raise SeatingPlanValidationError(get_translation('clan_payment_managed_hint'))
                     # Schutz vor destruktiver Typ-Änderung belegter Plätze
                     if cell.registration is not None and cell_type != SeatingCell.CellType.SEAT:
                         user_name = cell.registration.user.username
@@ -298,4 +306,3 @@ class SeatingPlanService:
                 invalidate_event_capacity_cache(locked_plan.event_id)
 
         return True, "Sitzplan erfolgreich gespeichert!"
-

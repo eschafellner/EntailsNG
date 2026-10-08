@@ -22,11 +22,12 @@ from emails.services import queue_system_email
 from events.models import Event
 from .models import ClanSeatAllocation, ClanSeatHold, SeatingCell, SeatingPlan
 from .clan_texts import TEXTS
+from .clan_payment_texts import TEXTS as PAYMENT_TEXTS
 
 
 class ClanSeatError(Exception):
     def __init__(self, key):
-        super().__init__(get_translation(key, TEXTS[key]))
+        super().__init__(get_translation(key, {**TEXTS, **PAYMENT_TEXTS}[key]))
 
 
 def lock_configuration():
@@ -53,6 +54,7 @@ def live_holds(event_id=None, now=None):
     now = now or timezone.now()
     config = ClanSeatConfiguration.load()
     qs = ClanSeatHold.objects.filter(
+        payment__isnull=True,
         protection_active=True, cell__isnull=False,
         allocation__expired_at__isnull=True,
         allocation__event__is_active=True,
@@ -62,11 +64,14 @@ def live_holds(event_id=None, now=None):
     ).filter(Q(allocation__duration=ClanSeatConfiguration.Duration.EVENT) | Q(allocation__expires_at__gt=now)).exclude(cell__reservation_status=SeatingCell.ReservationStatus.BLOCKED).exclude(allocation__clan__seat_limit_override=0)
     if not config.enabled or config.default_limit == 0:
         if not config.enabled:
-            return qs.none()
-        qs = qs.filter(allocation__clan__seat_limit_override__gt=0)
+            qs = qs.none()
+        else:
+            qs = qs.filter(allocation__clan__seat_limit_override__gt=0)
     if event_id is not None:
         qs = qs.filter(allocation__event_id=event_id)
-    return qs
+    from .clan_payments import committed_holds
+    funded = committed_holds(event_id, now)
+    return ClanSeatHold.objects.filter(Q(pk__in=qs.values('pk')) | Q(pk__in=funded.values('pk')))
 
 
 def open_holds(event_id=None, now=None):
@@ -74,6 +79,9 @@ def open_holds(event_id=None, now=None):
 
 
 def check_clan_access(cell, user):
+    from .clan_payments import committed_holds
+    if committed_holds(cell.plan.event_id).filter(cell=cell).exists():
+        return False, get_translation('clan_payment_managed_hint')
     # Retain protection on unpaid personal bookings, too: outsiders cannot overwrite them.
     hold = live_holds(cell.plan.event_id).filter(cell=cell).select_related('allocation__clan').first()
     if hold and not ClanMembership.objects.filter(
@@ -93,12 +101,14 @@ def claim_hold(cell):
 
 def release_holds(qs):
     """Detach protection; preserve the consumed quota of previously claimed seats."""
+    qs = qs.filter(Q(payment__isnull=True) | Q(payment__status='CANCELLED') |
+        Q(payment__status='PENDING', payment__release_at__lte=timezone.now()))
     qs.filter(state=ClanSeatHold.State.OPEN).update(state=ClanSeatHold.State.RELEASED, protection_active=False)
     qs.exclude(state=ClanSeatHold.State.OPEN).update(protection_active=False)
 
 
 def expire_allocation(allocation, now, *, notify=True):
-    holds = allocation.holds.filter(protection_active=True)
+    holds = allocation.holds.filter(protection_active=True, payment__isnull=True)
     labels = list(holds.filter(cell__registration__isnull=True, cell__isnull=False).values_list('seat_label', flat=True))
     if labels and notify:
         notify_admins(allocation, 'clan_seat_expired', labels)
@@ -129,7 +139,7 @@ def notify_admins(allocation, template, labels):
 
 def _remind(allocation, now):
     if allocation.reminder_at is None and allocation.expires_at - timedelta(days=7) <= now < allocation.expires_at:
-        labels = list(open_holds(allocation.event_id, now).filter(allocation=allocation).values_list('seat_label', flat=True))
+        labels = list(open_holds(allocation.event_id, now).filter(allocation=allocation, payment__isnull=True).values_list('seat_label', flat=True))
         if labels:
             notify_admins(allocation, 'clan_seat_reminder', labels)
             allocation.reminder_at = now
@@ -157,6 +167,8 @@ def update_selection(clan_id, actor_id, event_id, cell_ids, *, expected_revision
     if plan is None:
         raise ClanSeatError('clan_seat_event')
     allocation = ClanSeatAllocation.objects.filter(clan=clan, event=event).first()
+    if allocation and hasattr(allocation, 'payment'):
+        raise ClanSeatError('clan_payment_locked')
     if expected_revision is not None and expected_revision != selection_revision(clan, event, config, allocation):
         raise ClanSeatError('clan_seat_stale')
     if allocation and (allocation.expired_at or (event.end_date if allocation.duration == config.Duration.EVENT else allocation.expires_at) <= now):
@@ -208,7 +220,10 @@ def selection_revision(clan, event, config, allocation):
                config.days, str(config.deadline), event.is_active, event.status, str(event.end_date),
                str(allocation.expires_at) if allocation else None,
                str(allocation.expired_at) if allocation else None]
-    return hashlib.sha256(json.dumps(payload).encode()).hexdigest()
+    payload.extend([config.payment_ticket_type_id, config.payment_days, config.payment_review_days,
+        list(event.ticket_types.order_by('pk').values_list('pk', 'is_active', 'price')),
+        list(event.seating_plan.cells.order_by('pk').values_list('pk', 'seat_label')) if hasattr(event, 'seating_plan') else []])
+    return hashlib.sha256(json.dumps(payload, default=str).encode()).hexdigest()
 
 
 def selection_status(clan, event):
@@ -224,7 +239,7 @@ def selection_status(clan, event):
         'selected': [h.cell_id for h in holds],
         'consumed_open': [h.cell_id for h in holds if h.state == ClanSeatHold.State.CLAIMED],
         'expires_at': (event.end_date if allocation.duration == config.Duration.EVENT else allocation.expires_at).isoformat() if allocation else None,
-        'enabled': config.enabled and effective_limit(clan, config) > 0 and valid_event and (
+        'enabled': not (allocation and hasattr(allocation, 'payment')) and config.enabled and effective_limit(clan, config) > 0 and valid_event and (
             allocation is None or (allocation.expired_at is None and (event.end_date if allocation.duration == config.Duration.EVENT else allocation.expires_at) > now)),
     }
 
@@ -232,6 +247,8 @@ def selection_status(clan, event):
 @seating_write
 def process_clan_holds():
     now = timezone.now()
+    from .clan_payments import process_payments
+    process_payments(now)
     config = ClanSeatConfiguration.objects.get(pk=1)
     for allocation_id in ClanSeatAllocation.objects.filter(expired_at__isnull=True).order_by('pk').values_list('pk', flat=True):
         event_id = ClanSeatAllocation.objects.values_list('event_id', flat=True).get(pk=allocation_id)

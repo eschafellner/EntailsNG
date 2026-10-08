@@ -230,7 +230,8 @@ class Event(models.Model):
         """Prüft, ob die maximale Teilnehmerzahl erreicht ist."""
         if not self.max_guests:
             return False
-        return self.active_registrations_count >= self.max_guests
+        from seating.clan_payments import reserved_ticket_count
+        return self.active_registrations_count + reserved_ticket_count(self.pk) >= self.max_guests
 
     def clean(self):
         super().clean()
@@ -588,5 +589,4 @@ class EventRegistration(models.Model):
             send_system_email('payment_confirmation', self.user.email, context_data)
         except Exception as e:
             logger.exception("Fehler beim Auslösen der Zahlungsbestätigung für Anmeldung %s: %s", self.id, e)
-
 

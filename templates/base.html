@@ -5,15 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
-  <style>
-    :root {
-{{ theme_css_vars|safe }}
-    }
-    {% if custom_css %}
-    /* Custom CSS Injection */
-    {{ custom_css|safe }}
-    {% endif %}
-  </style>
+  {% include "includes/theme.html" %}
   {% block extra_head %}{% endblock %}
   <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
 </head>
@@ -120,11 +112,11 @@
   <div class="sidebar-foot">
     {% if user.is_authenticated %}
       {% if user.is_staff %}
-        <a href="{% url 'checkin_scanner' %}" style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px; background: rgba(255, 255, 255, 0.08); color: var(--sidebar-nav-hover-text, #ffffff); border: 1px solid var(--sidebar-border, rgba(255, 255, 255, 0.15)); padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; font-family: 'DM Sans', sans-serif; text-decoration: none; text-align: center; transition: background 0.15s ease;">
+        <a href="{% url 'checkin_scanner' %}" class="sidebar-scanner-link">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg> {% t "nav_scanner" %}
         </a>
       {% endif %}
-      <a href="{% url 'profile' %}" class="user-name" style="display: flex; align-items: center; gap: 6px; text-decoration: none; color: #fffaf2; transition: color 0.2s;" title="Mein Profil öffnen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> {{ user.username }}</a>
+      <a href="{% url 'profile' %}" class="user-name" title="Mein Profil öffnen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> {{ user.username }}</a>
 
       <form method="post" action="{% url 'logout' %}" style="margin-bottom: 12px;">
         {% csrf_token %}
@@ -150,11 +142,11 @@
 <!-- ================= HAUPTINHALT ================= -->
 <main class="main-wrapper" id="main-content">
   {% if email_warning %}
-    <div style="margin-bottom: 20px; padding: 12px 16px; border-radius: 8px; border-left: 4px solid {% if email_warning_is_info %}#0284c7{% else %}#eab308{% endif %}; background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-      <div style="font-size: 13px; color: #f3f4f6;">
+    <div class="email-warning{% if email_warning_is_info %} email-warning-info{% endif %}">
+      <div>
         <strong>{% if email_warning_is_info %}ℹ️ E-Mail Testmodus:{% else %}⚠️ E-Mail Versand-Hinweis (nur für Orga sichtbar):{% endif %}</strong> {{ email_warning }}
       </div>
-      <a href="{% url 'admin:emails_generalemailsettings_change' 1 %}" style="font-size: 12px; font-weight: 600; color: #38bdf8; text-decoration: underline;">
+      <a href="{% url 'admin:emails_generalemailsettings_change' 1 %}" class="text-link">
         {% t "email_warning_open_settings" "Einstellungen öffnen →" %}
       </a>
     </div>

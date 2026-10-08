@@ -5,13 +5,14 @@ from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
 from django.http import JsonResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.utils import timezone
 from .services.results import result_lock_reason, match_version, tournament_version
 from .services.validation import identifier
 from .services.rosters import roster_action
 from .services.recruitment import received_invitations, current_recruitment_teams
 from .team_views import recruitment_context
+from .services.draws import SUPPORTED_MODES
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ from configuration.translations import get_translation
 from events.models import Event, EventRegistration
 
 from tournaments.models import (
-    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentRegistration, generate_invite_code
+    Game, Team, TeamMember, Tournament, ExternalTournament, TournamentMatch, TournamentRegistration, generate_invite_code
 )
 
 from tournaments.exceptions import (
@@ -62,6 +63,11 @@ def tournament_list(request):
         .annotate(annotated_registered_teams_count=models.Count('registrations'))
     ) if active_event else []
 
+    external_tournaments = (
+        ExternalTournament.objects.visible_to(request.user).filter(event=active_event)
+        .select_related('game')
+    ) if active_event else []
+
     user_checkin = False
     registered_tournament_ids = set()
     if request.user.is_authenticated and active_event:
@@ -77,6 +83,7 @@ def tournament_list(request):
     context = {
         'active_event': active_event,
         'tournaments': tournaments,
+        'external_tournaments': external_tournaments,
         'user_checkin': user_checkin,
         'registered_tournament_ids': registered_tournament_ids,
         'can_view_drafts': Tournament.can_view_drafts(request.user),
@@ -340,6 +347,8 @@ def tournament_detail(request, slug):
             and tournament.status == Tournament.Status.REGISTRATION_OPEN,
         'can_generate_bracket': is_admin and not tournament.is_generated and not event_closed
             and tournament.status in (Tournament.Status.REGISTRATION_OPEN, Tournament.Status.REGISTRATION_CLOSED),
+        'draw_supported': tournament.mode in SUPPORTED_MODES,
+        'draw_logs': tournament.draw_logs.select_related('actor')[:10] if is_admin else [],
         'can_view_drafts': Tournament.can_view_drafts(request.user),
         'results_locked': tournament.status in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED)
             or tournament.event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED),
@@ -480,6 +489,34 @@ def tournament_unregister(request, slug):
 
 
 @login_required
+@require_http_methods(['GET', 'POST'])
+def tournament_draw_preview(request, slug):
+    from .services.draws import TournamentDrawService
+    tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug)
+    if not tournament.is_managed_by(request.user):
+        return HttpResponseForbidden(get_translation('draw_permission'))
+    plan, error = None, ''
+    try:
+        if request.method == 'POST':
+            plan = TournamentDrawService.revise(tournament.pk, actor=request.user,
+                token=request.POST.get('preview_token'), action=request.POST.get('action'),
+                clans={key[5:]: value for key, value in request.POST.items() if key.startswith('clan_')},
+                respect_seeds=request.POST.get('respect_seeds') == 'yes',
+                avoid_clans=request.POST.get('avoid_clans') == 'yes',
+                swap_first=request.POST.get('swap_first'), swap_second=request.POST.get('swap_second'))
+        else:
+            plan = TournamentDrawService.preview(tournament.pk, actor=request.user)
+    except TournamentError as exc:
+        error = str(exc)
+        if request.method == 'POST':
+            try:
+                plan = TournamentDrawService.preview(tournament.pk, actor=request.user, token=request.POST.get('preview_token'))
+            except TournamentError:
+                pass
+    return render(request, 'tournaments/draw_preview.html', {'tournament': tournament, 'plan': plan, 'error': error})
+
+
+@login_required
 @require_POST
 def tournament_generate_bracket(request, slug):
     """
@@ -497,19 +534,23 @@ def tournament_generate_bracket(request, slug):
         return redirect('tournament_detail', slug=slug)
 
     try:
-        if tournament.mode == Tournament.Mode.SWISS:
-            return redirect('tournament_swiss_preview', slug=slug)
-        TournamentBracketService.generate_bracket(tournament_id=tournament.id, actor=request.user)
-        messages.success(
-            request,
-            get_translation(
-                'msg_bracket_generated',
-                'Turnierbaum für "{tournament_title}" erfolgreich generiert! Das Turnier läuft jetzt.',
-                tournament_title=tournament.title,
-            ),
-        )
+        from .services.draws import TournamentDrawService
+        if not request.POST.get('preview_token'):
+            return redirect('tournament_draw_preview', slug=slug)
+        log, created = TournamentDrawService.publish(tournament.pk, actor=request.user,
+            token=request.POST.get('preview_token'),
+            approve_conflicts=request.POST.get('approve_conflicts') == 'yes', reason=request.POST.get('reason', ''))
+        messages.success(request, get_translation('draw_success' if created else 'draw_already_published'))
     except TournamentError as e:
         messages.error(request, str(e))
+        if request.POST.get('preview_token'):
+            try:
+                plan = TournamentDrawService.preview(tournament.pk, actor=request.user,
+                    token=request.POST['preview_token'])
+            except TournamentError:
+                return redirect('tournament_draw_preview', slug=slug)
+            return render(request, 'tournaments/draw_preview.html',
+                {'tournament': tournament, 'plan': plan, 'error': str(e)})
 
     return redirect('tournament_detail', slug=slug)
 
@@ -520,6 +561,8 @@ def tournament_swiss_preview(request, slug):
     tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug, mode=Tournament.Mode.SWISS)
     if not tournament.is_managed_by(request.user):
         return HttpResponseForbidden('Nur die Turnierleitung darf Runden freigeben.')
+    if not tournament.is_generated:
+        return redirect('tournament_draw_preview', slug=slug)
     plan, error, can_rescue = None, '', False
     try:
         plan = SwissTournamentService.preview(tournament.pk, actor=request.user,
@@ -537,6 +580,8 @@ def tournament_swiss_publish(request, slug):
     tournament = get_object_or_404(Tournament.objects.visible_to(request.user), slug=slug, mode=Tournament.Mode.SWISS)
     if not tournament.is_managed_by(request.user):
         return HttpResponseForbidden('Nur die Turnierleitung darf Runden freigeben.')
+    if not tournament.is_generated:
+        return redirect('tournament_draw_preview', slug=slug)
     try:
         token = request.POST.get('preview_token')
         if not token:

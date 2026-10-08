@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% t 'clan_payment_title' %} – {{ clan.name }}{% endblock %}
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/clan-payments.css' %}">{% endblock %}
+{% block content %}
+<div class="clan-payment-page">
+  <a href="{% url 'clan_detail' slug=clan.slug %}" class="text-link">{% t 'clan_seat_back' %}</a>
+  <section class="card clan-payment-card">
+    <h1>{% t 'clan_payment_title' %}: {{ clan.name }}</h1>
+    <p>{{ event.title }}</p>
+    {% if payment_error %}<p role="alert">{{ payment_error }}</p>
+      {% if event %}<a href="{% url 'clan_seat_selection' slug=clan.slug %}" class="btn-action-blue">{% t 'clan_seat_button' %}</a>{% endif %}
+    {% endif %}
+    {% if preview %}
+      <p>{% t 'clan_payment_preview_hint' %}</p>
+      <dl class="clan-payment-summary">
+        <dt>{% t 'clan_payment_count' %}</dt><dd>{{ preview.seat_count }}</dd>
+        <dt>{% t 'clan_payment_ticket' %}</dt><dd>{{ preview.ticket.name }}</dd>
+        <dt>{% t 'clan_payment_unit_price' %}</dt><dd>{{ preview.unit_price|floatformat:2 }} €</dd>
+        <dt>{% t 'clan_payment_total' %}</dt><dd><strong>{{ preview.total_amount|floatformat:2 }} €</strong></dd>
+        <dt>{% t 'clan_payment_due' %}</dt><dd>{{ preview.payment_due_at|date:'d.m.Y H:i' }}</dd>
+        <dt>{% t 'clan_payment_release' %}</dt><dd>{{ preview.release_at|date:'d.m.Y H:i' }}</dd>
+      </dl>
+      <ul>{% for hold in preview.holds %}<li>{{ hold.seat_label }}</li>{% endfor %}</ul>
+      <p>{% t 'clan_payment_deadline_hint' %}</p>
+      <form method="post" action="{% url 'clan_payment_create' slug=clan.slug %}">
+        {% csrf_token %}{{ create_form.token }}{{ create_form.event_id }}
+        <label class="clan-payment-confirm">{{ create_form.confirmed }} {{ create_form.confirmed.label }}</label>
+        <button class="btn-action-primary" type="submit">{% t 'clan_payment_create' %}</button>
+      </form>
+    {% endif %}
+    {% if payment %}
+      {% if payment_expired %}<p role="alert">{% t 'clan_payment_expired' %}</p>{% endif %}
+      <p class="clan-payment-status" role="status">
+        {% if payment.status == 'PENDING' %}{% t 'clan_payment_pending' %}{% elif payment.status == 'PAID' %}{% t 'clan_payment_paid' %}{% else %}{% t 'clan_payment_cancelled' %}{% endif %}
+      </p>
+      <dl class="clan-payment-summary">
+        <dt>{% t 'clan_payment_count' %}</dt><dd>{{ payment.seat_count }}</dd>
+        <dt>{% t 'clan_payment_ticket' %}</dt><dd>{{ payment.ticket_name }}</dd>
+        <dt>{% t 'clan_payment_unit_price' %}</dt><dd>{{ payment.unit_price|floatformat:2 }} €</dd>
+        <dt>{% t 'clan_payment_total' %}</dt><dd><strong>{{ payment.total_amount|floatformat:2 }} €</strong></dd>
+        <dt>{% t 'clan_payment_reference' %}</dt><dd><code>{{ payment.reference }}</code></dd>
+        {% if payment.status == 'PAID' %}
+        <dt>{% t 'clan_payment_received_at' %}</dt><dd>{{ payment.received_at|date:'d.m.Y H:i' }}</dd>
+        {% else %}
+        <dt>{% t 'clan_payment_due' %}</dt><dd>{{ payment.payment_due_at|date:'d.m.Y H:i' }}</dd>
+        <dt>{% t 'clan_payment_release' %}</dt><dd>{{ payment.release_at|date:'d.m.Y H:i' }}</dd>
+        {% endif %}
+      </dl>
+      {% if payment.status == 'PAID' %}<p>{% t 'clan_payment_paid_hint' %}</p>{% endif %}
+      {% if payment.status == 'PENDING' %}
+        <p>{% t 'clan_payment_deadline_hint' %}</p>
+        {% if payment.payment_due_at > now %}
+          <p>{{ payment.beneficiary_name }}<br><strong>{{ payment.iban }}</strong>{% if payment.bic %}<br>{{ payment.bic }}{% endif %}</p>
+          <img class="clan-payment-qr" src="{% url 'clan_payment_qr' payment_id=payment.pk %}" alt="{% t 'clan_payment_reference' %}: {{ payment.reference }}">
+        {% elif not payment_expired %}<p>{% t 'clan_payment_review_hint' %}</p>{% endif %}
+        <p>{% t 'clan_payment_not_paid' %}</p>
+      {% elif payment.status == 'CANCELLED' %}<p>{{ payment.cancel_reason }}</p>{% endif %}
+      {% if orga %}<a href="{% url 'admin:seating_clanseatpayment_manage' payment.pk %}" class="btn-action-blue">{% t 'clan_payment_admin_confirm' %}</a>{% endif %}
+    {% endif %}
+  </section>
+  {% if payment %}
+    <section class="card clan-payment-card">
+      <h2>{% t 'clan_payment_count' %}</h2>
+      {% if payment.status == 'PAID' %}<p>{% t 'clan_payment_assignment_hint' %}</p>{% endif %}
+      <div class="clan-payment-seats">
+        {% for hold in holds %}
+          <article class="clan-payment-seat">
+            <h3>{% t 'clan_payment_seat' %} {{ hold.seat_label }}</h3>
+            <p>{% if hold.funded_registration %}{{ hold.funded_registration.user.username }}{% else %}{% t 'clan_payment_unassigned_label' %}{% endif %}</p>
+            {% if payment.status == 'PAID' and assignment_open %}
+              {% if not hold.funded_registration.is_checked_in or orga %}
+                <form method="post" action="{% url 'clan_payment_assign' slug=clan.slug hold_id=hold.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="expected_registration_id" value="{{ hold.funded_registration_id|default_if_none:'' }}">
+                  <label>{% t 'clan_payment_member' %}
+                    <select name="user_id"><option value="">—</option>{% for membership in eligible_members %}<option value="{{ membership.user_id }}">{{ membership.user.username }}</option>{% endfor %}</select>
+                  </label>
+                  {% if orga %}<label>{% t 'clan_payment_reason' %}<input name="reason" maxlength="2000"></label>{% endif %}
+                  <label class="clan-payment-confirm"><input type="checkbox" name="confirmed" required> {% t 'clan_payment_assignment_confirm' %}</label>
+                  <button class="btn-action-primary" type="submit" name="action" value="assign">{% t 'clan_payment_assign' %}</button>
+                  {% if hold.funded_registration %}<button class="btn-action-blue" type="submit" name="action" value="unassign">{% t 'clan_payment_unassign' %}</button>{% endif %}
+                </form>
+              {% else %}<p>{% t 'clan_payment_checked_in' %}</p>{% endif %}
+            {% endif %}
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

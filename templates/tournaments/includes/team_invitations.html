@@ -6,7 +6,7 @@
     {% for invitation in received_invitations %}
     <div class="team-recruitment-row">
       <div>
-        <a href="{% url 'team_detail' slug=invitation.team.slug %}"><strong>{{ invitation.team.name }}</strong></a>
+        <a href="{% url 'team_detail' slug=invitation.team.slug %}" class="text-link"><strong>{{ invitation.team.name }}</strong></a>
         {% if invitation.team.game %}<span> · {{ invitation.team.game.name }}</span>{% endif %}
         <p class="team-recruitment-hint">{% t "team_invitation_from" username=invitation.invited_by.display_name %} · {{ invitation.created_at|date:"d.m.Y H:i" }}</p>
       </div>

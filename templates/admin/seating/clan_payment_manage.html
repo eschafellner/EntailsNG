@@ -1,0 +1,30 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+<h1>{{ payment.reference }} · {{ payment.allocation.clan.name }}</h1>
+<p>{{ payment.allocation.event.title }} · {{ payment.get_status_display }}</p>
+<p>{{ payment.seat_count }} × {{ payment.unit_price|floatformat:2 }} € = <strong>{{ payment.total_amount|floatformat:2 }} €</strong> · {{ payment.ticket_name }}</p>
+<p>{% t 'clan_payment_due' %}: {{ payment.payment_due_at|date:'d.m.Y H:i' }}<br>
+{% t 'clan_payment_release' %}: {{ payment.release_at|date:'d.m.Y H:i' }}</p>
+<ul>{% for hold in holds %}<li>{{ hold.seat_label }} · {% if hold.funded_registration %}{{ hold.funded_registration.user.username }}{% else %}{% t 'clan_payment_unassigned_label' %}{% endif %}</li>{% endfor %}</ul>
+{% if payment.status == 'PENDING' %}
+{{ form.non_field_errors }}
+<form method="post">{% csrf_token %}
+  <p>{{ form.received_at.errors }}{{ form.received_at.label_tag }} {{ form.received_at }}</p>
+  <p>{{ form.amount.errors }}{{ form.amount.label_tag }} {{ form.amount }}</p>
+  <p>{{ form.confirmed.errors }}{{ form.confirmed }} {{ form.confirmed.label_tag }}</p>
+  <button type="submit" name="action" value="confirm">{% t 'clan_payment_confirm_received' %}</button>
+</form>
+<details style="margin-top:24px">
+  <summary>{% t 'clan_payment_cancel' %}</summary>
+  <form method="post">{% csrf_token %}
+    <p>{{ form.reason.errors }}{{ form.reason.label_tag }} {{ form.reason }}</p>
+    <p><label><input type="checkbox" name="confirmed" required> {% t 'clan_payment_cancel_confirm' %}</label></p>
+    <button type="submit" name="action" value="cancel">{% t 'clan_payment_cancel' %}</button>
+  </form>
+</details>
+{% elif payment.status == 'PAID' %}
+<p>{% t 'clan_payment_received_at' %}: {{ payment.received_at|date:'d.m.Y H:i' }}</p>
+<a href="{% url 'clan_payment_detail' slug=payment.allocation.clan.slug %}?event={{ payment.allocation.event_id }}">{% t 'clan_payment_manage' %}</a>
+{% else %}<p>{{ payment.cancel_reason }}</p>{% endif %}
+<p><a href="{% url 'admin:seating_clanseatpayment_change' payment.pk %}">{% t 'clan_payment_title' %}: {{ payment.reference }}</a></p>
+{% endblock %}

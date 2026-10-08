@@ -9,8 +9,7 @@
     <nav class="info-tabs-nav" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 16px; scrollbar-width: thin;" aria-label="Informationsseiten">
       {% for p in all_pages %}
         {% with p_url=p.get_absolute_url %}
-          <a href="{{ p_url }}"
-             style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; transition: all 0.2s; {% if p.slug == current_page.slug or request.path == p_url %}background: var(--accent, #f59e0b); color: #111827; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);{% else %}background: var(--card-bg, #111827); color: var(--muted, #9ca3af); border: 1px solid var(--line, #374151);{% endif %}">
+          <a href="{{ p_url }}" class="link-tab"{% if p.slug == current_page.slug or request.path == p_url %} aria-current="page"{% endif %}>
             {% if p.login_required %}
               <span title="Nur für angemeldete Teilnehmer" style="font-size: 11px;">🔒</span>
             {% endif %}
@@ -34,7 +33,6 @@
         {% if perms.info.change_eventinfo or user.is_superuser %}
           <a href="{% url 'admin:info_eventinfo_change' event_info.pk %}"
              class="btn"
-             style="background: transparent; border: 1px solid var(--line, #374151); color: var(--muted, #9ca3af); font-size: 12px; padding: 4px 10px; border-radius: 6px; text-decoration: none;"
              title="Im Admin-Bereich bearbeiten">
             ✏️ Seite bearbeiten
           </a>
@@ -79,7 +77,7 @@
       <p style="color: var(--muted);">{% t "info_empty" "Es wurden noch keine Informationsseiten hinterlegt." %}</p>
       {% if perms.info.add_eventinfo or user.is_superuser %}
         <div style="margin-top: 20px;">
-          <a href="{% url 'admin:info_eventinfo_add' %}" class="btn" style="padding: 8px 16px; background: var(--accent, #f59e0b); color: #111827; font-weight: bold; border-radius: 6px; text-decoration: none;">
+          <a href="{% url 'admin:info_eventinfo_add' %}" class="btn-action-primary">
             ➕ Erste Inhaltsseite anlegen
           </a>
         </div>

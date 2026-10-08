@@ -2,11 +2,15 @@ import re
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.urls import NoReverseMatch, reverse
 
-from .validators import validate_bic, validate_iban, validate_hex_color
+from .validators import (
+    parse_contact_recipients, validate_contact_recipients,
+    validate_bic, validate_iban, validate_hex_color,
+)
 from .default_data import DEFAULT_DATENSCHUTZ_CONTENT, SYSTEM_ICONS
 from .themes import THEME_PRESETS, SCALE_MAP, build_css_variables
 from .sanitizer import (
@@ -97,6 +101,8 @@ class NavigationItem(models.Model):
         'news': 'news_list',
         'sponsors': 'sponsor_list',
         'sponsoren': 'sponsor_list',
+        'contact': 'contact:form',
+        'kontakt': 'contact:form',
     }
 
     class Meta:
@@ -205,22 +211,30 @@ class ClanSeatConfiguration(models.Model):
         DAYS = 'DAYS', 'Zeitraum ab erster Vormerkung des Clans'
         FIXED = 'FIXED', 'Fixer Zeitpunkt'
 
-    enabled = models.BooleanField(default=False, verbose_name='Aktiv', help_text='Deaktivieren gibt alle offenen Clan-Vormerkungen frei. Persönliche Buchungen bleiben erhalten.')
+    enabled = models.BooleanField(default=False, verbose_name='Aktiv', help_text='Deaktivieren gibt offene Vormerkungen ohne Sammelauftrag frei. Sammelaufträge und persönliche Buchungen bleiben erhalten.')
     default_limit = models.PositiveIntegerField(default=8, verbose_name='Anzahl vormerkbarer Sitzplätze', help_text='Kontingent pro Clan und Veranstaltung. Bereits übernommene Plätze zählen mit.')
     duration = models.CharField(max_length=5, choices=Duration.choices, default=Duration.EVENT, verbose_name='Dauer der Vormerkung')
     days = models.PositiveIntegerField(default=14, verbose_name='Dauer in Tagen', help_text='Nur beim Tagesmodus; jeder Clan startet mit seiner ersten bestätigten Vormerkung.')
     deadline = models.DateTimeField(null=True, blank=True, verbose_name='Gültig bis', help_text='Nur beim fixen Zeitpunkt. Zeitzone: Europe/Vienna.')
+    payment_ticket_type = models.ForeignKey('events.TicketType', null=True, blank=True, on_delete=models.PROTECT,
+        verbose_name='Ticketkategorie für Clan-Sammelzahlungen', help_text='Bei genau einer aktiven Kategorie wird diese automatisch verwendet. Sonst hier eine Kategorie der aktiven Veranstaltung festlegen.')
+    payment_days = models.PositiveIntegerField(default=7, verbose_name='Zahlungsfrist in Kalendertagen')
+    payment_review_days = models.PositiveIntegerField(default=2, verbose_name='Prüfzeit in Kalendertagen',
+        help_text='Zusätzliche Zeit für die Orga. Beide Fristen enden spätestens mit der ursprünglichen Vormerkfrist.')
 
     class Meta:
         verbose_name = 'Clan Sitzplatz Vormerkung'
         verbose_name_plural = 'Clan Sitzplatz Vormerkung'
-        constraints = [models.CheckConstraint(condition=models.Q(pk=1), name='clan_seat_config_singleton')]
+        constraints = [models.CheckConstraint(condition=models.Q(pk=1), name='clan_seat_config_singleton'),
+            models.CheckConstraint(condition=models.Q(payment_days__gte=1), name='clan_payment_days_positive')]
 
     def __str__(self):
         return self._meta.verbose_name
 
     def clean(self):
         super().clean()
+        if not self.payment_days:
+            raise ValidationError({'payment_days': 'Bitte mindestens einen Tag Zahlungsfrist angeben.'})
         if self.duration == self.Duration.DAYS and not self.days:
             raise ValidationError({'days': 'Bitte mindestens einen Tag angeben.'})
         if self.duration == self.Duration.FIXED and not self.deadline:
@@ -255,6 +269,16 @@ class GeneralConfiguration(models.Model):
     class ExpiredTicketMode(models.TextChoices):
         WORN = 'WORN', 'Ticket abgenutzt (Mit "Veranstaltung beendet" Hinweis anzeigen)'
         HIDE = 'HIDE', 'Event beendet (Automatisch ausblenden bei Event-Ende)'
+
+    contact_enabled = models.BooleanField(
+        default=False, verbose_name='Kontaktformular aktivieren',
+        help_text='Erlaubt Kontaktanfragen auch ohne Anmeldung. Benötigt aktive Betreffkategorien und einen eingerichteten E-Mail-Versand.',
+    )
+    contact_recipient_emails = models.TextField(
+        blank=True, default='', max_length=6000,
+        validators=[validate_contact_recipients], verbose_name='Standardempfänger für Kontaktanfragen',
+        help_text='Eine oder mehrere E-Mail-Adressen, getrennt mit ; (maximal 20). Kategorien ohne eigene Empfänger verwenden diese Liste.',
+    )
 
     ticket_enabled = models.BooleanField(
         default=True,
@@ -333,6 +357,12 @@ class GeneralConfiguration(models.Model):
 
     def clean(self):
         super().clean()
+        try:
+            self.contact_recipient_emails = '; '.join(parse_contact_recipients(self.contact_recipient_emails))
+        except ValidationError as exc:
+            raise ValidationError({'contact_recipient_emails': exc.messages}) from exc
+        if self.contact_enabled and not self.contact_recipient_emails:
+            raise ValidationError({'contact_recipient_emails': 'Zum Aktivieren des Kontaktformulars mindestens einen Standardempfänger angeben.'})
         if self.iban:
             self.iban = re.sub(r'[\s\-]', '', self.iban).upper()
             validate_iban(self.iban)
@@ -344,6 +374,7 @@ class GeneralConfiguration(models.Model):
 
     def save(self, *args, **kwargs):
         self.pk = 1
+        self.contact_recipient_emails = '; '.join(parse_contact_recipients(self.contact_recipient_emails))
         if self.iban:
             self.iban = re.sub(r'[\s\-]', '', self.iban).upper()
         if self.bic:
@@ -365,6 +396,45 @@ class GeneralConfiguration(models.Model):
             300,
         )
 
+
+
+class ContactCategory(models.Model):
+    configuration = models.ForeignKey(
+        GeneralConfiguration, on_delete=models.CASCADE, related_name='contact_categories',
+    )
+    name = models.CharField(max_length=120, verbose_name='Betreffkategorie')
+    recipient_emails = models.TextField(
+        blank=True, default='', max_length=6000, validators=[validate_contact_recipients],
+        verbose_name='Empfängeradressen',
+        help_text='Mit ; trennen (maximal 20). Leer lassen, um die Standardempfänger zu verwenden.',
+    )
+    order = models.PositiveIntegerField(default=0, verbose_name='Reihenfolge')
+    is_active = models.BooleanField(default=True, verbose_name='Aktiv')
+
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = 'Kontakt-Betreffkategorie'
+        verbose_name_plural = 'Kontakt-Betreffkategorien'
+        constraints = [models.UniqueConstraint(
+            Lower('name'), 'configuration', name='unique_contact_category_name',
+        )]
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        super().clean()
+        self.name = (self.name or '').strip()
+        if not self.name or '\r' in self.name or '\n' in self.name:
+            raise ValidationError({'name': 'Bitte eine nicht leere Betreffkategorie ohne Zeilenumbrüche angeben.'})
+        try:
+            self.recipient_emails = '; '.join(parse_contact_recipients(self.recipient_emails))
+        except ValidationError as exc:
+            raise ValidationError({'recipient_emails': exc.messages}) from exc
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 class SiteCustomization(models.Model):
@@ -596,8 +666,5 @@ def _on_general_config_change(sender, **kwargs):
 def _on_site_customization_change(sender, **kwargs):
     safe_cache_delete('site_customization')
     invalidate_site_customization_cache()
-
-
-
 
 

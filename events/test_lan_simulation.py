@@ -195,6 +195,13 @@ class LanEventSimulationTests(TestCase):
         for tournament, expected_matches in ((team_tournament, 1), (solo_tournament, 3)):
             response = staff.post(reverse("tournament_generate_bracket", kwargs={"slug": tournament.slug}))
             self.assertEqual(response.status_code, 302)
+            preview_url = reverse('tournament_draw_preview', kwargs={'slug': tournament.slug})
+            self.assertEqual(response.url, preview_url)
+            self.assertFalse(tournament.matches.exists())
+            preview = staff.get(preview_url)
+            response = staff.post(reverse('tournament_generate_bracket', kwargs={'slug': tournament.slug}),
+                {'preview_token': preview.context['plan']['token']})
+            self.assertEqual(response.status_code, 302)
             tournament.refresh_from_db()
             self.assertTrue(tournament.is_generated)
             self.assertEqual(tournament.status, Tournament.Status.IN_PROGRESS)

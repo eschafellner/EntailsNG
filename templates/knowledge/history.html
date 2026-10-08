@@ -1,6 +1,6 @@
 {% extends 'knowledge/base.html' %}
 {% block knowledge_content %}<div class="knowledge-layout">{% include 'knowledge/includes/tree.html' %}<section class="card knowledge-document">
 {% include 'knowledge/includes/breadcrumbs.html' %}<h1>{% t "knowledge_history" "Versionshistorie" %}</h1><p>{{ page.display_title }}</p>
-<ol class="knowledge-revisions">{% for revision in revisions %}<li><a href="{% url 'knowledge:revision' page.pk revision.pk %}"><strong>{% t "knowledge_version" "Version" %} {{ revision.number }} · {{ revision.title }}</strong></a><small>{{ revision.created_at|date:'d.m.Y H:i' }} · {{ revision.author.display_name|default:'—' }}{% if revision.pk == page.published_revision_id %} · {% t "knowledge_published" "Veröffentlicht" %}{% endif %}</small>{% if revision.note %}<p>{{ revision.note }}</p>{% endif %}</li>{% endfor %}</ol>
+<ol class="knowledge-revisions">{% for revision in revisions %}<li><a href="{% url 'knowledge:revision' page.pk revision.pk %}" class="text-link"><strong>{% t "knowledge_version" "Version" %} {{ revision.number }} · {{ revision.title }}</strong></a><small>{{ revision.created_at|date:'d.m.Y H:i' }} · {{ revision.author.display_name|default:'—' }}{% if revision.pk == page.published_revision_id %} · {% t "knowledge_published" "Veröffentlicht" %}{% endif %}</small>{% if revision.note %}<p>{{ revision.note }}</p>{% endif %}</li>{% endfor %}</ol>
 {% include 'knowledge/includes/pagination.html' with items=revisions %}
 </section></div>{% endblock %}

@@ -25,11 +25,11 @@
     {% if item.size_ok and not item.full %}
       <p>{% if tournament.roster_rule == 'BY_START' %}{% t "roster_provisional" %}{% else %}{% t "roster_incomplete_allowed" %}{% endif %}</p>
     {% endif %}
-    <a href="{% url 'team_detail' slug=item.team.slug %}">{% t "ux_prepare_team" "Team ansehen und Mitspieler einladen" %}</a>
+    <a href="{% url 'team_detail' slug=item.team.slug %}" class="text-link">{% t "ux_prepare_team" "Team ansehen und Mitspieler einladen" %}</a>
   </div>
   {% empty %}
     {% if tournament.game.team_size > 1 %}
-    <a href="{% url 'team_list' %}?game={{ tournament.game_id }}">{% t "ux_find_team" "Passendes Team finden oder gründen" %}</a>
+    <a href="{% url 'team_list' %}?game={{ tournament.game_id }}" class="text-link">{% t "ux_find_team" "Passendes Team finden oder gründen" %}</a>
     {% endif %}
   {% endfor %}
 </section>

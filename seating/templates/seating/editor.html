@@ -1,9 +1,11 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
     <title>Sitzplan Editor - {{ plan.name }}</title>
+    <link rel="stylesheet" href="{% static 'css/links.css' %}">
     <style>
+        :root { --link-color: #fbbf24; --link-hover-color: #f8fafc; --link-focus-color: #fbbf24; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #1e293b; padding: 15px 20px; border-radius: 8px; }
         .tools { display: flex; gap: 10px; margin-bottom: 20px; background: #1e293b; padding: 15px; border-radius: 8px; flex-wrap: wrap; }
@@ -23,7 +25,7 @@
         .cell.BLOCKED { background: #000000; color: #ef4444; border: 1px solid #ef4444; }
 
         .save-btn { background: #2563eb; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        .back-btn { color: #94a3b8; text-decoration: none; font-size: 14px; }
+        .back-btn { font-size: 14px; font-weight: 600; }
     </style>
 </head>
 <body>

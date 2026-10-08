@@ -2,7 +2,7 @@
 {% block knowledge_content %}
 <div class="knowledge-layout">{% include 'knowledge/includes/tree.html' %}<section class="card knowledge-document">
   {% include 'knowledge/includes/breadcrumbs.html' %}<h1>{% if page %}{% t "knowledge_edit_page" "Seite bearbeiten" %}{% else %}{% t "knowledge_new_page" "Seite anlegen" %}{% endif %}</h1>
-  {% if form.non_field_errors %}<div class="knowledge-notice knowledge-error" role="alert">{{ form.non_field_errors }}{% if page %}<a href="{% url 'knowledge:edit' page.pk %}" target="_blank" rel="noopener">{% t "knowledge_open_current" "Aktuellen Stand in einem zweiten Tab öffnen" %}</a>{% endif %}</div>{% endif %}
+  {% if form.non_field_errors %}<div class="knowledge-notice knowledge-error" role="alert">{{ form.non_field_errors }}{% if page %}<a href="{% url 'knowledge:edit' page.pk %}" target="_blank" rel="noopener" class="text-link">{% t "knowledge_open_current" "Aktuellen Stand in einem zweiten Tab öffnen" %}</a>{% endif %}</div>{% endif %}
   <form method="post" class="knowledge-fields" id="knowledge-editor-form"{% if page %} data-upload-url="{% url 'knowledge:upload' page.pk %}"{% endif %}>
     {% csrf_token %}{{ form.expected_version }}
     <p>{{ form.title.label_tag }}{{ form.title }}{{ form.title.errors }}</p>
@@ -17,7 +17,7 @@
     {% if page %}
     <form method="post" enctype="multipart/form-data" action="{% url 'knowledge:upload' page.pk %}" id="knowledge-upload-form" class="knowledge-actions">{% csrf_token %}<label for="id_file">{% t "knowledge_file" "Datei (max. 10 MB)" %}</label>{{ attachment_form.file }}<button type="submit" class="btn">{% t "knowledge_upload" "Hochladen" %}</button></form>
     <p class="knowledge-muted">{% t "knowledge_attachment_hint" "Anhänge werden sofort gespeichert. Füge Bilder oder Datei-Links anschließend in den Text ein; vorhandene Dateien bleiben für frühere Seitenversionen erhalten." %}</p>
-    <ul id="knowledge-attachment-list">{% for attachment in attachments %}<li><a href="{{ attachment.get_absolute_url }}">{{ attachment.original_name }}</a> <small>{{ attachment.size|filesizeformat }}</small><button type="button" class="btn knowledge-insert-attachment" data-url="{% if attachment.is_image %}{{ attachment.image_url }}{% else %}{{ attachment.get_absolute_url }}{% endif %}" data-name="{{ attachment.original_name }}" data-image="{{ attachment.is_image|yesno:'1,0' }}">{% if attachment.is_image %}{% t "knowledge_insert_image" "Bild einfügen" %}{% else %}{% t "knowledge_insert_link" "Link einfügen" %}{% endif %}</button></li>{% endfor %}</ul>
+    <ul id="knowledge-attachment-list">{% for attachment in attachments %}<li><a href="{{ attachment.get_absolute_url }}" class="text-link">{{ attachment.original_name }}</a> <small>{{ attachment.size|filesizeformat }}</small><button type="button" class="btn knowledge-insert-attachment" data-url="{% if attachment.is_image %}{{ attachment.image_url }}{% else %}{{ attachment.get_absolute_url }}{% endif %}" data-name="{{ attachment.original_name }}" data-image="{{ attachment.is_image|yesno:'1,0' }}">{% if attachment.is_image %}{% t "knowledge_insert_image" "Bild einfügen" %}{% else %}{% t "knowledge_insert_link" "Link einfügen" %}{% endif %}</button></li>{% endfor %}</ul>
     {% else %}<p class="knowledge-muted">{% t "knowledge_save_before_upload" "Speichere die neue Seite zuerst als Entwurf. Danach kannst du Bilder und Dateien hochladen." %}</p>{% endif %}
   </section>
 </section></div>

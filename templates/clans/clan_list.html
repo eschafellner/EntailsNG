@@ -20,11 +20,11 @@
 
       <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
         {% if user_membership %}
-          <a href="{% url 'clan_detail' slug=user_membership.clan.slug %}" style="background: #0284c7; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; text-decoration: none;">
+          <a href="{% url 'clan_detail' slug=user_membership.clan.slug %}" class="btn-action-blue">
             🛡️ {% t "clan_my_clan_btn" "Mein Clan" %} ({{ user_membership.clan.name }})
           </a>
         {% elif user.is_authenticated %}
-          <a href="{% url 'clan_create' %}" class="btn-login" style="display: inline-block; width: auto; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-decoration: none;">
+          <a href="{% url 'clan_create' %}" class="btn-action-primary">
             {% t "clan_create_btn" %}
           </a>
         {% endif %}
@@ -33,24 +33,24 @@
   </div>
 
   <!-- Clan Grid -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 20px;">
     {% for item in clan_data %}
       <div class="card" style="padding: 20px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
         <div>
           <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
             {% if item.clan.logo %}
-              <img src="{{ item.clan.logo.url }}" alt="{{ item.clan.name }}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
+              <img src="{{ item.clan.logo.url }}" alt="{{ item.clan.name }}" style="width: 48px; height: 48px; flex-shrink: 0; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
             {% else %}
-              <div style="width: 48px; height: 48px; background: var(--navy); color: var(--signal); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: bold;">
+              <div style="width: 48px; height: 48px; flex-shrink: 0; background: var(--navy); color: var(--signal); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: bold;">
                 {{ item.clan.name|slice:":2"|upper }}
               </div>
             {% endif %}
-            <div>
+            <div style="min-width: 0; flex: 1;">
               <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; color: var(--ink);">
                 {% if item.clan.tag %}[{{ item.clan.tag }}] {% endif %}{{ item.clan.name }}
               </h3>
               {% if item.clan.website %}
-                <a href="{{ item.clan.website }}" target="_blank" rel="noopener" style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--signal-deep); text-decoration: underline;">
+                <a href="{{ item.clan.website }}" target="_blank" rel="noopener" class="text-link">
                   🌐 {{ item.clan.website }}
                 </a>
               {% endif %}
@@ -68,7 +68,7 @@
         </div>
 
         <div style="padding-top: 12px; border-top: 1px solid var(--line); text-align: right;">
-          <a href="{% url 'clan_detail' slug=item.clan.slug %}" style="font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: bold; color: #0284c7; text-decoration: none;">
+          <a href="{% url 'clan_detail' slug=item.clan.slug %}" class="text-link">
             {% t "clan_view_profile_link" "Clanprofil ansehen →" %}
           </a>
         </div>
@@ -83,7 +83,7 @@
   {% if page_obj.has_other_pages %}
     <div style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px;">
       {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}" style="padding: 8px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; color: var(--ink); font-weight: bold;">
+        <a href="?page={{ page_obj.previous_page_number }}" class="btn">
           ← {% t "pagination_previous" "Zurück" %}
         </a>
       {% endif %}
@@ -93,7 +93,7 @@
       </span>
 
       {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}" style="padding: 8px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; color: var(--ink); font-weight: bold;">
+        <a href="?page={{ page_obj.next_page_number }}" class="btn">
           {% t "pagination_next" "Weiter" %} →
         </a>
       {% endif %}

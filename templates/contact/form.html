@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% t "contact_title" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/contact.css' %}">{% endblock %}
+
+{% block content %}
+<section class="card contact-card" aria-labelledby="contact-title">
+  <p class="eyebrow">{% t "contact_eyebrow" %}</p>
+  <h1 id="contact-title">{% t "contact_title" %}</h1>
+  {% if available %}
+    <p class="contact-intro">{% t "contact_intro" %}</p>
+    {% if form.errors %}
+      <div class="contact-errors" role="alert">
+        <strong>{% t "contact_error_summary" %}</strong>
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        {% for error in form.submission_token.errors %}<p>{{ error }}</p>{% endfor %}
+        {% for error in form.website.errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+    <form method="post" action="{% url 'contact:form' %}">
+      {% csrf_token %}
+      {{ form.submission_token }}
+      <div hidden aria-hidden="true">{{ form.website }}</div>
+      <div class="form-group">
+        <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+        {{ form.email }}
+        <small id="contact-email-help" class="contact-help">{% t "contact_email_help" %}</small>
+        {% if form.email.errors %}<div id="id_email_errors">{% for error in form.email.errors %}<p class="contact-field-error">{{ error }}</p>{% endfor %}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+        {{ form.category }}
+        {% if form.category.errors %}<div id="id_category_errors">{% for error in form.category.errors %}<p class="contact-field-error">{{ error }}</p>{% endfor %}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.message.id_for_label }}">{{ form.message.label }}</label>
+        {{ form.message }}
+        <small id="contact-message-help" class="contact-help">{% t "contact_message_help" %}</small>
+        {% if form.message.errors %}<div id="id_message_errors">{% for error in form.message.errors %}<p class="contact-field-error">{{ error }}</p>{% endfor %}</div>{% endif %}
+      </div>
+      <p class="contact-privacy">{% t "contact_privacy_notice" %} <a href="{% url 'datenschutz' %}" class="text-link">{% t "contact_privacy_link" %}</a></p>
+      <button type="submit" class="primary-btn contact-submit">{% t "contact_send" %}</button>
+    </form>
+  {% else %}
+    <p class="contact-intro" role="status">{% t "contact_unavailable" %}</p>
+    <a class="btn" href="{% url 'dashboard' %}">{% t "contact_back_home" %}</a>
+  {% endif %}
+</section>
+{% endblock %}

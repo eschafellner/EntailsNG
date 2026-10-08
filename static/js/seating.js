@@ -239,12 +239,19 @@
               };
             }
 
-          } else if (cellData.status === 'CLAN_HELD') {
+          } else if (['CLAN_HELD', 'CLAN_PAID', 'CLAN_PAYMENT_PENDING'].includes(cellData.status)) {
             cellEl.style.background = 'rgba(56, 189, 248, 0.18)';
             cellEl.style.border = '2px dashed #38bdf8';
             cellEl.style.color = '#7dd3fc';
             statusIconHtml = SVG_ICONS.clan;
-            tooltipText = formatText(config.clanTooltip, {clan: cellData.hold_clan_name});
+            tooltipText = cellData.hold_tooltip || formatText(config.clanTooltip, {clan: cellData.hold_clan_name});
+            if (cellData.status === 'CLAN_PAID') {
+              cellEl.style.border = '2px solid #22c55e';
+              cellEl.style.background = 'rgba(34, 197, 94, 0.18)';
+            } else if (cellData.status === 'CLAN_PAYMENT_PENDING') {
+              cellEl.style.border = '2px dashed #eab308';
+              cellEl.style.background = 'rgba(234, 179, 8, 0.18)';
+            }
             if (cellData.can_claim_hold && !config.clanMode) {
               cellEl.style.cursor = 'pointer';
               cellEl.onclick = (e) => {e.stopPropagation(); openReserveModal(x, y, seatLabel);};
@@ -305,7 +312,7 @@
           cellEl.innerHTML = statusIconHtml;
           const label = document.createElement('span');
           label.textContent = seatLabel;
-          if (cellData.status === 'CLAN_HELD') {
+          if (['CLAN_HELD', 'CLAN_PAID', 'CLAN_PAYMENT_PENDING'].includes(cellData.status)) {
             if (cellData.hold_clan_logo) {
               const logo = document.createElement('img');
               logo.src = cellData.hold_clan_logo;
@@ -356,7 +363,7 @@
             cellEl.setAttribute('role', 'button');
             cellEl.tabIndex = 0;
             cellEl.onkeydown = (e) => {if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); cellEl.click();}};
-          } else if (cellData.status === 'CLAN_HELD') {
+          } else if (['CLAN_HELD', 'CLAN_PAID', 'CLAN_PAYMENT_PENDING'].includes(cellData.status)) {
             cellEl.onclick = () => showSeatingToast(tooltipText, false);
             cellEl.tabIndex = 0;
             cellEl.setAttribute('role', 'button');

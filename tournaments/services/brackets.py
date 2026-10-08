@@ -45,7 +45,7 @@ def generate_standard_seed_order(n):
 
 class TournamentBracketService:
     @staticmethod
-    def generate_bracket(tournament_id, actor=None):
+    def generate_bracket(tournament_id, actor=None, *, registration_order=None):
         """
         Atomare Generierung des Turnierbaums.
         Prüft Vorbedingungen, generiert Matches und setzt den Status erst bei absolutem Erfolg auf IN_PROGRESS.
@@ -81,7 +81,7 @@ class TournamentBracketService:
                 )
 
             # 3. Generierung der Matches
-            success = _generate_bracket(tournament, preview=False)
+            success = _generate_bracket(tournament, preview=False, registration_order=registration_order)
             if not success:
                 raise TournamentBracketError("Die Generierung der Matches ist fehlgeschlagen.")
 
@@ -160,7 +160,7 @@ def generate_bracket(tournament, preview=False):
     return result
 
 
-def _generate_bracket(tournament, preview=False):
+def _generate_bracket(tournament, preview=False, *, registration_order=None):
     """
     Hauptfunktion zur Generierung und Vorschau der Turnierformate.
     Wenn preview=True, werden keine Daten in die DB geschrieben, sondern ein Dict mit der Vorschau-Struktur geliefert.
@@ -177,6 +177,12 @@ def _generate_bracket(tournament, preview=False):
             'registered_at',
         )
     )
+    if registration_order is not None:
+        by_id = {registration.pk: registration for registration in teams}
+        if (len(registration_order) != len(by_id) or len(set(registration_order)) != len(by_id)
+                or set(registration_order) != set(by_id)):
+            raise TournamentBracketError(get_translation('draw_invalid_teams'))
+        teams = [by_id[registration_id] for registration_id in registration_order]
     num_teams = len(teams)
 
     if tournament.mode == Tournament.Mode.FFA:
@@ -727,6 +733,12 @@ def _generate_group_stage(tournament, registered_teams, preview=False):
         return {
             'mode': 'GROUP_STAGE',
             'groups': groups_preview,
+            'group_rounds': [{'name': name, 'rounds': [
+                {'name': get_translation('draw_matchday', number=number), 'matches': [
+                    {'match_number': index, 'team1': first.name, 'team2': second.name}
+                    for index, (first, second) in enumerate(pairs, 1)]}
+                for number, pairs in schedule.items()]}
+                for name, schedule in (('Gruppe A', schedule_a), ('Gruppe B', schedule_b))],
             'ko_stage': ko_preview,
             'ko_rounds': ko_preview,
             'total_teams': num_teams,

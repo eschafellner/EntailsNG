@@ -16,6 +16,7 @@
     <p id="clan-seat-feedback" role="status" aria-live="polite"></p>
   </div>
   <div class="clan-seat-actions">
+  <a class="btn-action-blue" href="{% url 'clan_payment_detail' slug=selection_clan.slug %}">{% t "clan_payment_manage" %}</a>
   <button type="button" class="btn-action-primary" id="clan-seat-confirm" disabled>{% t "clan_seat_confirm" %}</button>
   <button type="button" class="btn-action-blue" id="clan-seat-refresh">{% t "clan_seat_refresh" %}</button>
   <a class="btn-action-blue" href="{% url 'clan_detail' slug=selection_clan.slug %}">{% t "clan_seat_back" %}</a>
@@ -37,6 +38,8 @@
       <!-- Responsive Farb- & Symbol-Legende (100% Theme-reaktiv & Barrierefrei) -->
       <div class="seating-legend" style="display: flex; gap: 8px 14px; font-size: 12px; font-family: 'DM Sans', sans-serif; align-items: center; background: var(--paper); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); flex-wrap: wrap;">
         <span style="display:flex;align-items:center;gap:5px"><span style="color:#38bdf8">▣</span>{% t "clan_seat_legend" %}</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="color:#eab308">▣</span>{% t "clan_payment_legend_pending" %}</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="color:#22c55e">▣</span>{% t "clan_payment_legend_paid" %}</span>
         <!-- Frei -->
         <span style="display: flex; align-items: center; gap: 5px;">
           <span style="width: 14px; height: 14px; background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">

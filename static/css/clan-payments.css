@@ -1,0 +1,15 @@
+.clan-payment-page { display:flex; flex-direction:column; gap:20px; max-width:1000px; margin:auto; }
+.clan-payment-card { padding:24px; min-width:0; }
+.clan-payment-summary { display:grid; grid-template-columns:minmax(150px,1fr) minmax(0,2fr); gap:10px 20px; }
+.clan-payment-summary dd { margin:0; overflow-wrap:anywhere; }
+.clan-payment-summary dt { color:var(--muted); }
+.clan-payment-seats { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:16px; }
+.clan-payment-seat { padding:18px; background:var(--panel); border:1px solid var(--line); border-radius:8px; min-width:0; }
+.clan-payment-seat form, .clan-payment-card form { display:flex; flex-direction:column; align-items:flex-start; gap:14px; }
+.clan-payment-seat label, .clan-payment-seat select, .clan-payment-seat input:not([type=checkbox]) { width:100%; box-sizing:border-box; }
+.clan-payment-seat select, .clan-payment-seat input:not([type=checkbox]) { padding:8px; background:var(--paper); color:var(--ink); border:1px solid var(--line); border-radius:4px; }
+.clan-payment-confirm { display:flex; align-items:flex-start; gap:10px; line-height:1.5; }
+.clan-payment-confirm input { flex:none; margin-top:5px; }
+.clan-payment-status { font-weight:bold; }
+.clan-payment-qr { width:220px; height:220px; max-width:100%; }
+@media(max-width:520px) { .clan-payment-card { padding:16px; } .clan-payment-summary { grid-template-columns:1fr; gap:5px; } .clan-payment-summary dd { margin-bottom:9px; } .clan-payment-seat button { width:100%; } }

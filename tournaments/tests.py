@@ -1752,16 +1752,16 @@ class TeamFeedbackAndIntegrityTests(TestCase):
         self.assertEqual(match.winner, opp_team)
 
     def test_tournament_detail_inline_bracket_and_score_validation(self):
-        """Turnieransicht nutzt Inline-Bestätigung zur Bracket-Generierung und Inline-Fehleranzeige für Scores."""
+        """Turnieransicht führt zur geprüften Auslosung und nutzt Inline-Fehleranzeigen für Scores."""
         staff_admin = User.objects.create_user(username="staff_admin_test", password="password", is_staff=True)
         self.client.login(username="staff_admin_test", password="password")
         response = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
         self.assertEqual(response.status_code, 200)
 
         content = response.content.decode('utf-8')
-        # Inline Bracket-Generierung
-        self.assertIn('id="bracket-generate-confirm"', content)
-        self.assertIn('toggleGenerateBracketConfirm', content)
+        # Die Generierung beginnt mit der verbindlich zu prüfenden Vorschau.
+        self.assertIn(reverse('tournament_draw_preview', kwargs={'slug': self.tournament.slug}), content)
+        self.assertIn('Auslosung vorbereiten', content)
         # Inline Fehleranzeige & Validierung für Matchergebnisse
         self.assertIn('id="scoreFormError"', content)
         self.assertIn('id="score-summary"', content)
@@ -3630,7 +3630,6 @@ class TournamentAndTeamHardeningTests(TestCase):
         annotated_t = qs.get(pk=tournament.pk)
         self.assertEqual(annotated_t.reg_count, 1)
         self.assertEqual(t_admin.registered_count(annotated_t), 1)
-
 
 
 

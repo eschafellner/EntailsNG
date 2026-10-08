@@ -3,7 +3,7 @@ from django import forms
 from django.db import transaction
 
 from tournaments.exceptions import TournamentError
-from tournaments.models import TournamentMatch
+from tournaments.models import ExternalTournament, TournamentMatch
 from tournaments.services.locking import lock_tournament
 from tournaments.services.matches import TournamentMatchService
 
@@ -90,6 +90,30 @@ class TournamentAdminForm(forms.ModelForm):
         elif status in (Tournament.Status.RESULTS_REVIEW, Tournament.Status.FINISHED):
             raise forms.ValidationError(get_translation('results_use_actions'))
         return status
+
+
+class ExternalTournamentAdminForm(forms.ModelForm):
+    class Meta:
+        model = ExternalTournament
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = get_translation(f'external_tournament_field_{name}')
+        for name, key in (
+            ('external_url', 'external_tournament_url_help'),
+            ('description', 'external_tournament_description_help'),
+            ('mode', 'external_tournament_mode_help'),
+            ('status', 'external_tournament_status_help'),
+        ):
+            if name in self.fields:
+                self.fields[name].help_text = get_translation(key)
+        if 'status' in self.fields:
+            self.fields['status'].choices = [
+                (status, ExternalTournament(status=status).get_status_display())
+                for status in ExternalTournament.Status.values
+            ]
 
 
 class TournamentRestartForm(forms.Form):

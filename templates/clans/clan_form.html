@@ -62,10 +62,10 @@
     </div>
 
     <div style="display: flex; align-items: center; justify-content: flex-start; gap: 12px; margin-top: 24px;">
-      <a href="{% if clan %}{% url 'clan_detail' slug=clan.slug %}{% else %}{% url 'clan_list' %}{% endif %}" class="btn" style="background: var(--line); color: var(--ink); text-decoration: none; padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; height: 42px; box-sizing: border-box;">
+      <a href="{% if clan %}{% url 'clan_detail' slug=clan.slug %}{% else %}{% url 'clan_list' %}{% endif %}" class="btn">
         {% t "btn_cancel" "Abbrechen" %}
       </a>
-      <button type="submit" class="btn-login" style="width: auto; padding: 10px 20px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; height: 42px; box-sizing: border-box;">
+      <button type="submit" class="btn-action-primary">
         💾 {% t "clan_save_btn" "Clan Speichern" %}
       </button>
     </div>

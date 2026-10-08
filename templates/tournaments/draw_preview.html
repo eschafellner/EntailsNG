@@ -1,0 +1,110 @@
+{% extends 'tournaments/base.html' %}
+{% load static %}
+{% block title %}{% t 'draw_title' %} – {{ tournament.title }}{% endblock %}
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/tournament-draw.css' %}">{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'js/tournament-draw.js' %}" defer></script>{% endblock %}
+{% block content %}
+<div class="draw-page">
+  <a href="{% url 'tournament_detail' slug=tournament.slug %}" class="text-link">← {{ tournament.title }}</a>
+  <h1>{% t 'draw_title' %}</h1>
+  <p>{{ tournament.get_mode_display }}</p>
+  <p>{% t 'draw_intro' %}</p>
+  {% if error %}<div class="draw-notice draw-error" role="alert">{{ error }}</div>{% endif %}
+  {% if plan %}
+  {% if plan.is_group %}<p class="draw-notice">{% t 'draw_group_hint' %}</p>{% elif plan.is_swiss %}<p class="draw-notice">{% t 'draw_swiss_hint' %}</p>{% elif plan.is_ffa %}<p class="draw-notice">{% t 'draw_ffa_hint' %}</p>{% elif tournament.mode == 'LEAGUE' %}<p class="draw-notice">{% t 'draw_league_hint' %}</p>{% endif %}
+  <form method="post" id="draw-edit-form">
+    {% csrf_token %}<input type="hidden" name="preview_token" value="{{ plan.token }}">
+    <section class="draw-panel">
+      <h2>{% t 'draw_clan' %}</h2>
+      <p>{% t 'draw_clan_hint' %}</p>
+      <div class="draw-team-grid">
+        {% for row in plan.rows %}
+        <fieldset class="draw-team-row">
+          <legend>{% if row.team.tag %}[{{ row.team.tag }}] {% endif %}{{ row.team.name }}</legend>
+          <p class="draw-team-meta">{% t 'draw_roster' %}: {{ row.roster_count }} / {{ tournament.game.team_size }}{% if row.seed %} · {% t 'draw_seed' %} {{ row.seed }}{% endif %}{% if row.locked %} · {% t 'draw_locked' %}{% endif %}</p>
+          <label for="draw-clan-{{ row.id }}">{% t 'draw_clan' %}</label>
+          <select id="draw-clan-{{ row.id }}" name="clan_{{ row.id }}">
+            <option value="">{% t 'draw_no_clan' %}</option>
+            {% for clan in plan.clans %}<option value="{{ clan.pk }}"{% if row.clan_id == clan.pk %} selected{% endif %}>{{ clan }}</option>{% endfor %}
+          </select>
+          {% if row.suggested_clan %}<p class="draw-team-meta">{% t 'draw_suggestion' clan=row.suggested_clan.name %}</p>{% endif %}
+        </fieldset>
+        {% endfor %}
+      </div>
+      <div class="draw-actions">
+        <button type="submit" name="action" value="suggest">{% t 'draw_suggestions' %}</button>
+      </div>
+    </section>
+    {% if plan.editable_positions %}
+    <section class="draw-panel">
+      <label class="draw-option"><input type="checkbox" name="respect_seeds" value="yes"{% if plan.respect_seeds %} checked{% endif %}> {% t 'draw_respect_seeds' %}</label>
+      <p>{% t 'draw_seed_hint' %}</p>
+      <label class="draw-option"><input type="checkbox" name="avoid_clans" value="yes"{% if plan.avoid_clans %} checked{% endif %}> {% if plan.is_group %}{% t 'draw_avoid_groups' %}{% else %}{% t 'draw_avoid_clans' %}{% endif %}</label>
+      <div class="draw-actions">
+        <button type="submit" name="action" value="apply">{% t 'draw_apply' %}</button>
+        <button type="submit" name="action" value="shuffle" class="btn-action-primary">{% t 'draw_shuffle' %}</button>
+      </div>
+      <fieldset class="draw-swap">
+        <legend>{% t 'draw_swap' %}</legend><p>{% t 'draw_swap_hint' %}</p>
+        <label for="draw-swap-first">{% t 'draw_swap_first' %}</label>
+        <select name="swap_first" id="draw-swap-first">
+          {% for row in plan.rows %}<option value="{{ row.id }}">{{ row.team.name }}{% if row.locked %} · {% t 'draw_locked' %}{% endif %}</option>{% endfor %}
+        </select>
+        <label for="draw-swap-second">{% t 'draw_swap_second' %}</label>
+        <select name="swap_second" id="draw-swap-second">
+          {% for row in plan.rows %}<option value="{{ row.id }}"{% if forloop.counter == 2 %} selected{% endif %}>{{ row.team.name }}{% if row.locked %} · {% t 'draw_locked' %}{% endif %}</option>{% endfor %}
+        </select>
+        <button type="submit" name="action" value="swap">{% t 'draw_swap' %}</button>
+      </fieldset>
+    </section>
+    {% else %}<input type="hidden" name="respect_seeds" value="yes"><button type="submit" name="action" value="apply">{% t 'draw_apply' %}</button>{% endif %}
+  </form>
+  <section class="draw-panel" aria-label="{% t 'draw_preview' %}">
+    <h2>{% t 'draw_preview' %}</h2><p>{{ plan.method }} · {% t 'tournament_preview_teams_stat' count=plan.rows|length %}</p>
+    {% if not plan.is_ffa %}
+      <div class="draw-notice{% if plan.conflicts %} draw-warning{% endif %}" role="status">
+        <strong>{% if plan.is_group %}{% t 'draw_group_conflicts' count=plan.conflict_count %}{% else %}{% t 'draw_conflicts' count=plan.conflict_count %}{% endif %}</strong>
+        {% if plan.conflicts %}<p>{% t 'draw_conflict_hint' %}</p><ul>{% for conflict in plan.conflicts %}<li>{% t 'draw_conflict_pair' team1=conflict.team1 team2=conflict.team2 clan=conflict.clan %}</li>{% endfor %}</ul>{% endif %}
+      </div>
+    {% endif %}
+    {% if plan.is_group %}
+      <div class="draw-pair-grid">{% for group in plan.groups %}<article class="draw-match"><h3>{{ group.name }}</h3><ul>{% for row in group.rows %}<li>{{ row.team.name }}{% if row.clan %} · {{ row.clan.name }}{% endif %}</li>{% endfor %}</ul></article>{% endfor %}</div>
+    {% elif plan.pairs %}
+      <h3>{% t 'draw_first_round' %}</h3>
+      <div class="draw-pair-grid">{% for pair in plan.pairs %}
+        <article class="draw-match{% if pair.conflict %} draw-warning{% endif %}">
+          <strong>#{{ pair.number }}</strong>
+          <p>{{ pair.team1.team.name }}{% if pair.team1.clan %} <span class="draw-clan-label">{{ pair.team1.clan.name }}</span>{% endif %}</p>
+          <p>{% if pair.team2 %}{{ pair.team2.team.name }}{% if pair.team2.clan %} <span class="draw-clan-label">{{ pair.team2.clan.name }}</span>{% endif %}{% else %}{% t 'draw_bye' %}{% endif %}</p>
+        </article>
+      {% endfor %}</div>
+    {% endif %}
+    {% with preview=plan.preview %}
+      {% if preview.wb_rounds %}<h3>{% t 'tournament_wb_title' %}</h3>{% include 'tournaments/includes/draw_rounds.html' with rounds=preview.wb_rounds %}{% endif %}
+      {% if preview.lb_rounds %}<h3>{% t 'tournament_lb_title' %}</h3>{% include 'tournaments/includes/draw_rounds.html' with rounds=preview.lb_rounds %}{% endif %}
+      {% if preview.grand_final %}<h3>{% t 'tournament_bracket_grand_final' %}</h3>{% for match in preview.grand_final %}<p>{{ match.team1 }} / {{ match.team2 }}</p>{% endfor %}{% endif %}
+      {% if preview.rounds %}{% include 'tournaments/includes/draw_rounds.html' with rounds=preview.rounds %}{% endif %}
+      {% if preview.group_rounds %}{% for group in preview.group_rounds %}<h3>{{ group.name }}</h3>{% include 'tournaments/includes/draw_rounds.html' with rounds=group.rounds %}{% endfor %}{% endif %}
+      {% if preview.ko_rounds %}{% include 'tournaments/includes/draw_rounds.html' with rounds=preview.ko_rounds %}{% endif %}
+      {% if preview.participants %}<ul>{% for name in preview.participants %}<li>{{ name }}</li>{% endfor %}</ul>{% endif %}
+    {% endwith %}
+  </section>
+  <section class="draw-panel">
+    <p id="draw-dirty-notice" class="draw-notice" role="status" hidden>{% t 'draw_dirty' %}</p>
+    <form method="post" action="{% url 'tournament_generate_bracket' slug=tournament.slug %}" id="draw-publish-form">
+      {% csrf_token %}<input type="hidden" name="preview_token" value="{{ plan.token }}">
+      {% if plan.needs_approval %}
+      <label class="draw-option"><input type="checkbox" name="approve_conflicts" value="yes" required> {% t 'draw_approve' %}</label>
+      <label for="draw-reason">{% t 'draw_reason' %}</label><textarea id="draw-reason" name="reason" maxlength="1000" rows="3" required></textarea>
+      {% endif %}
+      <button type="button" id="draw-open-confirm" class="btn-action-primary" hidden>{% t 'draw_publish' %}</button>
+      <div id="draw-confirm">
+        <p>{% t 'draw_publish_confirm' %}</p>
+        <button type="submit" id="draw-publish-submit" class="btn-action-primary">{% t 'draw_publish_yes' %}</button>
+        <button type="button" id="draw-close-confirm" hidden>{% t 'draw_cancel' %}</button>
+      </div>
+    </form>
+  </section>
+  {% else %}<a class="btn-action-primary" href="{% url 'tournament_draw_preview' slug=tournament.slug %}">{% t 'draw_refresh' %}</a>{% endif %}
+</div>
+{% endblock %}

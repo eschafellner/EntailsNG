@@ -1,4 +1,5 @@
 @import url("fonts.css");
+@import url("links.css");
 
 :root {
     --ink: #2b2115;
@@ -41,6 +42,9 @@
     --info-text: #0369a1;
     --info-bg: rgba(2, 132, 199, 0.08);
     --info-border: rgba(2, 132, 199, 0.25);
+    --link-color: color-mix(in srgb, var(--signal-deep) 65%, var(--ink));
+    --link-hover-color: var(--ink);
+    --link-focus-color: var(--link-color);
 }
 
 * { box-sizing: border-box; }
@@ -68,9 +72,13 @@ body {
 
 
 
-button, a { font: inherit; color: inherit; }
-a { text-decoration: none; }
+button, a { font: inherit; }
+button { color: inherit; }
 svg { display: block; }
+
+:where(.skip-link, .brand, .nav-item, .mobile-item, .mobile-modal-item) {
+    text-decoration: none;
+}
 
 .skip-link {
     position: fixed;
@@ -91,6 +99,9 @@ svg { display: block; }
  * LAYOUT: SIDEBAR + CONTENT
  * ========================================================================== */
 .sidebar {
+    --link-color: var(--sidebar-nav-text, #eadfce);
+    --link-hover-color: var(--sidebar-nav-hover-text, #fff);
+    --link-focus-color: var(--signal);
     position: fixed;
     inset: 0 auto 0 0;
     z-index: 20;
@@ -172,7 +183,7 @@ svg { display: block; }
     height: var(--nav-icon-size, 19px);
     flex-shrink: 0;
 }
-.nav-item:hover {
+.nav-item:is(:hover, :focus-visible) {
     background: var(--sidebar-nav-hover-bg, rgba(255,255,255,.07));
     color: var(--sidebar-nav-hover-text, #fff);
 }
@@ -201,13 +212,20 @@ svg { display: block; }
     border-top: 1px solid var(--sidebar-border, rgba(255,255,255,0.1));
 }
 .user-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: var(--foot-font-size, 13px);
     font-weight: 700;
     margin-bottom: 8px;
     color: var(--sidebar-text, inherit);
+    text-decoration: none;
+    transition: color .18s ease;
 }
+.user-name:is(:hover, :focus-visible) { color: var(--sidebar-nav-hover-text, #fff); }
 .user-logout,
-.btn-login {
+.btn-login,
+.sidebar-scanner-link {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -224,8 +242,15 @@ svg { display: block; }
     text-align: center;
     text-decoration: none;
     box-sizing: border-box;
+    transition: background .18s ease, color .18s ease;
 }
-.btn-login { background: var(--signal); color: var(--navy); font-weight: 700; border-color: transparent; }
+.btn-login { background: var(--signal); color: var(--signal-ink, var(--navy)); font-weight: 700; border-color: transparent; }
+.btn-login:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--signal) 90%, var(--signal-ink, var(--navy))); }
+.sidebar-scanner-link { gap: 6px; margin-bottom: 12px; }
+:is(.user-logout, .sidebar-scanner-link):is(:hover, :focus-visible) {
+    background: var(--sidebar-nav-hover-bg);
+    color: var(--sidebar-nav-hover-text);
+}
 .sidebar-legal {
     padding-top: 12px;
     margin-top: 12px;
@@ -245,11 +270,11 @@ svg { display: block; }
 .sidebar-legal a {
     color: var(--sidebar-nav-text, rgba(255, 255, 255, 0.85));
     font-weight: 600;
-    text-decoration: none;
+    text-decoration: underline;
     transition: color 0.15s ease;
     text-align: center;
 }
-.sidebar-legal a:hover {
+.sidebar-legal a:is(:hover, :focus-visible) {
     color: var(--sidebar-nav-hover-text, #ffffff);
     text-decoration: underline;
 }
@@ -267,7 +292,24 @@ svg { display: block; }
         padding: 34px clamp(20px, 4vw, 58px) 70px;
     }
 
-    /* Django-Messages */
+.email-warning {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    border: 1px solid var(--warning-border);
+    border-left-width: 4px;
+    border-radius: 8px;
+    background: var(--warning-bg);
+    color: var(--ink);
+    font-size: var(--font-sm, 13px);
+}
+.email-warning-info { background: var(--info-bg); border-color: var(--info-border); }
+
+/* Django-Messages */
     .message-list { list-style: none; margin: 0 0 22px; padding: 0;
         display: grid; gap: 8px; }
         .message {
@@ -628,7 +670,7 @@ h3 {
 
 .auth-btn {
     width: 100%;
-    min-height: var(--btn-height, 42px);
+    min-height: max(44px, var(--btn-height, 42px));
     margin-top: 12px;
     font-size: var(--font-sm, 13px);
     font-weight: 600;
@@ -644,18 +686,7 @@ h3 {
     line-height: 1.6;
 }
 
-.auth-footer a {
-    color: var(--signal-deep);
-    font-weight: 700;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    transition: color .18s ease, opacity .18s ease;
-}
-
-.auth-footer a:hover {
-    color: var(--amber);
-    text-decoration: underline;
-}
+.auth-footer :where(a:not(.primary-btn)) { font-weight: 600; }
 
 .error-list, .error-msg {
     padding: 12px 16px;
@@ -678,18 +709,6 @@ h3 {
     font-size: var(--font-sm, 13px);
 }
 
-.auth-footer .sub-link a {
-    color: var(--signal-deep);
-    font-weight: 700;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    transition: color .18s ease, opacity .18s ease;
-}
-
-.auth-footer .sub-link a:hover {
-    color: var(--amber);
-    text-decoration: underline;
-}
 /* ==========================================================================
  * RESPONSIVE
  * ========================================================================== */
@@ -707,6 +726,7 @@ h3 {
     .sidebar { display: none; }
 
     .mobile-header {
+        --link-focus-color: var(--signal);
         position: sticky;
         top: 0;
         z-index: 35;
@@ -717,7 +737,7 @@ h3 {
         min-height: calc(var(--input-height, 42px) + 10px);
         padding: calc(6px + env(safe-area-inset-top, 0px)) 16px 8px;
         background: var(--navy);
-        color: #fffaf2;
+        color: var(--sidebar-text, #fffaf2);
         border-bottom: 1px solid rgba(255,255,255,0.1);
         box-shadow: 0 4px 18px rgba(0,0,0,0.12);
     }
@@ -725,10 +745,13 @@ h3 {
         display: flex;
         align-items: center;
         gap: 8px;
-        color: #fffaf2;
+        min-width: 0;
+        color: var(--sidebar-text, #fffaf2);
         font-weight: 700;
         text-decoration: none;
     }
+    .mobile-header-brand .brand-mark { flex-shrink: 0; }
+    .mobile-header-brand .brand-mark svg { width: 24px; height: 24px; }
     .mobile-header-logo {
         max-height: 28px;
         max-width: 32px;
@@ -739,12 +762,18 @@ h3 {
         font-size: calc(var(--font-base, 15px) * 1.25);
         letter-spacing: -0.01em;
         line-height: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .mobile-header-actions {
         display: flex;
         align-items: center;
         gap: 8px;
         flex-shrink: 0;
+        min-width: 0;
+        max-width: 55%;
     }
     .mobile-user-link {
         display: inline-flex;
@@ -752,7 +781,7 @@ h3 {
         gap: 6px;
         font-size: var(--font-xs, 11px);
         font-weight: 600;
-        color: #eadfce;
+        color: var(--sidebar-nav-text, #eadfce);
         padding: 5px 10px;
         background: rgba(255,255,255,0.08);
         border-radius: 8px;
@@ -761,13 +790,14 @@ h3 {
         max-width: 150px;
         white-space: nowrap;
         line-height: 1.2;
-        flex-shrink: 0;
+        flex-shrink: 1;
+        min-width: 0;
         box-sizing: border-box;
         transition: background 0.15s ease, color 0.15s ease;
     }
-    .mobile-user-link:hover {
-        background: rgba(255,255,255,0.15);
-        color: #ffffff;
+    .mobile-user-link:is(:hover, :focus-visible) {
+        background: var(--sidebar-nav-hover-bg);
+        color: var(--sidebar-nav-hover-text);
     }
     .mobile-user-link svg {
         display: block;
@@ -789,9 +819,9 @@ h3 {
         justify-content: center;
         font-size: var(--font-xs, 11px);
         padding: 5px 8px;
-        background: rgba(2, 132, 199, 0.3);
-        color: #38bdf8;
-        border: 1px solid #0284c7;
+        background: var(--sidebar-nav-hover-bg);
+        color: var(--sidebar-nav-text);
+        border: 1px solid var(--sidebar-border);
         border-radius: 8px;
         text-decoration: none;
         flex-shrink: 0;
@@ -804,12 +834,16 @@ h3 {
         width: 14px;
         height: 14px;
     }
+    .mobile-scanner-badge:is(:hover, :focus-visible) {
+        background: var(--sidebar-nav-hover-bg);
+        color: var(--sidebar-nav-hover-text);
+    }
     .mobile-login-btn {
         display: inline-flex;
         align-items: center;
         font-size: var(--font-xs, 11px);
         font-weight: 700;
-        color: var(--navy);
+        color: var(--signal-ink, var(--navy));
         background: var(--signal);
         padding: 5px 12px;
         border-radius: 8px;
@@ -875,8 +909,9 @@ h3 {
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .mobile-item.active { color: var(--signal-deep); font-weight: 700; }
+    .mobile-item.active { color: var(--link-color); font-weight: 700; }
     .mobile-item.active svg { color: var(--amber); }
+    .mobile-item:is(:hover, :focus-visible) { background: var(--signal-soft); color: var(--ink); }
 
 
     .mobile-menu-overlay {
@@ -937,12 +972,12 @@ h3 {
     .mobile-modal-item svg {
         flex-shrink: 0;
     }
-    .mobile-modal-item:hover {
+    .mobile-modal-item:is(:hover, :focus-visible) {
         background: var(--paper);
     }
     .mobile-modal-item.active {
         background: var(--signal-soft);
-        color: var(--signal-deep);
+        color: var(--link-color);
         font-weight: 700;
     }
 
@@ -963,8 +998,8 @@ h3 {
 
 /* --- Barrierefreiheit --- */
 :focus-visible {
-    outline: 3px solid var(--amber);
-    outline-offset: 2px;
+    outline: 3px solid var(--link-focus-color, var(--amber));
+    outline-offset: 3px;
     border-radius: 6px;
 }
 
@@ -1166,27 +1201,6 @@ h3 {
     text-transform: uppercase;
 }
 
-/* Aktions-Buttons */
-.btn-action-primary {
-    background: var(--signal);
-    color: var(--navy);
-    padding: 9px 18px;
-    border-radius: 8px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.btn-action-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
 .media-export-link {
     min-height: 44px;
     min-width: 0;
@@ -1195,59 +1209,8 @@ h3 {
     justify-content: center;
     text-align: center;
     white-space: normal;
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 .media-export-link span:last-child { overflow-wrap: anywhere; }
-.media-export-link:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
-}
-
-.btn-action-blue {
-    background: var(--panel);
-    color: var(--ink);
-    border: 1px solid var(--line);
-    padding: 9px 18px;
-    border-radius: 8px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: transform 0.15s ease, background 0.15s ease;
-}
-.btn-action-blue:hover {
-    background: var(--paper);
-    transform: translateY(-1px);
-}
-
-.btn-action-blue-sm {
-    display: block;
-    text-align: center;
-    background: #0284c7;
-    color: white;
-    padding: 8px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: bold;
-    text-decoration: none;
-}
-
-.btn-action-navy {
-    background: var(--navy);
-    color: var(--signal);
-    border: none;
-    padding: 11px 18px;
-    border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    font-weight: bold;
-    cursor: pointer;
-    white-space: nowrap;
-}
 
 /* Checkin-Status im Header */
 .badge-checkin-eligible {
@@ -1346,27 +1309,6 @@ h3 {
         grid-template-columns: 1fr;
         gap: 16px;
     }
-}
-
-/* Button Status: Bereits angemeldet */
-.btn-action-green {
-    background: #10b981;
-    color: #ffffff;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: 700;
-    padding: 8px 16px;
-    border-radius: 6px;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
-    transition: background 0.18s ease, transform 0.18s ease;
-}
-.btn-action-green:hover {
-    background: #059669;
-    transform: translateY(-1px);
 }
 
 /* Nav Notification Dot (für offene Team-Beitrittsanfragen) */

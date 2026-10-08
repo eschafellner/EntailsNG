@@ -25,7 +25,7 @@
   {% for membership in team_addition_notices %}
   <div class="card team-recruitment" role="status">
     <p>{% t "team_direct_addition_notice" username=membership.added_by.display_name team_name=membership.team.name %}</p>
-    <a href="{% url 'team_detail' slug=membership.team.slug %}">{% t "btn_details" "Details" %} →</a>
+    <a href="{% url 'team_detail' slug=membership.team.slug %}" class="text-link">{% t "btn_details" "Details" %} →</a>
   </div>
   {% endfor %}
 
@@ -63,7 +63,7 @@
             👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglied(er)" %} | Code: <code>{{ team.invite_code }}</code>
           </div>
 
-          <a href="{% url 'team_detail' slug=team.slug %}" class="btn-action-blue-sm">
+          <a href="{% url 'team_detail' slug=team.slug %}" class="btn-action-blue-sm btn-block">
             {% t "team_manage_btn" "Team verwalten →" %}
           </a>
         </div>
@@ -90,11 +90,11 @@
           </div>
 
           <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-            <a href="{% url 'team_detail' slug=team.slug %}" style="flex: 1; text-align: center; background: var(--line); color: var(--ink); padding: 8px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; text-decoration: none;">
+            <a href="{% url 'team_detail' slug=team.slug %}" class="btn" style="flex: 1;">
               {% t "btn_details" "Details" %}
             </a>
             {% if active_event and team.captain_id == user.id %}
-              <a href="{% url 'team_reactivate' slug=team.slug %}" style="flex: 1.4; text-align: center; background: #047857; color: white; padding: 8px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; text-decoration: none;">
+              <a href="{% url 'team_reactivate' slug=team.slug %}" class="btn-action-primary" style="flex: 1;">
                 🔄 {% t "team_reactivate_for_event" "Reaktivieren" %}
               </a>
             {% endif %}
@@ -159,10 +159,10 @@
   <div>
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
       <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-        <a href="{% url 'team_list' %}?tab=active{% if selected_game_id %}&game={{ selected_game_id }}{% endif %}" style="padding: 10px 16px; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; text-decoration: none; border-bottom: 3px solid {% if active_tab == 'active' %}#0284c7{% else %}transparent{% endif %}; color: {% if active_tab == 'active' %}var(--ink){% else %}var(--muted){% endif %};">
+        <a href="{% url 'team_list' %}?tab=active{% if selected_game_id %}&game={{ selected_game_id }}{% endif %}" class="link-tab"{% if active_tab == 'active' %} aria-current="page"{% endif %}>
           🎮 {% t "team_active_teams_tab" "Aktuelle Teams" %} {% if active_event %}({{ active_event.title }}){% endif %}
         </a>
-        <a href="{% url 'team_list' %}?tab=archived{% if selected_game_id %}&game={{ selected_game_id }}{% endif %}" style="padding: 10px 16px; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; text-decoration: none; border-bottom: 3px solid {% if active_tab == 'archived' %}#0284c7{% else %}transparent{% endif %}; color: {% if active_tab == 'archived' %}var(--ink){% else %}var(--muted){% endif %};">
+        <a href="{% url 'team_list' %}?tab=archived{% if selected_game_id %}&game={{ selected_game_id }}{% endif %}" class="link-tab"{% if active_tab == 'archived' %} aria-current="page"{% endif %}>
           📁 {% t "team_archived_teams_tab" "Archivierte Teams" %} ({{ archived_teams.count }})
         </a>
       </div>
@@ -206,7 +206,7 @@
             </div>
 
             <div style="padding-top: 10px; border-top: 1px solid var(--line); text-align: right;">
-              <a href="{% url 'team_detail' slug=team.slug %}" style="font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; color: #0284c7; text-decoration: none;">
+              <a href="{% url 'team_detail' slug=team.slug %}" class="text-link">
                 {% t "team_view_profile_btn" "Profil ansehen →" %}
               </a>
             </div>
@@ -239,11 +239,11 @@
             </div>
 
             <div style="padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
-              <a href="{% url 'team_detail' slug=team.slug %}" style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); text-decoration: none;">
+              <a href="{% url 'team_detail' slug=team.slug %}" class="text-link">
                 {% t "team_view_details_btn" "Details ansehen →" %}
               </a>
               {% if active_event and team.captain_id == user.id %}
-                <a href="{% url 'team_reactivate' slug=team.slug %}" style="background: #047857; color: white; padding: 4px 10px; border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold; text-decoration: none;">
+                <a href="{% url 'team_reactivate' slug=team.slug %}" class="btn-action-primary">
                   🔄 {% t "team_reactivate_btn" "Reaktivieren" %}
                 </a>
               {% endif %}

@@ -47,8 +47,10 @@ from tournaments.services.podium import TournamentPodiumService
 from tournaments.services.lifecycle import TournamentLifecycleService
 from tournaments.services.restart import TournamentRestartService
 from tournaments.services.swiss import SwissTournamentService, SwissPairingService, SwissStandingService
+from tournaments.services.draws import TournamentDrawService
 
 __all__ = [
+    'TournamentDrawService',
     # Registration
     'TournamentRegistrationService',
     'check_user_event_checkin',

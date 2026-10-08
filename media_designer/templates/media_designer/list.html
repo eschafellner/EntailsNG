@@ -32,8 +32,8 @@
         <div class="media-template-row">
           <div><strong>{{ template.name }}</strong><br><small>{{ template.event.title }} · {% if template.kind == 'BADGE' %}{% t "media_kind_badge" "Teilnehmerbadge" %}{% else %}{% t "media_kind_certificate" "Turnierurkunde" %}{% endif %} · {{ template.paper_size }}</small></div>
           <div class="media-actions">
-            <a href="{% url 'media_template_edit' template.pk %}">{% t "media_edit" "Gestalten" %}</a>
-            <a href="{% url 'media_template_export' template.pk %}">{% t "media_export" "Exportieren" %}</a>
+            <a href="{% url 'media_template_edit' template.pk %}" class="btn">{% t "media_edit" "Gestalten" %}</a>
+            <a href="{% url 'media_template_export' template.pk %}" class="btn-action-primary">{% t "media_export" "Exportieren" %}</a>
           </div>
         </div>
       {% endfor %}

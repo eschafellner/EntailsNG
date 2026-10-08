@@ -91,3 +91,27 @@ test('Clan selection enforces its quota and submits a single batch with its revi
   assert.deepEqual(JSON.parse(request.options.body), {event_id: 1, cell_ids: [1], revision: 'initial'});
   assert.equal(ui.nodes.get('clan-seat-confirm').disabled, true);
 });
+
+test('Pending and prepaid clan seats show their status and cannot open personal booking', async () => {
+  for (const status of ['CLAN_PAYMENT_PENDING', 'CLAN_PAID']) {
+    const ui = setup();
+    const tooltip = status + ' <unsafe clan>';
+    await ui.reply(plan([{...held, status, hold_tooltip: tooltip}]));
+    const cell = ui.nodes.get('seating-grid').children[0];
+    assert.equal(cell.title, tooltip);
+    assert.equal(cell.children.at(-1).textContent, 'A1');
+    cell.onclick({stopPropagation() {}});
+    assert.notEqual(ui.nodes.get('reserve-modal').style.display, 'flex');
+    assert.ok(ui.htmlWrites.every(value => !value.includes('<unsafe clan>')));
+  }
+});
+
+test('A fixed clan payment disables changes to the seat selection', async () => {
+  const ui = setup(true);
+  await ui.reply(plan([{...held, status: 'CLAN_PAID'}],
+    {limit: 8, claimed: 0, selected: [1], consumed_open: [], enabled: false, revision: 'locked'}));
+  assert.equal(ui.nodes.get('clan-seat-confirm').disabled, true);
+  ui.nodes.get('seating-grid').children[0].onclick({stopPropagation() {}});
+  ui.nodes.get('clan-seat-confirm').onclick();
+  assert.equal(ui.requests.length, 1);
+});

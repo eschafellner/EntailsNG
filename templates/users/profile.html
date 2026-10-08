@@ -24,7 +24,7 @@
           {% if clan_membership %}
             <span>
               {% t "profile_clan_header" "Clan" %}:
-              <a href="{% url 'clan_detail' slug=clan_membership.clan.slug %}" style="color: #0284c7; font-weight: bold; text-decoration: none;">
+              <a href="{% url 'clan_detail' slug=clan_membership.clan.slug %}" class="text-link">
                 🛡️ {{ clan_membership.clan.name }}
               </a>
               <span style="font-size: 11px; color: var(--muted);">({{ clan_membership.get_role_display }})</span>
@@ -33,7 +33,7 @@
             <span>
               {% t "profile_clan_header" "Clan" %}:
               <span style="color: var(--muted);">{% t "profile_no_clan" "Kein Clan" %}</span>
-              <a href="{% url 'clan_list' %}" style="color: #0284c7; text-decoration: underline; font-size: 11px; margin-left: 2px;">
+              <a href="{% url 'clan_list' %}" class="text-link">
                 {% t "profile_clan_find" "(Clan suchen / beitreten →)" %}
               </a>
             </span>
@@ -44,7 +44,7 @@
         </p>
       </div>
       <div>
-        <a href="{% url 'logout' %}" onclick="event.preventDefault(); document.getElementById('profile-logout-form').submit();" class="btn" style="background: var(--line); color: var(--ink); padding: 8px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; text-decoration: none;">
+        <a href="{% url 'logout' %}" onclick="event.preventDefault(); document.getElementById('profile-logout-form').submit();" class="btn">
           🚪 {% t "nav_logout" %}
         </a>
         <form id="profile-logout-form" method="post" action="{% url 'logout' %}" style="display: none;">
@@ -296,7 +296,7 @@
           </div>
           <div style="display: flex; flex-wrap: wrap; gap: 12px;">
             <button type="submit" class="btn" style="border: 1px solid var(--danger); color: var(--danger); padding: 10px 16px; cursor: pointer;">{% t "account_delete_submit" %}</button>
-            <a href="{% url 'profile' %}" class="btn" style="padding: 10px 16px;">{% t "account_delete_cancel" %}</a>
+            <a href="{% url 'profile' %}" class="btn">{% t "account_delete_cancel" %}</a>
           </div>
         </form>
       </details>

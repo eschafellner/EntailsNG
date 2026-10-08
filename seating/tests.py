@@ -122,8 +122,9 @@ class SeatingPlanTests(TestCase):
         SeatingCell.objects.bulk_create(cells)
 
 
-        # Querybudget bleibt unabhängig von der Rastergröße; die neue Clan-Konfiguration benötigt eine Abfrage.
-        with self.assertNumQueries(3):  # Plan, Clan-Konfiguration, Cells mit select_related
+        # Finanzierte Clan-Plätze bleiben auch bei deaktivierten Vormerkungen geschützt.
+        # Das feste Querybudget bleibt unabhängig von der Rastergröße.
+        with self.assertNumQueries(4):  # Plan, Konfiguration, Clan-Plätze, Cells mit select_related
             response = self.client.get(
                 reverse('api_event_seating', kwargs={'event_id': large_event.id})
             )
@@ -1713,7 +1714,6 @@ class SeatingFeedbackRegressionTests(TestCase):
         self.assertEqual(c1.seat_label, 'P2')
         self.assertEqual(c2.seat_label, 'R5-P5')
         self.assertIn('Bereinigung abgeschlossen', out_real.getvalue())
-
 
 
 

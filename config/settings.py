@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'tinymce',
     'events',
     'configuration',
+    'contact',
     'seating',
     'info',
     'knowledge',

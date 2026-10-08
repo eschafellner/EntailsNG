@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
+import uuid
 from configuration.cache import invalidate_event_capacity_cache
 from emails.services import send_system_email
 
@@ -227,12 +228,20 @@ class SeatingCell(models.Model):
     def clean(self):
         super().clean()
         if self.pk:
+            from .clan_payments import committed_holds
+            funded = committed_holds().filter(cell_id=self.pk).exists()
+            if funded:
+                old = SeatingCell.objects.get(pk=self.pk)
+                fields = ('plan_id', 'x', 'y', 'cell_type', 'seat_label', 'reservation_status', 'registration_id')
+                if any(getattr(old, field) != getattr(self, field) for field in fields):
+                    from configuration.translations import get_translation
+                    raise ValidationError(get_translation('clan_payment_managed_hint'))
             from .clan_services import live_holds, check_clan_access
             if live_holds().filter(cell_id=self.pk).exists():
                 old = SeatingCell.objects.get(pk=self.pk)
                 if self.plan_id != old.plan_id or self.cell_type != self.CellType.SEAT or self.reservation_status == self.ReservationStatus.BLOCKED:
                     raise ValidationError('Bitte die Clan-Vormerkung vor dieser Änderung ausdrücklich freigeben.')
-                if self.registration:
+                if self.registration and not funded:
                     allowed, reason = check_clan_access(old, self.registration.user)
                     if not allowed:
                         raise ValidationError({'registration': reason})
@@ -260,6 +269,10 @@ class SeatingCell(models.Model):
 
         if not registration:
             return False, "Keine gültige Anmeldung vorhanden."
+
+        if ClanSeatHold.objects.filter(funded_registration=registration).exists():
+            from configuration.translations import get_translation
+            return False, get_translation('clan_payment_managed_hint')
 
         from django.contrib.auth import get_user_model
         if get_user_model().objects.filter(pk=registration.user_id, is_banned=True).exists():
@@ -366,6 +379,10 @@ class SeatingCell(models.Model):
         return True, msg
 
     def release_seat(self, registration=None, is_admin=False):
+        from .clan_payments import committed_holds
+        if committed_holds().filter(cell=self).exists():
+            from configuration.translations import get_translation
+            return False, get_translation('clan_payment_managed_hint')
         if is_admin or self.registration == registration:
             self.registration = None
             self.reservation_status = self.ReservationStatus.FREE
@@ -374,6 +391,9 @@ class SeatingCell(models.Model):
         return False, "Du kannst nur deinen eigenen Sitzplatz freigeben."
 
     def toggle_admin_block(self, block=True):
+        from .clan_payments import committed_holds
+        if committed_holds().filter(cell=self).exists():
+            raise ValidationError('Dieser Platz wird über die Clan-Sammelzahlung verwaltet.')
         if block:
             self.registration = None
             self.reservation_status = self.ReservationStatus.BLOCKED
@@ -396,6 +416,66 @@ class ClanSeatAllocation(models.Model):
         constraints = [models.UniqueConstraint(fields=['clan', 'event'], name='unique_clan_event_allocation')]
 
 
+def clan_payment_reference():
+    return 'CLAN-' + uuid.uuid4().hex[:16].upper()
+
+
+class ClanSeatPayment(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Zahlung ausstehend'
+        PAID = 'PAID', 'Bezahlt'
+        CANCELLED = 'CANCELLED', 'Storniert'
+
+    allocation = models.OneToOneField(ClanSeatAllocation, on_delete=models.PROTECT, related_name='payment')
+    ticket_type = models.ForeignKey('events.TicketType', on_delete=models.PROTECT)
+    ticket_name = models.CharField(max_length=50)
+    seat_count = models.PositiveIntegerField()
+    unit_price = models.DecimalField(max_digits=6, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reference = models.CharField(max_length=24, unique=True, default=clan_payment_reference, editable=False)
+    beneficiary_name = models.CharField(max_length=70)
+    iban = models.CharField(max_length=34)
+    bic = models.CharField(max_length=11, blank=True)
+    status = models.CharField(max_length=9, choices=Status.choices, default=Status.PENDING, db_index=True)
+    created_by = models.ForeignKey('users.User', null=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(default=timezone.now)
+    payment_due_at = models.DateTimeField()
+    release_at = models.DateTimeField(db_index=True)
+    confirmed_by = models.ForeignKey('users.User', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancel_reason = models.TextField(blank=True)
+    reminder_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Clan-Sammelzahlung'
+        verbose_name_plural = 'Clan-Sammelzahlungen'
+        permissions = [('manage_clan_payments', 'Clan-Zahlungen bestätigen und Zuweisungen korrigieren')]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(seat_count__gte=1, unit_price__gt=0), name='clan_payment_positive'),
+            models.CheckConstraint(condition=models.Q(total_amount=models.F('unit_price') * models.F('seat_count')), name='clan_payment_amount_matches'),
+            models.CheckConstraint(condition=models.Q(release_at__gte=models.F('payment_due_at'), payment_due_at__gt=models.F('created_at')), name='clan_payment_dates_ordered'),
+        ]
+
+    def __str__(self):
+        return f'{self.reference} · {self.allocation.clan.name} · {self.total_amount} €'
+
+
+class ClanSeatPaymentLog(models.Model):
+    payment = models.ForeignKey(ClanSeatPayment, on_delete=models.PROTECT, related_name='logs')
+    actor = models.ForeignKey('users.User', null=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(default=timezone.now)
+    action = models.CharField(max_length=20)
+    reason = models.TextField(blank=True)
+    details = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ['created_at', 'pk']
+        verbose_name = 'Clan-Zahlungsprotokoll'
+        verbose_name_plural = 'Clan-Zahlungsprotokolle'
+
+
 class ClanSeatHold(models.Model):
     class State(models.TextChoices):
         OPEN = 'OPEN', 'Offen'
@@ -408,6 +488,10 @@ class ClanSeatHold(models.Model):
     state = models.CharField(max_length=8, choices=State.choices, default=State.OPEN)
     protection_active = models.BooleanField(default=True)
     claimed_by = models.ForeignKey('users.User', null=True, blank=True, on_delete=models.SET_NULL)
+    payment = models.ForeignKey(ClanSeatPayment, null=True, blank=True, on_delete=models.PROTECT, related_name='holds')
+    funded_registration = models.OneToOneField('events.EventRegistration', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='clan_funding')
+    registration_snapshot = models.JSONField(default=dict, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['cell'], condition=models.Q(protection_active=True), name='unique_protected_clan_seat')]

@@ -6,6 +6,7 @@ from django.db import models, transaction
 from django.utils.text import slugify
 from django.utils import timezone
 from configuration.translations import get_translation
+from .external_urls import validate_external_tournament_url
 
 
 class TournamentResultLog(models.Model):
@@ -461,6 +462,71 @@ class Tournament(models.Model):
         return self.registrations.count()
 
 
+class ExternalTournamentQuerySet(models.QuerySet):
+    def visible_to(self, user):
+        if Tournament.can_view_drafts(user):
+            return self
+        return self.filter(status=self.model.Status.PUBLISHED)
+
+
+class ExternalTournament(models.Model):
+    """Event-bound listings; deliberately outside registration and result services."""
+    objects = ExternalTournamentQuerySet.as_manager()
+
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', 'Entwurf'
+        PUBLISHED = 'PUBLISHED', 'Veröffentlicht'
+
+    event = models.ForeignKey(
+        'events.Event', on_delete=models.CASCADE, related_name='external_tournaments',
+        verbose_name='Veranstaltung',
+    )
+    game = models.ForeignKey(
+        Game, on_delete=models.PROTECT, related_name='external_tournaments', verbose_name='Spiel',
+    )
+    title = models.CharField(max_length=150, verbose_name='Turniertitel')
+    provider_name = models.CharField(max_length=100, verbose_name='Anbietername')
+    external_url = models.URLField(
+        max_length=1000, validators=[validate_external_tournament_url], verbose_name='Turnieradresse',
+    )
+    description = models.TextField(max_length=500, blank=True, verbose_name='Kurzbeschreibung')
+    mode = models.CharField(max_length=100, blank=True, verbose_name='Turniermodus')
+    tournament_start = models.DateTimeField(null=True, blank=True, verbose_name='Turnierstart')
+    registration_end = models.DateTimeField(null=True, blank=True, verbose_name='Anmeldeschluss')
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.DRAFT, verbose_name='Veröffentlichungszustand',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Erstellt am')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Zuletzt geändert')
+
+    class Meta:
+        verbose_name = 'Externes Turnier'
+        verbose_name_plural = 'Externe Turniere'
+        ordering = ('title', 'pk')
+
+    def __str__(self):
+        return self.title
+
+    def get_status_display(self):
+        return get_translation({
+            self.Status.DRAFT: 'external_tournament_status_draft',
+            self.Status.PUBLISHED: 'external_tournament_status_published',
+        }.get(self.status, 'external_tournament_status_draft'))
+
+    @property
+    def safe_external_url(self):
+        # Also protect rendering after imports or QuerySet.update() bypass validation.
+        try:
+            validate_external_tournament_url(self.external_url)
+        except ValidationError:
+            return ''
+        return self.external_url
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
 def generate_invite_code():
     return secrets.token_hex(4).upper()
 
@@ -760,6 +826,9 @@ class TournamentRegistration(models.Model):
     )
     registered_at = models.DateTimeField(auto_now_add=True, verbose_name="Angemeldet am")
     seed = models.PositiveIntegerField(null=True, blank=True, verbose_name="Seed / Platzierung")
+    draw_clan = models.ForeignKey('clans.Clan', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='tournament_draw_registrations', verbose_name='Clan für die Auslosung',
+        help_text='Von der Turnierleitung bestätigte Clan-Zuordnung für dieses Turnier.')
     group_name = models.CharField(max_length=20, blank=True, verbose_name="Gruppe (z.B. Gruppe A)")
     score = models.IntegerField(default=0, verbose_name="Punkte / Kills (für FFA)")
     is_forfeited = models.BooleanField(
@@ -779,6 +848,10 @@ class TournamentRegistration(models.Model):
 
     def clean(self):
         super().clean()
+        if self.pk and self.tournament_id and Tournament.objects.filter(pk=self.tournament_id, is_generated=True).exists():
+            original_clan = type(self).objects.values_list('draw_clan_id', flat=True).get(pk=self.pk)
+            if self.draw_clan_id != original_clan:
+                raise ValidationError(get_translation('draw_unavailable'))
         started_swiss = self.tournament_id and Tournament.objects.filter(
             pk=self.tournament_id, mode=Tournament.Mode.SWISS, is_generated=True).exists()
         historical_entry = self.pk and self.swiss_entries.exists()
@@ -792,6 +865,39 @@ class TournamentRegistration(models.Model):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
+
+
+class TournamentDraw(models.Model):
+    """Immutable publication snapshot; reset/restart never remove this history."""
+    tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='draw_logs')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    request_id = models.UUIDField(unique=True, editable=False)
+    mode = models.CharField(max_length=30)
+    method = models.CharField(max_length=20)
+    random_seed = models.PositiveIntegerField()
+    respect_seeds = models.BooleanField(default=True)
+    avoid_clans = models.BooleanField(default=True)
+    input_digest = models.CharField(max_length=64)
+    snapshot = models.JSONField(default=dict)
+    conflict_count = models.PositiveIntegerField(default=0)
+    reason = models.CharField(max_length=1000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-pk']
+        verbose_name = 'Turnierauslosung'
+        verbose_name_plural = 'Turnierauslosungen'
+
+    def get_method_display(self):
+        return get_translation(f'draw_method_{self.method}')
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError(get_translation('draw_history'))
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(get_translation('draw_history'))
 
 
 class TournamentMatch(models.Model):

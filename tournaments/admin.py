@@ -10,10 +10,10 @@ from django.template.response import TemplateResponse
 from configuration.translations import get_translation
 from tournaments.exceptions import TournamentError
 from tournaments.models import (
-    Game, Team, TeamMember, Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration, SwissRound, TournamentResultLog
+    Game, Team, TeamMember, Tournament, ExternalTournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration, SwissRound, TournamentResultLog, TournamentDraw
 )
 from tournaments.services import TournamentBracketService, TournamentRestartService
-from tournaments.forms import TournamentMatchAdminForm, TournamentRestartForm, MatchResultForm, TournamentAdminForm
+from tournaments.forms import TournamentMatchAdminForm, TournamentRestartForm, MatchResultForm, TournamentAdminForm, ExternalTournamentAdminForm
 
 
 @admin.register(Game)
@@ -23,13 +23,46 @@ class GameAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
 
 
+@admin.register(TournamentDraw)
+class TournamentDrawAdmin(admin.ModelAdmin):
+    list_display = ('tournament', 'mode', 'actor', 'created_at', 'conflict_count')
+    list_filter = ('mode', 'respect_seeds', 'avoid_clans')
+    list_select_related = ('tournament', 'actor')
+    readonly_fields = tuple(field.name for field in TournamentDraw._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ExternalTournament)
+class ExternalTournamentAdmin(admin.ModelAdmin):
+    form = ExternalTournamentAdminForm
+    list_display = ('title', 'event', 'game', 'provider_name', 'publication_status', 'tournament_start', 'registration_end')
+    list_filter = ('event', 'game', 'status')
+    search_fields = ('title', 'provider_name', 'description', 'external_url')
+    list_select_related = ('event', 'game')
+    readonly_fields = ('created_at', 'updated_at')
+    fields = ('event', 'game', 'title', 'provider_name', 'external_url', 'status',
+              'description', 'mode', 'tournament_start', 'registration_end', 'created_at', 'updated_at')
+
+    @admin.display(description=lazy(get_translation, str)('external_tournament_field_status'), ordering='status')
+    def publication_status(self, obj):
+        return obj.get_status_display()
+
+
 class TournamentRegistrationInline(admin.TabularInline):
     model = TournamentRegistration
     extra = 0
     raw_id_fields = ('team',)
 
     def get_readonly_fields(self, request, obj=None):
-        return ('team', 'seed', 'is_forfeited', 'group_name', 'score') if obj and obj.is_generated else ()
+        return ('draw_clan',) + (('team', 'seed', 'is_forfeited', 'group_name', 'score') if obj and obj.is_generated else ())
 
     def has_add_permission(self, request, obj=None):
         return not (obj and obj.is_generated) and super().has_add_permission(request, obj)
@@ -110,6 +143,9 @@ class TournamentAdmin(admin.ModelAdmin):
         context['can_restart'] = bool(obj and self.has_restart_permission(request, obj))
         context['can_manage_results'] = bool(obj and obj.is_generated and self.has_change_permission(request, obj)
             and request.user.has_perm('tournaments.change_tournamentmatch'))
+        context['can_prepare_draw'] = bool(obj and not obj.is_generated and obj.status in (
+            Tournament.Status.REGISTRATION_OPEN, Tournament.Status.REGISTRATION_CLOSED)
+            and obj.is_managed_by(request.user) and self.has_change_permission(request, obj))
         return super().change_view(request, object_id, form_url, context)
 
     def results_view(self, request, object_id):
@@ -264,45 +300,17 @@ class TournamentAdmin(admin.ModelAdmin):
             ]
         return super().formfield_for_choice_field(db_field, request, **kwargs)
 
-    @admin.action(description="Turnierbaum generieren & Turnier starten")
+    @admin.action(description=lazy(get_translation, str)('draw_prepare'))
     def action_close_registration_and_generate_bracket(self, request, queryset):
-        for tournament in queryset:
-            if tournament.mode == Tournament.Mode.SWISS:
-                from django.urls import reverse
-                self.message_user(request, format_html(
-                    'Schweizer System: <a href="{}">Paarungen prüfen und Runde freigeben</a>.',
-                    reverse('tournament_swiss_preview', args=[tournament.slug])), messages.INFO)
-                continue
-            try:
-                TournamentBracketService.generate_bracket(tournament.id, actor=request.user)
-                self.message_user(
-                    request,
-                    f"Turnier '{tournament.title}': Turnierbaum erfolgreich generiert! Das Turnier läuft jetzt.",
-                    messages.SUCCESS
-                )
-            except TournamentError as e:
-                self.message_user(
-                    request,
-                    f"Turnier '{tournament.title}': {e}",
-                    messages.ERROR
-                )
+        selected = list(queryset)
+        if len(selected) != 1:
+            self.message_user(request, get_translation('draw_admin_select_one'), messages.ERROR)
+            return
+        return redirect('tournament_draw_preview', slug=selected[0].slug)
 
-    @admin.action(description="Vorschau des Turnierbaums im Admin-Protokoll anzeigen")
+    @admin.action(description=lazy(get_translation, str)('draw_title'))
     def action_generate_bracket_preview(self, request, queryset):
-        for tournament in queryset:
-            try:
-                preview_data = TournamentBracketService.get_bracket_preview(tournament.id)
-                self.message_user(
-                    request,
-                    f"Vorschau für '{tournament.title}': {preview_data}",
-                    messages.INFO
-                )
-            except Exception as e:
-                self.message_user(
-                    request,
-                    f"Fehler bei Vorschau für '{tournament.title}': {e}",
-                    messages.ERROR
-                )
+        return self.action_close_registration_and_generate_bracket(request, queryset)
 
     @admin.action(description="Turnierbaum zurücksetzen & Anmeldung wieder öffnen")
     def action_reset_bracket(self, request, queryset):
@@ -447,7 +455,7 @@ class TournamentRegistrationAdmin(admin.ModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def get_readonly_fields(self, request, obj=None):
-        return ('tournament', 'team', 'seed', 'is_forfeited', 'group_name', 'score') if obj and (obj.tournament.is_generated or obj.swiss_entries.exists()) else ()
+        return ('draw_clan',) + (('tournament', 'team', 'seed', 'is_forfeited', 'group_name', 'score') if obj and (obj.tournament.is_generated or obj.swiss_entries.exists()) else ())
 
     def has_delete_permission(self, request, obj=None):
         return not (obj and (obj.tournament.is_generated or obj.swiss_entries.exists())) and super().has_delete_permission(request, obj)

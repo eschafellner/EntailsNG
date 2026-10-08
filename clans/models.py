@@ -7,7 +7,7 @@ from django.utils.text import slugify
 
 
 class Clan(models.Model):
-    seat_limit_override = models.PositiveIntegerField(null=True, blank=True, verbose_name='Sitzplatzkontingent (optional)', help_text='Leer: globaler Standard. 0: gesperrt und offene Vormerkungen freigeben. Nur durch die Orga änderbar.')
+    seat_limit_override = models.PositiveIntegerField(null=True, blank=True, verbose_name='Sitzplatzkontingent (optional)', help_text='Leer: globaler Standard. 0: neue Vormerkungen sperren und offene Plätze ohne Sammelauftrag freigeben. Sammelaufträge bleiben erhalten. Nur durch die Orga änderbar.')
     name = models.CharField(
         max_length=32, unique=True, verbose_name="Clanname"
     )

@@ -15,7 +15,7 @@
     {% for article in articles %}
       <article class="card news-list-article" id="news-{{ article.pk }}">
         <header style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
-          <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px;"><a href="{% url 'news_detail' article.pk %}">{{ article.title }}</a></h2>
+          <h2 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px;"><a href="{% url 'news_detail' article.pk %}" class="link-title">{{ article.title }}</a></h2>
           <small style="color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px;">
             {{ article.created_at|date:"d.m.Y H:i" }} {% if article.author %}{% t "news_author_by" %} {{ article.author.display_name }}{% endif %}
           </small>

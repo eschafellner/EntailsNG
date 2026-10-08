@@ -1,0 +1,56 @@
+<div class="card tournament-card external-tournament-card" data-external-tournament-id="{{ external_tournament.pk }}">
+  <div>
+    <div class="external-tournament-badges">
+      <span class="badge-mode">
+        {% if external_tournament.mode %}{{ external_tournament.mode }} • {% endif %}
+        {% if external_tournament.game.team_size == 1 %}{% t "tournament_format_solo" "1v1 Solo" %}{% else %}{% t "tournament_format_team" "{size}v{size} Team" size=external_tournament.game.team_size %}{% endif %}
+      </span>
+      <div class="external-tournament-badges">
+        <span class="badge-status-default">{% t "external_tournament_badge" "Extern" %}</span>
+        {% if external_tournament.status == 'DRAFT' %}
+          <span class="badge-status-default">{{ external_tournament.get_status_display }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="external-tournament-identity">
+      {% if external_tournament.game.logo %}
+        <img src="{{ external_tournament.game.logo.url }}" alt="{{ external_tournament.game.name }}" class="tournament-avatar-img">
+      {% else %}
+        <div class="tournament-avatar-placeholder" aria-hidden="true">🎮</div>
+      {% endif %}
+      <div class="external-tournament-heading">
+        <h2>{{ external_tournament.title }}</h2>
+        <p>🎮 {{ external_tournament.game.name }}{% if external_tournament.game.mode %} • {{ external_tournament.game.mode }}{% endif %}</p>
+      </div>
+    </div>
+
+    <div class="tournament-stats-box">
+      <strong>{% t "external_tournament_provider" "Anbieter: {provider}" provider=external_tournament.provider_name %}</strong>
+      <p>{% t "external_tournament_registration_hint" "Anmeldung und Spielplan beim Anbieter" %}</p>
+      {% if external_tournament.description %}
+        <p>{{ external_tournament.description|linebreaksbr }}</p>
+      {% endif %}
+      {% if external_tournament.registration_end or external_tournament.tournament_start %}
+        <div class="external-tournament-dates">
+          {% if external_tournament.registration_end %}
+            <span>📅 {% t "tournament_reg_deadline_label" "Anmeldeschluss:" %} <strong>{% t "external_tournament_datetime" "{date} Uhr" date=external_tournament.registration_end|date:"d.m.Y H:i" %}</strong></span>
+          {% endif %}
+          {% if external_tournament.tournament_start %}
+            <span>🚀 {% t "tournament_start_label" "Turnierstart:" %} <strong>{% t "external_tournament_datetime" "{date} Uhr" date=external_tournament.tournament_start|date:"d.m.Y H:i" %}</strong></span>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="external-tournament-footer">
+    {% with target_url=external_tournament.safe_external_url %}
+      {% if target_url %}
+        <a href="{{ target_url }}" class="btn-action-primary">{% t "external_tournament_open" "Zum Turnier →" %}</a>
+      {% else %}
+        <span>{% t "external_tournament_link_unavailable" "Link derzeit nicht verfügbar." %}</span>
+      {% endif %}
+    {% endwith %}
+  </div>
+</div>

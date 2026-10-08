@@ -335,6 +335,7 @@ class OutgoingEmailAdmin(admin.ModelAdmin):
     search_fields = ('recipient_email', 'subject', 'last_error', 'template_key', 'worker_id')
     readonly_fields = (
         'created_at', 'sent_at', 'status', 'attempts',
+        'reply_to_email', 'submitted_by', 'contact_submission_id', 'contact_ip_hash',
         'last_error', 'body_text', 'body_html', 'scheduled_at',
         'expires_at', 'worker_id', 'lease_expires_at'
     )

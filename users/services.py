@@ -174,6 +174,12 @@ class UserService:
         from tournaments.models import Tournament
 
         blockers = []
+        from seating.models import ClanSeatPayment
+        from clans.models import ClanMembership
+        for membership in user.clan_memberships.filter(status=ClanMembership.Status.ACCEPTED):
+            if ClanSeatPayment.objects.filter(allocation__clan_id=membership.clan_id).exists() and not membership.clan.memberships.filter(
+                    status=ClanMembership.Status.ACCEPTED, user__is_active=True, user__deleted_at__isnull=True).exclude(user=user).exists():
+                blockers.append(('clan_payment', get_translation('clan_payment_account_blocked')))
         if user.deleted_at:
             blockers.append(('deleted', get_translation('account_delete_already_deleted', 'Dieser Account wurde bereits gelöscht.')))
         if user.is_staff or user.is_superuser or user.role != User.Roles.USER:
@@ -284,6 +290,10 @@ class UserService:
         from clans.models import Clan, ClanMembership
         clan_ids = list(user.clan_memberships.values_list('clan_id', flat=True))
         for clan in Clan.objects.select_for_update().filter(pk__in=clan_ids).order_by('pk'):
+            from seating.models import ClanSeatPayment
+            if ClanSeatPayment.objects.filter(allocation__clan=clan).exists() and not clan.memberships.filter(
+                    status=ClanMembership.Status.ACCEPTED, user__is_active=True, user__deleted_at__isnull=True).exclude(user=user).exists():
+                raise AccountDeletionError(get_translation('clan_payment_account_blocked'), 'clan_payment')
             clan.memberships.filter(user=user).delete()
             remaining = clan.memberships.filter(
                 status=ClanMembership.Status.ACCEPTED, user__deleted_at__isnull=True,
@@ -347,8 +357,8 @@ class UserService:
     def _erase_account_messages(user, original_username, original_email):
         from configuration.models import SystemErrorLog
         from emails.models import OutgoingEmail
-        # Die Outbox enthält gerenderte Kopien und keine User-Fremdschlüssel.
-        query = Q(recipient_email__iexact=original_email)
+        # Gerenderte Mailkopien; Kontaktanfragen sind zusätzlich über submitted_by zugeordnet.
+        query = Q(recipient_email__iexact=original_email) | Q(submitted_by=user)
         for code in user.verification_codes.exclude(new_email__isnull=True):
             query |= Q(
                 recipient_email__iexact=code.new_email,
@@ -356,6 +366,7 @@ class UserService:
             )
         OutgoingEmail.objects.filter(query).update(
             recipient_email=user.email, subject='', body_text='', body_html='', last_error='',
+            reply_to_email='', submitted_by=None, contact_ip_hash='', contact_submission_id=None,
             status=OutgoingEmail.Status.EXPIRED, worker_id='', lease_expires_at=None,
         )
         SystemErrorLog.objects.filter(user=original_username).delete()

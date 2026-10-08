@@ -35,6 +35,7 @@ def _snapshot(source):
     teams = {team.pk: team for team in Team.objects.select_for_update().filter(
         pk__in=[r.team_id for r in registrations]).order_by('pk')}
     rows = [{'id': r.pk, 'team_id': r.team_id, 'name': teams[r.team_id].name, 'seed': r.seed,
+             'draw_clan': r.draw_clan_id,
              'withdrawn': r.is_forfeited, 'archived': teams[r.team_id].is_archived,
              'group': r.group_name, 'score': r.score,
              'team_event': teams[r.team_id].event_id, 'team_game': teams[r.team_id].game_id}
@@ -113,7 +114,7 @@ class TournamentRestartService:
         new.save()
         for row in selected:
             TournamentRegistration.objects.create(tournament=new, team_id=row['team_id'],
-                seed=row['seed'] if copy_seeds else None)
+                seed=row['seed'] if copy_seeds else None, draw_clan_id=row['draw_clan'])
         if cancel_source:
             source.status = Tournament.Status.CANCELLED
             source.save(update_fields=['status', 'updated_at'])

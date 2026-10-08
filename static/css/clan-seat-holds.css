@@ -3,7 +3,8 @@
 .clan-seat-panel h2 { font-family: 'Barlow Condensed', sans-serif; font-size: 24px; margin: 0 0 8px; }
 .clan-seat-panel p { margin: 8px 0; overflow-wrap: anywhere; }
 .clan-seat-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.clan-seat-actions button, .clan-seat-actions a { min-height: 44px; border: 0; cursor: pointer; justify-content: center; }
+.clan-seat-actions button, .clan-seat-actions a { min-height: 44px; cursor: pointer; justify-content: center; }
+.clan-seat-actions button { border: 0; }
 .clan-seat-actions button:disabled { opacity: .5; cursor: default; }
 #clan-seat-counter { font-weight: 700; }
 #clan-seat-deadline { color: var(--muted); }
