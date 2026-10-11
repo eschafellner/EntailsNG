@@ -249,8 +249,12 @@ class SeatingPlanService:
 
                     if cell.pk in protected_ids and (cell_type != SeatingCell.CellType.SEAT or res_status == SeatingCell.ReservationStatus.BLOCKED):
                         raise SeatingPlanValidationError('Clan-Vormerkungen müssen vor einer Typänderung oder Sperre ausdrücklich freigegeben werden.')
+                    target_res_status = cell.reservation_status
+                    if cell.registration_id is None and cell_type == SeatingCell.CellType.SEAT:
+                        target_res_status = res_status
                     if cell.pk in funded_ids and (
-                            seat_label != cell.seat_label or res_status != cell.reservation_status):
+                            seat_label != cell.seat_label or target_res_status != cell.reservation_status
+                            or res_status == SeatingCell.ReservationStatus.BLOCKED):
                         from configuration.translations import get_translation
                         raise SeatingPlanValidationError(get_translation('clan_payment_managed_hint'))
                     # Schutz vor destruktiver Typ-Änderung belegter Plätze
@@ -259,11 +263,6 @@ class SeatingPlanService:
                         raise SeatingPlanValidationError(
                             f'Sitzplatz ({x},{y}) kann nicht in "{cell_type}" umgewandelt werden, da er von {user_name} belegt ist.'
                         )
-
-                    # Status nur ändern, wenn kein User registriert ist
-                    target_res_status = cell.reservation_status
-                    if cell.registration is None and cell_type == SeatingCell.CellType.SEAT:
-                        target_res_status = res_status
 
                     if (cell.cell_type != cell_type or
                         cell.seat_label != seat_label or

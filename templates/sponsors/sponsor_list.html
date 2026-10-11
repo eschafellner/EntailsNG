@@ -102,13 +102,13 @@
             {% if sponsor.beschreibung|length > 1500 %}
               <div class="sponsor-desc-block" id="desc-block-{{ sponsor.id }}">
                 <div class="sponsor-description desc-short-desktop" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                  {{ sponsor.beschreibung|truncatechars_html:1500|safe }}
+                  {{ sponsor.beschreibung|safe_html|truncatechars_html:1500 }}
                 </div>
                 <div class="sponsor-description desc-short-mobile" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                  {{ sponsor.beschreibung|truncatechars_html:500|safe }}
+                  {{ sponsor.beschreibung|safe_html|truncatechars_html:500 }}
                 </div>
                 <div class="sponsor-description desc-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                  {{ sponsor.beschreibung|safe }}
+                  {{ sponsor.beschreibung|safe_html }}
                 </div>
                 <button type="button" class="btn-toggle-desc" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start; margin-top: 6px;">
                   <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
@@ -117,13 +117,13 @@
             {% elif sponsor.beschreibung|length > 500 %}
               <div class="sponsor-desc-block" id="desc-block-{{ sponsor.id }}">
                 <div class="sponsor-description desc-desktop-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                  {{ sponsor.beschreibung|safe }}
+                  {{ sponsor.beschreibung|safe_html }}
                 </div>
                 <div class="sponsor-description desc-short-mobile" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                  {{ sponsor.beschreibung|truncatechars_html:500|safe }}
+                  {{ sponsor.beschreibung|safe_html|truncatechars_html:500 }}
                 </div>
                 <div class="sponsor-description desc-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                  {{ sponsor.beschreibung|safe }}
+                  {{ sponsor.beschreibung|safe_html }}
                 </div>
                 <button type="button" class="btn-toggle-desc desc-btn-mobile-only" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start; margin-top: 6px;">
                   <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
@@ -131,7 +131,7 @@
               </div>
             {% else %}
               <div class="sponsor-description" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                {{ sponsor.beschreibung|safe }}
+                {{ sponsor.beschreibung|safe_html }}
               </div>
             {% endif %}
           {% endif %}
@@ -166,13 +166,13 @@
                 {% if sponsor.beschreibung|length > 1500 %}
                   <div class="sponsor-desc-block" id="desc-block-{{ sponsor.id }}">
                     <div class="sponsor-description desc-short-desktop" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                      {{ sponsor.beschreibung|truncatechars_html:1500|safe }}
+                      {{ sponsor.beschreibung|safe_html|truncatechars_html:1500 }}
                     </div>
                     <div class="sponsor-description desc-short-mobile" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                      {{ sponsor.beschreibung|truncatechars_html:500|safe }}
+                      {{ sponsor.beschreibung|safe_html|truncatechars_html:500 }}
                     </div>
                     <div class="sponsor-description desc-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                      {{ sponsor.beschreibung|safe }}
+                      {{ sponsor.beschreibung|safe_html }}
                     </div>
                     <button type="button" class="btn-toggle-desc" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start; margin-top: 6px;">
                       <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
@@ -181,13 +181,13 @@
                 {% elif sponsor.beschreibung|length > 500 %}
                   <div class="sponsor-desc-block" id="desc-block-{{ sponsor.id }}">
                     <div class="sponsor-description desc-desktop-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                      {{ sponsor.beschreibung|safe }}
+                      {{ sponsor.beschreibung|safe_html }}
                     </div>
                     <div class="sponsor-description desc-short-mobile" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                      {{ sponsor.beschreibung|truncatechars_html:500|safe }}
+                      {{ sponsor.beschreibung|safe_html|truncatechars_html:500 }}
                     </div>
                     <div class="sponsor-description desc-full" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                      {{ sponsor.beschreibung|safe }}
+                      {{ sponsor.beschreibung|safe_html }}
                     </div>
                     <button type="button" class="btn-toggle-desc desc-btn-mobile-only" onclick="toggleSponsorDesc('{{ sponsor.id }}')" style="background: none; border: none; padding: 0; color: #0284c7; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: underline; align-self: flex-start; margin-top: 6px;">
                       <span id="desc-btn-text-{{ sponsor.id }}">{% t "sponsors_read_more" %}</span>
@@ -195,7 +195,7 @@
                   </div>
                 {% else %}
                   <div class="sponsor-description" style="color: var(--muted); font-size: 14px; line-height: 1.6;">
-                    {{ sponsor.beschreibung|safe }}
+                    {{ sponsor.beschreibung|safe_html }}
                   </div>
                 {% endif %}
               {% endif %}

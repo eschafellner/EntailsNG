@@ -201,7 +201,7 @@ class EventAdmin(admin.ModelAdmin):
             )
         return None
 
-    @admin.action(description="🏦 Letzten Kontocheck für ausgewählte Events auf JETZT setzen")
+    @admin.action(permissions=['change'], description="🏦 Letzten Kontocheck für ausgewählte Events auf JETZT setzen")
     def action_set_payment_check_now(self, request, queryset):
         now = timezone.now()
         updated = queryset.update(last_payment_check=now)
@@ -274,8 +274,56 @@ class TicketTypeAdmin(admin.ModelAdmin):
     list_filter = ('event', 'is_active')
 
 
+class EventRegistrationAdminForm(forms.ModelForm):
+    class Meta:
+        model = EventRegistration
+        fields = '__all__'
+
+    def clean(self):
+        data = super().clean()
+        event = data.get('event')
+        status = data.get('payment_status')
+        old = EventRegistration.objects.filter(pk=self.instance.pk).first() if self.instance.pk else None
+        consumes_place = not old or old.payment_status == EventRegistration.PaymentStatus.CANCELLED or (event and old.event_id != event.pk)
+        if event and status != EventRegistration.PaymentStatus.CANCELLED and consumes_place:
+            event = Event.objects.get(pk=event.pk)
+            if event.is_full:
+                raise forms.ValidationError(f"Die Veranstaltung '{event.title}' ist bereits ausgebucht.")
+        return data
+
+
 @admin.register(EventRegistration)
 class EventRegistrationAdmin(admin.ModelAdmin):
+    form = EventRegistrationAdminForm
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        if request.method != 'POST':
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        from django.contrib.auth import get_user_model
+        from django.shortcuts import redirect
+        try:
+            with transaction.atomic():
+                previous = self.get_object(request, object_id) if object_id else None
+                # Use the same User -> Event -> Registration order as the services.
+                id_field = forms.IntegerField(min_value=1, max_value=2**63 - 1, required=False)
+                user_ids = {previous.user_id} if previous else set()
+                event_ids = {previous.event_id} if previous else set()
+                for key, targets in [('user', user_ids), ('event', event_ids)]:
+                    try:
+                        value = id_field.clean(request.POST.get(key))
+                    except forms.ValidationError:
+                        continue  # The ModelForm reports invalid input.
+                    if value:
+                        targets.add(value)
+                list(get_user_model().objects.select_for_update(no_key=True).filter(pk__in=user_ids).order_by('pk'))
+                list(Event.objects.select_for_update().filter(pk__in=event_ids).order_by('pk'))
+                if previous:
+                    EventRegistration.objects.select_for_update().get(pk=previous.pk)
+                return super().changeform_view(request, object_id, form_url, extra_context)
+        except EventFullError as exc:
+            self.message_user(request, str(exc), level=messages.ERROR)
+            return redirect(request.path)
+
     def get_readonly_fields(self, request, obj=None):
         fields = super().get_readonly_fields(request, obj)
         from seating.models import ClanSeatHold
@@ -330,7 +378,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
-    @admin.action(description="📊 CSV-Export für Kasse / Einlass (Excel-kompatibel)")
+    @admin.action(permissions=['view'], description="📊 CSV-Export für Kasse / Einlass (Excel-kompatibel)")
     def export_as_csv(self, request, queryset):
         import csv
         from django.http import HttpResponse
@@ -417,7 +465,10 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         elif not obj.is_checked_in:
             obj.checked_in_at = None
 
-        # Immer zuerst speichern, damit neue Objekte (change=False) eine Primärschlüssel-ID (pk) erhalten
+        # Preserve the database payment state until the service checks the transition.
+        if became_paid:
+            previous = EventRegistration.objects.select_for_update().filter(pk=obj.pk).first() if change else None
+            obj.payment_status = previous.payment_status if previous else EventRegistration.PaymentStatus.UNPAID
         super().save_model(request, obj, form, change)
 
         if became_paid:
@@ -428,15 +479,15 @@ class EventRegistrationAdmin(admin.ModelAdmin):
                     f"Zahlungsbestätigung für '{obj.user.username}' wurde erfolgreich verbucht und per E-Mail versendet.",
                     level=messages.SUCCESS,
                 )
-            except EventFullError as e:
-                self.message_user(request, str(e), level=messages.ERROR)
+            except EventFullError:
+                raise  # Roll back the complete admin form transaction.
         elif became_cancelled:
             obj.mark_as_cancelled()
         else:
             from seating.services import sync_seat_status_with_payment
             sync_seat_status_with_payment(obj)
 
-    @admin.action(description="💶 Ausgewählte Anmeldungen als BEZAHLT markieren (inkl. E-Mail)")
+    @admin.action(permissions=['change'], description="💶 Ausgewählte Anmeldungen als BEZAHLT markieren (inkl. E-Mail)")
     def action_mark_as_paid(self, request, queryset):
         success_count = 0
         skipped_count = 0
@@ -481,7 +532,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
                 '⏳ Ausstehend</span>'
             )
 
-    @admin.action(description="🎧 Ausgewählte Gäste EINCHECKENT")
+    @admin.action(permissions=['change'], description="🎧 Ausgewählte Gäste EINCHECKENT")
     def action_check_in_guests(self, request, queryset):
         from django.core.exceptions import ValidationError
         success_count = 0
@@ -505,7 +556,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
                 level=messages.ERROR
             )
 
-    @admin.action(description="⏳ Ausgewählten Check-in RÜCKGÄNGIG machen")
+    @admin.action(permissions=['change'], description="⏳ Ausgewählten Check-in RÜCKGÄNGIG machen")
     def action_check_out_guests(self, request, queryset):
         for reg in queryset:
             reg.check_out()

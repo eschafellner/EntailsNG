@@ -23,6 +23,14 @@ from .clan_texts import TEXTS
 logger = logging.getLogger(__name__)
 
 
+def _json_positive_integer(value):
+    if isinstance(value, str) and len(value) <= 19 and value.isascii() and value.isdecimal():
+        value = int(value)
+    if type(value) is not int or not 0 < value <= 2**63 - 1:
+        raise ValueError('Positive integer required')
+    return value
+
+
 def seating_plan_view(request):
     """Rendert die öffentliche Sitzplanseite für das aktive Event."""
     event = Event.objects.get_active()
@@ -225,9 +233,11 @@ def reserve_seat_api(request, event_id):
     """
     try:
         data = json.loads(request.body)
-        x = int(data.get('x'))
-        y = int(data.get('y'))
-    except (json.JSONDecodeError, ValueError, TypeError):
+        if not isinstance(data, dict):
+            raise ValueError('JSON object required')
+        x = _json_positive_integer(data.get('x'))
+        y = _json_positive_integer(data.get('y'))
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
         return JsonResponse({'status': 'error', 'message': 'Ungültige Koordinaten übermittelt.'}, status=400)
 
     try:
@@ -532,10 +542,12 @@ def admin_toggle_block_seat(request):
 
     try:
         data = json.loads(request.body)
-        event_id = data.get('event_id')
-        x = int(data.get('x'))
-        y = int(data.get('y'))
-    except (json.JSONDecodeError, ValueError, TypeError):
+        if not isinstance(data, dict):
+            raise ValueError('JSON object required')
+        event_id = _json_positive_integer(data.get('event_id'))
+        x = _json_positive_integer(data.get('x'))
+        y = _json_positive_integer(data.get('y'))
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
         return JsonResponse({'status': 'error', 'message': 'Ungültige Koordinaten oder Parameter übermittelt.'}, status=400)
 
     try:

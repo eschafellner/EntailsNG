@@ -128,11 +128,11 @@ Wichtige Parameter:
 
 1. Im [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) einen Tunnel erstellen.
 2. In der `.env` den `CLOUDFLARE_TUNNEL_TOKEN` eintragen.
-3. Public Hostname im Cloudflare Dashboard auf `HTTP` -> `nginx:80` setzen.
+3. Public Hostname im Cloudflare Dashboard auf `HTTP` -> `nginx:8080` setzen.
 4. Container starten:
    ```bash
-   docker compose up -d --build
-   # (oder: podman compose up -d --build)
+   docker compose --profile tunnel up -d --build
+   # (oder: podman compose --profile tunnel up -d --build)
    ```
 
 ---

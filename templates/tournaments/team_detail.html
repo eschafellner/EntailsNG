@@ -7,6 +7,7 @@
 <style>
   .team-invite-code-box {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
@@ -14,6 +15,11 @@
     border: 1px solid var(--line);
     padding: 6px 12px;
     border-radius: 8px;
+  }
+  .team-invite-code-box #inviteCodeText {
+    flex: 1 1 16rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .team-invite-code-box #copyCodeBtn {
     margin-left: auto;
@@ -178,7 +184,7 @@
       </div>
 
       <div class="team-invite-code-box">
-        <span id="inviteCodeText" style="font-family: 'DM Sans', sans-serif; font-size: 18px; font-weight: bold; letter-spacing: 2px; color: var(--navy); white-space: nowrap;">
+        <span id="inviteCodeText" style="font-family: 'DM Sans', sans-serif; font-size: 18px; font-weight: bold; letter-spacing: 2px; color: var(--navy); white-space: normal;">
           {{ team.invite_code }}
         </span>
 
@@ -314,7 +320,9 @@ function toggleKickMemberConfirm(userId, show) {
 }
 
 function copyInviteCode() {
-  var code = "{{ team.invite_code }}";
+  var codeElement = document.getElementById('inviteCodeText');
+  if (!codeElement) return;
+  var code = codeElement.textContent.trim();
   var btn = document.getElementById('copyCodeBtn');
   var origHTML = btn ? btn.innerHTML : '';
 

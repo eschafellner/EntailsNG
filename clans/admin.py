@@ -1,4 +1,5 @@
 from django.contrib import admin
+from .forms import ClanForm
 from .models import Clan, ClanMembership
 from seating.clan_admin_forms import ClanQuotaForm
 
@@ -9,9 +10,14 @@ class ClanMembershipInline(admin.TabularInline):
     raw_id_fields = ('user',)
 
 
+class ClanAdminForm(ClanForm, ClanQuotaForm):
+    class Meta(ClanQuotaForm.Meta):
+        fields = '__all__'
+
+
 @admin.register(Clan)
 class ClanAdmin(admin.ModelAdmin):
-    form = ClanQuotaForm
+    form = ClanAdminForm
 
     def changeform_view(self, request, *args, **kwargs):
         from django.db import transaction

@@ -26,7 +26,7 @@ class EventInfoViewTests(TestCase):
         response = self.client.get(reverse('event_info_detail'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'LAN Info &amp; Regeln')
-        self.assertContains(response, 'WLAN Passwort & Catering Infos')
+        self.assertContains(response, '<p>WLAN Passwort & Catering Infos</p>', html=True)
 
     def test_multiple_pages_and_slug_routing(self):
         page2 = EventInfo.objects.create(
@@ -149,7 +149,7 @@ class EventInfoViewTests(TestCase):
         response = self.client.get(reverse('event_info_detail'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'LAN Info &amp; Regeln')
-        self.assertContains(response, 'WLAN Passwort & Catering Infos')
+        self.assertContains(response, '<p>WLAN Passwort & Catering Infos</p>', html=True)
 
     def test_info_root_redirects_if_only_login_required_pages_exist(self):
         """Wenn alle Seiten loginpflichtig sind, wird ein anonymer Gast zum Login geleitet."""

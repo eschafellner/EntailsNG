@@ -19,6 +19,7 @@ from events.models import EventRegistration
 from configuration.translations import get_translation
 from .auth_backends import get_client_ip
 from .exceptions import AccountDeletionError, RegistrationBlockedError, VerificationCodeCooldownError, VerificationCodeLimitError
+from .rate_limits import reserve_rate_limit
 from .forms import AccountDeletionForm, CustomUserCreationForm, UserProfileForm
 from .models import EmailVerificationCode
 from .services import UserService
@@ -213,18 +214,9 @@ def request_activation_code_view(request):
     if request.method == "POST":
         client_ip = get_client_ip(request)
         rate_key = f"rate_limit_request_activation_{client_ip}"
-        count = cache.get(rate_key, 0)
-        if count >= 5:
-            messages.error(
-                request,
-                "Zu viele Anfragen von deiner IP-Adresse. Bitte warte einige Minuten."
-            )
+        if not reserve_rate_limit(rate_key, limit=5, timeout=600):
+            messages.error(request, "Zu viele Anfragen von deiner IP-Adresse. Bitte warte einige Minuten.")
             return render(request, "auth/request_activation.html")
-
-        try:
-            cache.set(rate_key, count + 1, 600)
-        except Exception:
-            pass
 
         email_input = request.POST.get("email", "").strip().lower()
         if email_input:
@@ -237,19 +229,10 @@ def request_activation_code_view(request):
                 if has_code:
                     try:
                         UserService.resend_registration_code(user)
-                        request.session['pending_verification_user_id'] = user.id
-                        messages.success(
-                            request,
-                            "Ein neuer Bestätigungscode wurde gesendet. Bitte prüfe dein Postfach."
-                        )
-                        return redirect("verify_email")
-                    except VerificationCodeCooldownError as e:
-                        request.session['pending_verification_user_id'] = user.id
-                        messages.warning(request, str(e))
-                        return redirect("verify_email")
-                    except (VerificationCodeLimitError, ValidationError) as e:
-                        messages.error(request, str(e))
-                        return redirect("login")
+                    except (VerificationCodeCooldownError, VerificationCodeLimitError, ValidationError):
+                        pass
+                    # Session recovery needs proof of the password through /login/.
+                    # Public requests always produce the same response.
 
         messages.success(
             request,

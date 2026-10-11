@@ -5,6 +5,7 @@ from django.utils.html import linebreaks, strip_tags
 from django.utils.safestring import mark_safe
 from django.utils.functional import cached_property
 
+from .content import sanitize_news_html
 from .images import get_embedded_image, get_preview_text, validate_news_image_size
 
 
@@ -58,6 +59,18 @@ class NewsArticle(models.Model):
     def __str__(self):
         return self.title
 
+    def clean(self):
+        super().clean()
+        if strip_tags(self.content) != self.content:
+            self.content = sanitize_news_html(self.content)
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        # Invalidate in-memory previews when an article is edited.
+        self.__dict__.pop('preview_image', None)
+        self.__dict__.pop('preview_text', None)
+        super().save(*args, **kwargs)
+
     @cached_property
     def preview_image(self):
         if self.cover_image:
@@ -70,7 +83,7 @@ class NewsArticle(models.Model):
 
     @property
     def rendered_content(self):
-        """Render staff-authored HTML; preserve line breaks in existing plain text."""
+        """Render sanitized HTML, including legacy rows; preserve plain-text line breaks."""
         if strip_tags(self.content) == self.content:
             return mark_safe(linebreaks(self.content, autoescape=True))
-        return mark_safe(self.content)
+        return mark_safe(sanitize_news_html(self.content))

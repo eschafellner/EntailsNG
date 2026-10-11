@@ -3,6 +3,7 @@ import logging
 import os
 import secrets
 import shutil
+import time
 from pathlib import Path
 
 from django.conf import settings
@@ -231,6 +232,36 @@ def refresh_runtime():
     storage.atomic_json(storage.root() / 'generation.json', {'generation': storage.new_id()})
 
 
+def verify_restored(manifest, db):
+    live = db.verify_live()
+    if live['migrations'] != manifest['migrations']:
+        raise BackupError('backup_err_compatible')
+    for name in live['references']:
+        prefix, relative = name.split('/', 1)
+        directory = settings.MEDIA_ROOT if prefix == 'media' else settings.PRIVATE_MEDIA_ROOT
+        if not (Path(directory) / relative).is_file():
+            raise BackupError('backup_err_references')
+
+
+def finish_database_cleanup(job, db, stage):
+    # Persist the intent before DROP, so process death cannot lose a retry.
+    update_job(job, cleanup_pending=True, cleanup_stage=stage, cleanup_retry_at=time.time() + 300)
+    try:
+        db.finish(stage)
+    except Exception:
+        logger.exception('Previous database cleanup deferred for job %s', job['id'])
+        return False
+    update_job(job, cleanup_pending=False, cleanup_stage=None, cleanup_retry_at=None)
+    return True
+
+
+def retry_database_cleanup():
+    for job in storage.list_records('jobs'):
+        if (job['state'] == 'completed' and job.get('cleanup_pending')
+                and (job.get('cleanup_retry_at') or 0) <= time.time()):
+            finish_database_cleanup(job, database.adapter(), job['cleanup_stage'])
+
+
 def prune():
     records = [record for record in storage.list_records() if not record.get('protected') and not record.get('uploaded')]
     for record in records[settings.BACKUP_KEEP_COUNT:]:
@@ -300,14 +331,7 @@ def restore_job(job, work, db):
                 db.apply(stage)
                 replace_media(snapshot)
                 update_job(job, stage='verify')
-                live = db.verify_live()
-                if live['migrations'] != manifest['migrations']:
-                    raise BackupError('backup_err_compatible')
-                for name in live['references']:
-                    prefix, relative = name.split('/', 1)
-                    directory = settings.MEDIA_ROOT if prefix == 'media' else settings.PRIVATE_MEDIA_ROOT
-                    if not (Path(directory) / relative).is_file():
-                        raise BackupError('backup_err_references')
+                verify_restored(manifest, db)
                 refresh_runtime()
                 journal['phase'] = 'committed'
                 storage.atomic_json(journal_path, journal)
@@ -324,10 +348,7 @@ def restore_job(job, work, db):
         journal = storage.read_json(journal_path, {})
         if journal.get('phase') == 'committed':
             # Cleanup cannot undo a successfully committed restore.
-            try:
-                db.finish(stage)
-            except Exception:
-                logger.exception('Previous database cleanup failed for job %s', job['id'])
+            finish_database_cleanup(job, db, stage)
         elif job['state'] != 'recovery_required':
             db.discard(stage)
 
@@ -345,6 +366,7 @@ def rollback(job, work, db, journal):
 
 def recover_interrupted():
     """Called with worker.lock held, before admitting any new jobs."""
+    retry_database_cleanup()
     for job in storage.list_records('jobs'):
         if job['state'] not in ('running', 'interrupted', 'recovery_required'):
             continue
@@ -362,9 +384,26 @@ def recover_interrupted():
                 storage.atomic_json(storage.root() / 'maintenance.json', {'job_id': job['id'], 'message': 'Entails-NG wird gewartet.'})
                 return
         elif job['kind'] == 'restore' and journal.get('phase') == 'committed':
-            database.adapter().finish(journal['stage'])
-            (storage.root() / 'maintenance.json').unlink(missing_ok=True)
+            db = database.adapter()
+            update_job(job, state='running', stage='verify')
+            try:
+                with maintenance(job):
+                    try:
+                        record = storage.load('records', job['record_id'])
+                        verify_restored(record['manifest'], db)
+                        refresh_runtime()
+                        update_job(job, cleanup_pending=True, cleanup_stage=journal['stage'], cleanup_retry_at=0)
+                    except Exception:
+                        # Set this before maintenance.__exit__ decides to reopen.
+                        update_job(job, state='recovery_required', error='backup_err_operation')
+                        raise
+            except Exception:
+                update_job(job, state='recovery_required', error='backup_err_operation')
+                logger.exception('Committed restore verification failed for job %s', job['id'])
+                storage.atomic_json(storage.root() / 'maintenance.json', {'job_id': job['id'], 'message': 'Entails-NG wird gewartet.'})
+                return
             update_job(job, state='completed')
+            finish_database_cleanup(job, db, journal['stage'])
             storage.remove_work(job['id'])
             continue
         else:
@@ -377,6 +416,7 @@ def recover_interrupted():
 
 
 def process_next():
+    retry_database_cleanup()
     if maintenance_active():
         return False
     with FileLock('control.lock'):

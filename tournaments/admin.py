@@ -300,7 +300,7 @@ class TournamentAdmin(admin.ModelAdmin):
             ]
         return super().formfield_for_choice_field(db_field, request, **kwargs)
 
-    @admin.action(description=lazy(get_translation, str)('draw_prepare'))
+    @admin.action(permissions=['change'], description=lazy(get_translation, str)('draw_prepare'))
     def action_close_registration_and_generate_bracket(self, request, queryset):
         selected = list(queryset)
         if len(selected) != 1:
@@ -308,11 +308,11 @@ class TournamentAdmin(admin.ModelAdmin):
             return
         return redirect('tournament_draw_preview', slug=selected[0].slug)
 
-    @admin.action(description=lazy(get_translation, str)('draw_title'))
+    @admin.action(permissions=['change'], description=lazy(get_translation, str)('draw_title'))
     def action_generate_bracket_preview(self, request, queryset):
         return self.action_close_registration_and_generate_bracket(request, queryset)
 
-    @admin.action(description="Turnierbaum zurücksetzen & Anmeldung wieder öffnen")
+    @admin.action(permissions=['change'], description="Turnierbaum zurücksetzen & Anmeldung wieder öffnen")
     def action_reset_bracket(self, request, queryset):
         for tournament in queryset:
             try:
@@ -358,7 +358,7 @@ class TeamAdmin(admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         return ('event', 'game', 'captain', 'is_archived', 'is_solo') if obj and obj.is_in_active_tournament() else ()
 
-    @admin.action(description="Ausgewählte Teams archivieren")
+    @admin.action(permissions=['change'], description="Ausgewählte Teams archivieren")
     def action_archive_teams(self, request, queryset):
         archived_count = 0
         skipped_count = 0
@@ -379,19 +379,26 @@ class TeamAdmin(admin.ModelAdmin):
                 messages.WARNING
             )
 
-    @admin.action(description="Ausgewählte Teams aus dem Archiv wiederherstellen")
+    @admin.action(permissions=['change'], description="Ausgewählte Teams aus dem Archiv wiederherstellen")
     def action_unarchive_teams(self, request, queryset):
-        count = queryset.update(is_archived=False)
-        self.message_user(request, f"{count} Team(s) als aktiv markiert.", messages.SUCCESS)
+        teams = list(queryset[:2])
+        if len(teams) != 1 or not teams[0].is_archived:
+            self.message_user(request, "Bitte genau ein archiviertes Team für den Reaktivierungsassistenten auswählen.", messages.ERROR)
+            return
+        return redirect('team_reactivate', slug=teams[0].slug)
 
-    @admin.action(description="Ausgewählte Teams aus laufenden Turnieren zurückziehen (Walkover vergeben)")
+    @admin.action(permissions=['change'], description="Ausgewählte Teams aus laufenden Turnieren zurückziehen (Walkover vergeben)")
     def action_forfeit_and_disqualify(self, request, queryset):
         from tournaments.services import forfeit_team_in_active_tournaments
         count = 0
         for team in queryset:
             if team.is_in_active_tournament():
-                forfeit_team_in_active_tournaments(team, reason="Admin-Entscheidung / Disqualifikation")
-                count += 1
+                try:
+                    forfeit_team_in_active_tournaments(team, reason="Admin-Entscheidung / Disqualifikation")
+                except TournamentError as exc:
+                    self.message_user(request, f"{team.name}: {exc}", messages.ERROR)
+                else:
+                    count += 1
         if count > 0:
             self.message_user(
                 request,

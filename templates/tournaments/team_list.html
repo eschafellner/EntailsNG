@@ -60,7 +60,7 @@
           </div>
 
           <div style="font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); margin-bottom: 12px;">
-            👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglied(er)" %} | Code: <code>{{ team.invite_code }}</code>
+            👥 {{ team.accepted_members_count }} {% t "team_members_unit" "Mitglied(er)" %} | Code: <code style="overflow-wrap: anywhere;">{{ team.invite_code }}</code>
           </div>
 
           <a href="{% url 'team_detail' slug=team.slug %}" class="btn-action-blue-sm btn-block">

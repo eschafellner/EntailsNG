@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 from tinymce.models import HTMLField
 from events.models import Event
+from configuration.sanitizer import sanitize_html
 
 
 class SponsorQuerySet(models.QuerySet):
@@ -170,6 +171,7 @@ class Sponsor(models.Model):
 
     def clean(self):
         super().clean()
+        self.beschreibung = sanitize_html(self.beschreibung)
         if self.aktiv_modus == self.AktivModus.VERANSTALTUNG and not self.veranstaltung_id:
             raise ValidationError({
                 'veranstaltung': 'Für den Modus "An Veranstaltung gekoppelt" muss eine Veranstaltung ausgewählt werden.'
@@ -178,3 +180,7 @@ class Sponsor(models.Model):
             raise ValidationError({
                 'aktiv_bis': 'Für den Modus "Bis Datum" muss ein Enddatum angegeben werden.'
             })
+
+    def save(self, *args, **kwargs):
+        self.beschreibung = sanitize_html(self.beschreibung)
+        return super().save(*args, **kwargs)

@@ -86,7 +86,7 @@ def validate_elements(elements, kind):
         if not isinstance(element, dict):
             raise ValidationError(get_translation('media_error_field_structure', 'Feld {index}: ungültige Struktur.', index=index))
         source = element.get('source')
-        if source != 'static' and source not in allowed:
+        if not isinstance(source, str) or (source != 'static' and source not in allowed):
             raise ValidationError(get_translation('media_error_field_source', 'Feld {index}: unbekannte Datenquelle.', index=index))
         if source == 'static' and (
             not isinstance(element.get('text'), str) or len(element['text']) > 160

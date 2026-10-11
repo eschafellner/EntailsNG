@@ -10,6 +10,21 @@ from django.shortcuts import redirect
 from events.models import Event
 from configuration.cache import get_request_cache
 from tournaments.models import Team, TeamMember
+from users.auth_backends import get_client_ip
+from users.rate_limits import reserve_rate_limit
+
+
+def invite_attempts(view):
+    """Limit secret-code probes before looking up or locking a roster."""
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        for key, limit in ((f'team_invite_user_{request.user.pk}', 10),
+                           (f'team_invite_ip_{get_client_ip(request)}', 50)):
+            if not reserve_rate_limit(key, limit=limit, timeout=600):
+                messages.error(request, get_translation('team_invite_rate_limit', 'Zu viele Beitrittsversuche. Bitte versuche es später erneut.'))
+                return redirect('team_list')
+        return view(request, *args, **kwargs)
+    return wrapped
 
 
 def roster_action(view):

@@ -353,6 +353,39 @@ class ClanPaymentTests(TestCase):
         with self.assertRaises(SeatingPlanValidationError):
             SeatingPlanService.save_grid(self.plan, [])
 
+    def test_editor_can_save_assigned_paid_seat_but_cannot_change_its_identity(self):
+        payment = self.pay(self.create())
+        hold = self.assign(payment)
+        cells = list(self.plan.cells.values('x', 'y', 'cell_type', 'seat_label', 'text_label', 'reservation_status'))
+        protected = next(c for c in cells if (c['x'], c['y']) == (hold.cell.x, hold.cell.y))
+        self.assertEqual(protected['reservation_status'], 'RESERVED')
+        unrelated = next(c for c in cells if c['x'] != hold.cell.x or c['y'] != hold.cell.y)
+        unrelated['text_label'] = 'Editor change'
+        self.assertTrue(SeatingPlanService.save_grid(self.plan, cells)[0])
+        hold.cell.refresh_from_db()
+        self.assertEqual(hold.cell.reservation_status, 'RESERVED')
+        protected['seat_label'] = 'Changed'
+        with self.assertRaises(SeatingPlanValidationError):
+            SeatingPlanService.save_grid(self.plan, cells)
+        protected['seat_label'] = hold.cell.seat_label
+        protected['reservation_status'] = 'BLOCKED'
+        with self.assertRaises(SeatingPlanValidationError):
+            SeatingPlanService.save_grid(self.plan, cells)
+
+    def test_reservation_endpoints_reject_invalid_json_objects_and_fields(self):
+        self.client.force_login(self.orga)
+        self.orga.user_permissions.add(Permission.objects.get(codename='change_seatingcell'))
+        for endpoint, kwargs in [('api_reserve_seat', {'event_id': self.event.pk}), ('admin_toggle_block_seat', {})]:
+            for value in [[], None, 1, 'value', {'x': [], 'y': 1}, {'x': True, 'y': 1},
+                          {'x': 1.5, 'y': 1}, {'x': '²', 'y': 1}]:
+                with self.subTest(endpoint=endpoint, value=value):
+                    response = self.client.post(reverse(endpoint, kwargs=kwargs), json.dumps(value), content_type='application/json')
+                    self.assertEqual(response.status_code, 400)
+
+        response = self.client.post(reverse('admin_toggle_block_seat'),
+                                    {'event_id': {}, 'x': 1, 'y': 1}, content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+
     def test_immutable_payment_admin_and_csrf(self):
         payment = self.create()
         self.client.force_login(self.orga)

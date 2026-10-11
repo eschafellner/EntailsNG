@@ -434,73 +434,65 @@ class OutgoingEmail(models.Model):
     def __str__(self):
         return f"[{self.get_status_display()}] {self.template_key} an {self.recipient_email} (#{self.pk})"
 
+    def _owned_queryset(self, worker_id=None):
+        worker = self.worker_id if worker_id is None else worker_id
+        if not worker:
+            return OutgoingEmail.objects.none()
+        return OutgoingEmail.objects.filter(pk=self.pk, status=self.Status.PROCESSING,
+                                            worker_id=worker, sent_at__isnull=True)
+
+    def _worker_update(self, values, worker_id=None):
+        rows = self._owned_queryset(worker_id).update(**values)
+        if rows:
+            for key, value in values.items():
+                setattr(self, key, value)
+        return bool(rows)
+
     def mark_processing(self, worker_id='', lease_seconds=300):
+        import uuid
         now = timezone.now()
-        self.status = self.Status.PROCESSING
-        self.worker_id = worker_id
-        self.lease_expires_at = now + timedelta(seconds=lease_seconds)
-        self.updated_at = now
-        self.save(update_fields=['status', 'worker_id', 'lease_expires_at', 'updated_at'])
+        values = {'status': self.Status.PROCESSING, 'worker_id': worker_id or uuid.uuid4().hex,
+                  'lease_expires_at': now + timedelta(seconds=lease_seconds), 'updated_at': now}
+        rows = OutgoingEmail.objects.filter(pk=self.pk, status=self.Status.PENDING, sent_at__isnull=True).update(**values)
+        if rows:
+            for key, value in values.items():
+                setattr(self, key, value)
+        return bool(rows)
+
+    def renew_lease(self, *, worker_id, lease_seconds):
+        now = timezone.now()
+        expiry = now + timedelta(seconds=lease_seconds)
+        rows = self._owned_queryset(worker_id).filter(lease_expires_at__gt=now).update(
+            lease_expires_at=expiry, updated_at=now)
+        if rows:
+            self.lease_expires_at, self.updated_at = expiry, now
+        return bool(rows)
 
     def mark_sent(self, worker_id=None):
         now = timezone.now()
-        qs = OutgoingEmail.objects.filter(pk=self.pk, status=self.Status.PROCESSING)
-        if worker_id:
-            qs = qs.filter(worker_id=worker_id)
-        rows = qs.update(
-            status=self.Status.SENT,
-            sent_at=now,
-            last_error='',
-            worker_id='',
-            lease_expires_at=None,
-            updated_at=now,
-        )
-        if rows:
-            self.status = self.Status.SENT
-            self.sent_at = now
-            self.last_error = ''
-            self.worker_id = ''
-            self.lease_expires_at = None
-            self.updated_at = now
-        return bool(rows)
+        return self._worker_update({'status': self.Status.SENT, 'sent_at': now, 'last_error': '',
+                                    'worker_id': '', 'lease_expires_at': None, 'updated_at': now}, worker_id)
 
-    def mark_expired(self, reason="Nachricht vor Versand abgelaufen."):
+    def mark_expired(self, reason="Nachricht vor Versand abgelaufen.", *, worker_id=None):
+        return self._worker_update({'status': self.Status.EXPIRED, 'last_error': reason[:2000],
+                                    'worker_id': '', 'lease_expires_at': None, 'updated_at': timezone.now()}, worker_id)
+
+    def mark_paused(self, reason="E-Mail-Versand ist vorübergehend deaktiviert.", delay_seconds=30, *, worker_id=None):
         now = timezone.now()
-        self.status = self.Status.EXPIRED
-        self.last_error = reason
-        self.worker_id = ''
-        self.lease_expires_at = None
-        self.updated_at = now
-        self.save(update_fields=['status', 'last_error', 'worker_id', 'lease_expires_at', 'updated_at'])
+        return self._worker_update({'status': self.Status.PENDING, 'last_error': reason[:2000],
+                                    'scheduled_at': now + timedelta(seconds=delay_seconds), 'worker_id': '',
+                                    'lease_expires_at': None, 'updated_at': now}, worker_id)
 
-    def mark_paused(self, reason="E-Mail-Versand ist vorübergehend deaktiviert.", delay_seconds=30):
-        """Pausiert den Sendeversuch ohne Fehlversuche (attempts) hochzuzählen."""
-        now = timezone.now()
-        self.status = self.Status.PENDING
-        self.last_error = reason[:2000]
-        self.scheduled_at = now + timedelta(seconds=delay_seconds)
-        self.worker_id = ''
-        self.lease_expires_at = None
-        self.updated_at = now
-        self.save(update_fields=['status', 'last_error', 'scheduled_at', 'worker_id', 'lease_expires_at', 'updated_at'])
-
-    def mark_failed_attempt(self, error_message: str, is_pause: bool = False):
+    def mark_failed_attempt(self, error_message: str, is_pause: bool = False, *, worker_id=None):
         if is_pause:
-            self.mark_paused(error_message)
-            return
+            return self.mark_paused(error_message, worker_id=worker_id)
         now = timezone.now()
-        self.attempts += 1
-        self.last_error = error_message[:2000]
-        self.worker_id = ''
-        self.lease_expires_at = None
-        if self.attempts >= self.max_attempts:
-            self.status = self.Status.FAILED
-        else:
-            self.status = self.Status.PENDING
-            backoff_seconds = 60 * (2 ** (self.attempts - 1))
-            self.scheduled_at = now + timedelta(seconds=backoff_seconds)
-        self.updated_at = now
-        self.save(update_fields=['attempts', 'last_error', 'status', 'scheduled_at', 'worker_id', 'lease_expires_at', 'updated_at'])
+        attempts = self.attempts + 1
+        status = self.Status.FAILED if attempts >= self.max_attempts else self.Status.PENDING
+        scheduled = self.scheduled_at if status == self.Status.FAILED else now + timedelta(seconds=60 * (2 ** (attempts - 1)))
+        return self._worker_update({'attempts': attempts, 'last_error': error_message[:2000], 'status': status,
+                                    'scheduled_at': scheduled, 'worker_id': '', 'lease_expires_at': None,
+                                    'updated_at': now}, worker_id)
 
     def mark_stale_recovered(self, timeout_seconds: int):
         """Atomares Zurücksetzen auf PENDING oder FAILED, nur wenn noch PROCESSING und ungesendet."""
@@ -518,6 +510,13 @@ class OutgoingEmail(models.Model):
             pk=self.pk,
             status=self.Status.PROCESSING,
             sent_at__isnull=True,
+            worker_id=self.worker_id,
+            lease_expires_at=self.lease_expires_at,
+            updated_at=self.updated_at,
+            attempts=self.attempts,
+        ).filter(
+            models.Q(lease_expires_at__lte=now) |
+            models.Q(lease_expires_at__isnull=True, updated_at__lte=now - timedelta(seconds=timeout_seconds))
         ).update(
             attempts=new_attempts,
             last_error=err,
@@ -538,15 +537,15 @@ class OutgoingEmail(models.Model):
         return bool(rows)
 
     def reset_for_retry(self, reset_attempts: bool = True):
-        """Setzt die E-Mail für einen sofortigen erneuten Sendeversuch zurück."""
+        """Retry only a still retryable, unsent snapshot; never revoke a worker lease."""
         now = timezone.now()
-        self.status = self.Status.PENDING
-        self.scheduled_at = now
-        self.worker_id = ''
-        self.lease_expires_at = None
-        self.updated_at = now
-        update_fields = ['status', 'scheduled_at', 'worker_id', 'lease_expires_at', 'updated_at']
+        values = {'status': self.Status.PENDING, 'scheduled_at': now, 'worker_id': '',
+                  'lease_expires_at': None, 'updated_at': now}
         if reset_attempts:
-            self.attempts = 0
-            update_fields.append('attempts')
-        self.save(update_fields=update_fields)
+            values['attempts'] = 0
+        rows = OutgoingEmail.objects.filter(pk=self.pk, status=self.status, sent_at__isnull=True,
+            status__in=[self.Status.PENDING, self.Status.FAILED, self.Status.EXPIRED]).update(**values)
+        if rows:
+            for key, value in values.items():
+                setattr(self, key, value)
+        return bool(rows)

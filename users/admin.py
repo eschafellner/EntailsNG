@@ -38,7 +38,7 @@ class CustomUserAdmin(UserAdmin):
         ),
     )
 
-    @admin.action(description="Login-Fehlversuchssperre zurücksetzen (keine Orga-Sperren)")
+    @admin.action(permissions=['change'], description="Login-Fehlversuchssperre zurücksetzen (keine Orga-Sperren)")
     def action_unlock_accounts(self, request, queryset):
         unlocked_count = 0
         for user in queryset:

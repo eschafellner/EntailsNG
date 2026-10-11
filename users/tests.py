@@ -1090,8 +1090,8 @@ class UserFeedbackHardeningRegressionTests(TestCase):
             reverse('request_activation_code'),
             {'email': 'act@example.com'},
         )
-        self.assertRedirects(resp, reverse('verify_email'))
-        self.assertEqual(self.client.session.get('pending_verification_user_id'), user.id)
+        self.assertRedirects(resp, reverse('login'))
+        self.assertNotIn('pending_verification_user_id', self.client.session)
 
     def test_p8_profile_expired_email_change_shows_expired_and_allows_resend(self):
         """Punkt 8: Nach Ablauf des E-Mail-Codes bleibt die Änderung sichtbar und erlaubt Resend."""

@@ -67,6 +67,30 @@ class MediaDesignerTests(TestCase):
         self.assertTrue(media_boxes)
         self.assertTrue(all(box == b'/MediaBox [ 0 0 595.2 841.92 ]' for box in media_boxes))
 
+    def test_invalid_source_types_are_form_errors_in_editor_and_admin(self):
+        original = self.badge.elements
+        self.staff.is_superuser = True
+        self.staff.save(update_fields=['is_superuser'])
+        self.client.force_login(self.staff)
+        for source in ([], {}, None, True, 7):
+            elements = [dict(default_elements('BADGE')[0], source=source)]
+            for url, form_key in (
+                (reverse('media_template_edit', args=[self.badge.pk]), 'form'),
+                (reverse('admin:media_designer_mediatemplate_change', args=[self.badge.pk]), 'adminform'),
+            ):
+                with self.subTest(source=source, url=url):
+                    response = self.client.post(url, {
+                        'event': self.event.pk, 'name': self.badge.name,
+                        'kind': 'BADGE', 'paper_size': 'A8', 'elements': json.dumps(elements),
+                    })
+                    self.assertEqual(response.status_code, 200)
+                    form = response.context[form_key]
+                    if form_key == 'adminform':
+                        form = form.form
+                    self.assertIn('elements', form.errors)
+                    self.badge.refresh_from_db()
+                    self.assertEqual(self.badge.elements, original)
+
     def test_seeded_media_texts_are_editable_and_seed_preserves_changes(self):
         call_command('seed_translations', stdout=StringIO())
         for key in (

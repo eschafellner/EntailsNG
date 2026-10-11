@@ -393,6 +393,38 @@ class NativeRoundTripTests(PrivateStorageMixin, TransactionTestCase):
             self.assertEqual(native.execute('SELECT COUNT(*) FROM django_session').fetchone()[0], 0)
             self.assertEqual(native.execute('SELECT COUNT(*) FROM users_emailverificationcode').fetchone()[0], 0)
 
+    def test_committed_recovery_defers_failed_cleanup_of_real_previous_database(self):
+        value = self.create_backup()
+        self.mutate()
+        self.process('prepare', value)
+        with mock.patch.object(database.PostgreSQLAdapter, 'finish', side_effect=OSError('cleanup unavailable')):
+            job = self.process('restore', value)
+        self.assertEqual(job['state'], 'completed')
+        self.assertTrue(job['cleanup_pending'])
+        stage = job['cleanup_stage']
+        with database.adapter().connect('postgres') as pg:
+            self.assertTrue(database.adapter()._exists(pg, stage['old']))
+        # Recreate the persistent state left by an interruption after commit.
+        job.update(state='interrupted')
+        storage.save('jobs', job)
+        work = storage.root() / 'work' / job['id']
+        storage.atomic_json(work / 'journal.json', {'phase': 'committed', 'stage': stage})
+        storage.atomic_json(storage.root() / 'maintenance.json', {'job_id': job['id']})
+        with FileLock('worker.lock'), mock.patch.object(database.PostgreSQLAdapter, 'finish', side_effect=OSError('still unavailable')):
+            services.recover_interrupted()
+        job = storage.load('jobs', job['id'])
+        self.assertEqual(job['state'], 'completed')
+        self.assertTrue(job['cleanup_pending'])
+        self.assertFalse((storage.root() / 'maintenance.json').exists())
+        self.assertEqual(self.read_game(), 'Saved Game')
+        job['cleanup_retry_at'] = 0
+        storage.save('jobs', job)
+        with FileLock('worker.lock'):
+            services.process_next()
+        self.assertFalse(storage.load('jobs', job['id'])['cleanup_pending'])
+        with database.adapter().connect('postgres') as pg:
+            self.assertFalse(database.adapter()._exists(pg, stage['old']))
+
     def test_media_failure_rolls_back_database_and_files(self):
         value = self.create_backup()
         self.mutate()

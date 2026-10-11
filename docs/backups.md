@@ -157,6 +157,14 @@ Journal und Arbeitskopien niemals manuell löschen, solange die Rücksetzung
 nicht abgeschlossen ist. Während einer offenen Rücksetzung überspringt der
 Container-Entrypoint Migrationen und Seeds.
 
+Bei einem bereits bestätigten Restore prüft Recovery den Live-Stand erneut,
+bevor die Wartung endet. Schlägt nur das Löschen der vorherigen Datenbank fehl,
+bleibt die Website verfügbar und der Auftrag abgeschlossen. Der Worker
+protokolliert den Fehler und wiederholt die Bereinigung nach jeweils fünf
+Minuten; `cleanup_pending` und `cleanup_stage` bleiben im privaten Job-JSON
+gespeichert, auch über Worker-Neustarts hinweg. Die vorherige Datenbank bleibt
+bis zum erfolgreichen Cleanup erhalten.
+
 Für einen neuen Server zuerst denselben Softwarestand, die separat gesicherte
 Umgebungskonfiguration und eine initialisierte Anwendungsdatenbank mit
 Administrator bereitstellen. Danach die heruntergeladene Sicherung vorbereiten

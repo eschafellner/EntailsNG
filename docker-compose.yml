@@ -136,6 +136,7 @@ services:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ./nginx/certs/dummy:/etc/nginx/dummy-certs:ro
       - ./nginx/init-certs.sh:/docker-entrypoint.d/10-init-certs.sh:ro
+      - ./nginx/watch-certificates.sh:/docker-entrypoint.d/20-watch-certificates.sh:ro
       - static_data:/app/staticfiles:ro
       - media_data:/app/media:ro
       - ./data/certbot/conf:/etc/letsencrypt
@@ -154,7 +155,7 @@ services:
     volumes:
       - ./data/certbot/conf:/etc/letsencrypt
       - ./data/certbot/www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --deploy-hook \"date +%s > /etc/letsencrypt/.reload-nginx\"; sleep 12h & wait $${!}; done'"
 
   cloudflared:
     image: cloudflare/cloudflared:latest

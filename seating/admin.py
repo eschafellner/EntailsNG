@@ -215,7 +215,8 @@ class SeatingPlanAdmin(admin.ModelAdmin):
 
 
     @admin.action(
-        description="Ausgewählte Sitzpläne klonen (ohne Event-Zuordnung)"
+        description="Ausgewählte Sitzpläne klonen (ohne Event-Zuordnung)",
+        permissions=['add'],
     )
     def duplicate_seating_plan(self, request, queryset):
         for plan in queryset:

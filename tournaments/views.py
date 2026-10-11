@@ -3,13 +3,13 @@ from itertools import groupby
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
-from django.http import JsonResponse, Http404, HttpResponseForbidden
+from django.http import JsonResponse, Http404, HttpResponseForbidden, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.utils import timezone
 from .services.results import result_lock_reason, match_version, tournament_version
 from .services.validation import identifier
-from .services.rosters import roster_action
+from .services.rosters import roster_action, invite_attempts
 from .services.recruitment import received_invitations, current_recruitment_teams
 from .team_views import recruitment_context
 from .services.draws import SUPPORTED_MODES
@@ -781,7 +781,10 @@ def team_list(request):
     games = Game.objects.all().order_by('name')
     active_tab = request.GET.get('tab', 'active')
     game_filter = request.GET.get('game', '').strip()
-    selected_game_id = int(game_filter) if game_filter.isdigit() else None
+    try:
+        selected_game_id = identifier(game_filter) if game_filter else None
+    except TournamentError as exc:
+        return HttpResponseBadRequest(str(exc), content_type='text/plain; charset=utf-8')
 
     # Aktive Teams: Nicht archiviert & entweder dem aktiven Event zugeordnet oder ohne Zuordnung
     if active_event:
@@ -1023,7 +1026,11 @@ def team_reactivate(request, slug):
 
     if request.method == 'POST':
         game_id = request.POST.get('game_id')
-        keep_user_ids = [int(uid) for uid in request.POST.getlist('keep_members') if uid.isdigit()]
+        try:
+            keep_user_ids = [identifier(uid) for uid in request.POST.getlist('keep_members')]
+        except TournamentError as exc:
+            messages.error(request, str(exc))
+            return redirect('team_reactivate', slug=team.slug)
         reset_invite = request.POST.get('reset_invite_code') == '1'
 
         target_game = team.game
@@ -1124,6 +1131,7 @@ def team_reactivate(request, slug):
 
 @login_required
 @require_POST
+@invite_attempts
 @roster_action
 def team_join_by_code(request):
     """

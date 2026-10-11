@@ -7,6 +7,8 @@ from django.db.models import Count, IntegerField, Q, Value
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from users.auth_backends import get_client_ip
+from users.rate_limits import reserve_rate_limit
 from configuration.translations import get_translation
 from events.models import Event, EventRegistration
 from seating.services import get_user_seat_map
@@ -197,8 +199,14 @@ def clan_edit_view(request, slug):
         form = ClanForm(request.POST, request.FILES, instance=clan)
         if form.is_valid():
             try:
-                with locked_management(clan.pk, request.user.pk):
-                    form.save()
+                with locked_management(clan.pk, request.user.pk) as (locked_clan, _):
+                    form = ClanForm(request.POST, request.FILES, instance=locked_clan)
+                    if form.is_valid():
+                        form.save()
+                    else:
+                        return render(request, 'clans/clan_form.html', {
+                            'form': form, 'clan': locked_clan, 'title': f'Clan "{locked_clan.name}" bearbeiten',
+                        })
             except Clan.DoesNotExist as exc:
                 raise Http404 from exc
             except ClanManagementError as exc:
@@ -240,35 +248,35 @@ def clan_join_password_view(request, slug):
         )
         return redirect('clan_detail', slug=clan.slug)
 
+    limits = [
+        (f'clan_join_user_{request.user.pk}', 5),
+        (f'clan_join_ip_{get_client_ip(request)}', 25),
+        (f'clan_join_clan_{clan.pk}', 100),
+    ]
+    for key, limit in limits:
+        if not reserve_rate_limit(key, limit=limit, timeout=600):
+            messages.error(request, get_translation('msg_clan_join_rate_limit',
+                'Zu viele Beitrittsversuche. Bitte warte 10 Minuten.'))
+            return redirect('clan_detail', slug=clan.slug)
+
     form = ClanJoinPasswordForm(request.POST)
     if form.is_valid():
         entered_password = form.cleaned_data.get('password')
-        if clan.check_password(entered_password):
-            with transaction.atomic():
-                # Bestehende ausstehende Anfragen löschen/überschreiben
-                ClanMembership.objects.filter(user=request.user, clan=clan).delete()
-                ClanMembership.objects.create(
-                    user=request.user,
-                    clan=clan,
-                    role=ClanMembership.Role.MEMBER,
-                    status=ClanMembership.Status.ACCEPTED,
-                )
-            messages.success(
-                request,
-                get_translation(
-                    'msg_clan_joined',
-                    'Du bist dem Clan "{clan_name}" beigetreten!',
-                    clan_name=clan.name,
-                ),
-            )
-        else:
-            messages.error(
-                request,
-                get_translation(
-                    'msg_clan_password_incorrect',
-                    'Das eingegebene Clan-Passwort ist falsch.',
-                ),
-            )
+        try:
+            with locked_management(clan.pk, request.user.pk, require_admin=False) as (locked_clan, _):
+                if ClanMembership.get_user_active_membership(request.user):
+                    messages.error(request, get_translation('msg_clan_already_member', 'Du bist bereits Mitglied in einem Clan.'))
+                elif locked_clan.check_password(entered_password):
+                    ClanMembership.objects.filter(user=request.user, clan=locked_clan).delete()
+                    ClanMembership.objects.create(user=request.user, clan=locked_clan,
+                        role=ClanMembership.Role.MEMBER, status=ClanMembership.Status.ACCEPTED)
+                    messages.success(request, get_translation('msg_clan_joined',
+                        'Du bist dem Clan "{clan_name}" beigetreten!', clan_name=locked_clan.name))
+                else:
+                    messages.error(request, get_translation('msg_clan_password_incorrect',
+                        'Das eingegebene Clan-Passwort ist falsch.'))
+        except ClanManagementError as exc:
+            messages.error(request, str(exc))
 
     return redirect('clan_detail', slug=clan.slug)
 

@@ -16,3 +16,11 @@ def t(context, key, default=None, **kwargs):
     return get_translation(key, default=default, request=request, **kwargs)
 
 
+
+
+@register.filter
+def safe_html(value):
+    """Sanitize at output too, including content stored before security fixes."""
+    from django.utils.safestring import mark_safe
+    from configuration.sanitizer import sanitize_html
+    return mark_safe(sanitize_html(str(value or '')))

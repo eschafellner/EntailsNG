@@ -127,7 +127,7 @@ class TournamentModelTests(TestCase):
     def test_team_creation_and_invite_code(self):
         team = Team.objects.create(name="Team Rocket", captain=self.user1, game=self.game)
         self.assertIsNotNone(team.invite_code)
-        self.assertEqual(len(team.invite_code), 8)
+        self.assertEqual(len(team.invite_code), 32)
 
     def test_team_leave_logic(self):
         team = Team.objects.create(name="Alpha Team", captain=self.user1, game=self.game)
@@ -3630,7 +3630,6 @@ class TournamentAndTeamHardeningTests(TestCase):
         annotated_t = qs.get(pk=tournament.pk)
         self.assertEqual(annotated_t.reg_count, 1)
         self.assertEqual(t_admin.registered_count(annotated_t), 1)
-
 
 
 

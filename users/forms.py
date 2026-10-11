@@ -2,8 +2,8 @@ import logging
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.core.cache import cache
 from django.utils import timezone
+from .rate_limits import reserve_rate_limit
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -247,27 +247,14 @@ class CustomPasswordResetForm(forms.Form):
         # Rate Limiting: IP-basiert (max 5 Requests pro 10 Minuten)
         client_ip = get_client_ip(request) if request else '127.0.0.1'
         ip_key = f"rate_limit_pwd_reset_ip_{client_ip}"
-        ip_count = cache.get(ip_key, 0)
-        if ip_count >= 5:
+        if not reserve_rate_limit(ip_key, limit=5, timeout=600):
             logger.warning("Password reset IP-Rate-Limit erreicht für IP %s", client_ip)
             return
 
-        try:
-            cache.set(ip_key, ip_count + 1, 600)
-        except Exception:
-            pass
-
-        # Rate Limiting: E-Mail-basiert (max 3 Requests pro Stunde pro Zieladresse)
         email_key = f"rate_limit_pwd_reset_email_{email}"
-        email_count = cache.get(email_key, 0)
-        if email_count >= 3:
-            logger.warning("Password reset E-Mail-Rate-Limit erreicht für %s", email)
+        if not reserve_rate_limit(email_key, limit=3, timeout=3600):
+            logger.warning("Password reset E-Mail-Rate-Limit erreicht")
             return
-
-        try:
-            cache.set(email_key, email_count + 1, 3600)
-        except Exception:
-            pass
 
         if token_generator is None:
             token_generator = password_reset_token_generator

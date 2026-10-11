@@ -99,7 +99,7 @@ class GeneralConfigurationAdmin(admin.ModelAdmin):
 
 
     def has_add_permission(self, request):
-        return not GeneralConfiguration.objects.exists()
+        return super().has_add_permission(request) and not GeneralConfiguration.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -222,7 +222,7 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
         return render(request, 'admin/reset_demo_data_confirm.html')
 
     def has_add_permission(self, request):
-        return not SiteCustomization.objects.exists()
+        return super().has_add_permission(request) and not SiteCustomization.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -323,12 +323,12 @@ class SystemErrorLogAdmin(admin.ModelAdmin):
             obj.traceback,
         )
 
-    @admin.action(description="Ausgewählte Fehler als 'Behoben' markieren")
+    @admin.action(permissions=['change'], description="Ausgewählte Fehler als 'Behoben' markieren")
     def mark_as_resolved(self, request, queryset):
         count = queryset.update(resolved=True, resolved_at=timezone.now())
         self.message_user(request, f"{count} Fehlerprotokoll(e) als behoben markiert.")
 
-    @admin.action(description="Ausgewählte Fehler als 'Offen' markieren")
+    @admin.action(permissions=['change'], description="Ausgewählte Fehler als 'Offen' markieren")
     def mark_as_unresolved(self, request, queryset):
         count = queryset.update(resolved=False, resolved_at=None)
         self.message_user(request, f"{count} Fehlerprotokoll(e) wieder auf offen gesetzt.")
@@ -355,7 +355,7 @@ class ClanSeatConfigurationAdmin(admin.ModelAdmin):
               'payment_days', 'payment_review_days', 'release_seats', 'confirm_release')
 
     def has_add_permission(self, request):
-        return not ClanSeatConfiguration.objects.exists()
+        return super().has_add_permission(request) and not ClanSeatConfiguration.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False

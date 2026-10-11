@@ -18,7 +18,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 
 from clans.models import ClanMembership
 from seating.models import ClanSeatHold
@@ -268,13 +268,19 @@ def toggle_check_in_api(request):
     """Schaltet den Check-in-Status eines Gastes um (Einlass-Tool)."""
     try:
         data = json.loads(request.body)
-    except (json.JSONDecodeError, AttributeError):
+    except (ValueError, UnicodeDecodeError):
         return JsonResponse(
             {'status': 'error', 'message': 'Ungültige Anfrage.'}, status=400
         )
 
+    if not isinstance(data, dict):
+        return JsonResponse({'status': 'error', 'message': 'Ungültige Anfrage.'}, status=400)
+    reg_id = data.get('registration_id')
+    if type(reg_id) is not int or not 0 < reg_id <= 2**63 - 1:
+        return JsonResponse({'status': 'error', 'message': 'Ungültige Anmeldungs-ID.'}, status=400)
+
     registration = EventRegistration.objects.filter(
-        pk=data.get('registration_id')
+        pk=reg_id
     ).select_related('user', 'event', 'ticket_type').first()
     if registration is None:
         return JsonResponse(
@@ -328,6 +334,7 @@ def toggle_check_in_api(request):
 
 
 @staff_member_required
+@require_http_methods(['GET', 'HEAD', 'POST'])
 def process_checkin(request, registration_id, token):
     """Zeigt bei GET eine Vorschau mit Bestätigungs-Button und verarbeitet erst bei POST den Check-in."""
     registration = get_object_or_404(
@@ -355,7 +362,7 @@ def process_checkin(request, registration_id, token):
     seat_label = seat.seat_label if seat else "Kein Sitzplatz"
 
     # GET-Request: Keine Zustandsänderung! Vorschau / Bestätigungsseite anzeigen
-    if request.method == 'GET':
+    if request.method in ('GET', 'HEAD'):
         if registration.is_checked_in:
             return render(
                 request,
@@ -375,28 +382,26 @@ def process_checkin(request, registration_id, token):
         )
 
     # POST-Request: Zustandsänderung durchführen!
-    already_checked_in = registration.is_checked_in
-    if not already_checked_in:
-        try:
-            registration.check_in(target_event=active_event)
-        except ValidationError as e:
-            error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
-            if _wants_json(request):
-                return JsonResponse({'status': 'error', 'message': error_message}, status=400)
-            return render(
-                request,
-                'events/checkin_confirm.html',
-                {
-                    'registration': registration,
-                    'seat_label': seat_label,
-                    'error': error_message,
-                },
-                status=400,
-            )
+    try:
+        already_checked_in = not registration.check_in(target_event=active_event, actor=request.user)
+    except ValidationError as e:
+        error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+        if _wants_json(request):
+            return JsonResponse({'status': 'error', 'message': error_message}, status=400)
+        return render(
+            request,
+            'events/checkin_confirm.html',
+            {
+                'registration': registration,
+                'seat_label': seat_label,
+                'error': error_message,
+            },
+            status=400,
+        )
 
     if _wants_json(request):
         return JsonResponse({
-            'status': 'success',
+            'status': 'already_checked_in' if already_checked_in else 'success',
             'user': registration.user.username,
             'already_checked_in': already_checked_in,
             'message': f'Check-in für {registration.user.username} erfolgt.',
@@ -545,11 +550,16 @@ def scan_qr_api(request):
 
     try:
         data = json.loads(request.body)
-        code_str = str(data.get('code', '')).strip()
-    except json.JSONDecodeError:
+    except (ValueError, UnicodeDecodeError):
         return JsonResponse(
             {'status': 'error', 'message': 'Ungültiges JSON-Format.'}, status=400
         )
+
+    if not isinstance(data, dict) or not isinstance(data.get('code', ''), str):
+        return JsonResponse({'status': 'error', 'message': 'Ungültige Anfrage.'}, status=400)
+    code_str = data.get('code', '').strip()
+    if len(code_str) > 2048:
+        return JsonResponse({'status': 'error', 'message': 'Code zu lang.'}, status=400)
 
     if not code_str:
         return JsonResponse(
@@ -622,17 +632,15 @@ def scan_qr_api(request):
             status=400,
         )
 
-    already_checked_in = registration.is_checked_in
-    if not already_checked_in:
-        try:
-            registration.check_in(target_event=active_event)
-        except ValidationError as e:
-            error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
-            return JsonResponse({
-                'status': 'error',
-                'user': registration.user.username,
-                'message': error_message,
-            }, status=400)
+    try:
+        already_checked_in = not registration.check_in(target_event=active_event, actor=request.user)
+    except ValidationError as e:
+        error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+        return JsonResponse({
+            'status': 'error',
+            'user': registration.user.username,
+            'message': error_message,
+        }, status=400)
 
     return JsonResponse({
         'status': 'already_checked_in' if already_checked_in else 'success',

@@ -64,7 +64,11 @@ def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
                     TournamentMatch.Status.READY,
                     TournamentMatch.Status.IN_PROGRESS,
                 ]
-            ).exclude(tournament__mode=Tournament.Mode.SWISS).order_by('round_number')
+            ).exclude(tournament__mode=Tournament.Mode.SWISS).exclude(
+                models.Q(tournament__mode=Tournament.Mode.GROUP_STAGE,
+                         tournament__playoffs_released_at__isnull=True)
+                & ~models.Q(bracket_type=TournamentMatch.BracketType.GROUP)
+            ).order_by('round_number')
         )
 
         for match in open_matches:
@@ -96,7 +100,11 @@ def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
         from .standings import GroupStageStandingService
         for tournament in Tournament.objects.filter(pk__in=active_ids).exclude(mode=Tournament.Mode.SWISS):
             if tournament.mode == Tournament.Mode.GROUP_STAGE:
-                GroupStageStandingService.check_and_advance_group_stage(tournament)
+                if not tournament.playoffs_released_at:
+                    from .results import reset_unreleased_playoffs
+                    reset_unreleased_playoffs(tournament, None, reason)
+                else:
+                    GroupStageStandingService.check_and_advance_group_stage(tournament)
             if tournament.is_generated and tournament.matches.exists() and not tournament.matches.exclude(status=TournamentMatch.Status.COMPLETED).exists():
                 from .results import sync_review
                 sync_review(tournament)

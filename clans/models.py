@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth.hashers import check_password, make_password, identify_hasher
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db import models
@@ -69,13 +69,12 @@ class Clan(models.Model):
                 slug = f"{base_slug}-{count}"
                 count += 1
             self.slug = slug
-        if self.password and not (
-            self.password.startswith('pbkdf2_') or
-            self.password.startswith('argon2') or
-            self.password.startswith('bcrypt') or
-            self.password.startswith('scrypt')
-        ):
-            self.password = make_password(self.password)
+        if self.password:
+            try:
+                # Require a complete encoded value, never just an algorithm prefix.
+                identify_hasher(self.password).decode(self.password)
+            except (ValueError, TypeError, AssertionError, KeyError, IndexError):
+                self.password = make_password(self.password)
         super().save(*args, **kwargs)
         if self.seat_limit_override == 0:
             from seating.models import ClanSeatHold

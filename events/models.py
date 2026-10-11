@@ -449,6 +449,7 @@ class EventRegistration(models.Model):
     def check_in(self, target_event=None, actor=None):
         """
         Zentrale Methode zum Einchecken des Gastes (Single Source of Truth).
+        Liefert True nur für einen neu ausgeführten Check-in, False für einen bereits erfolgten.
         Prüft zwingend den Bezahlstatus und die Gültigkeit der Anmeldung vor der Zustandsänderung.
         Nutzt select_for_update() für Concurrency-Schutz gegen Race Conditions mit Stornierungen.
         """
@@ -460,13 +461,14 @@ class EventRegistration(models.Model):
         if not result.allowed:
             raise ValidationError(result.reason)
 
-        if not locked_reg.is_checked_in:
+        checked_in_now = not locked_reg.is_checked_in
+        if checked_in_now:
             locked_reg.is_checked_in = True
             locked_reg.checked_in_at = timezone.now()
             locked_reg.save(update_fields=['is_checked_in', 'checked_in_at'])
-            self.is_checked_in = True
-            self.checked_in_at = locked_reg.checked_in_at
-        return True
+        self.is_checked_in = locked_reg.is_checked_in
+        self.checked_in_at = locked_reg.checked_in_at
+        return checked_in_now
 
     @transaction.atomic
     def check_out(self):

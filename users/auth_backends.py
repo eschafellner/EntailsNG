@@ -142,17 +142,6 @@ class EmailOrUsernameBackend(ModelBackend):
         if user.deleted_at or user.is_banned:
             return None
 
-        # 3. Inaktive Konten (z. B. vor Double Opt-In E-Mail-Verifizierung)
-        if not user.is_active:
-            if user.check_password(password):
-                # Wenn Passswort stimmt: Prüfen, ob Konto noch unbestätigt ist (Session-Wiederaufnahme)
-                has_pending_verification = user.verification_codes.filter(
-                    new_email__isnull=True, is_used=False
-                ).exists()
-                if has_pending_verification and request:
-                    setattr(request, 'unverified_user', user)
-            return None
-
         # 4. Prüfe, ob Konto aktuell temporär gesperrt ist (15 Minuten Sperre)
         # Abgelaufene Sperren atomar unter Zeilensperre zurücksetzen
         if user.locked_until:
@@ -169,7 +158,7 @@ class EmailOrUsernameBackend(ModelBackend):
             authenticated_hash = user.password
             # Vor erfolgreichem Login prüfen, ob zwischenzeitlich durch parallele Requests gesperrt wurde
             user.refresh_from_db(fields=['locked_until', 'failed_login_attempts', 'deleted_at', 'is_active', 'is_banned', 'password', 'session_version'])
-            if not self.user_can_authenticate(user) or user.password != authenticated_hash:
+            if user.deleted_at or user.is_banned or user.password != authenticated_hash:
                 return None
             if user.locked_until:
                 user.reset_expired_lockout()
@@ -179,6 +168,10 @@ class EmailOrUsernameBackend(ModelBackend):
                     setattr(request, 'locked_user', user)
                 return None
             user.reset_lockout()
+            if not user.is_active:
+                if request and user.verification_codes.filter(new_email__isnull=True, is_used=False).exists():
+                    setattr(request, 'unverified_user', user)
+                return None
             return user
         else:
             _record_ip_failed_attempt(client_ip)

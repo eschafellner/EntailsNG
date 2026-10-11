@@ -252,13 +252,13 @@ class GeneralEmailSettingsAdmin(admin.ModelAdmin):
         return render(request, 'emails/admin_send_test_email.html', context)
 
 
-@admin.action(description="Ausgewählte Vorlagen aktivieren")
+@admin.action(permissions=['change'], description="Ausgewählte Vorlagen aktivieren")
 def activate_templates(modeladmin, request, queryset):
     updated = queryset.update(is_active=True)
     messages.success(request, f"{updated} Template(s) erfolgreich aktiviert.")
 
 
-@admin.action(description="Ausgewählte Vorlagen deaktivieren")
+@admin.action(permissions=['change'], description="Ausgewählte Vorlagen deaktivieren")
 def deactivate_templates(modeladmin, request, queryset):
     updated = queryset.update(is_active=False)
     messages.warning(request, f"{updated} Template(s) deaktiviert.")
@@ -290,7 +290,7 @@ class EmailTemplateAdmin(admin.ModelAdmin):
     readonly_fields = ('key', 'placeholder_info')
 
 
-@admin.action(description="Ausgewählte E-Mails erneut zur Warteschlange hinzufügen")
+@admin.action(permissions=['change'], description="Ausgewählte E-Mails erneut zur Warteschlange hinzufügen")
 def retry_outgoing_emails(modeladmin, request, queryset):
     retryable = queryset.filter(status__in=[
         OutgoingEmail.Status.PENDING,
@@ -299,12 +299,12 @@ def retry_outgoing_emails(modeladmin, request, queryset):
     ])
     count = 0
     for email_obj in retryable:
-        email_obj.reset_for_retry()
-        count += 1
+        if email_obj.reset_for_retry():
+            count += 1
     messages.success(request, f"{count} E-Mail(s) wurden für erneuten Versand vorgemerkt.")
 
 
-@admin.action(description="Ausgewählte E-Mails jetzt sofort versenden")
+@admin.action(permissions=['change'], description="Ausgewählte E-Mails jetzt sofort versenden")
 def process_outgoing_emails_now(modeladmin, request, queryset):
     from .services import process_email_queue
     retryable = queryset.filter(status__in=[
@@ -314,8 +314,8 @@ def process_outgoing_emails_now(modeladmin, request, queryset):
     ])
     selected_ids = []
     for email_obj in retryable:
-        email_obj.reset_for_retry()
-        selected_ids.append(email_obj.id)
+        if email_obj.reset_for_retry():
+            selected_ids.append(email_obj.id)
 
     if not selected_ids:
         messages.warning(request, "Keine geeigneten (ausstehenden oder fehlgeschlagenen) E-Mails ausgewählt.")

@@ -165,13 +165,13 @@ nano .env
    * **Subdomain:** z. B. `lan` (oder leer lassen für die Hauptdomain)
    * **Domain:** Wähle deine Domain aus
    * **Type:** `HTTP`
-   * **URL:** `nginx:80`
+   * **URL:** `nginx:8080`
 6. Klicke auf **Save hostname**.
 7. Stelle unter *Cloudflare Dashboard* → *Deine Domain* → *SSL/TLS* die Verschlüsselung auf **Full** (oder **Full (strict)**).
 
 > [!TIP]
 > **Tipp für Heimserver mit Pi-hole oder bestehendem Webserver:**
-> Falls Port 80 oder 443 auf deinem Heimserver bereits belegt ist, kannst du in deiner `.env` einfach Ausweichports angeben (z. B. `HTTP_PORT=8080` und `HTTPS_PORT=8443`). Der Cloudflare Tunnel verbindet sich containerintern trotzdem direkt über Port 80 mit Nginx!
+> Falls Port 80 oder 443 auf deinem Heimserver bereits belegt ist, kannst du in deiner `.env` einfach Ausweichports angeben (z. B. `HTTP_PORT=8080` und `HTTPS_PORT=8443`). Der Cloudflare Tunnel verbindet sich containerintern über Port 8080 mit Nginx; dieser Port wird nicht am Host veröffentlicht.
 
 ### 2. Container mit Tunnel starten:
 ```bash

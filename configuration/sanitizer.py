@@ -120,7 +120,7 @@ class SafeHTMLSanitizer(HTMLParser):
     def handle_data(self, data):
         if self.drop_depth > 0:
             return
-        self.result.append(data)
+        self.result.append(html.escape(data, quote=False))
 
     def handle_entityref(self, name):
         if self.drop_depth > 0:
@@ -144,6 +144,7 @@ def sanitize_html(html_code: str) -> str:
         return ""
     sanitizer = SafeHTMLSanitizer()
     sanitizer.feed(html_code)
+    sanitizer.close()
     return sanitizer.get_clean_html()
 
 

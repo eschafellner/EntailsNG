@@ -88,6 +88,12 @@ def queue_system_email(template_key, recipient_email, context_data, trigger_work
     if not template:
         return None
 
+    subject_limit = OutgoingEmail._meta.get_field('subject').max_length
+    if len(subject) > subject_limit:
+        logger.warning("Gerenderter Betreff für Template '%s' von %s auf %s Zeichen gekürzt.",
+                       template_key, len(subject), subject_limit)
+        subject = subject[:subject_limit]
+
     outgoing = OutgoingEmail.objects.create(
         template_key=template_key,
         recipient_email=recipient_email,
@@ -188,6 +194,7 @@ def process_email_queue(limit=50, email_ids=None):
     with transaction.atomic():
         qs = OutgoingEmail.objects.filter(
             status=OutgoingEmail.Status.PENDING,
+            sent_at__isnull=True,
         )
         if email_ids is not None:
             qs = qs.filter(id__in=email_ids)
@@ -204,6 +211,7 @@ def process_email_queue(limit=50, email_ids=None):
             OutgoingEmail.objects.filter(
                 id__in=selected_ids,
                 status=OutgoingEmail.Status.PENDING,
+                sent_at__isnull=True,
             ).update(
                 status=OutgoingEmail.Status.PROCESSING,
                 worker_id=worker_uuid,
@@ -222,14 +230,14 @@ def process_email_queue(limit=50, email_ids=None):
 
         # Ablaufzeitpunkt prüfen (z. B. zeitkritischer Verifizierungscode)
         if outgoing.expires_at and outgoing.expires_at <= timezone.now():
-            outgoing.mark_expired("E-Mail ist vor dem Versand abgelaufen (expires_at überschritten).")
+            outgoing.mark_expired("E-Mail ist vor dem Versand abgelaufen (expires_at überschritten).", worker_id=worker_uuid)
             logger.info("E-Mail ID %s ist abgelaufen und wurde verworfen.", outgoing.pk)
             continue
 
         # Prüfung des Schalters vor jedem Versand
         cfg = GeneralEmailSettings.load()
         if not cfg.is_enabled:
-            outgoing.mark_paused("Versand während Queue-Durchlauf administrativ pausiert.")
+            outgoing.mark_paused("Versand während Queue-Durchlauf administrativ pausiert.", worker_id=worker_uuid)
             continue
 
         msg = EmailMultiAlternatives(
@@ -240,10 +248,15 @@ def process_email_queue(limit=50, email_ids=None):
         )
         msg.attach_alternative(outgoing.body_html, "text/html")
 
+        smtp_timeout = cfg.smtp_timeout or getattr(settings, 'EMAIL_TIMEOUT', 10)
+        if not outgoing.renew_lease(worker_id=worker_uuid, lease_seconds=max(lease_timeout, smtp_timeout * 10 + 30)):
+            continue
         try:
             sent = msg.send(fail_silently=False)
             if sent:
-                outgoing.mark_sent(worker_id=worker_uuid)
+                if not outgoing.mark_sent(worker_id=worker_uuid):
+                    logger.warning("Versandbestätigung von veraltetem Worker für E-Mail ID %s ignoriert.", outgoing.pk)
+                    continue
                 logger.info(
                     "E-Mail '%s' an %s (ID %s) erfolgreich gesendet.",
                     outgoing.template_key, outgoing.recipient_email, outgoing.pk
@@ -254,16 +267,15 @@ def process_email_queue(limit=50, email_ids=None):
                 logger.warning("E-Mail ID %s blockiert: %s", outgoing.pk, reason)
                 cfg = GeneralEmailSettings.load()
                 is_pause = not cfg.is_enabled
-                outgoing.mark_failed_attempt(reason, is_pause=is_pause)
-                if not is_pause:
+                if outgoing.mark_failed_attempt(reason, is_pause=is_pause, worker_id=worker_uuid) and not is_pause:
                     failed_count += 1
         except Exception as exc:
             logger.error(
                 "Versand von OutgoingEmail ID %s an %s fehlgeschlagen: %s",
                 outgoing.pk, outgoing.recipient_email, exc
             )
-            outgoing.mark_failed_attempt(str(exc))
-            failed_count += 1
+            if outgoing.mark_failed_attempt(str(exc), worker_id=worker_uuid):
+                failed_count += 1
 
     return sent_count, failed_count
 

@@ -1,6 +1,7 @@
 import os
 from django import forms
 from django.core.exceptions import ValidationError
+from django.contrib.auth.password_validation import validate_password
 from PIL import Image
 from .models import Clan
 
@@ -71,6 +72,11 @@ class ClanForm(forms.ModelForm):
             "logo": forms.FileInput(attrs={"class": "form-control", "accept": ".jpg,.jpeg,.png"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._original_password = self.instance.password if self.instance.pk else ''
+        self._password_changed = False
+
     def clean_name(self):
         name = self.cleaned_data.get('name', '').strip()
         if len(name) > 32:
@@ -93,17 +99,20 @@ class ClanForm(forms.ModelForm):
         password = self.cleaned_data.get('password')
         if not password and self.instance and self.instance.pk:
             # Keep existing password when editing and field is left blank
-            return self.instance.password
+            return self._original_password
         if not password and (not self.instance or not self.instance.pk):
             raise ValidationError("Bei der Neuerstellung eines Clans muss ein Passwort angegeben werden.")
+        validate_password(password)
+        self._password_changed = bool(password)
         return password
 
     def save(self, commit=True):
         clan = super().save(commit=False)
         password = self.cleaned_data.get('password')
-        if password:
-            if not (self.instance.pk and password == self.instance.password):
-                clan.set_password(password)
+        if self._password_changed:
+            clan.set_password(password)
+        else:
+            clan.password = self._original_password
         if commit:
             clan.save()
             self.save_m2m()

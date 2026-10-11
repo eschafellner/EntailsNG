@@ -528,7 +528,7 @@ class ExternalTournament(models.Model):
 
 
 def generate_invite_code():
-    return secrets.token_hex(4).upper()
+    return secrets.token_hex(16).upper()
 
 
 class Team(models.Model):
@@ -550,7 +550,7 @@ class Team(models.Model):
         verbose_name="Kapitän",
     )
     invite_code = models.CharField(
-        max_length=12,
+        max_length=32,
         default=generate_invite_code,
         unique=True,
         verbose_name="Einladungscode",

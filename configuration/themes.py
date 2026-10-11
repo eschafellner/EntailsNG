@@ -329,9 +329,20 @@ def build_css_variables(theme_preset, ui_scale, primary_color=None, secondary_co
     scale_vars = SCALE_MAP.get(ui_scale, SCALE_MAP.get('MD'))
     base_vars.update(scale_vars)
 
+    def color_channels(hex_color, background):
+        value = hex_color.strip().lstrip('#')
+        if len(value) == 3:
+            value = ''.join(c * 2 for c in value)
+        channels = [int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        alpha = int(value[6:8], 16) / 255 if len(value) == 8 else 1
+        return [c * alpha + b * (1 - alpha) for c, b in zip(channels, background)]
+
+    preset_paper = color_channels(default_preset['--paper'], (1, 1, 1))
+    paper_channels = color_channels(base_vars['--paper'], preset_paper)
+
     # Keep action labels readable with presets and custom accent colors.
     def luminance(hex_color):
-        channels = [int(hex_color.lstrip('#')[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        channels = color_channels(hex_color, paper_channels)
         linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
         return sum(c * weight for c, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
 
@@ -342,17 +353,8 @@ def build_css_variables(theme_preset, ui_scale, primary_color=None, secondary_co
     navy = base_vars['--navy']
     base_vars['--signal-ink'] = navy if contrast(navy) >= 4.5 else max(('#111827', '#ffffff'), key=contrast)
 
-    paper_hex = base_vars.get('--paper', '#fffaf2').lstrip('#')
-    is_dark = False
-    try:
-        if len(paper_hex) == 6:
-            r = int(paper_hex[0:2], 16)
-            g = int(paper_hex[2:4], 16)
-            b = int(paper_hex[4:6], 16)
-            luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-            is_dark = luminance < 0.5
-    except Exception:
-        pass
+    paper_brightness = sum(c * weight for c, weight in zip(paper_channels, (0.299, 0.587, 0.114)))
+    is_dark = paper_brightness < 0.5
 
     if is_dark:
         base_vars['--warning-text'] = '#facc15'
