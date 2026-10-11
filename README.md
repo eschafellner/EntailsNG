@@ -135,6 +135,16 @@ Wichtige Parameter:
    # (oder: podman compose --profile tunnel up -d --build)
    ```
 
+**Update einer bestehenden Tunnel-Installation:** Falls der Tunnel-Service bisher auf `nginx:80` zeigt, stelle ihn einmalig im Cloudflare Dashboard auf **Typ `HTTP`**, **URL `nginx:8080`** um. Der öffentliche Port 80 leitet auf HTTPS um; das alte Tunnel-Ziel kann daher eine Weiterleitungsschleife verursachen (`ERR_TOO_MANY_REDIRECTS`). Port 8080 bleibt containerintern.
+
+```bash
+git pull
+docker compose --profile tunnel up -d --build
+docker compose restart nginx
+```
+
+Der Nginx-Neustart liest aktualisierte Konfigurationsvorlagen ein. Das Löschen von Cookies behebt ein falsch konfiguriertes Tunnel-Ziel nicht. Weitere Deployment-Varianten und Diagnosebefehle: [Updates einspielen](INSTRUCTIONS.MD#-schritt-9-updates-einspielen).
+
 ---
 
 ### 3. Variante B: Deployment auf Linux-VPS mit Let's Encrypt

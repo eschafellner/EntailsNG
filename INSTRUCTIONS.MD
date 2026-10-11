@@ -178,7 +178,7 @@ nano .env
 docker compose --profile tunnel up -d --build
 ```
 
-Fertig! Nginx startet dank intelligenter Proxy-Erkennung und integriertem Fallback-Zertifikat sofort und ohne Redirect-Schleifen. Deine LAN-Party-Webseite ist jetzt weltweit unter `https://lan.meinedomain.de` erreichbar.
+Nginx nimmt Tunnel-Anfragen über den internen Port 8080 entgegen. Mit diesem Tunnel-Ziel und dem integrierten Fallback-Zertifikat ist deine LAN-Party-Webseite unter `https://lan.meinedomain.de` erreichbar.
 
 ---
 
@@ -367,13 +367,34 @@ Wenn es neue Versionen oder Verbesserungen von EntailsNG gibt:
 ```bash
 cd /opt/entailsng
 
-# 1. Neuesten Code abrufen:
+# Neuesten Code abrufen:
 git pull
-
-# 2. Container neu bauen & starten (Migrationen laufen automatisch):
-docker compose up -d --build
 ```
-> *(Deine Datenbank, hochgeladene Logos und Einstellungen bleiben dabei zu 100% erhalten!)*
+
+Wähle danach die Befehle für deine Deployment-Variante. Migrationen laufen beim Start des Web-Containers automatisch.
+
+### Weg A: Cloudflare Tunnel
+
+**Bei bestehenden Installationen mit dem bisherigen Tunnel-Ziel `nginx:80` ist eine einmalige Umstellung erforderlich:** Öffne im Cloudflare Dashboard den öffentlichen Hostnamen deines Tunnels und stelle den Service auf **Typ `HTTP`**, **URL `nginx:8080`**. Port 8080 ist containerintern und muss nicht am Server freigegeben werden.
+
+```bash
+docker compose --profile tunnel up -d --build
+# Nginx liest die aktualisierten Konfigurationsvorlagen beim Neustart ein:
+docker compose restart nginx
+```
+
+Der öffentliche Port 80 leitet auf HTTPS um. Zeigt der Tunnel weiterhin auf `nginx:80`, kann deshalb eine Weiterleitungsschleife entstehen (siehe Problem 5 unten). Das Löschen von Cookies behebt diese serverseitige Konfiguration nicht.
+
+### Weg B: Linux-VPS mit Let's Encrypt
+
+```bash
+docker compose --profile vps up -d --build
+docker compose restart nginx
+```
+
+Das Profil `vps` startet auch den Certbot-Dienst zur Zertifikatserneuerung.
+
+Weitere verwendete Profile ebenfalls aktivieren, z. B. `--profile tunnel --profile backups` für Tunnelbetrieb mit Backup-Worker. Die bestehenden Daten-Volumes werden von diesen Update-Befehlen weiterverwendet.
 
 ---
 
@@ -409,6 +430,20 @@ docker compose up -d --build
   docker compose up -d
   ```
 
+### ❌ Problem 5: `Zu oft weitergeleitet / ERR_TOO_MANY_REDIRECTS` nach einem Update mit Cloudflare Tunnel
+
+* **Ursache:** Der Tunnel verbindet sich noch mit `nginx:80`. Dieser öffentliche HTTP-Eingang leitet auf HTTPS um; Tunnel-Anfragen benötigen den internen Eingang auf Port 8080.
+* **Lösung:** Stelle im Cloudflare Dashboard beim öffentlichen Hostnamen den Service auf **Typ `HTTP`**, **URL `nginx:8080`**. Führe danach auf dem Server aus:
+  ```bash
+  docker compose --profile tunnel up -d --build
+  docker compose restart nginx
+  ```
+  Cookie-Löschen oder Inkognito-Modus beheben die serverseitige Weiterleitungsschleife nicht. Falls die Seite danach weiterhin nicht erreichbar ist, prüfe Status und Logs:
+  ```bash
+  docker compose --profile tunnel ps
+  docker compose --profile tunnel logs --tail=100 nginx cloudflared web
+  ```
+
 ---
 
 ## 📋 Spickzettel: Die wichtigsten Befehle & CLI-Tools
@@ -429,5 +464,6 @@ docker compose up -d --build
 | **Sicherheits-Check** | `docker compose exec web python manage.py check --deploy` | `python manage.py check --deploy` |
 | **Server neu starten** | `docker compose restart` | `./start.sh` neu ausführen |
 | **Server stoppen** | `docker compose down` | `Strg + C` |
-| **Update durchführen** | `git pull && docker compose up -d --build` | `git pull && ./start.sh` |
-
+| **Update mit Cloudflare Tunnel** | `git pull && docker compose --profile tunnel up -d --build && docker compose restart nginx` (Tunnel-Service: `HTTP` → `nginx:8080`) | – |
+| **Update auf VPS mit Let's Encrypt** | `git pull && docker compose --profile vps up -d --build && docker compose restart nginx` | – |
+| **Update lokal durchführen** | – | `git pull && ./start.sh` |
