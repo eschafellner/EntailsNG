@@ -2,6 +2,7 @@
 """Build/run an isolated copy with unique resources; never use the checkout's .env or volumes."""
 import argparse
 import base64
+import http.client
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--performance', action='store_true', help='Also record HTTP performance baseline on disposable data.')
+    parser.add_argument('--tests', action='store_true', help='Run the full Django suite inside the isolated Python 3.12 image.')
+    parser.add_argument('--test-processes', type=int, choices=range(1, 5), default=1,
+                        help='Number of isolated Django test processes (default: 1).')
     options = parser.parse_args()
     output = Path(options.output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -113,6 +117,36 @@ def main():
                 raise RuntimeError('Imagebuild fehlgeschlagen; siehe bereinigtes build.log.')
             started = True
             run([*compose, 'up', '-d', '--wait', '--wait-timeout', '240'], timeout=300)
+            versions = {}
+            image_id = run(['docker', 'image', 'inspect', '--format', '{{.Id}}', image]).stdout.strip()
+            for service in ('web', 'email_worker', 'clan_seat_worker', 'backup_worker'):
+                probe = run([*compose, 'exec', '-T', service, 'python', 'scripts/dependency_inventory.py'])
+                versions[service] = json.loads(probe.stdout)
+                container_id = run([*compose, 'ps', '-q', service]).stdout.strip()
+                actual_image = run(['docker', 'inspect', '--format', '{{.Image}}', container_id]).stdout.strip()
+                assert actual_image == image_id, f'{service} is not running the tested image'
+                run([*compose, 'exec', '-T', service, 'python', '-m', 'pip', 'check'])
+            (output / 'service-versions.json').write_text(json.dumps(
+                {'image_id': image_id, 'services': versions}, indent=2) + '\n')
+            runtime = versions['web']
+            (output / 'runtime.json').write_text(json.dumps(runtime, indent=2) + '\n')
+            (output / 'runtime-requirements.txt').write_text(''.join(
+                f"{package['name']}=={package['version']}\n" for package in runtime['packages']))
+            deploy = run([*compose, 'exec', '-T', 'web', 'python', 'manage.py', 'check',
+                          '--deploy', '--fail-level', 'WARNING'], check=False)
+            (output / 'deployment-check.log').write_text(redact(deploy.stdout + deploy.stderr))
+            if deploy.returncode:
+                raise RuntimeError('Deploymentcheck fehlgeschlagen; siehe deployment-check.log.')
+            labels = [] if options.tests else ['config.test_header_parsing', 'config.test_dependency_checks']
+            print('Running Django tests inside the isolated image (full suite)...' if options.tests
+                  else 'Running header and dependency security gates inside the isolated image...', flush=True)
+            suite = run([*compose, 'exec', '-T', '-e', 'SECURE_SSL_REDIRECT=False',
+                         '-e', 'DJANGO_LOG_LEVEL=WARNING', 'web', 'python', 'manage.py',
+                         'test', '--noinput', '--parallel', str(options.test_processes), *labels],
+                        check=False, timeout=1800)
+            (output / 'django-tests.log').write_text(redact(suite.stdout + suite.stderr))
+            if suite.returncode:
+                raise RuntimeError('Django-Tests fehlgeschlagen; siehe django-tests.log.')
             run([*compose, 'exec', '-T', 'web', 'python', 'manage.py', 'check_runtime',
                  '--health-host', '127.0.0.1', '--require-redis'])
             run([*compose, 'exec', '-T', '-e', 'ENTAILS_SETUP_SMOKE=1', 'web',
@@ -139,6 +173,37 @@ def main():
                         if attempt == 29:
                             raise
                         time.sleep(1)
+            # Repeated headers must travel over HTTP; a WSGI dict cannot represent
+            # them separately. Keep all samples small and below proxy limits.
+            header_cases = {
+                'quoted_content_type': [('Content-Type', 'text/plain; note="a;b;c"')],
+                'quoted_accept': [('Accept', 'text/html; note="a;b;c", application/json;q=0.5')],
+                'repeated_accept': [('Accept', 'text/html; note="a;b"'), ('Accept', 'application/json')],
+                'repeated_content_type': [('Content-Type', 'text/plain; note="a;b"'),
+                                          ('Content-Type', 'application/json')],
+                'repeated_host': [('Host', 'localhost')],
+            }
+            header_results = {}
+            for label, headers in header_cases.items():
+                connection = http.client.HTTPSConnection('127.0.0.1', int(port), timeout=10,
+                                                         context=ssl._create_unverified_context())
+                try:
+                    connection.putrequest('GET', '/api/health/', skip_host=True)
+                    connection.putheader('Host', 'localhost')
+                    for key, value in headers:
+                        connection.putheader(key, value)
+                    connection.endheaders()
+                    response = connection.getresponse()
+                    response.read()
+                    # This stack accepts repeated Content-Type, but Nginx rejects
+                    # duplicate Host headers before the request reaches Django.
+                    expected = 400 if label == 'repeated_host' else 200
+                    assert response.status == expected, (label, response.status, expected)
+                    header_results[label] = {'status': response.status,
+                                             'outcome': 'proxy_rejected' if expected == 400 else 'application_healthy'}
+                finally:
+                    connection.close()
+            (output / 'header-http.json').write_text(json.dumps(header_results, indent=2) + '\n')
             print('Checking fresh setup with PostgreSQL and Redis...', flush=True)
             run([*compose, 'exec', '-T', 'db', 'createdb', '-U', 'entails_smoke', 'entails_smoke_setup'])
             setup = run([*compose, 'exec', '-T', '-e', 'ENTAILS_SETUP_SMOKE=1',
@@ -161,7 +226,10 @@ def main():
             assert all(item['State'] == 'running' for item in states), 'Worker did not stay running'
             assert len(states) == 7, 'Expected web, database, Redis, Nginx and three workers'
             result = {'container': 'passed', 'services': sorted(item['Service'] for item in states),
-                      'https_pages': 4, 'real_smtp': False, 'external_tunnel_acme': 'not tested'}
+                      'image_id': image_id, 'django': runtime['django'],
+                      'django_suite': 'full' if options.tests else 'security',
+                      'header_cases': len(header_results), 'https_pages': 4, 'real_smtp': False,
+                      'external_tunnel_acme': 'not tested'}
             (output / 'container.json').write_text(json.dumps(result, indent=2) + '\n')
             print(json.dumps(result), flush=True)
         finally:

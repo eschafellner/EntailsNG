@@ -58,7 +58,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client-16
-          python -m pip install -r requirements.txt
+          python -m venv "$RUNNER_TEMP/entails-app"
+          echo "$RUNNER_TEMP/entails-app/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/entails-app/bin/python" -m pip install pip==26.2.1
+          "$RUNNER_TEMP/entails-app/bin/python" -m pip install -r requirements.txt
+      - name: Check Installed Dependencies and Export Complete Inventory
+        run: |
+          python -m pip check
+          python scripts/dependency_inventory.py --output-dir smoke-results
+      - name: Audit Installed Packages With Separate Tool Environment
+        run: |
+          python -m venv "$RUNNER_TEMP/entails-audit"
+          "$RUNNER_TEMP/entails-audit/bin/python" -m pip install pip-audit==2.10.1
+          "$RUNNER_TEMP/entails-audit/bin/python" scripts/audit_dependencies.py --inventory smoke-results/runtime-requirements.txt --output-dir smoke-results
       - name: Set up Node for Browser Tests
         uses: actions/setup-node@v4
         with:
@@ -66,7 +78,9 @@ jobs:
       - name: Test Browser Interactions
         run: node --test scripts/tests/*.test.cjs
       - name: Run Django Security & Deployment Check
-        run: python manage.py check --deploy
+        env:
+          SECURE_SSL_REDIRECT: 'True'
+        run: python manage.py check --deploy --fail-level WARNING
       - name: Run Full Test Suite Including Row Locks and Native Backups
         run: python manage.py test --noinput
       - name: Check Missing Migrations
@@ -104,6 +118,11 @@ jobs:
           docker run --rm cloudflare/cloudflared:2026.10.0@sha256:9b49eed8f62806d5d45ddf59ecefb5710429598ea6d3fcccd2af938f621b2b07 --version
       - name: Build and Start Temporary Stack
         run: python scripts/container_smoke.py --output-dir smoke-results --performance
+      - name: Audit Actual Image Package Inventory
+        run: |
+          python -m venv "$RUNNER_TEMP/entails-image-audit"
+          "$RUNNER_TEMP/entails-image-audit/bin/python" -m pip install pip-audit==2.10.1
+          "$RUNNER_TEMP/entails-image-audit/bin/python" scripts/audit_dependencies.py --inventory smoke-results/runtime-requirements.txt --output-dir smoke-results
       - name: Upload Sanitized Container Evidence
         if: always()
         uses: actions/upload-artifact@v4

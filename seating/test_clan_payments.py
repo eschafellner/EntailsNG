@@ -63,8 +63,10 @@ class ClanPaymentTests(TestCase):
         payment = self.create(self.seats[:3])
         self.assertEqual((payment.seat_count, payment.total_amount), (3, Decimal('90')))
         self.assertEqual(payment.holds.count(), 3)
-        self.assertAlmostEqual((payment.payment_due_at - before).total_seconds(), 7 * 86400, delta=2)
-        self.assertEqual(payment.release_at - payment.payment_due_at, timedelta(days=2))
+        # The contract is Vienna calendar days, including DST transitions.
+        self.assertAlmostEqual((timezone.localtime(payment.payment_due_at) - timezone.localtime(before)).total_seconds(),
+                               7 * 86400, delta=2)
+        self.assertEqual(timezone.localtime(payment.release_at) - timezone.localtime(payment.payment_due_at), timedelta(days=2))
         self.ticket.price = 99
         self.ticket.save()
         bank = GeneralConfiguration.load()
@@ -129,8 +131,9 @@ class ClanPaymentTests(TestCase):
         self.config.save()
         payment = self.create()
         self.assertLessEqual(payment.release_at, payment.allocation.expires_at)
-        self.assertEqual(payment.release_at - payment.payment_due_at, timedelta(days=2))
-        self.assertAlmostEqual((payment.payment_due_at-payment.created_at).total_seconds(), 3*86400, delta=2)
+        self.assertEqual(timezone.localtime(payment.release_at) - timezone.localtime(payment.payment_due_at), timedelta(days=2))
+        self.assertAlmostEqual((timezone.localtime(payment.payment_due_at) - timezone.localtime(payment.created_at)).total_seconds(),
+                               3 * 86400, delta=2)
 
     def test_no_order_when_only_review_time_remains(self):
         self.config.days = 1
@@ -512,6 +515,18 @@ class ClanPaymentTests(TestCase):
         self.assertEqual(timezone.localtime(payment.payment_due_at).hour, 12)
         self.assertEqual(timezone.localtime(payment.payment_due_at).day, 31)
         self.assertEqual(timezone.localtime(payment.release_at).day, 2)
+
+    def test_review_deadline_uses_two_calendar_days_across_dst(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        date = datetime(2026, 10, 16, 12, 0, tzinfo=ZoneInfo('Europe/Vienna'))
+        with patch('django.utils.timezone.now', return_value=date):
+            payment = self.create()
+        self.assertEqual(timezone.localtime(payment.payment_due_at).day, 23)
+        self.assertEqual(timezone.localtime(payment.release_at).day, 25)
+        self.assertEqual(timezone.localtime(payment.release_at).hour, 12)
+        self.assertEqual(timezone.localtime(payment.release_at) - timezone.localtime(payment.payment_due_at), timedelta(days=2))
+        self.assertEqual(payment.release_at - payment.payment_due_at, timedelta(days=2, hours=1))
 
     def test_changed_bank_data_invalidates_preview(self):
         self.select()

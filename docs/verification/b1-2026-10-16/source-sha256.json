@@ -1,0 +1,11 @@
+{
+  "requirements.txt": "0f31810aa875ed808a82aca91d3ec6026bd583e76dfa612f042865101a88c9f8",
+  "Dockerfile": "5b91b7204cf1988fc0746fd6c8855fe503d14fefa8abb83d56e32b68d5d904c3",
+  ".github/workflows/ci.yml": "997c9d33cc7f6ab8fbca6d6de0e924ec13df885fc3e1a2101bdc573f636535a7",
+  "scripts/container_smoke.py": "4c9f157022d7197ce83cb92771e53022dd3cd79a700928709e7b62a27c859f22",
+  "scripts/dependency_inventory.py": "811fd0a5c2cc09408bb5213cdbb14cbb60f4c0ba7a8d147742bdb23cbc48d98d",
+  "scripts/audit_dependencies.py": "55d8e635adb2a2b73aae48b506ab1fcfbaf24175a9df968c1790401d1e8a9202",
+  "config/test_header_parsing.py": "8e0edfb98bc7b1fbe1c4f9e1321d723b8dac2ce194d0f1bed4a75092998cc14a",
+  "config/test_dependency_checks.py": "53559a6dece8b98a02af12d6dc0b3d1e66ea73e2d9aeec04a839447b1189e4d8",
+  "seating/test_clan_payments.py": "d2da2438161e077bc350b996a77403d38a72460075cabcc84c4d0ec2fe00ba2e"
+}

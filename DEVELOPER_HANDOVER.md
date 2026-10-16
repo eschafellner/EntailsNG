@@ -1,6 +1,6 @@
 # EntailsNG – Entwicklerübergabe
 
-Stand: 15. Oktober 2026. Maßgeblich sind Code und Konfiguration. Umsetzungsstand, Testbefehle und Grenzen: [Nachweise zu P1–P6](docs/remediation-progress.md). Die [vorherige Übergabe samt historischen Prüfberichten](docs/verification-history.md) bleibt archiviert. Der [Audit](docs/developer-handover-audit-2026-10-15.md) beschreibt den Stand vor diesen Korrekturen.
+Stand: 16. Oktober 2026. Maßgeblich sind Code und Konfiguration. Sicherheitsupdate B1: [Änderungen und neue Prüfnachweise](docs/b1-django-security-update-results.md). Weiterer Umsetzungsstand, Testbefehle und Grenzen: [Nachweise zu P1–P6](docs/remediation-progress.md). Die [vorherige Übergabe samt historischen Prüfberichten](docs/verification-history.md) bleibt archiviert. Der [Audit](docs/developer-handover-audit-2026-10-15.md) beschreibt den Stand vor diesen Korrekturen.
 
 ## Zweck und Architektur
 
@@ -29,7 +29,7 @@ Die Kernassets, Fonts, TinyMCE und QR-Erzeugung sind lokal. Optional eingebettet
 
 | Bereich | Maßgeblicher Stand |
 | --- | --- |
-| Python/Django | Image und CI: Python 3.12; Django 6.0.7. Lokal zusätzlich Python 3.14.8 geprüft; keine allgemeine Python-Versionsmatrix. NetworkX 3.6.1 schließt 3.14.1 aus. |
+| Python/Django | Image und CI: Python 3.12; Django 6.0.9. Lokal zusätzlich Python 3.14.8 geprüft; keine allgemeine Python-Versionsmatrix. NetworkX 3.6.1 schließt 3.14.1 aus. |
 | Pythonpakete | Vollständig gepinnt in [requirements.txt](requirements.txt): django-tinymce, psycopg[binary], Pillow, redis, Gunicorn, WhiteNoise, python-dotenv, cryptography, qrcode und NetworkX. |
 | DB/Cache | Compose/CI: PostgreSQL 16 und Redis 7. PostgreSQL ist verbindlich; native Backup-Tools müssen dieselbe Hauptversion wie der Server haben. |
 | Web | Python-Slim-Bookworm-Image, Nginx 1.27; Certbot 5.8.0 und cloudflared 2026.10.0 auf konkrete Digests festgelegt. Definitionen: [Dockerfile](Dockerfile), [Compose](docker-compose.yml). |
@@ -142,6 +142,8 @@ python manage.py check_runtime --health-host 127.0.0.1 --require-redis
 ```
 
 Die [CI](.github/workflows/ci.yml) läuft für main/master mit Python 3.12, PostgreSQL 16, Redis 7 und Node 22. Sie prüft Django/JavaScript/Migrationen, ein frisches Setup samt Demo-Wiederholung, echten prozessübergreifenden Redis sowie einen isolierten Imagebau/Compose-Start. Dieser prüft auch HTTPS, statische Dateien, alle Worker und HTTP-Lastszenarien. Keine pauschale WCAG-Aussage aus diesen Tests ableiten. Ein separater Formatter-/Linterlauf ist derzeit nicht konfiguriert.
+
+Seit B1 exportieren `scripts/dependency_inventory.py` und der Container-Smoke den vollständigen installierten Paketbestand einschließlich pip. Ein separater pip-audit-2.10.1-Prozess prüft die Inventare der Testumgebung und des Images; Befunde, übersprungene Pakete, unvollständige Ergebnisse und Abruffehler verhindern einen erfolgreichen Prüfschritt. Zusätzlich wird Django gegen den exakten Pin und mindestens 6.0.9 geprüft. Image/CI verwenden pip 26.2.1; python-dotenv ist auf 1.2.4 aktualisiert. Offizielle Django-Sicherheitshinweise bleiben zusätzlich maßgeblich, da ein Scanner nicht alle aktuellen Korrekturen erfassen muss.
 
 ## Deployment und Betrieb
 

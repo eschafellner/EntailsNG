@@ -30,7 +30,10 @@ RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -m -s /bin/bash appuser
 
 COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+# Keep the installer itself on a corrected, audited version as well.
+RUN python -m pip install --no-cache-dir pip==26.2.1 && \
+    python -m pip install --no-cache-dir -r requirements.txt && \
+    python -m pip check
 
 COPY . /app/
 

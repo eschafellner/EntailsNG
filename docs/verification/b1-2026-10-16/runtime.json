@@ -1,0 +1,83 @@
+{
+  "python": "3.12.15",
+  "django": "6.0.9",
+  "expected_django": "6.0.9",
+  "packages": [
+    {
+      "name": "asgiref",
+      "version": "3.12.1"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1"
+    },
+    {
+      "name": "cryptography",
+      "version": "50.0.1"
+    },
+    {
+      "name": "Django",
+      "version": "6.0.9"
+    },
+    {
+      "name": "django-tinymce",
+      "version": "5.0.0"
+    },
+    {
+      "name": "gunicorn",
+      "version": "23.0.0"
+    },
+    {
+      "name": "networkx",
+      "version": "3.6.1"
+    },
+    {
+      "name": "packaging",
+      "version": "26.3"
+    },
+    {
+      "name": "pillow",
+      "version": "12.3.0"
+    },
+    {
+      "name": "pip",
+      "version": "26.2.1"
+    },
+    {
+      "name": "psycopg",
+      "version": "3.2.13"
+    },
+    {
+      "name": "psycopg-binary",
+      "version": "3.2.13"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.11"
+    },
+    {
+      "name": "python-dotenv",
+      "version": "1.2.4"
+    },
+    {
+      "name": "qrcode",
+      "version": "8.2"
+    },
+    {
+      "name": "redis",
+      "version": "5.2.1"
+    },
+    {
+      "name": "sqlparse",
+      "version": "0.6.0"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0"
+    },
+    {
+      "name": "whitenoise",
+      "version": "6.12.0"
+    }
+  ]
+}

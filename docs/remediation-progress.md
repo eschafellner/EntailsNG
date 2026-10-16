@@ -26,7 +26,11 @@ Der abschließende Imagebau/Containerlauf einschließlich frischer Migrationen, 
 
 Dauerhafte bereinigte Nachweise: [Zusammenfassung](verification/remediation-2026-10-15/summary.json), [frisches Setup/Migration](verification/remediation-2026-10-15/setup.json), [Container](verification/remediation-2026-10-15/container.json), [Ausfallerkennung](verification/remediation-2026-10-15/runtime-negative.json), [HTTP-Messwerte](verification/remediation-2026-10-15/http-performance.json). Rohlogs liegen außerhalb des Repository unter `/tmp/entails-remediation/`. Keine echten Benutzerlisten oder Secrets wurden in die Nachweise übernommen.
 
-## Grenzen
+## Ergänzung vom 16. Oktober 2026: Sicherheitsupdate B1
+
+Django 6.0.9, python-dotenv 1.2.4 und pip 26.2.1 für Image/CI umgesetzt; Header-/Dependency-Gates, Audit des tatsächlichen Paketbestands und Image-/Workerabgleich ergänzt. Die neue Gesamtsuite umfasst 1.335 Tests und ist erfolgreich (ein Node-Skip im Produktionsimage; derselbe JavaScript-Test separat auf dem Host erfolgreich). Alle fünf JavaScript-Testdateien, strikter Deploymentcheck und vollständiger isolierter Container-Smoke einschließlich 864 HTTP-Requests bestanden. Der vollständige Audit der 19 Imagepakete meldet keine Befunde. Ein bereits unter Django 6.0.7 vorhandener DST-Fehler in Testassertionen wurde korrigiert; keine Änderung der Zahlungslogik. [B1-Bericht und neue Nachweise](b1-django-security-update-results.md). Die obigen Ergebnisse vom 15. Oktober bleiben historische Nachweise; es wurde weiterhin kein Produktionsdeployment ausgeführt.
+
+## Grenzen der ursprünglichen P1–P6-Prüfung
 
 Der Containerlauf verwendet eine getrennte Quellkopie mit eigenen Schlüsseln, Projektnamen, Volumes und Loopbackports; die lokale Anwendungs-`.env` und ihre Daten werden nicht übernommen. Im ersten Container-Testaufbau verhinderten SELinux-Labels die Nginx-Bind-Mounts; das wurde ausschließlich für die temporäre Kopie durch Relabeling und private Zertifikatsvolumes korrigiert. Das ist kein als erfolgreich ausgegebenes Produktionsdeployment.
 

@@ -1,10 +1,11 @@
 # Entwicklungsbacklog
 
-Stand: 15. Oktober 2026. Technische Fehler und optionale Funktionen werden getrennt geführt. Verantwortlich sind zunächst Rollen; konkrete Personen und Produktprioritäten sind offen, bis das Projektteam sie festlegt.
+Stand: 16. Oktober 2026. Technische Fehler und optionale Funktionen werden getrennt geführt. Verantwortlich sind zunächst Rollen; konkrete Personen und Produktprioritäten sind offen, bis das Projektteam sie festlegt.
 
 | ID | Typ / Status | Nutzende und Problem | Abnahme | Priorität / Rolle / Abhängigkeit |
 | --- | --- | --- | --- | --- |
 | OPS-01 | Betrieb / Zielnachweis offen | Betrieb braucht verlässlichen Tunnel-/TLS-Zugriff. | Reales Origin HTTP nginx:8080 bzw. ACME-Erneuerung und Nginx-Reload in Zielumgebung protokolliert. | Hoch; Betrieb; Zugriff auf Zielumgebung. |
+| DEP-01 | Wartung / offen | Django 6.0 erhält laut Hersteller nur bis April 2027 Sicherheitskorrekturen. | Vor Supportende auf eine dann unterstützte Reihe mit aktuellem Patch wechseln; Herstellerhinweise, Kompatibilität, Suite, Audit und Container-Smoke prüfen. | Hoch, vor April 2027 einplanen; Entwicklung/Betrieb; gesondertes Upgradepaket. |
 | USERS-03 | Sicherheit / zurückgestellt | Delegierte Benutzerverwaltung besitzt weitreichende Rechte. | Bestehende Entscheidung und private Rechteübersicht nach `security-backlog.md`. | Mittel; Sicherheits-/Betriebsverantwortung; keine automatische Rechteänderung. |
 | QA-01 | Nachweis / Kriterien festgelegt, manuelle Abnahme offen | Entwicklung braucht aktuelle Darstellungs-/Zugänglichkeitsnachweise. | Prüfmatrix und manuelle Protokolle nach `quality-verification.md`. | Niedrig; Entwicklung/QA; getrennte Vorschau. |
 | PERF-01 | Nachweis / Messwerkzeug vorhanden | Betrieb braucht konkrete Lastgrenzen. | Reproduzierbare HTTP-Baseline für 50/250/1000 Gäste und 1/12/32 parallele Requests; danach Grenzwerte beschließen. | Niedrig; Entwicklung/Betrieb; isolierte Laufumgebung. |
