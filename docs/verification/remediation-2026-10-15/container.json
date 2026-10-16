@@ -1,0 +1,15 @@
+{
+  "container": "passed",
+  "services": [
+    "backup_worker",
+    "clan_seat_worker",
+    "db",
+    "email_worker",
+    "nginx",
+    "redis",
+    "web"
+  ],
+  "https_pages": 4,
+  "real_smtp": false,
+  "external_tunnel_acme": "not tested"
+}

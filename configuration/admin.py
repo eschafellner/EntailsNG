@@ -40,6 +40,7 @@ from django.core.management import call_command
 from django.utils.safestring import mark_safe
 from .models import GeneralConfiguration, SiteCustomization
 from .contact_admin import ContactCategoryInline
+from .translations import get_translation as tr
 
 
 @admin.register(GeneralConfiguration)
@@ -153,19 +154,19 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
                     'custom_css',
                     'reset_demo_data_button',
                 ),
-                'description': 'Eigenes CSS injizieren oder das System auf Werkseinstellungen / Demo-Daten zurücksetzen.',
+                'description': 'Eigenes CSS und Einrichtung synthetischer Beispieldaten in einer Demo-Umgebung.',
             },
         ),
     )
 
     def reset_demo_data_button(self, obj):
-        return mark_safe(
+        return format_html(
             '<a href="/admin/configuration/sitecustomization/reset-demo-data/" '
             'style="background:#dc2626; color:#ffffff; font-weight:bold; padding:8px 14px; border-radius:6px; text-decoration:none; display:inline-block;">'
-            '🔄 System auf Demo-Daten zurücksetzen'
-            '</a>'
+            '{}'
+            '</a>', tr('demo_setup_title')
         )
-    reset_demo_data_button.short_description = "Demo-Daten Reset"
+    reset_demo_data_button.short_description = "Demo-Daten einrichten"
 
 
     def theme_preset_preview(self, obj):
@@ -213,11 +214,11 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
             raise PermissionDenied("Nur Superuser dürfen die Demo-Daten zurücksetzen.")
         if request.method == 'POST':
             try:
-                call_command('reset_demo_data')
-                messages.success(request, '🎉 Demo-Daten und System-Einstellungen wurden erfolgreich zurückgesetzt!')
+                call_command('seed_demo_data')
+                messages.success(request, tr('demo_setup_success'))
             except Exception as e:
-                logger.error("Fehler beim Zurücksetzen der Demo-Daten: %s", e, exc_info=True)
-                messages.error(request, f"Fehler beim Zurücksetzen der Demo-Daten: {e}")
+                logger.error("Demo-Einrichtung fehlgeschlagen", exc_info=True)
+                messages.error(request, tr('demo_setup_failed'))
             return redirect('/admin/configuration/sitecustomization/1/change/')
         return render(request, 'admin/reset_demo_data_confirm.html')
 

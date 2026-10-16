@@ -1,36 +1,9 @@
-from django.core.management import call_command
-from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
-from configuration.cache import (
-    invalidate_general_configuration_cache,
-    invalidate_navigation_cache,
-    invalidate_site_customization_cache,
-    invalidate_system_translations_cache,
-)
+from configuration.management.commands.seed_demo_data import Command as SeedDemoCommand
 
 
-class Command(BaseCommand):
-    help = 'Spielt die vordefinierten Demo-Daten aus initial_data.json transaktional ein und aktualisiert System-Einstellungen.'
+class Command(SeedDemoCommand):
+    help = 'Veralteter Alias für seed_demo_data; löscht keine vorhandenen Daten.'
 
     def handle(self, *args, **options):
-        self.stdout.write('Starte Einspielen der Demo-Daten...')
-
-        try:
-            with transaction.atomic():
-                call_command('loaddata', 'initial_data.json')
-                self.stdout.write(self.style.SUCCESS('✓ Demo-Daten aus initial_data.json erfolgreich geladen.'))
-
-                call_command('seed_translations')
-                call_command('seed_features', reset=True)
-        except Exception as e:
-            self.stderr.write(self.style.ERROR(f'Fehler beim Laden der Demo-Daten: {e}'))
-            raise CommandError(f'Demo-Reset fehlgeschlagen: {e}') from e
-
-        # Caches gezielt invalidieren
-        invalidate_general_configuration_cache()
-        invalidate_site_customization_cache()
-        invalidate_navigation_cache()
-        invalidate_system_translations_cache()
-
-        self.stdout.write(self.style.SUCCESS('🎉 Demo-Daten und System-Einstellungen wurden erfolgreich geladen.'))
-
+        self.stderr.write('reset_demo_data ist veraltet; bitte seed_demo_data verwenden. Es erfolgt kein Reset.')
+        return super().handle(*args, **options)

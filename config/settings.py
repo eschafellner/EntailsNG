@@ -27,6 +27,7 @@ def env_bool(key, default=False):
 # Basis & Core-Sicherheit (Fail-Fast Validierung)
 # -----------------------------------------------------------------------------
 DEBUG = env_bool('DEBUG', default=False)
+DEMO_MODE = env_bool('DEMO_MODE', default=False)
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:

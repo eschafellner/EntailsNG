@@ -1184,7 +1184,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         with patch('configuration.admin.call_command') as mock_cmd:
             resp_super = self.client.post(reset_url)
             self.assertEqual(resp_super.status_code, 302)
-            mock_cmd.assert_called_once_with('reset_demo_data')
+            mock_cmd.assert_called_once_with('seed_demo_data')
 
     def test_p2_html_sanitizer_entity_decoding_and_idempotence(self):
         """P2: HTMLSanitizer verhindert Entity-Decoding-Bypasses und arbeitet idempotent."""
@@ -1324,10 +1324,11 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         )
 
         # 1. Command wirft CommandError bei Fixture-Fehlern
-        with patch('configuration.management.commands.reset_demo_data.call_command', side_effect=Exception("Fixture fehlt")):
+        from configuration.demo import DemoDataError
+        with patch('configuration.management.commands.seed_demo_data.seed_demo_data', side_effect=DemoDataError("Demo deaktiviert")):
             with self.assertRaises(CommandError) as ctx:
                 call_command('reset_demo_data', stdout=StringIO())
-            self.assertIn("Demo-Reset fehlgeschlagen", str(ctx.exception))
+            self.assertIn("Demo deaktiviert", str(ctx.exception))
 
         # 2. Admin-Endpunkt fängt den Fehler ab und sendet messages.error
         self.client.login(username="admin_p5", password="password")
@@ -1335,7 +1336,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
             resp = self.client.post(reverse('admin:reset_demo_data_admin'), follow=True)
             self.assertEqual(resp.status_code, 200)
             messages_list = [str(m) for m in resp.context['messages']]
-            self.assertTrue(any("Fehler beim Zurücksetzen der Demo-Daten" in m for m in messages_list))
+            self.assertTrue(any("Demo-Einrichtung fehlgeschlagen" in m for m in messages_list))
 
     def test_p6_seed_features_preserves_customizations_without_reset(self):
         """P6: seed_features behält benutzerdefinierte Titel, Reihenfolgen und Status bei, wenn kein --reset übergeben wird."""

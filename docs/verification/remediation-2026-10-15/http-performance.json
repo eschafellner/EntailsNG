@@ -1,0 +1,355 @@
+{
+  "transport": "HTTP through Nginx/Gunicorn",
+  "source_fingerprint": "1389b1724645c7c6aba6c98a2367dca217c69fffeaa273fca07f2c833e4b4089",
+  "python": "3.12.15",
+  "django": "6.0.7",
+  "postgresql": 160015,
+  "web_workers": "3",
+  "machine": "x86_64",
+  "logical_cpus_visible": 16,
+  "thresholds": "baseline only; no product latency SLA approved",
+  "results": [
+    {
+      "registered_guests_before": 50,
+      "parallel_requests": 1,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 18.2,
+        "p95_ms": 25.51,
+        "p99_ms": 27.66,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 19.65,
+        "p95_ms": 25.07,
+        "p99_ms": 25.74,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "200": 1,
+          "400": 31
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 17.81,
+        "p95_ms": 19.64,
+        "p99_ms": 20.08,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    },
+    {
+      "registered_guests_before": 50,
+      "parallel_requests": 12,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 162.85,
+        "p95_ms": 192.15,
+        "p99_ms": 197.06,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 158.52,
+        "p95_ms": 211.38,
+        "p99_ms": 217.26,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "200": 1,
+          "400": 31
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 165.46,
+        "p95_ms": 185.22,
+        "p99_ms": 188.3,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    },
+    {
+      "registered_guests_before": 50,
+      "parallel_requests": 32,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 460.2,
+        "p95_ms": 503.88,
+        "p99_ms": 507.16,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 450.44,
+        "p95_ms": 529.87,
+        "p99_ms": 542.52,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "400": 31,
+          "200": 1
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 416.2,
+        "p95_ms": 458.99,
+        "p99_ms": 463.44,
+        "max_lock_waiters": 1,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    },
+    {
+      "registered_guests_before": 250,
+      "parallel_requests": 1,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 18.05,
+        "p95_ms": 20.84,
+        "p99_ms": 21.1,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 19.47,
+        "p95_ms": 21.61,
+        "p99_ms": 23.89,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "200": 1,
+          "400": 31
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 18.24,
+        "p95_ms": 19.41,
+        "p99_ms": 24.89,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    },
+    {
+      "registered_guests_before": 250,
+      "parallel_requests": 12,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 165.2,
+        "p95_ms": 190.72,
+        "p99_ms": 194.66,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 141.91,
+        "p95_ms": 238.54,
+        "p99_ms": 245.61,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "400": 31,
+          "200": 1
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 165.51,
+        "p95_ms": 186.16,
+        "p99_ms": 188.12,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    },
+    {
+      "registered_guests_before": 250,
+      "parallel_requests": 32,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 431.56,
+        "p95_ms": 467.13,
+        "p99_ms": 467.17,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 445.32,
+        "p95_ms": 518.36,
+        "p99_ms": 534.32,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "400": 31,
+          "200": 1
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 425.42,
+        "p95_ms": 458.89,
+        "p99_ms": 460.94,
+        "max_lock_waiters": 1,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    },
+    {
+      "registered_guests_before": 1000,
+      "parallel_requests": 1,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 17.82,
+        "p95_ms": 19.88,
+        "p99_ms": 19.95,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 19.99,
+        "p95_ms": 21.7,
+        "p99_ms": 25.84,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "200": 1,
+          "400": 31
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 17.67,
+        "p95_ms": 18.69,
+        "p99_ms": 18.78,
+        "max_lock_waiters": 0,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    },
+    {
+      "registered_guests_before": 1000,
+      "parallel_requests": 12,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 156.37,
+        "p95_ms": 199.3,
+        "p99_ms": 203.1,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 153.51,
+        "p95_ms": 236.32,
+        "p99_ms": 242.85,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "400": 31,
+          "200": 1
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 166.23,
+        "p95_ms": 187.8,
+        "p99_ms": 189.35,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    },
+    {
+      "registered_guests_before": 1000,
+      "parallel_requests": 32,
+      "samples_per_scenario": 32,
+      "registration": {
+        "p50_ms": 432.1,
+        "p95_ms": 470.16,
+        "p99_ms": 479.66,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "302": 32
+        },
+        "errors": 0
+      },
+      "seat_contention": {
+        "p50_ms": 446.35,
+        "p95_ms": 498.61,
+        "p99_ms": 521.52,
+        "max_lock_waiters": 2,
+        "statuses": {
+          "400": 31,
+          "200": 1
+        },
+        "errors": 0,
+        "expected_conflicts": 31,
+        "one_winner": true
+      },
+      "checkin": {
+        "p50_ms": 374.25,
+        "p95_ms": 451.1,
+        "p99_ms": 456.66,
+        "max_lock_waiters": 1,
+        "statuses": {
+          "200": 32
+        },
+        "errors": 0
+      }
+    }
+  ]
+}

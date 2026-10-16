@@ -68,7 +68,11 @@ class ClanForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. Team Alternate", "maxlength": "32"}),
             "tag": forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. HNX", "maxlength": "5"}),
-            "website": forms.URLInput(attrs={"class": "form-control", "placeholder": "https://clan.de"}),
+            # URLField adds https:// server-side; type="url" would reject bare domains in the browser.
+            "website": forms.TextInput(attrs={
+                "class": "form-control", "placeholder": "www.clan.at",
+                "inputmode": "url", "autocapitalize": "none", "spellcheck": "false",
+            }),
             "logo": forms.FileInput(attrs={"class": "form-control", "accept": ".jpg,.jpeg,.png"}),
         }
 

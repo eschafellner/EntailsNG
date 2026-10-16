@@ -35,6 +35,15 @@ from configuration.cache import (
 )
 
 
+class DemoDataset(models.Model):
+    """Completion record for explicitly requested, atomic demo initialization."""
+
+    name = models.CharField(max_length=64, unique=True)
+    version = models.PositiveIntegerField()
+    objects_manifest = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class NavigationItem(models.Model):
     class Visibility(models.TextChoices):
         PUBLIC = 'PUBLIC', 'Alle Besucher'
@@ -666,5 +675,4 @@ def _on_general_config_change(sender, **kwargs):
 def _on_site_customization_change(sender, **kwargs):
     safe_cache_delete('site_customization')
     invalidate_site_customization_cache()
-
 

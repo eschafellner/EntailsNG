@@ -47,10 +47,14 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     cp .env.example .env
     RANDOM_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
     RANDOM_ENCRYPT=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
+    RANDOM_DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
     sed -i "s|SECRET_KEY=hier-einen-langen-zufaelligen-secret-key-eintragen|SECRET_KEY=${RANDOM_SECRET}|" .env
     sed -i "s|FIELD_ENCRYPTION_KEY=hier-einen-langen-zufaelligen-schluessel-eintragen|FIELD_ENCRYPTION_KEY=${RANDOM_ENCRYPT}|" .env
+    sed -i "s|DB_PASSWORD=hier-ein-sicheres-datenbank-passwort-eintragen|DB_PASSWORD=${RANDOM_DB_PASSWORD}|" .env
+    sed -i "s|PUBLIC_BASE_URL=https://lan.example.com|PUBLIC_BASE_URL=http://127.0.0.1:8000|" .env
+    sed -i "s|EMAIL_BACKEND=emails.backends.ConfiguredSMTPBackend|EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend|" .env
     sed -i "s|DEBUG=False|DEBUG=True|" .env
-    sed -i "s|ALLOWED_HOSTS=lan.meinedomain.de|ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0|" .env
+    sed -i "s|ALLOWED_HOSTS=lan.meinedomain.de,127.0.0.1|ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0|" .env
     sed -i "s|CSRF_TRUSTED_ORIGINS=https://lan.meinedomain.de|CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000|" .env
     sed -i "s|DB_HOST=db|DB_HOST=127.0.0.1|" .env
     sed -i "s|REDIS_URL=redis://redis:6379/1|REDIS_URL=redis://127.0.0.1:6379/1|" .env
@@ -105,37 +109,15 @@ if [ "$INSTALL_DEMO_DATA" == "1" ] || [ "$INSTALL_DEMO_DATA" == "true" ]; then
     LOAD_DEMO=true
 fi
 
-# Falls Demo-Daten explizit angefordert wurden, laden
-if [ "$LOAD_DEMO" = true ] && [ -f "initial_data.json" ]; then
-    echo -e "${YELLOW}   Lade Vorab-Daten (Test-Events, Sitzpläne, Demo-User sadmin/gamer1)...${NC}"
-    python -c "
-import django, os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-django.setup()
-from configuration.models import SystemTranslation, NavigationItem
-SystemTranslation.objects.all().delete()
-NavigationItem.objects.all().delete()
-" 2>/dev/null || true
-    python manage.py loaddata initial_data.json --quiet 2>/dev/null || python manage.py loaddata initial_data.json
-    python -c "
-import django, os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-django.setup()
-from django.core.management.color import no_style
-from django.db import connection
-from django.apps import apps
-[connection.cursor().execute(sql) for sql in connection.ops.sequence_reset_sql(no_style(), apps.get_models())]
-" 2>/dev/null || true
-    echo -e "${GREEN}✓ Demo-Daten erfolgreich geladen.${NC}"
+# All initialization paths use one atomic, non-destructive demo generator.
+if [ "$LOAD_DEMO" = true ]; then
+    DEMO_MODE=True python manage.py seed_demo_data
 else
-    echo -e "${BLUE}ℹ️ Saubere Installation: Es wurden keine Demo-Benutzer oder Test-Events geladen.${NC}"
-    echo -e "${BLUE}   (Hinweis: Führe './install.sh --demo' aus, falls du Test-Daten laden möchtest.)${NC}"
+    python manage.py seed_translations
+    python manage.py seed_features
+    python manage.py seed_email_templates
 fi
-
-# System-Seeds ausführen
-python manage.py seed_translations --quiet 2>/dev/null || python manage.py seed_translations
-python manage.py seed_features --quiet 2>/dev/null || python manage.py seed_features
-python manage.py seed_email_templates --quiet 2>/dev/null || python manage.py seed_email_templates
+echo "Eigenen Administrator anlegen: python manage.py createsuperuser"
 
 echo ""
 

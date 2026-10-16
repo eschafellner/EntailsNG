@@ -56,59 +56,14 @@ fi
 echo "📦 Sammle statische Dateien..."
 python manage.py collectstatic --noinput
 
-# 5. Optionaler Demo-Daten-Import (nur wenn explizit gewünscht via DEMO_MODE=true oder LOAD_DEMO_DATA=true)
-LOAD_DEMO=0
-if [ "${DEMO_MODE:-0}" = "1" ] || [ "${DEMO_MODE:-false}" = "true" ] || [ "${LOAD_DEMO_DATA:-0}" = "1" ] || [ "${LOAD_DEMO_DATA:-false}" = "true" ]; then
-    LOAD_DEMO=1
-fi
-
-IS_INITIALIZED=$(python -c "
-import os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-django.setup()
-from users.models import User
-print('true' if User.objects.filter(is_superuser=True).exists() else 'false')
-" 2>/dev/null || echo "false")
-
-if [ "$LOAD_DEMO" = "1" ] && [ "$IS_INITIALIZED" = "false" ] && [ -f "initial_data.json" ]; then
-    echo "📥 DEMO_MODE aktiv: Lade Beispieldaten (initial_data.json)..."
-    python -c "
-import os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-django.setup()
-from configuration.models import SystemTranslation, NavigationItem
-SystemTranslation.objects.all().delete()
-NavigationItem.objects.all().delete()
-" 2>/dev/null || true
-    python manage.py loaddata initial_data.json
-    python -c "
-import os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-django.setup()
-from django.core.management.color import no_style
-from django.db import connection
-from django.apps import apps
-statements = connection.ops.sequence_reset_sql(no_style(), apps.get_models())
-with connection.cursor() as cursor:
-    for sql in statements:
-        cursor.execute(sql)
-" 2>/dev/null || true
-    echo "✓ Demo-Daten erfolgreich geladen."
+# Required seeds run inside the demo transaction or the ordinary installation.
+if [ "${DEMO_MODE:-false}" = "true" ] || [ "${DEMO_MODE:-0}" = "1" ] || [ "${DEMO_MODE:-false}" = "True" ] || [ "${LOAD_DEMO_DATA:-false}" = "true" ] || [ "${LOAD_DEMO_DATA:-0}" = "1" ]; then
+    DEMO_MODE=True python manage.py seed_demo_data
 else
-    if [ "$IS_INITIALIZED" = "false" ]; then
-        echo "ℹ️ Saubere Produktiv-Installation: Keine Testbenutzer geladen."
-        echo "💡 Erstelle deinen Administrator-Account nach dem Start mit:"
-        echo "   docker compose exec web python manage.py createsuperuser"
-    else
-        echo "ℹ️ Datenbank enthält bereits Daten. Überspringe Fixture-Import zur Erhaltung der Datenintegrität."
-    fi
+    python manage.py seed_translations
+    python manage.py seed_features
+    python manage.py seed_email_templates
 fi
-
-# 6. System-Seeds ausführen (get_or_create: idempotent)
-echo "🌱 Aktualisiere System-Übersetzungen, Feature-Flags und E-Mail-Templates..."
-python manage.py seed_translations 2>/dev/null || true
-python manage.py seed_features 2>/dev/null || true
-python manage.py seed_email_templates 2>/dev/null || true
 
 echo "✨ Initialisierung erfolgreich abgeschlossen. Starte Anwendung..."
 exec "$@"

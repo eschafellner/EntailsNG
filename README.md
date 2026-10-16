@@ -35,7 +35,7 @@ EntailsNG unterstützt sowohl **Podman** (Standard auf Fedora/RHEL) als auch **D
 
 ```bash
 # 1. Installation (einmalig)
-./install.sh --demo    # Richtet .venv ein, startet DB & lädt Testdaten (sadmin/adminpwd)
+./install.sh --demo    # Richtet .venv ein, startet DB & erstellt synthetische Beispieldaten ohne Standardpasswörter
 
 # 2. Server starten
 ./start.sh             # Startet den Django Dev-Server & prüft automatisch PostgreSQL/Redis
@@ -95,7 +95,7 @@ Sobald der Server läuft, erreichst du die Anwendung unter:
 | **🌐 Hauptseite / Dashboard** | [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Hauptübersicht mit aktuellem Event, Ticket-Status & News. |
 | **🗺️ Interaktiver Sitzplan** | [http://127.0.0.1:8000/seating/](http://127.0.0.1:8000/seating/) | 2D-Saalplan mit Zoom & Sitzplatzwahl. |
 | **📱 Helfer Check-in Scanner** | [http://127.0.0.1:8000/checkin/scanner/](http://127.0.0.1:8000/checkin/scanner/) | Vor-Ort Einlass-Tool für Helfer mit QR-Scanner *(Staff-Login nötig)*. |
-| **🛠️ Admin-Verwaltung** | [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/) | Django Verwaltungsoberfläche (Standard-Admin: `sadmin` / `adminpwd`). |
+| **🛠️ Admin-Verwaltung** | [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/) | Django-Verwaltung; eigenen Zugang mit `python manage.py createsuperuser` anlegen. |
 
 ---
 
@@ -205,3 +205,5 @@ EntailsNG versendet Registrierungsbestätigungen, Tickets und Passwort-Reset-Mai
 docker compose down
 # (oder: podman compose down)
 ```
+
+Entwicklereinstieg: [DEVELOPER_HANDOVER.md](DEVELOPER_HANDOVER.md). Updates und Laufzeitprüfung: [docs/updating.md](docs/updating.md). Der historische Snapshot `initial_data.json` ist kein unterstützter Setupweg.

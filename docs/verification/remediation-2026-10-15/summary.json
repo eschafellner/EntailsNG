@@ -1,0 +1,42 @@
+{
+  "verified_at_utc": "2026-10-15T05:46:22.544268+00:00",
+  "base_commit": "97026fd9877aeb56e6bb25eff356ea7b7fc0017b",
+  "working_tree": "uncommitted; includes pre-existing clan website and seating legend changes",
+  "application_fingerprint": "1389b1724645c7c6aba6c98a2367dca217c69fffeaa273fca07f2c833e4b4089",
+  "django_regression": {
+    "tests": 1319,
+    "seconds": 267.541,
+    "failures": 0,
+    "skipped": 0,
+    "python": "3.14.8",
+    "postgresql": "18.6"
+  },
+  "javascript": {
+    "files": 5,
+    "failures": 0
+  },
+  "workflow_actionlint": "passed",
+  "shell_syntax": "passed",
+  "diff_check": "passed",
+  "host": {
+    "cpu_model": "AMD Ryzen 7 9700X 8-Core Processor",
+    "host_memory_kib": 65417804,
+    "storage_profile": "not controlled / not recorded"
+  },
+  "http_measurements": 864,
+  "production_deployment": false,
+  "real_smtp": false,
+  "not_verified": [
+    "actual production permissions",
+    "real Cloudflare origin",
+    "public ACME issuance/renewal",
+    "manual screenreader and complete browser matrix",
+    "first setup by a new human developer",
+    "approved product latency SLA"
+  ],
+  "operational_images": {
+    "certbot": "5.8.0",
+    "cloudflared": "2026.10.0",
+    "scope": "version/start and Certbot offline parser check only"
+  }
+}

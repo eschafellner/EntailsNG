@@ -530,6 +530,19 @@ h3 {
 
 
 /* Dynamisches Sitzplan Grid */
+.seating-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding: 6px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+}
+
 .seat-visual-dynamic {
     display: grid;
     gap: 8px;

@@ -19,6 +19,14 @@ from users.ban_texts import TEXTS as BAN_TEXTS
 from contact.texts import CONTACT_TEXTS
 
 DEFAULT_TEXTS = {
+    'demo_setup_title': 'Demo-Daten einrichten',
+    'demo_setup_intro': 'Synthetische Beispieldaten in einer frischen Demo-Umgebung einrichten?',
+    'demo_setup_scope': 'Ein Evententwurf, Gäste ohne Passwort, Sitzplätze, Clan und Turnierentwurf werden eingerichtet. Bestehende Fachdaten werden nicht ersetzt.',
+    'demo_setup_requirement': 'Nur bei aktivem DEMO_MODE und ohne vorhandene Fachdaten. Einen Administrator separat anlegen; für einen Gastlogin ein individuelles Passwort setzen.',
+    'demo_setup_confirm': 'Demo-Daten jetzt einrichten',
+    'demo_setup_success': 'Demo-Einrichtung geprüft und abgeschlossen. Bereits vorhandene Demo-Daten bleiben unverändert.',
+    'demo_setup_failed': 'Demo-Einrichtung fehlgeschlagen. Demoaktivierung und Datenbestand prüfen; Details stehen im Serverprotokoll.',
+
     **CONTACT_TEXTS,
     **DRAW_TEXTS,
     **EXTERNAL_TOURNAMENT_TEXTS,

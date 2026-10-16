@@ -71,3 +71,43 @@ jobs:
         run: python manage.py test --noinput
       - name: Check Missing Migrations
         run: python manage.py makemigrations --check --dry-run
+      - name: Prove Real Cross-Process Redis Cache
+        env:
+          ENTAILS_SETUP_SMOKE: '1'
+        run: python scripts/redis_smoke.py
+      - name: Reproduce Fresh Setup and Demo Initialization
+        env:
+          ENTAILS_SETUP_SMOKE: '1'
+        run: |
+          mkdir -p smoke-results
+          PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE entails_smoke_ci'
+          DB_NAME=entails_smoke_ci python scripts/setup_smoke.py > smoke-results/setup.json
+      - name: Upload Setup Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-evidence
+          path: smoke-results/
+          if-no-files-found: ignore
+
+  container-smoke:
+    name: Isolated Image Build and Compose Startup
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Pinned Operational Images
+        run: |
+          docker run --rm certbot/certbot@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20 --version
+          docker run --rm cloudflare/cloudflared:2026.10.0@sha256:9b49eed8f62806d5d45ddf59ecefb5710429598ea6d3fcccd2af938f621b2b07 --version
+      - name: Build and Start Temporary Stack
+        run: python scripts/container_smoke.py --output-dir smoke-results --performance
+      - name: Upload Sanitized Container Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-evidence
+          path: smoke-results/
+          if-no-files-found: ignore

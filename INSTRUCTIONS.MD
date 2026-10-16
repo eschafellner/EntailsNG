@@ -235,8 +235,7 @@ docker compose exec web python manage.py createsuperuser
 Gib deinen gewünschten Benutzernamen, E-Mail-Adresse und ein Passwort ein.
 
 > [!NOTE]
-> Falls du stattdessen für einen schnellen Test vorbereitete Demo-Accounts (`admin`, `orga`, `gamer1`, `gamer2` mit Kennwort `EntailsDemo2026!`) laden möchtest, führe einfach aus:
-> `docker compose exec web python manage.py loaddata initial_data.json`
+> Für synthetische Beispieldaten auf einer frischen Demo-Datenbank: `docker compose exec -e DEMO_MODE=True web python manage.py seed_demo_data`. Der Generator erstellt keine Standardadminzugänge und keine nutzbaren Gastpasswörter. Einen Administrator mit `createsuperuser` anlegen; für einen Gastlogin bei Bedarf individuell `changepassword demo_guest_1` verwenden. Vorhandene Fachdaten werden nicht zurückgesetzt. Der historische JSON-Snapshot ist kein unterstützter Importweg.
 
 ### 2. Im Admin-Bereich einloggen:
 Öffne `https://deine-domain.de/admin/` und melde dich an.
@@ -257,8 +256,8 @@ Gib deinen gewünschten Benutzernamen, E-Mail-Adresse und ein Passwort ein.
   - UI-Skalierung wählen (*Kompakt 90%*, *Standard 100%*, *Groß 110%*) sowie optional Custom-CSS hinterlegen (integrierte Syntax-Validierung schützt vor Layout-Fehlern).
 - [ ] **Rechtliches & Datenschutz (`Rechtliche Hinweise`):**
   - Impressum und Datenschutzerklärung hinterlegen (Rich-Text Editor). Der integrierte Cookie-Hinweis informiert Besucher transparent über technisch notwendige Session-Cookies.
-- [ ] **Sicherer Demo-Reset (`/admin/demo-reset/`):**
-  - Falls Test-Daten geladen wurden, kann die Datenbank im Admin-Bereich mit einem Klick auf die Standard-Demodaten zurückgesetzt werden. Dieser Endpunkt ist aus Sicherheitsgründen strikt auf Superuser beschränkt.
+- [ ] **Demo-Daten einrichten (Site-Customization-Admin):**
+  - Bei ausdrücklich aktivem DEMO_MODE können Superuser eine frische Umgebung mit synthetischen Beispieldaten einrichten. Vorhandene Fachdaten werden nicht gelöscht; vollständige Wiederholungen ändern die Demo nicht. Einen destruktiven Reset bietet diese Aktion nicht.
 
 ---
 
