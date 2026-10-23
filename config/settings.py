@@ -248,6 +248,8 @@ STORAGES = {
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# Tests laden Uploads in ein temporäres Verzeichnis statt nach media/ bzw. private_media/.
+TEST_RUNNER = 'config.testing.IsolatedMediaTestRunner'
 PRIVATE_MEDIA_ROOT = Path(os.environ.get('PRIVATE_MEDIA_ROOT', BASE_DIR / 'private_media'))
 SERVE_MEDIA = env_bool('SERVE_MEDIA', default=DEBUG)
 

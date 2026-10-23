@@ -115,7 +115,9 @@ Korrekturaktion, das Schweizer Adminformular während der Ergebnisprüfung und
 veraltete K.-o.-Freigaben in beiden Oberflächen und bei gleichzeitigen Änderungen.
 Alle **24 JavaScript-Tests**, Django-Systemprüfung und Migrationsabgleich
 bestanden ebenfalls, ebenso die **38 zusätzlichen Modusprüfungen** aus
-`scripts/tournament_mode_review.py`. Backend-Eingabe, Siegerwechsel, Abschlussbestätigung und
+`scripts/tournament_mode_review.py` (am 23.10.2026 entfernt; die Fälle sind in
+`tournaments.test_format_improvements`, `tournaments.test_audit` und
+`tournaments.test_swiss` abgedeckt). Backend-Eingabe, Siegerwechsel, Abschlussbestätigung und
 FFA-Korrektur wurden zusätzlich im Browser mit einer isolierten Testdatenbank
 geprüft.
 

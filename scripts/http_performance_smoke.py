@@ -23,6 +23,28 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def percentile(values, percent):
+    ordered = sorted(values)
+    return round(ordered[min(len(ordered) - 1, int((len(ordered) - 1) * percent))], 2)
+
+
+def sample_lock_waits(stop, samples):
+    """Zählt eigene PostgreSQL-Sessions, die gerade auf eine Sperre warten."""
+    from django.db import connection
+    try:
+        while not stop.is_set():
+            with connection.cursor() as cursor:
+                cursor.execute('''
+                    SELECT count(*) FROM pg_stat_activity
+                    WHERE datname = current_database() AND usename = current_user
+                      AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()
+                ''')
+                samples.append(cursor.fetchone()[0])
+            stop.wait(.005)
+    finally:
+        connection.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url', required=True)
@@ -52,7 +74,6 @@ def main():
     from backups.database import software_fingerprint
     from events.models import Event, TicketType, EventRegistration
     from seating.models import SeatingPlan, SeatingCell
-    from performance_smoke import percentile, sample_lock_waits
 
     if connection.vendor != 'postgresql':
         raise RuntimeError('PostgreSQL required')

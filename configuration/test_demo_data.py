@@ -1,11 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
-from io import StringIO
 import tempfile
 from threading import Barrier
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.core.management import call_command
 from django.db import connection, connections
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -111,14 +109,6 @@ class DemoDataTests(DemoEnvironment, TestCase):
         Team.objects.update(game=different)
         with self.assertRaises(DemoDataError):
             seed_demo_data()
-
-    def test_legacy_alias_is_non_destructive(self):
-        output, errors = StringIO(), StringIO()
-        call_command('reset_demo_data', stdout=output, stderr=errors)
-        call_command('reset_demo_data', stdout=output, stderr=errors)
-        self.assertIn('veraltet', errors.getvalue())
-        self.assertEqual(DemoDataset.objects.count(), 1)
-        self.assertEqual(Event.objects.count(), 1)
 
 
 class DemoConcurrencyTests(DemoEnvironment, TransactionTestCase):

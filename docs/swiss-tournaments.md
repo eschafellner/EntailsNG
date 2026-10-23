@@ -2,10 +2,11 @@
 
 > Seit 5. Oktober 2026 verwendet das Projekt ausschließlich PostgreSQL, auch lokal und für Tests. Testbefehle benötigen eine konfigurierte PostgreSQL-Verbindung; erwähnte SQLite-Ergebnisse sind historische Prüfstände vor der Umstellung. Die vollständige PostgreSQL-Suite einschließlich Parallelität und Backups läuft gemeinsam in CI.
 
-Die anschließende modulweite Prüfung und die aktuellen Testergebnisse sind im
-[Prüfbericht vom 1. Oktober 2026](tournament-audit-2026-10-01.md) dokumentiert.
-Die spätere [Verbesserungsrunde](tournament-mode-improvements-2026-10-01.md)
-ergänzt einen explizit genehmigten Rettungsweg für blockierte Auslosungen.
+Die anschließende modulweite Prüfung (Prüfbericht vom 1. Oktober 2026) und die
+spätere Verbesserungsrunde mit dem explizit genehmigten Rettungsweg für blockierte
+Auslosungen liegen im Dokumentationsarchiv außerhalb des Projekts
+(`entails-ng-archiv/docs/`). Die zugehörigen Regressionen laufen in
+`tournaments.test_swiss` und `tournaments.test_format_improvements`.
 
 Stand: 7. Oktober 2026. Die gemeinsame [Ergebnisverwaltung](tournament-result-management.md)
 ergänzt Backend-Korrekturen, Änderungshistorie und die endgültige Abschlussbestätigung.

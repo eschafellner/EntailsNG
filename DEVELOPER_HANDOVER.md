@@ -1,6 +1,6 @@
 # EntailsNG – Entwicklerübergabe
 
-Stand: 16. Oktober 2026. Maßgeblich sind Code und Konfiguration. Sicherheitsupdate B1: [Änderungen und neue Prüfnachweise](docs/b1-django-security-update-results.md). Weiterer Umsetzungsstand, Testbefehle und Grenzen: [Nachweise zu P1–P6](docs/remediation-progress.md). Die [vorherige Übergabe samt historischen Prüfberichten](docs/verification-history.md) bleibt archiviert. Der [Audit](docs/developer-handover-audit-2026-10-15.md) beschreibt den Stand vor diesen Korrekturen.
+Stand: 16. Oktober 2026. Maßgeblich sind Code und Konfiguration. Sicherheitsupdate B1: [Änderungen und neue Prüfnachweise](docs/b1-django-security-update-results.md). Weiterer Umsetzungsstand, Testbefehle und Grenzen: [Nachweise zu P1–P6](docs/remediation-progress.md). Die vorherige Übergabe samt historischen Prüfberichten (`verification-history.md`), der Audit des Stands vor diesen Korrekturen und die datierten Release-Nachweise (`verification/`) liegen seit 23.10.2026 im Dokumentationsarchiv außerhalb des Projekts (`entails-ng-archiv/docs/`).
 
 ## Zweck und Architektur
 
@@ -90,7 +90,7 @@ Der Generator benötigt Migration `configuration.0025_demodataset`. Er akzeptier
 
 Gäste haben **kein nutzbares Passwort**. Für einen Gastlogin individuell `python manage.py changepassword demo_guest_1` verwenden. Einen Administrator separat anlegen. Ein versionierter Abschlussnachweis und eine PostgreSQL-Sperre sichern atomare, parallele und wiederholte Aufrufe; bei unverändert vollständiger Demo bleibt der Datenbestand unverändert. Bei fehlenden Objekten, veränderten Beziehungen oder anderer Version erfolgt ein Abbruch, kein Reset.
 
-`./install.sh --demo`, `scripts/setup_postgres.py --demo` und ausdrücklich aktivierter Docker-DEMO_MODE verwenden denselben Service. Die Adminaktion „Demo-Daten einrichten“ benötigt eine entsprechend aktivierte Demo-Umgebung. Wenn die Demo anschließend frei bearbeitet wird, DEMO_MODE nach der initialen Einrichtung wieder deaktivieren: Ein aktiver Generator bricht bei veränderten Beziehungen ausdrücklich ab. `reset_demo_data` bleibt vorübergehend ein veralteter, nicht löschender Alias. `initial_data.json` ist ein historischer Snapshot und kein unterstützter Setup-/Importweg.
+`./install.sh --demo`, `scripts/setup_postgres.py --demo` und ausdrücklich aktivierter Docker-DEMO_MODE verwenden denselben Service. Die Adminaktion „Demo-Daten einrichten“ benötigt eine entsprechend aktivierte Demo-Umgebung. Wenn die Demo anschließend frei bearbeitet wird, DEMO_MODE nach der initialen Einrichtung wieder deaktivieren: Ein aktiver Generator bricht bei veränderten Beziehungen ausdrücklich ab. Der frühere Alias `reset_demo_data` und der Snapshot `initial_data.json` wurden am 23.10.2026 entfernt; Demodaten entstehen ausschließlich über `seed_demo_data`.
 
 ### Erste Veranstaltung und Hintergrundprozesse
 

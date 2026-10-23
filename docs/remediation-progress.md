@@ -24,7 +24,7 @@ Stand: 15. Oktober 2026. Ausgangspunkt: Commit `97026fd` auf `main` mit bereits 
 
 Der abschließende Imagebau/Containerlauf einschließlich frischer Migrationen, zehn Setupseiten, unveränderter Seed-/Demowiederholung und der Probe „0017 rotiert genau einmal“ ist erfolgreich. Tatsächliche DB-/Redis-Ausfälle wurden über absichtlich falsche Testverbindungen erkannt. Alle sieben Dienste blieben laufend; vier HTTPS-/Assetpfade und 864 HTTP-Messungen bestanden. Native PG-Testinstanz und eigene Container-/Volume-/Image-Testressourcen wurden anschließend gestoppt bzw. entfernt.
 
-Dauerhafte bereinigte Nachweise: [Zusammenfassung](verification/remediation-2026-10-15/summary.json), [frisches Setup/Migration](verification/remediation-2026-10-15/setup.json), [Container](verification/remediation-2026-10-15/container.json), [Ausfallerkennung](verification/remediation-2026-10-15/runtime-negative.json), [HTTP-Messwerte](verification/remediation-2026-10-15/http-performance.json). Rohlogs liegen außerhalb des Repository unter `/tmp/entails-remediation/`. Keine echten Benutzerlisten oder Secrets wurden in die Nachweise übernommen.
+Dauerhafte bereinigte Nachweise (Zusammenfassung, frisches Setup/Migration, Container, Ausfallerkennung, HTTP-Messwerte) liegen seit 23.10.2026 im Dokumentationsarchiv außerhalb des Projekts unter `entails-ng-archiv/docs/verification/remediation-2026-10-15/`. Rohlogs liegen außerhalb des Repository unter `/tmp/entails-remediation/`. Keine echten Benutzerlisten oder Secrets wurden in die Nachweise übernommen.
 
 ## Ergänzung vom 16. Oktober 2026: Sicherheitsupdate B1
 

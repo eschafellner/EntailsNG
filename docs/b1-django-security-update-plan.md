@@ -89,7 +89,7 @@ Frisches Setup, Migrationen, Seeds, Demowiederholung, echter Redis, HTTPS-Seiten
 
 ### 6. Dokumentieren und Betriebsrollout abschließen
 
-**Verantwortung: Entwicklung für Releaseunterlagen; Betrieb für Zielsystem und Freigabe.** Nach erfolgreicher Prüfung die Versionsangabe in `DEVELOPER_HANDOVER.md` aktualisieren und einen neuen datierten B1-Nachweis unter `docs/verification/` ablegen. Verweise in `docs/remediation-progress.md` ergänzen; historische Ergebnisse nicht umetikettieren. Nachweis enthält Commit/Änderungsstand, Befehle, Laufzeitversionen, Image-ID, Ergebnisse, Auditbewertung und Grenzen; keine Geheimnisse oder personenbezogenen Betriebsdaten.
+**Verantwortung: Entwicklung für Releaseunterlagen; Betrieb für Zielsystem und Freigabe.** Nach erfolgreicher Prüfung die Versionsangabe in `DEVELOPER_HANDOVER.md` aktualisieren und einen neuen datierten B1-Nachweis ablegen (seit 23.10.2026 im Dokumentationsarchiv außerhalb des Projekts, `entails-ng-archiv/docs/verification/`). Verweise in `docs/remediation-progress.md` ergänzen; historische Ergebnisse nicht umetikettieren. Nachweis enthält Commit/Änderungsstand, Befehle, Laufzeitversionen, Image-ID, Ergebnisse, Auditbewertung und Grenzen; keine Geheimnisse oder personenbezogenen Betriebsdaten.
 
 Im Zielsystem das geprüfte Image für Web und alle aktivierten Worker zusammen ausrollen; verwendete Compose-Profile erhalten. Anschließend Versionen/Imagebezug, Dienstzustände, Logs, `/api/health/`, Login, Formular-/Uploadstichprobe und folgenden Laufzeitcheck prüfen:
 

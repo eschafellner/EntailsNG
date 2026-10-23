@@ -189,7 +189,7 @@ seit der Sammelzahlungserweiterung vier Abfragen auch bei deaktivierter Funktion
 weil finanzierte Plätze weiterhin geschützt werden müssen.
 Desktop- und 390-Pixel-Browserprüfung bestätigen Auswahl, Speicherung, Logos,
 Kontingentanzeige und gezielte Backendfreigabe. Die schmale Ansicht hat keinen
-horizontalen Seitenüberlauf. Screenshots liegen unter `docs/screenshots/clan-seat-*`.
+horizontalen Seitenüberlauf.
 Die Browserprüfung nutzt eine getrennte Vorschau-Datenbank und Testkonten.
 
 Der damalige globale Migrationsunterschied zu drei Theme-Farbdefaults wurde am

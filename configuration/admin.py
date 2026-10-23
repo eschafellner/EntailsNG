@@ -33,7 +33,7 @@ class NavigationItemAdmin(admin.ModelAdmin):
         return readonly
 
 
-from django.urls import path
+from django.urls import path, reverse
 from django.shortcuts import redirect, render
 from django.contrib import messages
 from django.core.management import call_command
@@ -108,7 +108,7 @@ class GeneralConfigurationAdmin(admin.ModelAdmin):
 
 @admin.register(SiteCustomization)
 class SiteCustomizationAdmin(admin.ModelAdmin):
-    readonly_fields = ('theme_preset_preview', 'reset_demo_data_button')
+    readonly_fields = ('theme_preset_preview', 'seed_demo_data_button')
 
     fieldsets = (
         (
@@ -152,21 +152,21 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
             {
                 'fields': (
                     'custom_css',
-                    'reset_demo_data_button',
+                    'seed_demo_data_button',
                 ),
                 'description': 'Eigenes CSS und Einrichtung synthetischer Beispieldaten in einer Demo-Umgebung.',
             },
         ),
     )
 
-    def reset_demo_data_button(self, obj):
+    def seed_demo_data_button(self, obj):
         return format_html(
-            '<a href="/admin/configuration/sitecustomization/reset-demo-data/" '
+            '<a href="{}" '
             'style="background:#dc2626; color:#ffffff; font-weight:bold; padding:8px 14px; border-radius:6px; text-decoration:none; display:inline-block;">'
             '{}'
-            '</a>', tr('demo_setup_title')
+            '</a>', reverse('admin:seed_demo_data_admin'), tr('demo_setup_title')
         )
-    reset_demo_data_button.short_description = "Demo-Daten einrichten"
+    seed_demo_data_button.short_description = "Demo-Daten einrichten"
 
 
     def theme_preset_preview(self, obj):
@@ -205,13 +205,13 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path('reset-demo-data/', self.admin_site.admin_view(self.reset_demo_data_view), name='reset_demo_data_admin'),
+            path('seed-demo-data/', self.admin_site.admin_view(self.seed_demo_data_view), name='seed_demo_data_admin'),
         ]
         return custom_urls + urls
 
-    def reset_demo_data_view(self, request):
+    def seed_demo_data_view(self, request):
         if not request.user.is_superuser:
-            raise PermissionDenied("Nur Superuser dürfen die Demo-Daten zurücksetzen.")
+            raise PermissionDenied("Nur Superuser dürfen die Demo-Daten einrichten.")
         if request.method == 'POST':
             try:
                 call_command('seed_demo_data')
@@ -220,7 +220,7 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
                 logger.error("Demo-Einrichtung fehlgeschlagen", exc_info=True)
                 messages.error(request, tr('demo_setup_failed'))
             return redirect('/admin/configuration/sitecustomization/1/change/')
-        return render(request, 'admin/reset_demo_data_confirm.html')
+        return render(request, 'admin/seed_demo_data_confirm.html')
 
     def has_add_permission(self, request):
         return super().has_add_permission(request) and not SiteCustomization.objects.exists()

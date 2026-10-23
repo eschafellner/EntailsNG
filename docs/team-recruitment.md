@@ -95,6 +95,3 @@ Entrypoint führt die bestehenden Update-Schritte aus.
   Desktop sowie 390-Pixel-Mobilansicht ohne horizontales Scrollen. Keine
   Browserfehler in der geprüften Spieleransicht.
 
-![Kapitän nach Clanaufnahme und Versand einer persönlichen Einladung](screenshots/team-recruitment-captain.png)
-
-![Einladung beim Spieler auf dem Smartphone](screenshots/team-invitation-mobile.png)

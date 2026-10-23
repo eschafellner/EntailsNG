@@ -206,4 +206,4 @@ docker compose down
 # (oder: podman compose down)
 ```
 
-Entwicklereinstieg: [DEVELOPER_HANDOVER.md](DEVELOPER_HANDOVER.md). Updates und Laufzeitprüfung: [docs/updating.md](docs/updating.md). Der historische Snapshot `initial_data.json` ist kein unterstützter Setupweg.
+Entwicklereinstieg: [DEVELOPER_HANDOVER.md](DEVELOPER_HANDOVER.md). Updates und Laufzeitprüfung: [docs/updating.md](docs/updating.md). Demodaten werden ausschließlich über `seed_demo_data` eingerichtet.

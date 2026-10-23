@@ -24,8 +24,6 @@ aus. Bankdaten und Zahlungsübersicht sind ausschließlich für Clanadmins und
 berechtigte Orgas erreichbar. Der öffentliche Sitzplan zeigt lediglich
 **Clan-Zahlung ausstehend** oder **Clanplatz bezahlt** mit Clanname/Logo.
 
-![Zahlungsvorschau](screenshots/clan-payment-preview-desktop.png)
-
 ## Ticketkategorie und feste Fristen
 
 Unter **Konfiguration → Clan Sitzplatz Vormerkung** stehen zusätzlich:
@@ -80,8 +78,6 @@ geben finanzierte Plätze nicht frei. Diese Regeln gelten auch für historische
 bezahlte Plätze im Editor. Eine Clanauflösung bzw. die Selbstlöschung des letzten
 aktiven Clanmitglieds ist bei vorhandener Zahlungshistorie gesperrt.
 
-![Backendprüfung](screenshots/clan-payment-admin-confirmation.png)
-
 ## Mitglieder zuweisen und ersetzen
 
 Nach Zahlungsbestätigung weist der Clanadmin bestätigte, aktive und nicht
@@ -114,8 +110,6 @@ keine zwischenzeitliche Zuweisung überschreiben.
 Auch die reguläre Orga-Stornierung einer gedeckten Anmeldung löst ihre Zuweisung
 und macht den weiterhin bezahlten Clanplatz wieder verfügbar. Normale Einzel-
 Zahlungsaktionen dürfen die Clan-Zahlungsdeckung nicht überschreiben.
-
-![Zuweisung auf Mobilgeräten](screenshots/clan-payment-assigned-mobile.png)
 
 ## Kapazität, Nachvollziehbarkeit und E-Mails
 

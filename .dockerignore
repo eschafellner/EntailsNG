@@ -1,7 +1,7 @@
 .git
 .venv
-__pycache__
-*.pyc
+**/__pycache__
+**/*.pyc
 .env
 .env.local
 .env.production
@@ -11,3 +11,8 @@ private_media
 backups_data
 staticfiles
 data/certbot
+
+# Nicht für die Laufzeit benötigt
+docs
+scripts/tests
+smoke-results

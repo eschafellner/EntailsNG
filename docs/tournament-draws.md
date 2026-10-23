@@ -180,5 +180,3 @@ python manage.py makemigrations --check --dry-run
 - GitHub-CI und Docker-Imagebau wurden lokal nicht ausgeführt.
 
 Vorschau mit synthetischen Beispieldaten:
-
-![Auslosungsvorschau mit manuellem Tausch und Clan-Hinweisen](screenshots/tournament-draw-desktop.jpg)

@@ -23,6 +23,26 @@ data/certbot/
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
+
+# KI- und Agenten-Arbeitsverzeichnisse
+.agents/
+.codex/
+.aws/
+
+# Test- & Coverage-Artefakte
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Node-Artefakte (lokale JavaScript-Tests)
+node_modules/
+npm-debug.log*
+
+# OS-Artefakte
+.DS_Store
+Thumbs.db
 
 # Lokale Implementierungsbaupläne
 /BAUPLAN_VIEWS_NG.md

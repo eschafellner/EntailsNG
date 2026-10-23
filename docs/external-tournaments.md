@@ -123,7 +123,3 @@ python manage.py makemigrations --check --dry-run
   fehlendes `target` für Navigation im selben Tab. Bei 390 und 320 Pixeln
   auch mit langen Turnier-/Anbieternamen kein horizontaler Überlauf.
 - GitHub-CI und Docker-Imagebau wurden lokal nicht ausgeführt.
-
-Vorschau mit Beispieldaten:
-[Desktop](screenshots/external-tournaments-desktop.jpg),
-[Mobil](screenshots/external-tournaments-mobile.jpg).

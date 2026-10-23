@@ -1,1 +1,0 @@
-{"setup": "passed", "python": "3.12.15", "django": "6.0.9", "postgresql": 160015, "pages": 10, "demo_guests": 4, "seed_repeat": "unchanged", "demo_repeat": "unchanged", "team_code_migration": "rotates once", "real_smtp": false}

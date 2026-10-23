@@ -1139,7 +1139,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
     - P2: Sichere HTML-Bereinigung gegen Entity-Decoding-Bypasses und Idempotenz
     - P3: DynamicDebugMiddleware schützt anonyme & normale Besucher bei DEBUG=True vor Traceback-Leaks
     - P4: Cache-Konsistenz bei Rollback und Bulk-Löschung via Signals & on_commit
-    - P5: reset_demo_data Transaktionssicherheit & Fehlerbehandlung
+    - P5: seed_demo_data Transaktionssicherheit & Fehlerbehandlung
     - P6: seed_features überschreibt keine angepassten Menüpunkte und verhindert Duplikate
     - P7: delete_resolved_logs im Admin löscht nur die übergebene Queryset-Auswahl
     - S2: SiteCustomization.load() ist read-only (keine DB-Writes bei Aufruf)
@@ -1172,7 +1172,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
             password="password",
         )
 
-        reset_url = reverse('admin:reset_demo_data_admin')
+        reset_url = reverse('admin:seed_demo_data_admin')
 
         # 1. Mitarbeiter ohne Superuser-Status: HTTP 403 Forbidden
         self.client.login(username="staff_only", password="password")
@@ -1327,13 +1327,13 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         from configuration.demo import DemoDataError
         with patch('configuration.management.commands.seed_demo_data.seed_demo_data', side_effect=DemoDataError("Demo deaktiviert")):
             with self.assertRaises(CommandError) as ctx:
-                call_command('reset_demo_data', stdout=StringIO())
+                call_command('seed_demo_data', stdout=StringIO())
             self.assertIn("Demo deaktiviert", str(ctx.exception))
 
         # 2. Admin-Endpunkt fängt den Fehler ab und sendet messages.error
         self.client.login(username="admin_p5", password="password")
         with patch('configuration.admin.call_command', side_effect=Exception("DB-Verbindung unterbrochen")):
-            resp = self.client.post(reverse('admin:reset_demo_data_admin'), follow=True)
+            resp = self.client.post(reverse('admin:seed_demo_data_admin'), follow=True)
             self.assertEqual(resp.status_code, 200)
             messages_list = [str(m) for m in resp.context['messages']]
             self.assertTrue(any("Demo-Einrichtung fehlgeschlagen" in m for m in messages_list))

@@ -215,5 +215,3 @@ Anmeldung, Mailpause und bestätigtes Löschen geprüft. Ein dabei gefundener
 Windows-Konflikt mit offenen SQLite-Dateiverbindungen ist korrigiert und war durch
 einen zusätzlichen Test einschließlich Rücksetzung abgedeckt. Dieser ausschließlich
 für SQLite bestimmte Test wurde bei der PostgreSQL-Umstellung entfernt.
-Eine [Bildschirmaufnahme nach der Wiederherstellung](screenshots/backup-admin.jpg)
-zeigt die Backup-Seite und die aktive Mailpause.

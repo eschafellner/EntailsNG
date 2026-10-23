@@ -142,9 +142,3 @@ python manage.py test contact --noinput
 python manage.py test --noinput
 node --test scripts/tests/*.test.cjs
 ```
-
-![Kontaktformular auf dem Desktop](screenshots/contact-desktop.jpg)
-
-Weitere Ansichten: [Mobil](screenshots/contact-mobile.jpg),
-[mobile Erfolgsanzeige](screenshots/contact-success-mobile.jpg),
-[Backend-Konfiguration](screenshots/contact-admin.jpg).

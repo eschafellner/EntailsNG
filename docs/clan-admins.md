@@ -30,8 +30,6 @@ Die Verwaltung ist Teil des Clanprofils; zusätzliche Rollen oder ein separates
 Admin-Limit werden nicht benötigt. Clan-Admins dürfen auch andere Clan-Admins
 herabstufen. Diese Regel entspricht ihren gleichen Rechten.
 
-![Bestätigung einer Beförderung](screenshots/clan-admins-confirmation.png)
-
 ## Implementierung
 
 `clans/services.py` bündelt Rollenänderungen, Entfernung, Bearbeitungsrechte,
@@ -73,7 +71,7 @@ eingetragen; sie wurden lokal nicht gegen PostgreSQL ausgeführt.
 
 Im Browser wurden Beförderung, Herabstufung, Abbrechen, Adminanzahl und der Schutz
 des letzten Admins mit lokalen Testkonten geprüft. Die 390-Pixel-Ansicht zeigt
-keinen horizontalen Überlauf. Screenshots liegen unter `docs/screenshots/clan-admins-*`.
+keinen horizontalen Überlauf.
 Der Clan-Migrationscheck meldet keine Änderungen.
 
 Für die Einführung sind **`python manage.py seed_translations`** und
