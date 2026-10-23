@@ -1,6 +1,6 @@
 # EntailsNG – Entwicklerübergabe
 
-Stand: 16. Oktober 2026. Maßgeblich sind Code und Konfiguration. Sicherheitsupdate B1: [Änderungen und neue Prüfnachweise](docs/b1-django-security-update-results.md). Weiterer Umsetzungsstand, Testbefehle und Grenzen: [Nachweise zu P1–P6](docs/remediation-progress.md). Die vorherige Übergabe samt historischen Prüfberichten (`verification-history.md`), der Audit des Stands vor diesen Korrekturen und die datierten Release-Nachweise (`verification/`) liegen seit 23.10.2026 im Dokumentationsarchiv außerhalb des Projekts (`entails-ng-archiv/docs/`).
+Stand: 23. Oktober 2026. Maßgeblich sind Code und Konfiguration. Sicherheitsupdate B1: [Änderungen und neue Prüfnachweise](docs/b1-django-security-update-results.md). Weiterer Umsetzungsstand, Testbefehle und Grenzen: [Nachweise zu P1–P6](docs/remediation-progress.md). Die Bereinigung nach dem [Repository-Audit](AUDIT_BERICHT.md) (Punkte 2–7 und 11) ist umgesetzt. Dabei wurden die vorherige Übergabe samt historischen Prüfberichten (`docs/verification-history.md`), der Audit des Stands vor P1–P6, die Turniermodus-Reviews vom 1. Oktober und die datierten Release-Nachweise (`docs/verification/`) aus dem Repository entfernt; bis Commit `85ba422` sind sie dort erhalten, z. B. `git show 85ba422:docs/verification-history.md`.
 
 ## Zweck und Architektur
 
@@ -29,7 +29,7 @@ Die Kernassets, Fonts, TinyMCE und QR-Erzeugung sind lokal. Optional eingebettet
 
 | Bereich | Maßgeblicher Stand |
 | --- | --- |
-| Python/Django | Image und CI: Python 3.12; Django 6.0.9. Lokal zusätzlich Python 3.14.8 geprüft; keine allgemeine Python-Versionsmatrix. NetworkX 3.6.1 schließt 3.14.1 aus. |
+| Python/Django | Image und CI: Python 3.12; Django 6.0.9. Lokal zusätzlich Python 3.14.8 geprüft; keine allgemeine Python-Versionsmatrix. NetworkX 3.6.1 schließt 3.14.1 aus. Python 3.15 ist mit den aktuellen Pins nicht installierbar (kein Wheel für psycopg-binary 3.2.13). |
 | Pythonpakete | Vollständig gepinnt in [requirements.txt](requirements.txt): django-tinymce, psycopg[binary], Pillow, redis, Gunicorn, WhiteNoise, python-dotenv, cryptography, qrcode und NetworkX. |
 | DB/Cache | Compose/CI: PostgreSQL 16 und Redis 7. PostgreSQL ist verbindlich; native Backup-Tools müssen dieselbe Hauptversion wie der Server haben. |
 | Web | Python-Slim-Bookworm-Image, Nginx 1.27; Certbot 5.8.0 und cloudflared 2026.10.0 auf konkrete Digests festgelegt. Definitionen: [Dockerfile](Dockerfile), [Compose](docker-compose.yml). |
@@ -113,7 +113,7 @@ Die vollständige [Env-Matrix](docs/configuration.md) beschreibt Defaults und Be
 
 | App/Paket | Verantwortung und Einstieg |
 | --- | --- |
-| `config` | Projektsettings, Root-URLs, WSGI/ASGI; keine eigene registrierte Fachapp. |
+| `config` | Projektsettings, Root-URLs, WSGI/ASGI, Testrunner (`config/testing.py`); keine eigene registrierte Fachapp. |
 | `events` | Event, **TicketType**, EventRegistration, Zahlungs-/Anmelde-/Check-in-Services; `/checkin/scanner/`; [Scanner](docs/scanner-feedback.md). |
 | `users` | E-Mail-/Username-Login über EmailOrUsernameBackend, Verifizierung, Profil, Kontolöschung, Orga-Sperren; [Löschung](docs/account-deletion.md), [Sperren](docs/user-bans.md). |
 | `tournaments` | Sechs Modi, Teams/Kader/Einladungen, Vorschau/Start, Ergebnisse/Bestätigung, Neustarts und externe Turniere. Services im **Paket** `tournaments/services/`; [Auslosung](docs/tournament-draws.md), [Ergebnisse](docs/tournament-result-management.md), [Einladungen](docs/team-recruitment.md), [externe Turniere](docs/external-tournaments.md). Podium erst nach expliziter Bestätigung und FINISHED. |
@@ -131,7 +131,7 @@ Die vollständige [Env-Matrix](docs/configuration.md) beschreibt Defaults und Be
 
 ## Tests, CI und Betriebsprüfung
 
-Eine ausdrücklich dafür vorgesehene PostgreSQL-Verbindung verwenden. Die Rolle braucht CREATEDB und für native Backup-/Restoretests Eigentümerrechte sowie passende PG-Programme. Django-Tests verwenden LocMemCache; reale Redisprüfungen laufen separat.
+Eine ausdrücklich dafür vorgesehene PostgreSQL-Verbindung verwenden. Die Rolle braucht CREATEDB und für native Backup-/Restoretests Eigentümerrechte sowie passende PG-Programme. Django-Tests verwenden LocMemCache; reale Redisprüfungen laufen separat. Der Testrunner `config.testing.IsolatedMediaTestRunner` leitet `MEDIA_ROOT` und `PRIVATE_MEDIA_ROOT` für den ganzen Lauf in ein temporäres Verzeichnis um, sodass Tests keine Dateien in `media/` oder `private_media/` hinterlassen. Bei `--parallel` gilt das nur für per fork gestartete Worker (Linux, CI, Container), nicht unter Windows/macOS.
 
 ```bash
 python manage.py check
@@ -143,7 +143,7 @@ python manage.py check_runtime --health-host 127.0.0.1 --require-redis
 
 Die [CI](.github/workflows/ci.yml) läuft für main/master mit Python 3.12, PostgreSQL 16, Redis 7 und Node 22. Sie prüft Django/JavaScript/Migrationen, ein frisches Setup samt Demo-Wiederholung, echten prozessübergreifenden Redis sowie einen isolierten Imagebau/Compose-Start. Dieser prüft auch HTTPS, statische Dateien, alle Worker und HTTP-Lastszenarien. Keine pauschale WCAG-Aussage aus diesen Tests ableiten. Ein separater Formatter-/Linterlauf ist derzeit nicht konfiguriert.
 
-Seit B1 exportieren `scripts/dependency_inventory.py` und der Container-Smoke den vollständigen installierten Paketbestand einschließlich pip. Ein separater pip-audit-2.10.1-Prozess prüft die Inventare der Testumgebung und des Images; Befunde, übersprungene Pakete, unvollständige Ergebnisse und Abruffehler verhindern einen erfolgreichen Prüfschritt. Zusätzlich wird Django gegen den exakten Pin und mindestens 6.0.9 geprüft. Image/CI verwenden pip 26.2.1; python-dotenv ist auf 1.2.4 aktualisiert. Offizielle Django-Sicherheitshinweise bleiben zusätzlich maßgeblich, da ein Scanner nicht alle aktuellen Korrekturen erfassen muss.
+Seit B1 exportieren `scripts/dependency_inventory.py` und der Container-Smoke den vollständigen installierten Paketbestand einschließlich pip. Ein separater pip-audit-2.10.1-Prozess prüft die Inventare der Testumgebung und des Images; Befunde, übersprungene Pakete, unvollständige Ergebnisse und Abruffehler verhindern einen erfolgreichen Prüfschritt. Zusätzlich wird Django gegen den exakten Pin und mindestens 6.0.9 geprüft. Image/CI verwenden pip 26.2.1; python-dotenv ist auf 1.2.4 aktualisiert. Pillow ist seit 23.10.2026 auf 13.0.0 angehoben, weil pip-audit für 12.3.0 35 Sicherheitsbefunde meldete. Ein lokaler Auditlauf braucht ebenfalls pip 26.2.1, sonst meldet er Befunde zu älteren pip-Versionen. Offizielle Django-Sicherheitshinweise bleiben zusätzlich maßgeblich, da ein Scanner nicht alle aktuellen Korrekturen erfassen muss.
 
 ## Deployment und Betrieb
 
@@ -151,7 +151,7 @@ Schrittfolge, Wartungsfenster, Migrationen, Rollbackgrenzen, TLS-Erneuerung und 
 
 Tunnel-Origin: **HTTP `nginx:8080`**. Öffentliche Ports 80/443 übernehmen keine eingesandten Client-IP-/Protokollangaben als vertrauenswürdig. `ALLOWED_HOSTS` braucht neben der Domain den Loopbackhost für den Compose-Healthcheck. Die Route `/api/health/` prüft DB/Cache, nicht den externen Tunnel oder die Zertifikatserneuerung.
 
-Der Entrypoint führt normalerweise Migrationen, statische Dateien und Seeds aus; erforderliche Seedfehler brechen den Start ab. Umgebungs-/Mountänderungen benötigen neu erstellte Container. Persistente Volumes und getrennte Schlüssel erhalten. Migration 0017 rotiert Teamcodes beim erstmaligen Anwenden irreversibel. Nach Restore werden Sessions/Codes entfernt und Mail pausiert; Wiederfreigabe erst nach Betriebsprüfung.
+Der Entrypoint führt normalerweise Migrationen, statische Dateien und Seeds aus; erforderliche Seedfehler brechen den Start ab. Umgebungs-/Mountänderungen benötigen neu erstellte Container. Das Image enthält laut `.dockerignore` weder `docs/` noch `scripts/tests/` noch Python-Caches. Persistente Volumes und getrennte Schlüssel erhalten. Migration 0017 rotiert Teamcodes beim erstmaligen Anwenden irreversibel. Nach Restore werden Sessions/Codes entfernt und Mail pausiert; Wiederfreigabe erst nach Betriebsprüfung.
 
 ## Konventionen, Entscheidungen und offene Punkte
 

@@ -4,8 +4,9 @@
 
 Die anschließende modulweite Prüfung (Prüfbericht vom 1. Oktober 2026) und die
 spätere Verbesserungsrunde mit dem explizit genehmigten Rettungsweg für blockierte
-Auslosungen liegen im Dokumentationsarchiv außerhalb des Projekts
-(`entails-ng-archiv/docs/`). Die zugehörigen Regressionen laufen in
+Auslosungen wurden am 23.10.2026 aus dem Repository entfernt; bis Commit `85ba422`
+liegen sie unter `docs/tournament-audit-2026-10-01.md` und
+`docs/tournament-mode-improvements-2026-10-01.md`. Die zugehörigen Regressionen laufen in
 `tournaments.test_swiss` und `tournaments.test_format_improvements`.
 
 Stand: 7. Oktober 2026. Die gemeinsame [Ergebnisverwaltung](tournament-result-management.md)

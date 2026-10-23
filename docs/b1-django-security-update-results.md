@@ -66,7 +66,7 @@ Im Python-Produktionsimage fehlt absichtlich Node. Deshalb überspringt die Djan
 | Bestehende HTTP-Fachlastmatrix | 864 Requests, keine unerwarteten Fehler; pro Sitzplatzkonkurrenz genau ein Gewinner. Diagnostische Messwerte ohne zugesicherte Latenz-/Kapazitätsgrenze. |
 | Statische Prüfung und Aufräumen | Actionlint, Python-Syntax und Diffprüfung erfolgreich. Eigene Testcontainer, Volumes, Netzwerke und temporäre Smoke-Images entfernt. |
 
-Dauerhafte Nachweise (Zusammenfassung, Runtimeinventar, Image-/Dienstabgleich, Audit samt Vollständigkeitsprüfung und Rohmeldungen, Header-HTTP, Setup, Ausfallerkennung, HTTP-Matrix, Baseline-Reproduktion auf Django 6.0.7 und Prüfsummen der geänderten Code-/Konfigurationsdateien) liegen seit 23.10.2026 im Dokumentationsarchiv außerhalb des Projekts unter `entails-ng-archiv/docs/verification/b1-2026-10-16/`.
+Dauerhafte Nachweise (Zusammenfassung, Runtimeinventar, Image-/Dienstabgleich, Audit samt Vollständigkeitsprüfung und Rohmeldungen, Header-HTTP, Setup, Ausfallerkennung, HTTP-Matrix, Baseline-Reproduktion auf Django 6.0.7 und Prüfsummen der geänderten Code-/Konfigurationsdateien) wurden am 23.10.2026 aus dem Repository entfernt; bis Commit `85ba422` liegen sie unter `docs/verification/b1-2026-10-16/`.
 
 Das abschließend geprüfte Image hatte die ID `sha256:6b6df3794c93a24f1ce51106564230c486cf1c1053051cda2ccad098a43941ef`. Der Smoke entfernt seine Testimages nach dem Lauf; für einen Rollout ist ein eigener Releasebuild aus dem geprüften Quellstand mit erneutem Paket-/Imageabgleich nötig. Bereinigte Rohlogs einschließlich des ersten fehlgeschlagenen Gesamtlaufs und der erfolgreichen Wiederholung liegen unter `/tmp/entails-b1-evidence/`. Historische Prüfzahlen wurden nicht verändert.
 
