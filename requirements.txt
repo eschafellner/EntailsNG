@@ -1,7 +1,7 @@
 Django==6.0.9
 django-tinymce==5.0.0
 psycopg[binary]==3.2.13
-pillow==12.3.0
+pillow==13.0.0
 redis==5.2.1
 gunicorn==23.0.0
 whitenoise==6.12.0
