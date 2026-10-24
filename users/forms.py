@@ -40,6 +40,41 @@ class AccountDeletionForm(forms.Form):
         self.fields['confirm_deletion'].error_messages['required'] = get_translation('account_delete_confirmation_required')
 
 
+class GuestPhotoForm(forms.Form):
+    photo = forms.FileField(widget=forms.ClearableFileInput(attrs={'accept': 'image/jpeg,image/png,image/webp'}))
+    confirm_notice = forms.BooleanField(required=True)
+
+    def __init__(self, *args, **kwargs):
+        from configuration.translations import get_translation
+        super().__init__(*args, **kwargs)
+        self.fields['photo'].label = get_translation('guest_photo_file_label')
+        self.fields['photo'].error_messages['required'] = get_translation('guest_photo_required_file')
+        self.fields['confirm_notice'].label = get_translation('guest_photo_confirm_label')
+        self.fields['confirm_notice'].error_messages['required'] = get_translation('guest_photo_confirm_required')
+
+
+REAL_NAME_EXTRA_CHARS = " -'’."
+
+
+def validate_real_name(value):
+    """Normalisiert und prüft Vor-/Nachname: Buchstaben (inkl. Umlaute/Akzente), Leerzeichen, - ' ’ ."""
+    from configuration.translations import get_translation
+    name = ' '.join((value or '').split())
+    if not name:
+        raise forms.ValidationError(get_translation('real_name_required'))
+    if len(name) > 150:
+        raise forms.ValidationError(get_translation('real_name_too_long'))
+    if any(not (char.isalpha() or char in REAL_NAME_EXTRA_CHARS) for char in name):
+        raise forms.ValidationError(get_translation('real_name_invalid_chars'))
+    if sum(char.isalpha() for char in name) < 2:
+        raise forms.ValidationError(get_translation('real_name_too_short'))
+    return name
+
+
+def real_name_field():
+    return forms.CharField(max_length=150, required=True, widget=forms.TextInput(attrs={"class": "form-control"}))
+
+
 def validate_birthday_date(birthday):
     if not birthday:
         return birthday
@@ -69,13 +104,19 @@ class CustomUserCreationForm(UserCreationForm):
         ),
     )
 
+    first_name = real_name_field()
+    last_name = real_name_field()
+
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ("username", "email", "birthday")
+        fields = ("username", "first_name", "last_name", "email", "birthday")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["username"].widget.attrs.update({"class": "form-control"})
+        from configuration.translations import get_translation
+        for name in ("first_name", "last_name"):
+            self.fields[name].error_messages['required'] = get_translation('real_name_required')
         # Maximales Datum dynamisch auf heute setzen
         today_str = timezone.now().date().isoformat()
         self.fields["birthday"].widget.attrs["max"] = today_str
@@ -119,6 +160,12 @@ class CustomUserCreationForm(UserCreationForm):
         birthday = self.cleaned_data.get('birthday')
         return validate_birthday_date(birthday)
 
+    def clean_first_name(self):
+        return validate_real_name(self.cleaned_data.get('first_name'))
+
+    def clean_last_name(self):
+        return validate_real_name(self.cleaned_data.get('last_name'))
+
 
 class UserProfileForm(forms.ModelForm):
     email = forms.EmailField(
@@ -138,9 +185,12 @@ class UserProfileForm(forms.ModelForm):
         ),
     )
 
+    first_name = real_name_field()
+    last_name = real_name_field()
+
     class Meta:
         model = User
-        fields = ("email", "birthday")
+        fields = ("first_name", "last_name", "email", "birthday")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -148,6 +198,22 @@ class UserProfileForm(forms.ModelForm):
         self.pending_new_email = None
         today_str = timezone.now().date().isoformat()
         self.fields["birthday"].widget.attrs["max"] = today_str
+        from configuration.translations import get_translation
+        # Gesperrte Felder: Django ignoriert übermittelte Werte und nutzt den gespeicherten Namen.
+        self.real_name_locked = bool(self.instance and self.instance.is_real_name_locked)
+        for name in ("first_name", "last_name"):
+            self.fields[name].error_messages['required'] = get_translation('real_name_required')
+            self.fields[name].disabled = self.real_name_locked
+
+    def clean_first_name(self):
+        if self.real_name_locked:
+            return self.instance.first_name
+        return validate_real_name(self.cleaned_data.get('first_name'))
+
+    def clean_last_name(self):
+        if self.real_name_locked:
+            return self.instance.last_name
+        return validate_real_name(self.cleaned_data.get('last_name'))
 
     def clean_email(self):
         email = self.cleaned_data.get('email', '').strip().lower()
@@ -187,7 +253,11 @@ class UserProfileForm(forms.ModelForm):
         if commit:
             # Punkt 2: Ausschließlich die tatsächlich bearbeiteten Profilfelder persistieren!
             # Sicherheitsfelder (is_active, locked_until, failed_login_attempts) dürfen nicht überschrieben werden.
-            user.save(update_fields=['birthday'])
+            update_fields = ['birthday']
+            # Erneute Prüfung beim Speichern: Zahlung kann zwischen Laden und Absenden bestätigt worden sein.
+            if not self.real_name_locked and not User.objects.get(pk=user.pk).is_real_name_locked:
+                update_fields += ['first_name', 'last_name']
+            user.save(update_fields=update_fields)
         return user
 
 

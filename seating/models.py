@@ -286,6 +286,9 @@ class SeatingCell(models.Model):
         if event and hasattr(event, 'effective_status'):
             if event.effective_status in (Event.Status.CANCELLED, Event.Status.FINISHED, Event.Status.DRAFT):
                 return False, "Für diese Veranstaltung können keine Plätze mehr gewählt werden."
+            if not event.is_seat_selection_open:
+                from configuration.translations import get_translation
+                return False, get_translation('msg_seat_selection_closed')
 
         if self.cell_type != self.CellType.SEAT:
             return False, "Dies ist kein gültiger Sitzplatz."
@@ -383,6 +386,10 @@ class SeatingCell(models.Model):
         if committed_holds().filter(cell=self).exists():
             from configuration.translations import get_translation
             return False, get_translation('clan_payment_managed_hint')
+        event = self.plan.event if self.plan_id else None
+        if not is_admin and event and not event.is_seat_selection_open:
+            from configuration.translations import get_translation
+            return False, get_translation('msg_seat_selection_closed')
         if is_admin or self.registration == registration:
             self.registration = None
             self.reservation_status = self.ReservationStatus.FREE

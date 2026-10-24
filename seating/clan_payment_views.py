@@ -59,7 +59,9 @@ def clan_payment_detail(request, slug):
         'eligible_members': members, 'orga': can_manage_payments(request.user),
         'now': timezone.now(),
         'payment_expired': bool(payment and payment.status == 'PENDING' and payment.release_at <= timezone.now()),
-        'assignment_open': bool(event and event.is_active and event.effective_status in (Event.Status.REGISTRATION_OPEN, Event.Status.RUNNING))})
+        'assignment_open': bool(event and event.is_active and (event.is_seat_selection_open or (
+            event.effective_status == Event.Status.RUNNING and can_manage_payments(request.user)))),
+        'assignment_orga_only': bool(event and event.is_active and event.effective_status == Event.Status.RUNNING)})
     response['Cache-Control'] = 'private, no-store'
     return response
 

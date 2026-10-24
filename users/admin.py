@@ -1,14 +1,17 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.http import HttpResponseNotAllowed
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 from configuration.translations import get_translation as tr
-from .models import User, UserBan
+from configuration.models import GeneralConfiguration
+from .models import GuestPhoto, User, UserBan
 from .forms import UserBanActionForm
+from .admin_filters import RealNameFilter
 from .exceptions import UserBanError
 from . import moderation
 
@@ -17,6 +20,7 @@ from . import moderation
 class CustomUserAdmin(UserAdmin):
     list_display = (
         'username',
+        'real_name',
         'email',
         'role',
         'failed_login_attempts',
@@ -26,8 +30,12 @@ class CustomUserAdmin(UserAdmin):
         'deleted_at',
     )
     readonly_fields = ('deleted_at', 'is_banned', 'email_verified')
-    list_filter = UserAdmin.list_filter + ('is_banned',)
+    list_filter = UserAdmin.list_filter + ('is_banned', RealNameFilter)
     change_form_template = 'admin/users/user/change_form.html'
+
+    @admin.display(description='Name', ordering='last_name')
+    def real_name(self, obj):
+        return obj.get_full_name() or '—'
     actions = ['action_unlock_accounts']
 
     # Fügt die neuen Felder zum Bearbeitungs-Formular hinzu
@@ -179,4 +187,63 @@ class UserBanAdmin(admin.ModelAdmin):
         return TemplateResponse(request, 'admin/users/user/moderation.html', {
             **self.admin_site.each_context(request), 'opts': self.model._meta, 'title': tr('ban_manage'),
             'form': form, 'active_ban': ban, 'email_action': email_action,
+        })
+
+
+@admin.register(GuestPhoto)
+class GuestPhotoAdmin(admin.ModelAdmin):
+    """Nur ansehen und löschen; Fotos entstehen ausschließlich über den bereinigenden Service."""
+    list_display = ('user', 'thumbnail', 'source', 'uploaded_by', 'captured_at', 'notice_confirmed_at', 'delete_after')
+    list_filter = ('source',)
+    list_select_related = ('user', 'uploaded_by')
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('user', 'preview', 'source', 'uploaded_by', 'captured_at', 'notice_confirmed_at', 'delete_after')
+    fields = readonly_fields
+    change_list_template = 'admin/users/guestphoto/change_list.html'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = {**(extra_context or {}), 'can_delete_all': self.has_delete_permission(request)}
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def get_urls(self):
+        return [path('delete-all/', self.admin_site.admin_view(self.delete_all_view),
+                     name='users_guestphoto_delete_all')] + super().get_urls()
+
+    def _image(self, obj, size):
+        # Gleiche Regel wie die Fotoausgabe: Mitarbeiter sehen Fotos nur bei aktivem erweitertem Check-in.
+        if not GeneralConfiguration.load().extended_checkin_enabled:
+            return tr('guest_photo_admin_hidden')
+        url = f"{reverse('guest_photo', args=[obj.user_id])}?v={int(obj.captured_at.timestamp())}"
+        return format_html('<img src="{}" alt="" width="{}" height="{}" style="object-fit: cover; border-radius: 6px;">',
+                           url, size, size)
+
+    @admin.display(description='Foto')
+    def thumbnail(self, obj):
+        return self._image(obj, 48)
+
+    @admin.display(description='Foto')
+    def preview(self, obj):
+        return self._image(obj, 240)
+
+    def delete_all_view(self, request):
+        if not self.has_delete_permission(request):
+            raise PermissionDenied
+        if request.method not in ('GET', 'POST'):
+            return HttpResponseNotAllowed(['GET', 'POST'])
+        count = GuestPhoto.objects.count()
+        if request.method == 'POST':
+            with transaction.atomic():
+                # Die Dateien entfernt der post_delete-Handler nach dem Commit.
+                deleted = GuestPhoto.objects.all().delete()[1].get(GuestPhoto._meta.label, 0)
+            self.message_user(request, tr('guest_photo_admin_deleted', count=deleted))
+            return redirect('admin:users_guestphoto_changelist')
+        return TemplateResponse(request, 'admin/users/guestphoto/delete_all.html', {
+            **self.admin_site.each_context(request), 'opts': self.model._meta,
+            'title': tr('guest_photo_admin_delete_all'), 'photo_count': count,
         })

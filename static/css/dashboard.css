@@ -3,7 +3,7 @@
 .ticket-wrapper {
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   margin-bottom: 24px;
 }
@@ -17,7 +17,7 @@
   overflow: hidden;
   margin-bottom: 24px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: #111827;
   color: #f9fafb;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
@@ -52,7 +52,7 @@
   position: absolute;
   width: 20px;
   height: 20px;
-  background: var(--bg, #0b0f17);
+  background: var(--paper);
   border-radius: 50%;
   z-index: 2;
   pointer-events: none;
@@ -80,7 +80,7 @@
 
 .ticket-eyebrow {
   margin: 0;
-  color: #22c55e;
+  color: var(--signal);
   font-weight: bold;
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
@@ -339,7 +339,7 @@
 }
 
 .countdown-live {
-  color: #22c55e;
+  color: var(--signal);
   font-size: 14px;
   font-weight: bold;
 }

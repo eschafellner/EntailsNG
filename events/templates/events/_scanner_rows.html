@@ -18,6 +18,9 @@
                       <span class="guest-clan-tag">[{{ membership.clan.tag }}]</span>
                     {% endif %}
                   {% endwith %}
+                  {% if extended_checkin_enabled and not reg.is_checked_in and not reg.has_guest_photo %}
+                    <span class="scanner-badge-nophoto">📷 {% t "scanner_photo_missing_badge" %}</span>
+                  {% endif %}
                 </div>
               </td>
 

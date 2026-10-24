@@ -24,6 +24,8 @@ function setup() {
           contains: name => classes.has(name), add: name => classes.add(name), remove: name => classes.delete(name) },
         setAttribute: (name, value) => { attrs[name] = value; },
         getAttribute: name => attrs[name],
+        removeAttribute(name) { delete attrs[name]; delete this[name]; },
+        click() { this.clicks = (this.clicks || 0) + 1; },
         addEventListener(name, callback) { this[name] = callback; }
       });
     }
@@ -31,7 +33,7 @@ function setup() {
   };
   element('scanner-feedback-texts').textContent = JSON.stringify(Object.fromEntries(
     ['ready', 'checking', 'waiting', 'success', 'already', 'checkout', 'rejected', 'limited', 'unknown',
-      'unconfirmed', 'network', 'pause', 'next', 'seat', 'time', 'no_guest'].map(key => [key, key])));
+      'unconfirmed', 'network', 'pause', 'next', 'seat', 'time', 'no_guest', 'photo_required'].map(key => [key, key])));
   const context = vm.createContext({
     document: {
       cookie: '', getElementById: element,
@@ -39,7 +41,7 @@ function setup() {
       querySelectorAll: selector => selector === '.guest-row' ? [element('row')] : [],
       addEventListener: (name, cb) => { listeners[name] = cb; }
     },
-    window: {}, navigator: {}, console, AbortController, URLSearchParams,
+    window: {}, navigator: {}, console, AbortController, URLSearchParams, FormData, Blob,
     Date: { now: () => now },
     setTimeout: (callback, delay) => { timers.set(++timerId, { at: now + delay, callback }); return timerId; },
     clearTimeout: id => timers.delete(id),
@@ -161,4 +163,52 @@ test('search Enter uses the idempotent scan endpoint even when the displayed row
   assert.equal(s.requests.length, 1);
   assert.equal(s.requests[0].url, '/api/check-in/scan/');
   assert.equal(JSON.parse(s.requests[0].options.body).code, 'ABCD1234');
+});
+
+test('stored guest photo is shown with the result and never carried over to the next guest', async () => {
+  const s = setup();
+  s.context.sendScanCode('ABCD1234');
+  await s.reply({ ...success, photo_url: '/photos/7/?v=1' });
+  assert.equal(s.element('scan-guest-photo').src, '/photos/7/?v=1');
+  assert.equal(s.element('scan-guest-photo-box').hidden, false);
+  s.advance(3000);
+  s.context.sendScanCode('EFGH5678');
+  assert.equal(s.element('scan-guest-photo').src, undefined);
+  assert.equal(s.element('scan-guest-photo-box').hidden, true);
+  await s.reply({ status: 'unpaid', message: 'Nicht bezahlt', user: 'Other', photo_url: null }, 400);
+  assert.equal(s.element('scan-guest-photo-box').hidden, true);
+});
+
+test('missing photo blocks check-in; the captured photo is uploaded and checks in despite the reading pause', async () => {
+  const s = setup();
+  s.context.sendScanCode('ABCD1234');
+  await s.reply({ ...success, status: 'photo_required', photo_url: null, message: 'Kein Foto' }, 400);
+  assert.equal(s.element('scan-status-banner').dataset.state, 'warning');
+  assert.equal(s.element('scan-result-title').textContent, 'photo_required');
+  assert.equal(s.element('scan-photo-capture').hidden, false);
+  assert.equal(s.updates.length, 0);
+
+  s.context.takeGuestPhoto();
+  assert.equal(s.element('scan-photo-input').clicks, 1);
+  assert.equal(await s.context.uploadGuestPhoto(new Blob(['jpeg'], { type: 'image/jpeg' })), true);
+  const request = s.requests.at(-1);
+  assert.equal(request.url, '/api/check-in/photo/');
+  assert.equal(request.options.body.get('registration_id'), '4');
+  assert.equal(request.options.headers['Content-Type'], undefined);
+  assert.equal(s.element('scan-photo-capture').hidden, true);
+  await s.reply({ ...success, photo_url: '/photos/7/?v=2' });
+  assert.equal(s.element('scan-status-banner').dataset.state, 'success');
+  assert.equal(s.element('scan-guest-photo').src, '/photos/7/?v=2');
+  assert.equal(s.updates[0][0], 4);
+  assert.equal(s.updates[0][1], true);
+});
+
+test('photo capture can be cancelled and is closed by the next scan', async () => {
+  const s = setup();
+  s.context.toggleCheckIn(4);
+  await s.reply({ ...success, status: 'photo_required', message: 'Kein Foto' }, 400);
+  s.listeners.DOMContentLoaded();
+  s.element('btn-cancel-photo').click();
+  assert.equal(s.element('scan-photo-capture').hidden, true);
+  assert.equal(await s.context.uploadGuestPhoto(new Blob(['jpeg'])), false);
 });

@@ -10,6 +10,15 @@
 
 {% block content %}
 
+{% if user.is_authenticated and not user.has_real_name %}
+<ul class="message-list">
+  <li class="message message-warning">
+    <span class="message-badge">Hinweis</span>
+    <span class="message-text">{% t "real_name_missing_banner" %} <a href="{% url 'profile' %}">{% t "real_name_missing_banner_link" %} →</a></span>
+  </li>
+</ul>
+{% endif %}
+
 {% if show_onboarding_ticket %}
 <!-- ======================================================================
      ONBOARDING TICKET (DARK TECH PATTERN DESIGN)
@@ -85,6 +94,13 @@
         {% endif %}
       </div>
 
+      {% if general_config.extended_checkin_enabled and is_user_registered and not registration.is_checked_in and not guest_photo and not is_event_expired %}
+      <p class="ticket-photo-hint" role="status" style="margin: 12px 0 0; padding: 10px 14px; border-left: 3px solid #eab308; background: rgba(234, 179, 8, 0.12); color: #f3f4f6; font-size: 13px;">
+        📷 {% t "guest_photo_ticket_hint" %}
+        <a href="{% url 'profile' %}#guest-photo" style="color: #facc15; font-weight: bold;">{% t "guest_photo_ticket_link" %} →</a>
+      </p>
+      {% endif %}
+
       {% if is_user_registered and registration and registration.payment_status == 'PAID' %}
       <!-- FULLSCREEN MODAL / POPUP FÜR QR CODE AM EINLASS -->
       <div id="qr-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px;">
@@ -114,6 +130,9 @@
             <strong style="font-size: 16px; font-family: 'JetBrains Mono', monospace; color: #111827; letter-spacing: 2px;">{{ registration.short_code }}</strong>
           </div>
 
+          {% if guest_photo %}
+          <img src="{% url 'guest_photo' request.user.pk %}?v={{ guest_photo.captured_at|date:'U' }}" alt="{% t 'guest_photo_alt' username=request.user.username %}" width="96" height="96" style="display: block; width: 96px; height: 96px; object-fit: cover; border-radius: 50%; border: 2px solid #e5e7eb; margin: 14px auto 0;">
+          {% endif %}
           <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #374151; font-weight: bold; display: block; margin-top: 12px;">
             {% t "dash_guest_label" %}: {{ request.user.username }}
           </span>
@@ -247,7 +266,7 @@
         <!-- VERANSTALTUNGSINFOS OBERHALB DER SITZPLAN-PREVIEW -->
         {% if upcoming_event %}
           <div style="margin-bottom: 16px;">
-            <p class="eyebrow" style="margin: 0 0 4px 0; color: var(--signal); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <p class="eyebrow" style="margin: 0 0 4px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
               {% t "dash_event_eyebrow" "Veranstaltung" %}
             </p>
             <h2 style="margin: 0 0 4px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 26px; color: var(--ink); line-height: 1.15;">
@@ -548,7 +567,7 @@
         </strong>
 
         <span style="color: #6b7280;">{% t "dash_payment_purpose_label" "Verwendungszweck:" %}</span>
-        <strong style="color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; display: inline-block;">{{ request.user.username }}</strong>
+        <strong style="color: #0284c7; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; display: inline-block;">{{ registration.payment_reference }}</strong>
       </div>
     </div>
 

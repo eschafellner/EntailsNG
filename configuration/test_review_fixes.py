@@ -28,6 +28,14 @@ class SanitizerAndColorRegressionTests(SimpleTestCase):
         self.assertEqual(alpha['--signal-ink'], '#ffffff')
         self.assertEqual(alpha['--warning-text'], short['--warning-text'])
 
+    def test_small_accent_text_follows_paper_brightness(self):
+        light = build_css_variables('WARM_AMBER', 'MD')
+        dark = build_css_variables('CYBERPUNK', 'MD')
+        self.assertEqual(light['--eyebrow-color'], 'var(--signal-deep)')
+        self.assertEqual(dark['--eyebrow-color'], 'var(--signal)')
+        self.assertEqual(light['--seat-key-pre'], '#a16207')
+        self.assertEqual(dark['--seat-key-pre'], '#eab308')
+
 
 class SingletonAndLegacyContentTests(TestCase):
     def setUp(self):

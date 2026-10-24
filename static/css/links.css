@@ -36,7 +36,7 @@
     max-width: 100%;
     padding: 10px 18px;
     border: 1px solid var(--line, #e7dac8);
-    border-radius: 8px;
+    border-radius: var(--radius-sm, 8px);
     background: var(--panel, #fff);
     color: var(--ink, #2b2115);
     font-family: 'DM Sans', sans-serif;
@@ -87,7 +87,7 @@
     border-color: var(--signal, #f8ab2d);
     box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
 }
-.link-media { border-radius: 8px; }
+.link-media { border-radius: var(--radius-sm, 8px); }
 .link-media:hover { box-shadow: 0 0 0 2px var(--signal, #f8ab2d); }
 
 .link-tab {
@@ -98,7 +98,7 @@
     min-height: 44px;
     padding: 8px 16px;
     border: 1px solid var(--line, #e7dac8);
-    border-radius: 8px;
+    border-radius: var(--radius-sm, 8px);
     background: var(--panel, #fff);
     color: var(--muted, #6f6252);
     font-size: var(--font-sm, 13px);

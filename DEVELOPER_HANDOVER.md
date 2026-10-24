@@ -103,6 +103,7 @@ Event im Entwurf mit künftigen Terminen, Ort, Kapazität und aktiven Tickets an
 ```bash
 python manage.py process_email_queue --daemon --interval 5
 python manage.py process_clan_seat_holds --daemon --interval 60
+python manage.py purge_guest_photos --daemon --interval 3600
 # Optional nach Einrichtung von Schlüssel, Speicher und passenden PG-Tools:
 python manage.py process_backup_jobs --daemon
 ```
@@ -114,7 +115,7 @@ Die vollständige [Env-Matrix](docs/configuration.md) beschreibt Defaults und Be
 | App/Paket | Verantwortung und Einstieg |
 | --- | --- |
 | `config` | Projektsettings, Root-URLs, WSGI/ASGI, Testrunner (`config/testing.py`); keine eigene registrierte Fachapp. |
-| `events` | Event, **TicketType**, EventRegistration, Zahlungs-/Anmelde-/Check-in-Services; `/checkin/scanner/`; [Scanner](docs/scanner-feedback.md). |
+| `events` | Event, **TicketType**, EventRegistration, Zahlungs-/Anmelde-/Check-in-Services; `/checkin/scanner/`; [Scanner](docs/scanner-feedback.md), [erweiterter Check-in mit Gastfoto](docs/extended-checkin.md). |
 | `users` | E-Mail-/Username-Login über EmailOrUsernameBackend, Verifizierung, Profil, Kontolöschung, Orga-Sperren; [Löschung](docs/account-deletion.md), [Sperren](docs/user-bans.md). |
 | `tournaments` | Sechs Modi, Teams/Kader/Einladungen, Vorschau/Start, Ergebnisse/Bestätigung, Neustarts und externe Turniere. Services im **Paket** `tournaments/services/`; [Auslosung](docs/tournament-draws.md), [Ergebnisse](docs/tournament-result-management.md), [Einladungen](docs/team-recruitment.md), [externe Turniere](docs/external-tournaments.md). Podium erst nach expliziter Bestätigung und FINISHED. |
 | `seating` | Rastereditor, Reservierungen, Clanvormerkungen und Sammelzahlungen; [Vormerkungen](docs/clan-seat-holds.md), [Zahlungen](docs/clan-seat-payments.md). |
@@ -157,6 +158,8 @@ Der Entrypoint führt normalerweise Migrationen, statische Dateien und Seeds aus
 
 - Aktives Event über `Event.objects.get_active()`, Cachezugriffe/-invalidierung über `configuration.cache`. Fachliche Statusänderungen in den vorhandenen Services ausführen; `seating/services.py` und `users/services.py` existieren bereits. Weitere Auslagerung aus Models/Views bleibt schrittweise Arbeit.
 - Benutzertexte über `get_translation` bzw. das eingebaute `{% t %}`-Tag; Standards in DEFAULT_TEXTS ergänzen und seeden. Für Frontendaktionen Inline-Bestätigungen und die gemeinsamen [Linkkonventionen](docs/link-styling.md) verwenden.
+- **Sitzplatzwahl schließt ab Eventstart:** Zentrale Regel `Event.is_seat_selection_open` (effektiver Status = Anmeldung geöffnet). Gilt für Gast-Reservierung/-Freigabe, Clan-Vormerkungen (unbezahlte Holds verlieren ab Start den Schutz und laufen über `process_clan_holds` ab) und Clan-Zuweisungen (während des Events nur Orga mit Begründung). Admin-Zuweisung/-Freigabe/-Sperre bleiben erlaubt.
+- **Echter Name ist Pflicht:** Vor-/Nachname (`first_name`/`last_name` aus `AbstractUser`) werden bei der Registrierung erfasst und über `users.forms.validate_real_name` geprüft. Bestandskonten ohne Namen können sich nicht zu Events anmelden (Ausnahme: bezahlte Clan-Plätze) und sehen einen Dashboard-Hinweis. Nach bezahlter/eingecheckter Anmeldung zum aktiven Event ändert nur noch die Orga den Namen (`User.is_real_name_locked`). Der Klarname ist nur für Gast und Orga sichtbar; Verwendungszweck einheitlich über `EventRegistration.payment_reference` (Kurzcode + Name). Die Datenschutzerklärung liegt pro Installation in der DB und muss bei bestehenden Installationen manuell ergänzt werden.
 - **USERS-03 bleibt bewusst zurückgestellt.** Benutzerverwaltungsrechte und privater Bericht: [Sicherheitsbacklog](docs/security-backlog.md). Keine Rechteänderung durch die aktuelle Umsetzung.
 - SMTP-Annahme und DB-Bestätigung sind nicht atomar; bei Prozessabbruch kann Zustellung unsicher sein und eine Wiederholung auftreten. Keine Exactly-once-Zustellung zugesichert.
 - Tatsächliche Produktionsmigrationen, Gruppenrechte, Cloudflare-/ACME-/SMTP-Betrieb, manuelle Screenreader-Abnahme und menschlicher Ersteinstieg benötigen separate Nachweise. Keine Produktion durch Testskripte konfigurieren.

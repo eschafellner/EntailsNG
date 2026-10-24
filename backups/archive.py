@@ -16,6 +16,14 @@ from .storage import encryption_key, require_space
 MAGIC = b'ENTAILSNG-BACKUP\x01'
 BLOCK = 1024 * 1024
 FORMAT_VERSION = 1
+# Gastfotos des erweiterten Check-ins werden bewusst nicht gesichert: kurze Löschfrist,
+# nach einem Restore nimmt die Orga sie neu auf. Passend zu users.models.GUEST_PHOTO_DIR.
+EXCLUDED_MEDIA_DIRS = ('private_media/guest_photos',)
+EXCLUDED_TABLE_DATA = ('users_guestphoto',)
+
+
+def is_excluded_media(name):
+    return any(name.startswith(directory + '/') for directory in EXCLUDED_MEDIA_DIRS)
 
 
 def digest_file(path):
@@ -46,6 +54,8 @@ def media_files():
                 raise BackupError('backup_err_paths')
             if path.is_file():
                 name = f'{prefix}/{path.relative_to(directory).as_posix()}'
+                if is_excluded_media(name):
+                    continue
                 safe_name(name)
                 result[name] = path
                 if len(result) > settings.BACKUP_MAX_FILES:

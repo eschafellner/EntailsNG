@@ -48,7 +48,7 @@ class RegistrationViewTests(TestCase):
             {
                 'username': 'newuser',
                 'email': 'newuser@example.com',
-                'birthday': '2000-05-15',
+                'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '2000-05-15',
                 'password1': 'StrongPass123!',
                 'password2': 'StrongPass123!',
             },
@@ -68,7 +68,7 @@ class RegistrationViewTests(TestCase):
                 {
                     'username': 'oncommituser',
                     'email': 'oncommit@example.com',
-                    'birthday': '2000-05-15',
+                    'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '2000-05-15',
                     'password1': 'StrongPass123!',
                     'password2': 'StrongPass123!',
                 },
@@ -92,7 +92,7 @@ class DoubleOptInTests(TestCase):
             {
                 'username': 'optuser',
                 'email': 'opt@example.com',
-                'birthday': '1998-04-10',
+                'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '1998-04-10',
                 'password1': 'StrongPass123!',
                 'password2': 'StrongPass123!',
             },
@@ -249,7 +249,7 @@ class ProfileViewTests(TestCase):
             {
                 'update_profile': '1',
                 'email': 'old@example.com',
-                'birthday': '1995-03-12',
+                'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '1995-03-12',
             },
         )
         self.assertRedirects(response, reverse('profile'))
@@ -268,7 +268,7 @@ class ProfileViewTests(TestCase):
                 {
                     'update_profile': '1',
                     'email': 'new@example.com',
-                    'birthday': '1995-03-12',
+                    'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '1995-03-12',
                 },
             )
         self.assertRedirects(response, reverse('profile'))
@@ -396,7 +396,7 @@ class AuthBackendAndLockoutTests(TestCase):
             {
                 'username': 'anotheruser',
                 'email': 'authuser@example.com',  # Bereits vergeben!
-                'birthday': '2000-01-01',
+                'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '2000-01-01',
                 'password1': 'StrongPass123!',
                 'password2': 'StrongPass123!',
             },
@@ -489,7 +489,7 @@ class AuthBackendAndLockoutTests(TestCase):
         form1 = CustomUserCreationForm(data={
             'username': 'yearuser1',
             'email': 'year1@example.com',
-            'birthday': '20005-01-01',
+            'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '20005-01-01',
             'password1': 'StrongPass123!',
             'password2': 'StrongPass123!',
         })
@@ -500,7 +500,7 @@ class AuthBackendAndLockoutTests(TestCase):
         form2 = CustomUserCreationForm(data={
             'username': 'yearuser2',
             'email': 'year2@example.com',
-            'birthday': '1850-01-01',
+            'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '1850-01-01',
             'password1': 'StrongPass123!',
             'password2': 'StrongPass123!',
         })
@@ -512,7 +512,7 @@ class AuthBackendAndLockoutTests(TestCase):
     def test_profile_form_rejects_non_4_digit_birthday_year(self):
         """Negativ-Test: UserProfileForm lehnt unplausible/überlange Jahreszahlen ab."""
         from users.forms import UserProfileForm
-        form = UserProfileForm(data={'email': 'update@example.com', 'birthday': '1850-01-01'}, instance=self.user)
+        form = UserProfileForm(data={'email': 'update@example.com', 'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '1850-01-01'}, instance=self.user)
         self.assertFalse(form.is_valid())
         self.assertIn('birthday', form.errors)
 
@@ -621,7 +621,7 @@ class VerificationCodeCooldownAndLimitTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             resp1 = self.client.post(
                 reverse('profile'),
-                {'update_profile': '1', 'email': 'attempt1@example.com'},
+                {'update_profile': '1', 'first_name': 'Max', 'last_name': 'Mustermann', 'email': 'attempt1@example.com'},
                 follow=True,
             )
         self.assertEqual(resp1.status_code, 200)
@@ -634,7 +634,7 @@ class VerificationCodeCooldownAndLimitTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             resp2 = self.client.post(
                 reverse('profile'),
-                {'update_profile': '1', 'email': 'attempt2@example.com'},
+                {'update_profile': '1', 'first_name': 'Max', 'last_name': 'Mustermann', 'email': 'attempt2@example.com'},
                 follow=True,
             )
         self.assertEqual(resp2.status_code, 200)
@@ -712,7 +712,7 @@ class VerificationCodeCooldownAndLimitTests(TestCase):
         self.client.login(username='cooldown_tester', password='Password123!')
         resp = self.client.post(
             reverse('profile'),
-            {'update_profile': '1', 'email': 'change6@example.com'},
+            {'update_profile': '1', 'first_name': 'Max', 'last_name': 'Mustermann', 'email': 'change6@example.com'},
             follow=True,
         )
         messages_list = list(resp.context['messages'])
@@ -971,7 +971,7 @@ class UserFeedbackHardeningRegressionTests(TestCase):
             birthday='1995-01-01',
         )
         # Formular wird mit dem initialen User-Objekt geladen
-        form = UserProfileForm(instance=user, data={'email': 'p2@example.com', 'birthday': '1996-02-02'})
+        form = UserProfileForm(instance=user, data={'email': 'p2@example.com', 'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '1996-02-02'})
         self.assertTrue(form.is_valid())
 
         # Zwischenzeitlich ändert der Administrator Sicherheitsfelder in der DB
@@ -1164,7 +1164,7 @@ class UserFeedbackHardeningRegressionTests(TestCase):
         form1 = CustomUserCreationForm(data={
             'username': 'futureboy',
             'email': 'future@example.com',
-            'birthday': tomorrow,
+            'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': tomorrow,
             'password1': 'StrongPass123!',
             'password2': 'StrongPass123!',
         })
@@ -1173,7 +1173,7 @@ class UserFeedbackHardeningRegressionTests(TestCase):
 
         # In UserProfileForm
         user = User.objects.create_user(username='fb_prof', email='fb@test.com', password='pw')
-        form2 = UserProfileForm(instance=user, data={'email': 'fb@test.com', 'birthday': tomorrow})
+        form2 = UserProfileForm(instance=user, data={'email': 'fb@test.com', 'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': tomorrow})
         self.assertFalse(form2.is_valid())
         self.assertIn('Geburtsdatum darf nicht in der Zukunft liegen', str(form2.errors))
 
@@ -1182,7 +1182,7 @@ class UserFeedbackHardeningRegressionTests(TestCase):
         form = CustomUserCreationForm(data={
             'username': 'bad@user',
             'email': 'good@example.com',
-            'birthday': '2000-01-01',
+            'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '2000-01-01',
             'password1': 'StrongPass123!',
             'password2': 'StrongPass123!',
         })

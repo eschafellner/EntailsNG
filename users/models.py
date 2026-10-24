@@ -1,7 +1,12 @@
+import uuid
+
 from django.contrib.auth.models import AbstractUser, UserManager as BaseUserManager
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models.functions import Lower
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+from knowledge.storage import private_storage
 from .exceptions import VerificationCodeCooldownError, VerificationCodeLimitError
 
 
@@ -84,6 +89,23 @@ class User(AbstractUser):
         if self.deleted_at:
             return get_translation('user_deleted_name', 'Gelöschter Benutzer')
         return self.username
+
+    @property
+    def has_real_name(self):
+        return bool((self.first_name or '').strip() and (self.last_name or '').strip())
+
+    @property
+    def is_real_name_locked(self):
+        """Nach Zahlung/Check-in zum aktiven Event darf nur noch die Orga den Namen ändern.
+
+        Ohne hinterlegten Namen bleibt das Nachtragen möglich (Bestandskonten).
+        """
+        if not self.pk or not self.has_real_name:
+            return False
+        from events.models import EventRegistration
+        return EventRegistration.objects.filter(user_id=self.pk, event__is_active=True).filter(
+            models.Q(payment_status=EventRegistration.PaymentStatus.PAID) | models.Q(is_checked_in=True)
+        ).exists()
 
     def clean(self):
         super().clean()
@@ -478,3 +500,47 @@ class EmailVerificationCode(models.Model):
                 remaining = max(0, 5 - code_obj.failed_attempts)
                 status = 'locked' if code_obj.failed_attempts >= 5 else 'wrong_code'
                 return (status, code_obj, remaining)
+
+
+# Unterordner im privaten Speicher; Backups lassen ihn bewusst aus.
+GUEST_PHOTO_DIR = 'guest_photos'
+
+
+def guest_photo_path(instance, filename):
+    return f'{GUEST_PHOTO_DIR}/{uuid.uuid4().hex}.jpg'
+
+
+class GuestPhoto(models.Model):
+    """Gastfoto für den erweiterten Check-in. Liegt nur im privaten Speicher."""
+
+    class Source(models.TextChoices):
+        SELF = 'SELF', 'Vom Gast hochgeladen'
+        STAFF = 'STAFF', 'Beim Check-in aufgenommen'
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='guest_photo', verbose_name='Benutzer')
+    image = models.FileField(storage=private_storage, upload_to=guest_photo_path, max_length=200, verbose_name='Foto')
+    source = models.CharField(max_length=10, choices=Source.choices, verbose_name='Herkunft')
+    uploaded_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+', verbose_name='Aufgenommen von',
+    )
+    captured_at = models.DateTimeField(verbose_name='Aufgenommen am')
+    notice_confirmed_at = models.DateTimeField(
+        null=True, blank=True, verbose_name='Hinweis bestätigt am',
+        help_text='Zeitpunkt, zu dem der Gast den Hinweis zur Verwendung seines Fotos beim Hochladen bestätigt hat.',
+    )
+    delete_after = models.DateTimeField(db_index=True, verbose_name='Löschen ab')
+
+    class Meta:
+        verbose_name = 'Gastfoto'
+        verbose_name_plural = 'Gastfotos'
+
+    def __str__(self):
+        return f'Gastfoto {self.user_id}'
+
+
+@receiver(post_delete, sender=GuestPhoto)
+def delete_guest_photo_file(sender, instance, **kwargs):
+    # Gilt auch für Kaskaden; die Datei verschwindet erst nach erfolgreichem Commit.
+    name, storage = instance.image.name, instance.image.storage
+    if name:
+        transaction.on_commit(lambda: storage.delete(name))

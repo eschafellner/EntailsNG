@@ -206,6 +206,9 @@ def replace_media(snapshot):
         total = sum(path.stat().st_size for path in files if path.is_file())
         storage.require_space(target, total)
         for existing in target.iterdir():
+            # Ausgeschlossene Ordner bleiben erhalten, damit ein Rollback sie wieder vorfindet.
+            if archive.is_excluded_media(f'{prefix}/{existing.name}/'):
+                continue
             if existing.is_symlink() or (hasattr(existing, 'is_junction') and existing.is_junction()):
                 raise BackupError('backup_err_paths')
             # Verify every recursive deletion stays inside the explicitly configured media root.
@@ -335,6 +338,7 @@ def restore_job(job, work, db):
                 refresh_runtime()
                 journal['phase'] = 'committed'
                 storage.atomic_json(journal_path, journal)
+                purge_guest_photos_after_restore()
             except Exception:
                 logger.exception('Restore failed; rolling back job %s', job['id'])
                 update_job(job, stage='rollback')
@@ -351,6 +355,15 @@ def restore_job(job, work, db):
             finish_database_cleanup(job, db, stage)
         elif job['state'] != 'recovery_required':
             db.discard(stage)
+
+
+def purge_guest_photos_after_restore():
+    # Restored databases contain no guest photos; files kept for a rollback are now orphans.
+    try:
+        from users.services import GuestPhotoService
+        GuestPhotoService.purge()
+    except Exception:
+        logger.exception('Guest photo cleanup after restore deferred to the purge worker')
 
 
 def rollback(job, work, db, journal):

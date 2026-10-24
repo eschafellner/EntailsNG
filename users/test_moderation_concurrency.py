@@ -39,7 +39,7 @@ class ModerationConcurrencyTests(TransactionTestCase):
 
     def form(self):
         form = CustomUserCreationForm({'username': 'new-guest', 'email': 'new@example.com',
-            'birthday': '2000-01-01', 'password1': 'Password123!', 'password2': 'Password123!'})
+            'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '2000-01-01', 'password1': 'Password123!', 'password2': 'Password123!'})
         self.assertTrue(form.is_valid(), form.errors)
         return form
 

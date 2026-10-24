@@ -6,9 +6,9 @@ Diese Anleitung aktualisiert eine vorhandene Installation. Ein frisches Setup st
 
 1. `git status` prüfen und den eingesetzten Commit samt lokalen Code-/Assetänderungen festhalten. Updates nicht über ungeklärte lokale Änderungen hinweg ausführen.
 2. Eine verifizierte Sicherung für genau diesen Code-/Migrationsstand vorhalten. Die eingebauten Backups prüfen auch den Softwarefingerabdruck; ein Git-Tag allein bildet uncommittierte Änderungen nicht ab. `.env`, `SECRET_KEY`, `FIELD_ENCRYPTION_KEY`, `USER_BAN_HMAC_KEY`, `BACKUP_ENCRYPTION_KEY` und Zertifikate getrennt sichern. Verfahren und Grenzen: `backups.md`.
-3. Releaseänderungen und Migrationen lesen. `configuration.0025_demodataset` ergänzt nur den Demo-Abschlussnachweis. Die bereits bestehende `tournaments.0017_rotate_exposed_invite_codes` ersetzt bei ihrer ersten Anwendung alle Teamcodes; bestehende Code-Einladungen werden ungültig. Ein erneutes `migrate` rotiert bereits migrierte Codes nicht erneut.
+3. Releaseänderungen und Migrationen lesen. `configuration.0025_demodataset` ergänzt nur den Demo-Abschlussnachweis. Die bereits bestehende `tournaments.0017_rotate_exposed_invite_codes` ersetzt bei ihrer ersten Anwendung alle Teamcodes; bestehende Code-Einladungen werden ungültig. Ein erneutes `migrate` rotiert bereits migrierte Codes nicht erneut. Der [erweiterte Check-in](extended-checkin.md) bringt `users.0012_guest_photo`, `users.0013_guestphoto_notice_confirmed_at` und `configuration.0026_guest_photo` (nur neue Tabelle/Felder, Funktion standardmäßig aus) sowie den neuen Dienst `guest_photo_worker`; er entsteht mit dem folgenden `up -d --build`, ein reiner Neustart vorhandener Container legt ihn nicht an.
 4. Für den Compose-Healthcheck zusätzlich zur öffentlichen Domain `127.0.0.1` in `ALLOWED_HOSTS` setzen. Öffentliche Domain/CSRF-Origins und `PUBLIC_BASE_URL` weiterhin für die tatsächliche Installation konfigurieren. `DEMO_MODE=False` für den normalen Betrieb belassen.
-5. Bei Änderungen, die nicht mit gleichzeitig laufendem altem Code kompatibel sind, schreibenden Zugriff in einem geplanten Wartungsfenster unterbinden und Mail-/Clan-/Backup-Worker kontrolliert stoppen. Ein Reverseproxy-Wartungsfenster ersetzt kein Datenbankbackup.
+5. Bei Änderungen, die nicht mit gleichzeitig laufendem altem Code kompatibel sind, schreibenden Zugriff in einem geplanten Wartungsfenster unterbinden und Mail-/Clan-/Gastfoto-/Backup-Worker kontrolliert stoppen. Ein Reverseproxy-Wartungsfenster ersetzt kein Datenbankbackup.
 
 ## Cloudflare Tunnel
 
@@ -42,7 +42,7 @@ Für Erstausstellung bzw. Reparatur einer Zertifikatsinstallation `bash nginx/in
 `entrypoint.sh` führt normalerweise Migrationen, `collectstatic` und drei erforderliche Seeds aus. Ein Seedfehler bricht den Start jetzt ab; die Ursache im Log beheben. Mehr Web-/Workerprozesse lösen weder fehlende Migrationen noch eine falsche Hostliste.
 
 ```bash
-docker compose logs --tail=100 web email_worker clan_seat_worker nginx
+docker compose logs --tail=100 web email_worker clan_seat_worker guest_photo_worker nginx
 docker compose exec -T web python manage.py showmigrations --plan
 docker compose exec -T web python manage.py check --deploy
 ```

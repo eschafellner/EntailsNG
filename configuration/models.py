@@ -1,6 +1,7 @@
 import re
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.db.models.signals import post_delete, post_save
@@ -315,6 +316,17 @@ class GeneralConfiguration(models.Model):
         default=ExpiredTicketMode.WORN,
         verbose_name="Verhalten bei abgelaufenen Veranstaltungen",
         help_text="Bestimmt das Verhalten der Ticket-Karte auf dem Dashboard, wenn das Event-Enddatum überschritten ist.",
+    )
+    extended_checkin_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Erweiterter Check-in (Gastfoto)",
+        help_text="Zeigt beim Scan das hinterlegte Foto des Gastes. Ohne Foto ist kein Check-in möglich; die Orga kann es direkt am Scanner aufnehmen.",
+    )
+    guest_photo_retention_days = models.PositiveIntegerField(
+        default=14,
+        validators=[MaxValueValidator(365)],
+        verbose_name="Gastfotos löschen nach X Tagen",
+        help_text="Tage nach dem Ende der letzten Veranstaltung des Gastes. Ohne Anmeldung zählt das Upload-Datum. 0 = direkt danach löschen.",
     )
     debug_mode = models.BooleanField(
         default=False,

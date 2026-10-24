@@ -273,6 +273,12 @@ def assign_member(payment_id, hold_id, actor_id, user_id, *, expected_registrati
         fail('clan_payment_not_paid')
     if not event.is_active or event.effective_status not in (Event.Status.REGISTRATION_OPEN, Event.Status.RUNNING):
         fail('clan_seat_event')
+    if not event.is_seat_selection_open:
+        # Laufende Veranstaltung: nur noch Orga-Korrekturen mit Begründung.
+        if not orga:
+            fail('clan_payment_running_orga_only')
+        if not reason.strip():
+            fail('clan_payment_reason_required')
     old_reg = EventRegistration.objects.select_for_update().filter(pk=hold.funded_registration_id).first()
     if old_reg and old_reg.is_checked_in:
         if not orga:

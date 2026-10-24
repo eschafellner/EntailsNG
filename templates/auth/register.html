@@ -49,6 +49,17 @@
         </div>
 
         <div class="form-group">
+          <label for="id_first_name">{% t "real_name_first_label" %}</label>
+          <input type="text" name="first_name" id="id_first_name" class="form-control" value="{{ form.first_name.value|default:'' }}" maxlength="150" autocomplete="given-name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="id_last_name">{% t "real_name_last_label" %}</label>
+          <input type="text" name="last_name" id="id_last_name" class="form-control" value="{{ form.last_name.value|default:'' }}" maxlength="150" autocomplete="family-name" required aria-describedby="real-name-hint">
+          <small id="real-name-hint" style="display: block; margin-top: 4px; color: var(--muted); font-size: 12px;">{% t "real_name_purpose_hint" %}</small>
+        </div>
+
+        <div class="form-group">
           <label for="id_email">{% t "auth_email_label" "E-Mail-Adresse:" %}</label>
           <input type="email" name="email" id="id_email" class="form-control" value="{{ form.email.value|default:'' }}" required>
         </div>

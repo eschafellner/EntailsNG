@@ -85,6 +85,19 @@ class GeneralConfigurationAdmin(admin.ModelAdmin):
             },
         ),
         (
+            'Erweiterter Check-in',
+            {
+                'fields': (
+                    'extended_checkin_enabled',
+                    'guest_photo_retention_days',
+                ),
+                'description': (
+                    'Gastfotos zur Identitätsprüfung am Einlass. Fotos liegen im privaten Speicher, '
+                    'sind nur für Mitarbeiter sichtbar und werden nach Ablauf der Frist automatisch gelöscht.'
+                ),
+            },
+        ),
+        (
             'System-Diagnose & Fehleranalyse',
             {
                 'fields': (

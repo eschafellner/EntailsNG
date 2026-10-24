@@ -11,7 +11,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Count, Prefetch, Q
+from django.db import transaction
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -30,6 +31,8 @@ from news.services import get_latest_news, get_pinned_news
 from seating.services import get_event_capacity_stats
 from seating.models import SeatingCell
 from sponsors.services import get_random_active_sponsor
+from users.models import GuestPhoto
+from users.services import GuestPhotoService
 
 from .exceptions import RegistrationError
 from .models import Event, EventRegistration, TicketType
@@ -112,6 +115,10 @@ def dashboard_view(request):
         'past_registrations': past_registrations,
         'active_sponsor': get_random_active_sponsor(),
         'general_config': general_config,
+        'guest_photo': (
+            GuestPhoto.objects.filter(user=request.user).first()
+            if general_config.extended_checkin_enabled and registration else None
+        ),
         'can_show_payment_qr': registration.can_show_payment_qr if registration else False,
     }
     return render(request, 'dashboard.html', context)
@@ -288,14 +295,7 @@ def toggle_check_in_api(request):
             status=404,
         )
 
-    seat = registration.seats.first()
-    feedback_details = {
-        'registration_id': registration.id,
-        'user': registration.user.username,
-        'full_name': registration.user.get_full_name() or registration.user.username,
-        'ticket': registration.ticket_type.name if registration.ticket_type else 'Standard',
-        'seat': seat.seat_label if seat else 'Kein Platz',
-    }
+    feedback_details = scanner_guest_details(registration)
 
     active_event = get_active_event()
     if not active_event or registration.event_id != active_event.id:
@@ -434,6 +434,7 @@ def checkin_scanner_view(request):
     pending_count = 0
     checkin_percent = 0
     search = request.GET.get('q', '').strip()[:100]
+    extended_checkin_enabled = GeneralConfiguration.load().extended_checkin_enabled
     status_filter = request.GET.get('filter', 'all')
     if status_filter not in ('all', 'pending', 'checked-in', 'unpaid'):
         status_filter = 'all'
@@ -467,6 +468,8 @@ def checkin_scanner_view(request):
                     | Q(seats__seat_label__icontains=term)
                 )
             regs_qs = regs_qs.distinct()
+        if extended_checkin_enabled:
+            regs_qs = regs_qs.annotate(has_guest_photo=Exists(GuestPhoto.objects.filter(user_id=OuterRef('user_id'))))
         regs_qs = regs_qs.select_related('user', 'ticket_type').prefetch_related(
             Prefetch('seats', queryset=SeatingCell.objects.only('id', 'registration_id', 'seat_label'), to_attr='scanner_seats'),
             Prefetch(
@@ -493,6 +496,7 @@ def checkin_scanner_view(request):
         'search': search,
         'status_filter': status_filter,
         'remaining': page.paginator.count - page.end_index() if page else 0,
+        'extended_checkin_enabled': extended_checkin_enabled,
     }
     if request.GET.get('partial') == '1':
         return JsonResponse({
@@ -601,10 +605,6 @@ def scan_qr_api(request):
             status=404,
         )
 
-    # Sitzplatz-Bezeichnung laden
-    seat = registration.seats.first()
-    seat_label = seat.seat_label if seat else "Kein Platz"
-
     active_event = get_active_event()
     if not active_event:
         return JsonResponse(
@@ -612,48 +612,45 @@ def scan_qr_api(request):
             status=400,
         )
 
+    details = scanner_guest_details(registration)
+
     # Zentrale fachliche Prüfung (Single Source of Truth)
     result = registration.can_check_in(target_event=active_event)
     if not result.allowed:
-        return JsonResponse(
-            {
-                'status': result.code,
-                'user': registration.user.username,
-                'full_name': registration.user.get_full_name()
-                or registration.user.username,
-                'ticket': (
-                    registration.ticket_type.name
-                    if registration.ticket_type
-                    else "Standard"
-                ),
-                'seat': seat_label,
-                'message': result.reason,
-            },
-            status=400,
-        )
+        return JsonResponse({**details, 'status': result.code, 'message': result.reason}, status=400)
 
     try:
         already_checked_in = not registration.check_in(target_event=active_event, actor=request.user)
     except ValidationError as e:
         error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
-        return JsonResponse({
-            'status': 'error',
-            'user': registration.user.username,
-            'message': error_message,
-        }, status=400)
+        return JsonResponse({**details, 'status': 'error', 'message': error_message}, status=400)
 
-    return JsonResponse({
-        'status': 'already_checked_in' if already_checked_in else 'success',
+    return JsonResponse(_scanner_checkin_reply(registration, details, already_checked_in))
+
+
+def scanner_guest_details(registration):
+    """Gemeinsame Gastangaben für alle Scanner-Antworten, beim erweiterten Check-in mit Foto."""
+    seat = registration.seats.first()
+    photo = None
+    if GeneralConfiguration.load().extended_checkin_enabled:
+        photo = GuestPhoto.objects.filter(user_id=registration.user_id).only('captured_at').first()
+    return {
         'registration_id': registration.id,
         'user': registration.user.username,
-        'full_name': registration.user.get_full_name()
-        or registration.user.username,
-        'ticket': (
-            registration.ticket_type.name
-            if registration.ticket_type
-            else "Standard"
+        'full_name': registration.user.get_full_name() or registration.user.username,
+        'ticket': registration.ticket_type.name if registration.ticket_type else 'Standard',
+        'seat': seat.seat_label if seat else 'Kein Platz',
+        'photo_url': (
+            f"{reverse('guest_photo', args=[registration.user_id])}?v={int(photo.captured_at.timestamp())}"
+            if photo else None
         ),
-        'seat': seat_label,
+    }
+
+
+def _scanner_checkin_reply(registration, details, already_checked_in):
+    return {
+        **details,
+        'status': 'already_checked_in' if already_checked_in else 'success',
         'already_checked_in': already_checked_in,
         'checked_in_at': (
             timezone.localtime(registration.checked_in_at).strftime('%H:%M:%S')
@@ -664,7 +661,45 @@ def scan_qr_api(request):
             f'Einlass gestattet: {registration.user.username} '
             f'{"(Bereits vorher eingecheckt)" if already_checked_in else "erfolgreich eingecheckt!"}'
         ),
-    })
+    }
+
+
+@staff_member_required
+@require_POST
+def checkin_photo_api(request):
+    """Speichert das am Einlass aufgenommene Foto und checkt den Gast in derselben Transaktion ein."""
+    if not GeneralConfiguration.load().extended_checkin_enabled:
+        return JsonResponse({'status': 'error', 'message': get_translation('guest_photo_feature_disabled')}, status=404)
+    reg_id = request.POST.get('registration_id', '')
+    if not reg_id.isdigit() or not 0 < int(reg_id) <= 2**63 - 1:
+        return JsonResponse({'status': 'error', 'message': 'Ungültige Anmeldungs-ID.'}, status=400)
+    registration = EventRegistration.objects.filter(pk=int(reg_id)).select_related('user', 'event', 'ticket_type').first()
+    if registration is None:
+        return JsonResponse({'status': 'error', 'message': 'Anmeldung nicht gefunden.'}, status=404)
+    active_event = get_active_event()
+    if not active_event:
+        return JsonResponse({'status': 'error', 'message': 'Keine aktive Veranstaltung konfiguriert.'}, status=400)
+
+    details = scanner_guest_details(registration)
+    # Andere Ablehnungsgründe vorab prüfen, damit kein Foto ohne möglichen Check-in entsteht.
+    result = registration.can_check_in(target_event=active_event)
+    if not result.allowed and result.code != 'photo_required':
+        return JsonResponse({**details, 'status': result.code, 'message': result.reason}, status=400)
+    upload = request.FILES.get('photo')
+    if upload is None:
+        return JsonResponse({**details, 'status': 'error', 'message': get_translation('guest_photo_upload_missing')}, status=400)
+
+    try:
+        with transaction.atomic():
+            GuestPhotoService.save_photo(
+                user=registration.user, upload=upload, actor=request.user, source=GuestPhoto.Source.STAFF,
+            )
+            already_checked_in = not registration.check_in(target_event=active_event, actor=request.user)
+    except ValidationError as e:
+        error_message = e.messages[0] if hasattr(e, 'messages') else str(e)
+        return JsonResponse({**details, 'status': 'error', 'message': error_message}, status=400)
+
+    return JsonResponse(_scanner_checkin_reply(registration, scanner_guest_details(registration), already_checked_in))
 
 
 # ==============================================================================

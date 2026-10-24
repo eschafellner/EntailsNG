@@ -498,13 +498,40 @@ class ClanPaymentTests(TestCase):
         self.client.force_login(self.admin)
         self.assertContains(self.client.get(reverse('clan_payment_detail', args=[self.clan.slug])), payment.reference)
 
-    def test_paid_entitlement_can_be_assigned_during_running_event(self):
+    def test_running_event_assignment_is_orga_only_with_reason(self):
         payment = self.pay(self.create())
         self.event.start_date = timezone.now()-timedelta(hours=1)
         self.event.status = 'RUNNING'
         self.event.save()
-        self.assign(payment, self.admin2)
+        with self.assertRaisesMessage(ClanSeatError, 'nur durch die Orga'):
+            self.assign(payment, self.admin2)
+        hold = payment.holds.order_by('pk').first()
+        with self.assertRaises(ClanSeatError):
+            assign_member(payment.pk, hold.pk, self.orga.pk, self.admin2.pk,
+                          expected_registration_id=hold.funded_registration_id, confirmed=True)
+        assign_member(payment.pk, hold.pk, self.orga.pk, self.admin2.pk,
+                      expected_registration_id=hold.funded_registration_id, confirmed=True, reason='Tausch vor Ort')
         self.assertEqual(EventRegistration.objects.get(user=self.admin2, event=self.event).payment_status, 'PAID')
+
+    def test_real_name_on_payment_page_only_for_orga(self):
+        self.member.first_name, self.member.last_name = 'Mirabella', 'Zuckerhut'
+        self.member.save()
+        self.assign(self.pay(self.create()))
+        url = reverse('clan_payment_detail', args=[self.clan.slug])
+        self.client.force_login(self.admin)
+        self.assertNotContains(self.client.get(url), 'Zuckerhut')
+        self.client.force_login(self.orga)
+        self.assertContains(self.client.get(url), 'Mirabella Zuckerhut')
+
+    def test_running_event_payment_page_shows_orga_only_hint_to_clan_admin(self):
+        payment = self.pay(self.create())
+        self.event.start_date = timezone.now()-timedelta(hours=1)
+        self.event.save()
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse('clan_payment_detail', args=[self.clan.slug]))
+        self.assertFalse(response.context['assignment_open'])
+        self.assertContains(response, 'nur durch die Orga')
+        self.assertContains(response, payment.reference)
 
     def test_calendar_day_deadlines_keep_vienna_wall_time_across_dst(self):
         from datetime import datetime

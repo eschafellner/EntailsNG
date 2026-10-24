@@ -9,20 +9,22 @@ from django.contrib.auth.views import PasswordResetConfirmView
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_POST
 from emails.models import GeneralEmailSettings
 from events.models import EventRegistration
+from configuration.models import GeneralConfiguration
 from configuration.translations import get_translation
 from .auth_backends import get_client_ip
 from .exceptions import AccountDeletionError, RegistrationBlockedError, VerificationCodeCooldownError, VerificationCodeLimitError
 from .rate_limits import reserve_rate_limit
-from .forms import AccountDeletionForm, CustomUserCreationForm, UserProfileForm
-from .models import EmailVerificationCode
-from .services import UserService
+from .forms import AccountDeletionForm, CustomUserCreationForm, GuestPhotoForm, UserProfileForm
+from .models import EmailVerificationCode, GuestPhoto
+from .services import GuestPhotoService, UserService
 from .tokens import password_reset_token_generator
 
 logger = logging.getLogger(__name__)
@@ -430,7 +432,12 @@ def profile_view(request, deletion_form=None):
                     ),
                 )
 
+    general_config = GeneralConfiguration.load()
     context = {
+        'extended_checkin_enabled': general_config.extended_checkin_enabled,
+        'guest_photo_retention_days': general_config.guest_photo_retention_days,
+        'guest_photo': GuestPhoto.objects.filter(user=user).first(),
+        'guest_photo_form': GuestPhotoForm(),
         'profile_form': profile_form,
         'password_form': password_form,
         'registrations': registrations,
@@ -458,3 +465,52 @@ def account_delete_view(request):
             messages.success(request, get_translation('account_delete_success'))
             return redirect('dashboard')
     return profile_view(request, deletion_form=form)
+
+
+@login_required
+@require_POST
+def guest_photo_upload_view(request):
+    if not GeneralConfiguration.load().extended_checkin_enabled:
+        raise Http404
+    form = GuestPhotoForm(request.POST, request.FILES)
+    if form.is_valid():
+        try:
+            GuestPhotoService.save_photo(
+                user=request.user, upload=form.cleaned_data['photo'],
+                actor=request.user, source=GuestPhoto.Source.SELF, notice_confirmed=True,
+            )
+        except ValidationError as error:
+            messages.error(request, error.messages[0])
+        else:
+            messages.success(request, get_translation('guest_photo_saved'))
+    else:
+        for errors in form.errors.values():
+            messages.error(request, errors[0])
+    return HttpResponseRedirect(reverse('profile') + '#guest-photo')
+
+
+@login_required
+@require_POST
+def guest_photo_delete_view(request):
+    # Löschen bleibt auch bei deaktiviertem erweitertem Check-in möglich.
+    if GuestPhotoService.delete_photo(request.user):
+        messages.success(request, get_translation('guest_photo_deleted'))
+    return HttpResponseRedirect(reverse('profile') + '#guest-photo')
+
+
+@login_required
+def guest_photo_view(request, user_id):
+    """Eigenes Foto jederzeit; Mitarbeiter nur bei aktivem erweitertem Check-in."""
+    is_owner = request.user.pk == user_id
+    if not is_owner and not (request.user.is_staff and GeneralConfiguration.load().extended_checkin_enabled):
+        raise Http404
+    photo = GuestPhoto.objects.filter(user_id=user_id, user__deleted_at__isnull=True).first()
+    if not photo:
+        raise Http404
+    try:
+        handle = photo.image.open('rb')
+    except FileNotFoundError:
+        raise Http404
+    response = FileResponse(handle, content_type='image/jpeg')
+    response['Cache-Control'] = 'private, no-store'
+    return response

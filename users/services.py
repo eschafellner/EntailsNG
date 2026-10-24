@@ -1,16 +1,20 @@
 import logging
 import uuid
 from datetime import timedelta
+from io import BytesIO
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Max, OuterRef, Q, Subquery
+from PIL import Image, ImageOps, UnidentifiedImageError
 from configuration.translations import get_translation
 from django.utils import timezone
 from emails.models import GeneralEmailSettings
 from emails.services import send_system_email
 from .exceptions import AccountDeletionError, VerificationCodeCooldownError, VerificationCodeLimitError
-from .models import EmailVerificationCode
+from .models import GUEST_PHOTO_DIR, EmailVerificationCode, GuestPhoto
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -279,6 +283,7 @@ class UserService:
                 UserService._leave_teams(locked_user, team_ids, marker)
                 UserService._erase_account_messages(locked_user, original_username, original_email)
                 locked_user.verification_codes.all().delete()
+                GuestPhotoService.delete_photo(locked_user)
                 UserService._erase_account_sessions(locked_user)
 
         if failure:
@@ -385,3 +390,151 @@ class UserService:
             data = session.get_decoded()
             if str(data.get('_auth_user_id', '')) == str(user.pk) or data.get('pending_verification_user_id') == user.pk:
                 session.delete()
+
+
+MAX_GUEST_PHOTO_BYTES = 10 * 1024 * 1024
+MAX_GUEST_PHOTO_PIXELS = 40_000_000
+# Dateien ohne Datensatz erst nach dieser Zeit löschen: Ein laufender Upload
+# schreibt die Datei vor dem Commit seines Datensatzes.
+ORPHAN_GUEST_PHOTO_GRACE = timedelta(hours=1)
+GUEST_PHOTO_EDGE = 600
+GUEST_PHOTO_FORMATS = {'JPEG', 'PNG', 'WEBP'}
+
+
+def normalize_guest_photo(upload):
+    """Kodiert ein Foto neu als JPEG (max. 600 px Kante) ohne EXIF-/GPS-Metadaten."""
+    size = getattr(upload, 'size', None)
+    if size is None or size > MAX_GUEST_PHOTO_BYTES:
+        raise ValidationError(get_translation('guest_photo_too_large'))
+    try:
+        upload.seek(0)
+        with Image.open(upload) as image:
+            if image.format not in GUEST_PHOTO_FORMATS:
+                raise ValidationError(get_translation('guest_photo_invalid'))
+            width, height = image.size
+            if width * height > MAX_GUEST_PHOTO_PIXELS:
+                raise ValidationError(get_translation('guest_photo_too_many_pixels'))
+            if image.format == 'JPEG':
+                image.draft('RGB', (GUEST_PHOTO_EDGE * 2, GUEST_PHOTO_EDGE * 2))
+            # Ausrichtung übernehmen, bevor die Metadaten verworfen werden.
+            photo = ImageOps.exif_transpose(image).convert('RGB')
+        photo.thumbnail((GUEST_PHOTO_EDGE, GUEST_PHOTO_EDGE))
+        output = BytesIO()
+        photo.save(output, format='JPEG', quality=85, optimize=True)
+    except ValidationError:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+        raise ValidationError(get_translation('guest_photo_invalid'))
+    finally:
+        upload.seek(0)
+    return ContentFile(output.getvalue())
+
+
+class GuestPhotoService:
+    @staticmethod
+    def compute_delete_after(user, captured_at, retention_days=None):
+        """Upload bzw. Ende der letzten nicht stornierten Veranstaltung plus Löschfrist."""
+        from configuration.models import GeneralConfiguration
+        from events.models import EventRegistration
+
+        if retention_days is None:
+            retention_days = GeneralConfiguration.load().guest_photo_retention_days
+        latest_end = (
+            EventRegistration.objects.filter(user=user)
+            .exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED)
+            .aggregate(latest=Max('event__end_date'))['latest']
+        )
+        base = max(captured_at, latest_end) if latest_end else captured_at
+        return base + timedelta(days=retention_days)
+
+    @staticmethod
+    def save_photo(*, user, upload, actor, source, notice_confirmed=False):
+        content = normalize_guest_photo(upload)
+        with transaction.atomic():
+            locked_user = User.objects.select_for_update(no_key=True).get(pk=user.pk)
+            if locked_user.deleted_at:
+                raise ValidationError(get_translation('guest_photo_account_deleted'))
+            photo = GuestPhoto.objects.select_for_update().filter(user=locked_user).first() or GuestPhoto(user=locked_user)
+            old_name = photo.image.name
+            photo.source = source
+            photo.uploaded_by = actor
+            photo.captured_at = timezone.now()
+            # Nur ein eigener Upload belegt die Bestätigung; eine Aufnahme am Einlass setzt sie zurück.
+            photo.notice_confirmed_at = photo.captured_at if notice_confirmed else None
+            photo.delete_after = GuestPhotoService.compute_delete_after(locked_user, photo.captured_at)
+            try:
+                photo.image.save('photo.jpg', content, save=False)
+                photo.save()
+            except Exception:
+                if photo.image.name and photo.image.name != old_name:
+                    photo.image.storage.delete(photo.image.name)
+                raise
+            if old_name:
+                storage = photo.image.storage
+                transaction.on_commit(lambda: storage.delete(old_name))
+        return photo
+
+    @staticmethod
+    def refresh_delete_after(user):
+        """Nach Anmeldung, Check-in oder Stornierung die Löschfrist neu berechnen."""
+        photo = GuestPhoto.objects.filter(user=user).first()
+        if photo:
+            photo.delete_after = GuestPhotoService.compute_delete_after(user, photo.captured_at)
+            photo.save(update_fields=['delete_after'])
+        return photo
+
+    @staticmethod
+    def delete_photo(user):
+        # Die Datei entfernt der post_delete-Handler nach dem Commit.
+        return GuestPhoto.objects.filter(user=user).delete()[0] > 0
+
+    @staticmethod
+    def purge(now=None, dry_run=False):
+        """Löscht abgelaufene Fotos, Datensätze ohne Datei und Dateien ohne Datensatz.
+
+        Die Fristen werden vorher neu berechnet, damit eine geänderte Löschfrist und
+        Anmeldungsänderungen außerhalb der Services (z. B. im Admin) wirksam werden.
+        """
+        from configuration.models import GeneralConfiguration
+        from events.models import EventRegistration
+
+        now = now or timezone.now()
+        days = timedelta(days=GeneralConfiguration.load().guest_photo_retention_days)
+        latest_end = (
+            EventRegistration.objects.filter(user=OuterRef('user'))
+            .exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED)
+            .values('user').annotate(latest=Max('event__end_date')).values('latest')
+        )
+        result = {'expired': 0, 'missing_files': 0, 'orphan_files': 0}
+        storage = GuestPhoto._meta.get_field('image').storage
+        for photo in GuestPhoto.objects.annotate(latest_end=Subquery(latest_end)).order_by('pk'):
+            base = max(photo.captured_at, photo.latest_end) if photo.latest_end else photo.captured_at
+            deadline = base + days
+            if deadline <= now:
+                key = 'expired'
+            elif not storage.exists(photo.image.name):
+                key = 'missing_files'
+            else:
+                if deadline != photo.delete_after and not dry_run:
+                    GuestPhoto.objects.filter(pk=photo.pk, captured_at=photo.captured_at).update(delete_after=deadline)
+                continue
+            result[key] += 1
+            if not dry_run:
+                with transaction.atomic():
+                    # Ein inzwischen ersetztes Foto hat ein neues Aufnahmedatum und bleibt.
+                    for locked in GuestPhoto.objects.select_for_update().filter(pk=photo.pk, captured_at=photo.captured_at):
+                        locked.delete()
+
+        known = set(GuestPhoto.objects.values_list('image', flat=True))
+        try:
+            _, names = storage.listdir(GUEST_PHOTO_DIR)
+        except FileNotFoundError:
+            names = []
+        for filename in names:
+            name = f'{GUEST_PHOTO_DIR}/{filename}'
+            if name in known or storage.get_modified_time(name) > now - ORPHAN_GUEST_PHOTO_GRACE:
+                continue
+            result['orphan_files'] += 1
+            if not dry_run:
+                storage.delete(name)
+        return result

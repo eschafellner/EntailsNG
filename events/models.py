@@ -212,6 +212,14 @@ class Event(models.Model):
         return can_reg
 
     @property
+    def is_seat_selection_open(self):
+        """Zentrale Regel: Gäste und Clan-Admins dürfen Plätze nur bis zum Eventstart wählen.
+
+        Orga-Korrekturen (Admin-Zuweisung/-Freigabe, Sperren) sind davon ausgenommen.
+        """
+        return self.effective_status == self.Status.REGISTRATION_OPEN
+
+    @property
     def is_expired(self):
         """Prüft, ob das Event zeitlich bereits beendet ist."""
         return bool(self.end_date and timezone.now() > self.end_date)
@@ -443,6 +451,19 @@ class EventRegistration(models.Model):
                 ),
                 code="event_finished",
             )
+        # Erweiterter Check-in: Ohne hinterlegtes Foto kein Einlass. Bereits
+        # eingecheckte Gäste bleiben unberührt (z. B. nach späterer Aktivierung).
+        if not self.is_checked_in:
+            from configuration.models import GeneralConfiguration
+            from users.models import GuestPhoto
+            if (GeneralConfiguration.load().extended_checkin_enabled
+                    and not GuestPhoto.objects.filter(user_id=self.user_id).exists()):
+                from configuration.translations import get_translation
+                return CheckInResult(
+                    False,
+                    get_translation('guest_photo_checkin_required', username=self.user.username),
+                    code="photo_required",
+                )
         return CheckInResult(True, "", code="ok")
 
     @transaction.atomic
@@ -506,6 +527,14 @@ class EventRegistration(models.Model):
         if seat:
             return seat.seat_label or f'Pos ({seat.x},{seat.y})'
         return None
+
+    @property
+    def payment_reference(self):
+        """Einheitlicher Verwendungszweck (QR-Code, Dashboard, E-Mail): Kurzcode + echter Name."""
+        code = self.short_code or f'#{self.id}'
+        user = self.user if self.user_id else None
+        name = (user.get_full_name() or user.username) if user else ''
+        return f'{code} {name}'.strip()
 
     @property
     def can_show_payment_qr(self):
@@ -584,7 +613,7 @@ class EventRegistration(models.Model):
                 'full_name': self.user.get_full_name() or self.user.username,
                 'event_title': self.event.title,
                 'amount': f"{self.paid_amount:.2f}",
-                'payment_reference': f"REG-{self.id}",
+                'payment_reference': self.payment_reference,
                 'seat_label': seat_label,
                 'ticket_type': self.ticket_type.name if self.ticket_type else "Standard Ticket",
             }

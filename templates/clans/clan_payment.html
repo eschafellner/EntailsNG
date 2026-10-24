@@ -67,14 +67,14 @@
         {% for hold in holds %}
           <article class="clan-payment-seat">
             <h3>{% t 'clan_payment_seat' %} {{ hold.seat_label }}</h3>
-            <p>{% if hold.funded_registration %}{{ hold.funded_registration.user.username }}{% else %}{% t 'clan_payment_unassigned_label' %}{% endif %}</p>
+            <p>{% if hold.funded_registration %}{{ hold.funded_registration.user.username }}{% if orga and hold.funded_registration.user.get_full_name %} ({{ hold.funded_registration.user.get_full_name }}){% endif %}{% else %}{% t 'clan_payment_unassigned_label' %}{% endif %}</p>
             {% if payment.status == 'PAID' and assignment_open %}
               {% if not hold.funded_registration.is_checked_in or orga %}
                 <form method="post" action="{% url 'clan_payment_assign' slug=clan.slug hold_id=hold.pk %}">
                   {% csrf_token %}
                   <input type="hidden" name="expected_registration_id" value="{{ hold.funded_registration_id|default_if_none:'' }}">
                   <label>{% t 'clan_payment_member' %}
-                    <select name="user_id"><option value="">—</option>{% for membership in eligible_members %}<option value="{{ membership.user_id }}">{{ membership.user.username }}</option>{% endfor %}</select>
+                    <select name="user_id"><option value="">—</option>{% for membership in eligible_members %}<option value="{{ membership.user_id }}">{{ membership.user.username }}{% if orga and membership.user.get_full_name %} ({{ membership.user.get_full_name }}){% endif %}</option>{% endfor %}</select>
                   </label>
                   {% if orga %}<label>{% t 'clan_payment_reason' %}<input name="reason" maxlength="2000"></label>{% endif %}
                   <label class="clan-payment-confirm"><input type="checkbox" name="confirmed" required> {% t 'clan_payment_assignment_confirm' %}</label>
@@ -82,6 +82,8 @@
                   {% if hold.funded_registration %}<button class="btn-action-blue" type="submit" name="action" value="unassign">{% t 'clan_payment_unassign' %}</button>{% endif %}
                 </form>
               {% else %}<p>{% t 'clan_payment_checked_in' %}</p>{% endif %}
+            {% elif payment.status == 'PAID' and assignment_orga_only %}
+              <p>{% t 'clan_payment_running_orga_only' %}</p>
             {% endif %}
           </article>
         {% endfor %}

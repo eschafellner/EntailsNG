@@ -99,6 +99,25 @@ services:
       web:
         condition: service_healthy
 
+  guest_photo_worker:
+    build: .
+    container_name: entailsng_guest_photo_worker
+    restart: unless-stopped
+    command: python manage.py purge_guest_photos --daemon --interval 3600
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/1
+      - SKIP_ENTRYPOINT_INIT=1
+    volumes:
+      - private_media_data:/app/private_media
+      - backup_data:/app/backups_data
+    depends_on:
+      web:
+        condition: service_healthy
+
   backup_worker:
     build: .
     container_name: entailsng_backup_worker

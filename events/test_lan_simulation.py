@@ -73,7 +73,7 @@ class LanEventSimulationTests(TestCase):
                 response = browser.post(reverse("register"), {
                     "username": username,
                     "email": f"{username}@example.test",
-                    "birthday": "2000-05-15",
+                    "first_name": "Max", "last_name": "Mustermann", "birthday": "2000-05-15",
                     "password1": "TestPass123!",
                     "password2": "TestPass123!",
                 })

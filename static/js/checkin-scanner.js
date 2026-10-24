@@ -10,8 +10,11 @@ let nextScanAt = 0;
 let feedbackTimer = null;
 let lastCameraCode = '';
 let lastCameraSeenAt = 0;
+let pendingPhotoRegistrationId = null;
+let resumeCameraAfterPhoto = false;
 const FEEDBACK_HOLD_MS = 3000;
 const CAMERA_REMOVAL_MS = 1500;
+const PHOTO_UPLOAD_EDGE = 1200;
 
 function scannerText(key) {
   const texts = JSON.parse(document.getElementById('scanner-feedback-texts').textContent);
@@ -80,6 +83,8 @@ function renderScanFeedback(state, title, message, body = {}, prominent = false)
   ['user', 'name', 'seat', 'ticket'].forEach(key => {
     document.getElementById('res-' + key).textContent = body[key === 'name' ? 'full_name' : key] || '—';
   });
+  showGuestPhoto(body.photo_url);
+  setPhotoCapture(null);
   banner.setAttribute('aria-busy', state === 'checking' ? 'true' : 'false');
   card.classList.toggle('is-prominent', prominent);
   if (prominent) {
@@ -88,6 +93,20 @@ function renderScanFeedback(state, title, message, body = {}, prominent = false)
       if (navigator.vibrate) navigator.vibrate(state === 'success' ? 100 : [80, 60, 80]);
     } catch (_) { /* Vibration is optional. */ }
   }
+}
+
+function showGuestPhoto(url) {
+  const box = document.getElementById('scan-guest-photo-box');
+  const img = document.getElementById('scan-guest-photo');
+  // Never leave the previous guest's photo on screen.
+  if (url) img.src = url;
+  else img.removeAttribute('src');
+  box.hidden = !url;
+}
+
+function setPhotoCapture(registrationId) {
+  pendingPhotoRegistrationId = registrationId || null;
+  document.getElementById('scan-photo-capture').hidden = !pendingPhotoRegistrationId;
 }
 
 function holdScanFeedback() {
@@ -103,8 +122,9 @@ function holdScanFeedback() {
   }, FEEDBACK_HOLD_MS);
 }
 
-function startScannerRequest(url, payload, isToggle = false) {
-  if (scanBusy || Date.now() < nextScanAt) return false;
+function startScannerRequest(url, payload, isToggle = false, allowDuringPause = false) {
+  // The reading pause guards against repeated QR reads, not deliberate photo uploads.
+  if (scanBusy || (!allowDuringPause && Date.now() < nextScanAt)) return false;
   prepareAudio();
   scanBusy = true;
   setScanControls(true);
@@ -118,10 +138,12 @@ async function performScannerRequest(url, payload, isToggle) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
+    const isForm = typeof FormData !== 'undefined' && payload instanceof FormData;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-      body: JSON.stringify(payload),
+      headers: isForm ? { 'X-CSRFToken': getCsrfToken() } :
+        { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: isForm ? payload : JSON.stringify(payload),
       signal: controller.signal
     });
     // Server errors, expired sessions (HTML redirects) and lost replies are uncertain.
@@ -134,6 +156,9 @@ async function performScannerRequest(url, payload, isToggle) {
         checkedIn ? scannerText('success') : scannerText('checkout');
       renderScanFeedback(warning ? 'warning' : 'success', title, body.message, body, true);
       updateLocalTableStatus(body.registration_id || payload.registration_id, checkedIn, body.checked_in_at);
+    } else if (body.status === 'photo_required' && body.registration_id) {
+      renderScanFeedback('warning', scannerText('photo_required'), body.message, body, true);
+      setPhotoCapture(body.registration_id);
     } else {
       renderScanFeedback(response.status === 429 ? 'warning' : 'error',
         response.status === 429 ? scannerText('limited') : scannerText('rejected'),
@@ -157,6 +182,49 @@ function sendScanCode(code) {
 
 function toggleCheckIn(registrationId) {
   return startScannerRequest('/api/check-in/toggle/', { registration_id: registrationId }, true);
+}
+
+async function shrinkPhoto(file) {
+  // Keeps uploads small on venue Wi-Fi; the server re-encodes the photo anyway.
+  try {
+    if (typeof createImageBitmap !== 'function') return file;
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, PHOTO_UPLOAD_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    if (bitmap.close) bitmap.close();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+    return blob || file;
+  } catch (_) {
+    return file;
+  }
+}
+
+function resumeCameraIfNeeded() {
+  if (resumeCameraAfterPhoto) startCamera();
+  resumeCameraAfterPhoto = false;
+}
+
+function takeGuestPhoto() {
+  if (!pendingPhotoRegistrationId) return;
+  // The QR camera must release the device before the photo camera opens.
+  resumeCameraAfterPhoto = resumeCameraAfterPhoto || isScannerRunning;
+  stopCamera();
+  document.getElementById('scan-photo-input').click();
+}
+
+async function uploadGuestPhoto(file) {
+  const registrationId = pendingPhotoRegistrationId;
+  if (!file || !registrationId || scanBusy) return false;
+  const photo = await shrinkPhoto(file);
+  const form = new FormData();
+  form.append('registration_id', String(registrationId));
+  form.append('photo', photo, 'checkin.jpg');
+  const started = startScannerRequest('/api/check-in/photo/', form, false, true);
+  resumeCameraIfNeeded();
+  return started;
 }
 
 function handleCameraCode(decodedText) {
@@ -404,6 +472,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
       loadGuestPage();
+    });
+  }
+
+  // Erweiterter Check-in: Foto am Einlass aufnehmen
+  const photoInput = document.getElementById('scan-photo-input');
+  const takePhotoBtn = document.getElementById('btn-take-photo');
+  const cancelPhotoBtn = document.getElementById('btn-cancel-photo');
+  if (photoInput && takePhotoBtn) {
+    takePhotoBtn.addEventListener('click', takeGuestPhoto);
+    photoInput.addEventListener('change', () => {
+      const file = photoInput.files && photoInput.files[0];
+      photoInput.value = '';
+      void uploadGuestPhoto(file);
+    });
+    photoInput.addEventListener('cancel', resumeCameraIfNeeded);
+  }
+  if (cancelPhotoBtn) {
+    cancelPhotoBtn.addEventListener('click', () => {
+      setPhotoCapture(null);
+      resumeCameraIfNeeded();
     });
   }
 

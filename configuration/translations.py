@@ -16,6 +16,8 @@ from tournaments.result_texts import TEXTS as RESULT_TEXTS
 from tournaments.external_texts import TEXTS as EXTERNAL_TOURNAMENT_TEXTS
 from tournaments.draw_texts import TEXTS as DRAW_TEXTS
 from users.ban_texts import TEXTS as BAN_TEXTS
+from users.photo_texts import TEXTS as GUEST_PHOTO_TEXTS
+from users.name_texts import TEXTS as REAL_NAME_TEXTS
 from contact.texts import CONTACT_TEXTS
 
 DEFAULT_TEXTS = {
@@ -32,6 +34,8 @@ DEFAULT_TEXTS = {
     **EXTERNAL_TOURNAMENT_TEXTS,
     **CLAN_PAYMENT_TEXTS,
     **BAN_TEXTS,
+    **GUEST_PHOTO_TEXTS,
+    **REAL_NAME_TEXTS,
     **RESULT_TEXTS,
     'tournament_state_label': 'Turnierstatus',
     'tournament_registration_status_label': 'Anmeldestatus',
@@ -1266,6 +1270,7 @@ DEFAULT_TEXTS = {
     'msg_seat_released_success': 'Sitzplatz erfolgreich freigegeben.',
     'msg_seat_release_error': 'Die Freigabe konnte nicht durchgeführt werden. Bitte versuche es erneut.',
     'msg_seat_one_per_user': 'Platzreservierung fehlgeschlagen: Jeder Teilnehmer kann nur einen Sitzplatz belegen.',
+    'msg_seat_selection_closed': 'Die Sitzplatzwahl ist geschlossen, da die Veranstaltung bereits begonnen hat. Bitte wende dich bei Änderungen an die Orga.',
     'msg_seat_not_registered': 'Du bist für diese Veranstaltung nicht angemeldet.',
     'msg_seat_none_reserved': 'Du hast aktuell keinen Sitzplatz reserviert.',
     'msg_seat_action_failed': 'Die Aktion konnte nicht ausgeführt werden. Bitte versuche es erneut.',

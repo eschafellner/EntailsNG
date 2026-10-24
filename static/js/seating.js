@@ -134,11 +134,20 @@
         if (config.clanMode) {
           clanSelectionState = data.clan_selection;
           selectedClanSeats = new Set(clanSelectionState.selected);
-          if (!clanSelectionState.enabled) document.getElementById('clan-seat-feedback').textContent = config.clanMode.disabled;
+          if (!clanSelectionState.enabled) document.getElementById('clan-seat-feedback').textContent = clanSelectionState.selection_closed ? config.clanMode.closed : config.clanMode.disabled;
           updateClanCounter();
         }
         const statusEl = document.getElementById('seating-status');
-        if (statusEl) statusEl.style.display = 'none';
+        if (statusEl) {
+          // Laufende Veranstaltung: Plan bleibt sichtbar, Hinweis ersetzt den Lade-Indikator
+          if (data.seat_selection_closed_message && !config.clanMode) {
+            statusEl.textContent = data.seat_selection_closed_message;
+            statusEl.style.padding = '12px';
+            statusEl.style.display = 'block';
+          } else {
+            statusEl.style.display = 'none';
+          }
+        }
         renderGrid(data);
         if (!isPanZoomInitialized) {
           initPanZoom(data);
@@ -229,7 +238,7 @@
             statusIconHtml = SVG_ICONS.free;
             tooltipText = `Platz ${seatLabel}: Frei`;
 
-            if (config.isUserLoggedIn) {
+            if (config.isUserLoggedIn && data.seat_selection_open !== false) {
               cellEl.style.cursor = 'pointer';
               cellEl.onmouseenter = () => { cellEl.style.transform = 'scale(1.08)'; cellEl.style.boxShadow = '0 0 8px rgba(34, 197, 94, 0.4)'; };
               cellEl.onmouseleave = () => { cellEl.style.transform = 'scale(1)'; cellEl.style.boxShadow = 'none'; };
@@ -368,6 +377,13 @@
             cellEl.tabIndex = 0;
             cellEl.setAttribute('role', 'button');
             cellEl.onkeydown = (e) => {if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); cellEl.click();}};
+          } else if (['PRE_RESERVED', 'RESERVED'].includes(cellData.status) && tooltipText) {
+            // Touch-Geräte zeigen kein title-Attribut: besetzte Plätze bekommen per Tap eine Tooltip-Blase
+            cellEl.onclick = (e) => {
+              if (!window.matchMedia('(hover: none)').matches) return;
+              e.stopPropagation();
+              showSeatTooltip(cellEl, tooltipText);
+            };
           }
           cellEl.setAttribute('aria-label', tooltipText || seatLabel);
 
@@ -464,6 +480,52 @@
       toast.style.transform = 'translateY(10px)';
       setTimeout(() => { toast.style.display = 'none'; }, 300);
     }, 4500);
+  }
+
+  function showSeatTooltip(cellEl, message) {
+    let tip = document.getElementById('seat-tap-tooltip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = 'seat-tap-tooltip';
+      tip.setAttribute('role', 'tooltip');
+      tip.style.cssText = `
+        position: fixed;
+        z-index: 999999;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: #111827;
+        border: 1px solid var(--signal, #f8ab2d);
+        color: #f9fafb;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        font-weight: bold;
+        max-width: min(280px, calc(100vw - 16px));
+        pointer-events: none;
+        transform: translateX(-50%);
+      `;
+      document.body.appendChild(tip);
+      document.addEventListener('click', hideSeatTooltip);
+    }
+    tip.textContent = message;
+    tip.style.display = 'block';
+
+    // Über dem Platz zentrieren, am Bildschirmrand einklemmen, bei Platzmangel darunter anzeigen
+    const rect = cellEl.getBoundingClientRect();
+    const half = tip.offsetWidth / 2;
+    const left = Math.min(Math.max(rect.left + rect.width / 2, half + 8), window.innerWidth - half - 8);
+    let top = rect.top - tip.offsetHeight - 8;
+    if (top < 8) top = rect.bottom + 8;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+
+    clearTimeout(tip._timeout);
+    tip._timeout = setTimeout(hideSeatTooltip, 3500);
+  }
+
+  function hideSeatTooltip() {
+    const tip = document.getElementById('seat-tap-tooltip');
+    if (tip) tip.style.display = 'none';
   }
 
   function confirmReservation() {
@@ -683,6 +745,7 @@
     }, { passive: true, signal });
 
     viewport.addEventListener('touchmove', function(e) {
+      hideSeatTooltip();
       if (isPanning && e.touches.length === 1) {
         e.preventDefault();
         pointX = e.touches[0].clientX - startX;

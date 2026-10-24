@@ -710,7 +710,7 @@ class SeatingServiceAndSignalTests(TestCase):
             title='LAN 2026',
             slug='lan-2026',
             is_active=True,
-            start_date=timezone.now(),
+            start_date=timezone.now() + timezone.timedelta(days=1),
             end_date=timezone.now() + timezone.timedelta(days=2),
         )
         self.plan = SeatingPlan.objects.create(
@@ -1705,3 +1705,99 @@ class SeatingFeedbackRegressionTests(TestCase):
 
 
 
+
+
+class SeatSelectionClosedTests(TestCase):
+    """Ab Eventstart dürfen Gäste keine Plätze mehr wählen oder freigeben; die Orga schon."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        now = timezone.now()
+        self.user1 = User.objects.create_user(username='guest1', email='g1@test.com', password='pw')
+        self.user2 = User.objects.create_user(username='guest2', email='g2@test.com', password='pw')
+        self.event = Event.objects.create(
+            title='Closed LAN', slug='closed-lan', is_active=True,
+            status=Event.Status.REGISTRATION_OPEN,
+            start_date=now + timedelta(days=1), end_date=now + timedelta(days=3),
+        )
+        self.plan = SeatingPlan.objects.create(event=self.event, name='Hall', columns=5, rows=1)
+        self.seat1 = SeatingCell.objects.create(plan=self.plan, x=1, y=1, cell_type='SEAT', seat_label='A1')
+        self.seat2 = SeatingCell.objects.create(plan=self.plan, x=2, y=1, cell_type='SEAT', seat_label='A2')
+        self.reg1 = EventRegistration.objects.create(user=self.user1, event=self.event)
+        self.reg2 = EventRegistration.objects.create(
+            user=self.user2, event=self.event, payment_status=EventRegistration.PaymentStatus.PAID)
+
+    def start_event(self):
+        self.event.start_date = timezone.now() - timedelta(hours=1)
+        self.event.save()
+        self.assertEqual(self.event.effective_status, Event.Status.RUNNING)
+
+    def reserve(self, user, seat):
+        self.client.force_login(user)
+        return self.client.post(reverse('api_reserve_seat', args=[self.event.pk]),
+                                json.dumps({'x': seat.x, 'y': seat.y}), content_type='application/json')
+
+    def test_flag_follows_effective_status(self):
+        self.assertTrue(self.event.is_seat_selection_open)
+        self.start_event()
+        self.assertFalse(self.event.is_seat_selection_open)
+        self.event.status = Event.Status.FINISHED
+        self.assertFalse(self.event.is_seat_selection_open)
+
+    def test_reservation_allowed_before_start(self):
+        response = self.reserve(self.user1, self.seat1)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.registration, self.reg1)
+
+    def test_reservation_and_seat_change_rejected_after_start(self):
+        self.seat1.reserve_for_user(self.reg1)
+        self.start_event()
+        response = self.reserve(self.user1, self.seat2)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('geschlossen', response.json()['message'])
+        self.seat1.refresh_from_db()
+        self.seat2.refresh_from_db()
+        self.assertEqual(self.seat1.registration, self.reg1)
+        self.assertIsNone(self.seat2.registration)
+
+    def test_paid_guest_cannot_overwrite_after_start(self):
+        self.seat1.reserve_for_user(self.reg1)
+        self.start_event()
+        response = self.reserve(self.user2, self.seat1)
+        self.assertEqual(response.status_code, 400)
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.registration, self.reg1)
+
+    def test_guest_cannot_release_after_start(self):
+        self.seat1.reserve_for_user(self.reg1)
+        self.start_event()
+        self.client.force_login(self.user1)
+        response = self.client.post(reverse('api_release_seat', args=[self.event.pk]))
+        self.assertEqual(response.status_code, 400)
+        self.seat1.refresh_from_db()
+        self.assertEqual(self.seat1.registration, self.reg1)
+
+    def test_orga_corrections_still_allowed_after_start(self):
+        self.seat1.reserve_for_user(self.reg1)
+        self.start_event()
+        success, _ = self.seat1.release_seat(is_admin=True)
+        self.assertTrue(success)
+        User.objects.create_superuser(username='orga', email='orga@test.com', password='pw')
+        self.client.login(username='orga', password='pw')
+        response = self.client.post(reverse('admin_assign_seat'), json.dumps(
+            {'registration_id': self.reg2.pk, 'x': self.seat2.x, 'y': self.seat2.y}), content_type='application/json')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.seat2.refresh_from_db()
+        self.assertEqual(self.seat2.registration, self.reg2)
+
+    def test_plan_api_reports_closed_selection(self):
+        url = reverse('api_event_seating', args=[self.event.pk])
+        data = self.client.get(url).json()
+        self.assertTrue(data['seat_selection_open'])
+        self.assertIsNone(data['seat_selection_closed_message'])
+        self.start_event()
+        data = self.client.get(url).json()
+        self.assertFalse(data['seat_selection_open'])
+        self.assertIn('geschlossen', data['seat_selection_closed_message'])

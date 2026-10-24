@@ -8,4 +8,7 @@ urlpatterns = [
     path('request-activation-code/', views.request_activation_code_view, name='request_activation_code'),
     path('profile/', views.profile_view, name='profile'),
     path('profile/delete/', views.account_delete_view, name='account_delete'),
+    path('profile/photo/', views.guest_photo_upload_view, name='guest_photo_upload'),
+    path('profile/photo/delete/', views.guest_photo_delete_view, name='guest_photo_delete'),
+    path('photos/<int:user_id>/', views.guest_photo_view, name='guest_photo'),
 ]

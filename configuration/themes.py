@@ -363,6 +363,11 @@ def build_css_variables(theme_preset, ui_scale, primary_color=None, secondary_co
         base_vars['--info-text'] = '#38bdf8'
         base_vars['--info-bg'] = 'rgba(56, 189, 248, 0.12)'
         base_vars['--info-border'] = 'rgba(56, 189, 248, 0.3)'
+        base_vars['--eyebrow-color'] = 'var(--signal)'
+        base_vars['--seat-key-free'] = '#22c55e'
+        base_vars['--seat-key-pre'] = '#eab308'
+        base_vars['--seat-key-reserved'] = '#ef4444'
+        base_vars['--seat-key-clan'] = '#38bdf8'
     else:
         base_vars['--warning-text'] = '#b45309'
         base_vars['--warning-bg'] = 'rgba(245, 158, 11, 0.12)'
@@ -370,5 +375,11 @@ def build_css_variables(theme_preset, ui_scale, primary_color=None, secondary_co
         base_vars['--info-text'] = '#0369a1'
         base_vars['--info-bg'] = 'rgba(2, 132, 199, 0.08)'
         base_vars['--info-border'] = 'rgba(2, 132, 199, 0.25)'
+        # Signal is too light for small text on light paper.
+        base_vars['--eyebrow-color'] = 'var(--signal-deep)'
+        base_vars['--seat-key-free'] = '#15803d'
+        base_vars['--seat-key-pre'] = '#a16207'
+        base_vars['--seat-key-reserved'] = '#b91c1c'
+        base_vars['--seat-key-clan'] = '#0369a1'
 
     return base_vars

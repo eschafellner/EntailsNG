@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from django.db import transaction
 from django.utils import timezone
+from users.services import GuestPhotoService
 from .models import Event, EventRegistration, TicketType
 from .exceptions import (
     RegistrationError,
@@ -251,6 +252,11 @@ class RegistrationService:
 
         booking_price = selected_ticket.price if selected_ticket else None
 
+        # Echter Name ist Pflicht (nach den fachlichen Event-/Ticketprüfungen);
+        # Clan-Sammelzahlungen (Zuweisung durch Orga/Clan-Admin) sind ausgenommen.
+        if not reserved_clan_slot and not user.has_real_name:
+            raise RegistrationError(get_translation('real_name_missing_registration'))
+
         # 7. Registrierung erstellen oder stornierte Registrierung reaktivieren
         if existing_reg:
             existing_reg.payment_status = EventRegistration.PaymentStatus.UNPAID
@@ -262,6 +268,7 @@ class RegistrationService:
             existing_reg.is_checked_in = False
             existing_reg.checked_in_at = None
             existing_reg.save()
+            GuestPhotoService.refresh_delete_after(user)
             return existing_reg, False, True
 
         registration = EventRegistration.objects.create(
@@ -270,6 +277,7 @@ class RegistrationService:
             ticket_type=selected_ticket,
             booking_price=booking_price,
         )
+        GuestPhotoService.refresh_delete_after(user)
         return registration, True, False
 
 
@@ -377,6 +385,7 @@ class PaymentService:
         reg.checked_in_at = None
         reg.cancelled_at = timezone.now()
         reg.save()
+        GuestPhotoService.refresh_delete_after(reg.user)
 
         # In-Memory-Objekt synchronisieren
         registration.payment_status = reg.payment_status

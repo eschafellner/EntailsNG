@@ -108,12 +108,12 @@ def get_event_seating_api(request, event_id):
     Nicht eingeloggte Besucher sehen ausschließlich den aggregierten Status (FREE, PRE_RESERVED, RESERVED, BLOCKED).
     """
     try:
-        plan = SeatingPlan.objects.get(event_id=event_id)
+        plan = SeatingPlan.objects.select_related('event').get(event_id=event_id)
     except SeatingPlan.DoesNotExist:
         return JsonResponse(
             {
                 'status': 'error',
-                'error': 'Kein Sitzplan für diese Veranstaltung vorhanden.',
+                'error':'Kein Sitzplan für diese Veranstaltung vorhanden.',
                 'message': 'Kein Sitzplan für diese Veranstaltung vorhanden.',
             },
             status=404,
@@ -148,6 +148,7 @@ def get_event_seating_api(request, event_id):
 
         current_user_clan_name = user_clan_map.get(request.user.id)
 
+    seat_selection_open = bool(plan.event and plan.event.is_seat_selection_open)
     hold_map = {h.cell_id: h for h in open_holds(event_id).select_related('allocation__clan', 'payment')}
     cells = []
     for c in cells_qs:
@@ -187,7 +188,7 @@ def get_event_seating_api(request, event_id):
             'hold_clan_name': hold.allocation.clan.name if hold else None,
             'hold_clan_logo': hold.allocation.clan.logo.url if hold and hold.allocation.clan.logo else None,
             'hold_clan_tag': (hold.allocation.clan.tag or hold.allocation.clan.name[:2]) if hold else None,
-            'can_claim_hold': bool(hold and not hold.payment_id and is_authenticated and user_clan_id == hold.allocation.clan_id),
+            'can_claim_hold': bool(seat_selection_open and hold and not hold.payment_id and is_authenticated and user_clan_id == hold.allocation.clan_id),
             'x': c.x,
             'y': c.y,
             'cell_type': c.cell_type,
@@ -217,6 +218,9 @@ def get_event_seating_api(request, event_id):
         'columns': plan.columns,
         'rows': plan.rows,
         'user_clan_name': current_user_clan_name,
+        'seat_selection_open': seat_selection_open,
+        'seat_selection_closed_message': get_translation('msg_seat_selection_closed')
+            if plan.event and plan.event.effective_status == Event.Status.RUNNING else None,
         'cells': cells,
     })
 
@@ -700,7 +704,8 @@ def clan_seat_selection(request, slug):
         'clanId': clan.pk, 'saveUrl': reverse('clan_seat_update', args=[clan.slug]),
         'counter': get_translation('clan_seat_counter'), 'until': get_translation('clan_seat_until'),
         'tooltip': get_translation('clan_seat_tooltip'),
-        'disabled': get_translation('clan_seat_disabled'), 'saved': get_translation('clan_seat_saved'),
+        'disabled': get_translation('clan_seat_disabled'), 'closed': get_translation('clan_seat_selection_closed'),
+        'saved': get_translation('clan_seat_saved'),
         'network': get_translation('clan_seat_network'), 'limitMessage': get_translation('clan_seat_limit'),
     }}
     return render(request, 'seating/seating.html', context)

@@ -133,12 +133,15 @@ def main():
                 allow_unpaid_seat_overwrite=False)
             ticket = TicketType.objects.create(event=event, name='Free smoke', price=0)
             prefix = f'http_{marker}_{size}_{workers}'
+            # Event registration requires a real name.
             baseline = User.objects.bulk_create([User(username=f'{prefix}_base_{i}',
-                email=f'{prefix}_base_{i}@example.invalid', password='!') for i in range(size)])
+                email=f'{prefix}_base_{i}@example.invalid', password='!',
+                first_name='Smoke', last_name=f'Base {i}') for i in range(size)])
             EventRegistration.objects.bulk_create([EventRegistration(user=u, event=event, ticket_type=ticket,
                 booking_price=0) for u in baseline])
             guests = User.objects.bulk_create([User(username=f'{prefix}_new_{i}',
-                email=f'{prefix}_new_{i}@example.invalid', password='!') for i in range(options.samples)])
+                email=f'{prefix}_new_{i}@example.invalid', password='!',
+                first_name='Smoke', last_name=f'Guest {i}') for i in range(options.samples)])
             sessions = [cookies(user) for user in guests]
             # Warm templates and caches without an extra registration.
             urllib.request.build_opener().open(urllib.request.Request(

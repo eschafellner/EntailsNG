@@ -271,7 +271,7 @@ class AccountDeletionTests(TestCase):
         settings.is_enabled = True
         settings.save()
         response = self.client.post(reverse('register'), {
-            'username': 'delete-me', 'email': 'DELETE-ME@example.com', 'birthday': '2000-01-01',
+            'username': 'delete-me', 'email': 'DELETE-ME@example.com', 'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '2000-01-01',
             'password1': 'NewStrongPass123!', 'password2': 'NewStrongPass123!',
         })
         self.assertRedirects(response, reverse('verify_email'))

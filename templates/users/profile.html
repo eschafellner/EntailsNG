@@ -142,6 +142,21 @@
           <small style="color: var(--muted); font-size: 11px;">{% t "profile_username_cannot_change" "Der Username kann nicht geändert werden." %}</small>
         </div>
 
+        {% for field in profile_form %}{% if field.name == 'first_name' or field.name == 'last_name' %}
+        <div class="form-group">
+          <label for="id_{{ field.name }}">{% if field.name == 'first_name' %}{% t "real_name_first_label" %}{% else %}{% t "real_name_last_label" %}{% endif %}</label>
+          <input type="text" name="{{ field.name }}" id="id_{{ field.name }}" class="form-control" value="{{ field.value|default:'' }}" maxlength="150"
+                 autocomplete="{% if field.name == 'first_name' %}given-name{% else %}family-name{% endif %}"
+                 {% if profile_form.real_name_locked %}disabled style="opacity: 0.7; cursor: not-allowed;"{% else %}required{% endif %}>
+          {% if field.errors %}
+            <div style="color: var(--danger); font-size: 12px; margin-top: 4px;">{{ field.errors.0 }}</div>
+          {% endif %}
+        </div>
+        {% endif %}{% endfor %}
+        <small style="display: block; margin: -6px 0 14px; color: var(--muted); font-size: 11px;">
+          {% if profile_form.real_name_locked %}{% t "real_name_locked_hint" %}{% else %}{% t "real_name_purpose_hint" %}{% endif %}
+        </small>
+
         <div class="form-group">
           <label for="id_email">{% t "auth_email_label" "E-Mail-Adresse:" %}</label>
           <input type="email" name="email" id="id_email" class="form-control" value="{{ profile_form.email.value|default:'' }}" required>
@@ -211,6 +226,58 @@
     </div>
 
   </div>
+
+  {% if extended_checkin_enabled or guest_photo %}
+  <!-- FOTO FÜR DEN ERWEITERTEN CHECK-IN -->
+  <section id="guest-photo" class="card" aria-labelledby="guest-photo-title" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">
+    <p class="eyebrow" style="margin-bottom: 4px;">{% t "guest_photo_eyebrow" %}</p>
+    <h3 id="guest-photo-title" style="font-family: 'Barlow Condensed', sans-serif; font-size: 24px; margin-top: 0; margin-bottom: 12px;">{% t "guest_photo_title" %}</h3>
+    <p style="color: var(--muted); max-width: 720px;">{% t "guest_photo_notice" days=guest_photo_retention_days %}</p>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; margin-top: 16px;">
+      {% if guest_photo %}
+        <div>
+          <img src="{% url 'guest_photo' request.user.pk %}?v={{ guest_photo.captured_at|date:'U' }}" alt="{% t 'guest_photo_alt' username=request.user.username %}" width="160" height="160" style="display: block; width: 160px; height: 160px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); background: var(--panel);">
+          <small style="display: block; margin-top: 8px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 12px;">{% t "guest_photo_delete_after" date=guest_photo.delete_after|date:"d.m.Y" %}</small>
+        </div>
+      {% else %}
+        <p role="status" style="margin: 0; padding: 12px 16px; border-left: 4px solid #eab308; background: var(--panel);">{% t "guest_photo_missing" %}</p>
+      {% endif %}
+
+      <div style="flex: 1 1 280px; display: flex; flex-direction: column; gap: 16px;">
+        {% if extended_checkin_enabled %}
+          <form method="post" action="{% url 'guest_photo_upload' %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="form-group">
+              <label for="id_photo">{{ guest_photo_form.photo.label }}</label>
+              {{ guest_photo_form.photo }}
+            </div>
+            <div class="form-group">
+              <label style="display: flex; align-items: flex-start; gap: 10px;">{{ guest_photo_form.confirm_notice }} <span>{{ guest_photo_form.confirm_notice.label }}</span></label>
+            </div>
+            <button type="submit" class="btn" style="padding: 10px 16px; cursor: pointer;">
+              {% if guest_photo %}{% t "guest_photo_replace_btn" %}{% else %}{% t "guest_photo_upload_btn" %}{% endif %}
+            </button>
+          </form>
+        {% endif %}
+
+        {% if guest_photo %}
+          <details>
+            <summary class="btn" style="cursor: pointer; color: var(--danger); padding: 10px 16px; width: fit-content;">{% t "guest_photo_delete_prepare" %}</summary>
+            <form method="post" action="{% url 'guest_photo_delete' %}" style="margin-top: 12px;">
+              {% csrf_token %}
+              <p>{% t "guest_photo_delete_confirm_text" %}</p>
+              <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                <button type="submit" class="btn" style="border: 1px solid var(--danger); color: var(--danger); padding: 10px 16px; cursor: pointer;">{% t "guest_photo_delete_confirm_btn" %}</button>
+                <a href="{% url 'profile' %}#guest-photo" class="btn">{% t "guest_photo_cancel" %}</a>
+              </div>
+            </form>
+          </details>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
 
   <!-- MEINE ANMELDUNGEN & TICKETS -->
   <div class="card" style="padding: 24px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line);">

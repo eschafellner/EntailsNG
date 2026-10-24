@@ -50,7 +50,10 @@ def effective_limit(clan, config=None):
 
 
 def live_holds(event_id=None, now=None):
-    """CLAIMED holds become open again if their personal booking is released."""
+    """CLAIMED holds become open again if their personal booking is released.
+
+    Unpaid protection ends at event start, independently of the expiry worker.
+    """
     now = now or timezone.now()
     config = ClanSeatConfiguration.load()
     qs = ClanSeatHold.objects.filter(
@@ -58,8 +61,8 @@ def live_holds(event_id=None, now=None):
         protection_active=True, cell__isnull=False,
         allocation__expired_at__isnull=True,
         allocation__event__is_active=True,
-        allocation__event__status__in=[Event.Status.REGISTRATION_OPEN, Event.Status.RUNNING],
-        allocation__event__end_date__gt=now,
+        allocation__event__status=Event.Status.REGISTRATION_OPEN,
+        allocation__event__start_date__gt=now,
         cell__cell_type=SeatingCell.CellType.SEAT,
     ).filter(Q(allocation__duration=ClanSeatConfiguration.Duration.EVENT) | Q(allocation__expires_at__gt=now)).exclude(cell__reservation_status=SeatingCell.ReservationStatus.BLOCKED).exclude(allocation__clan__seat_limit_override=0)
     if not config.enabled or config.default_limit == 0:
@@ -163,6 +166,8 @@ def update_selection(clan_id, actor_id, event_id, cell_ids, *, expected_revision
     now = timezone.now()
     if not event.is_active or event.effective_status not in (Event.Status.REGISTRATION_OPEN, Event.Status.RUNNING):
         raise ClanSeatError('clan_seat_event')
+    if not event.is_seat_selection_open:
+        raise ClanSeatError('clan_seat_selection_closed')
     plan = SeatingPlan.objects.select_for_update().filter(event=event).first()
     if plan is None:
         raise ClanSeatError('clan_seat_event')
@@ -232,8 +237,9 @@ def selection_status(clan, event):
     holds = list(open_holds(event.pk).filter(allocation__clan=clan))
     claimed = 0 if allocation is None else allocation.holds.filter(state=ClanSeatHold.State.CLAIMED).exclude(pk__in=[h.pk for h in holds]).count()
     now = timezone.now()
-    valid_event = event.is_active and event.effective_status in (Event.Status.REGISTRATION_OPEN, Event.Status.RUNNING)
+    valid_event = event.is_active and event.is_seat_selection_open
     return {
+        'selection_closed': event.is_active and event.effective_status == Event.Status.RUNNING,
         'revision': selection_revision(clan, event, config, allocation),
         'limit': effective_limit(clan, config), 'claimed': claimed,
         'selected': [h.cell_id for h in holds],
@@ -259,8 +265,7 @@ def process_clan_holds():
         if allocation.duration == config.Duration.EVENT and allocation.event.end_date != allocation.expires_at:
             allocation.expires_at = allocation.event.end_date
             allocation.save(update_fields=['expires_at'])
-        if (allocation.expires_at <= now or not allocation.event.is_active
-                or allocation.event.effective_status not in (Event.Status.REGISTRATION_OPEN, Event.Status.RUNNING)):
+        if allocation.expires_at <= now or not allocation.event.is_active or not allocation.event.is_seat_selection_open:
             expire_allocation(allocation, now)
         elif not config.enabled or effective_limit(allocation.clan, config) == 0:
             release_holds(allocation.holds.filter(protection_active=True))

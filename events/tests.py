@@ -26,7 +26,7 @@ class EventDashboardTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username='gamer1', email='gamer1@example.com', password='password'
+            username='gamer1', email='gamer1@example.com', password='password', first_name='Gamer', last_name='Eins'
         )
         self.staff_user = User.objects.create_superuser(
             username='admin', email='admin@example.com', password='password'
@@ -333,8 +333,8 @@ class EventDashboardTests(TestCase):
 class RegistrationRulesTests(TestCase):
 
     def setUp(self):
-        self.user1 = User.objects.create_user(username='user1', email='u1@example.com', password='password')
-        self.user2 = User.objects.create_user(username='user2', email='u2@example.com', password='password')
+        self.user1 = User.objects.create_user(username='user1', email='u1@example.com', password='password', first_name='Max', last_name='Muster')
+        self.user2 = User.objects.create_user(username='user2', email='u2@example.com', password='password', first_name='Max', last_name='Muster')
         self.event = Event.objects.create(
             title='Lan 2026',
             slug='lan-2026',
@@ -496,7 +496,7 @@ class EventStateAndLifecycleTests(TestCase):
 class EventRegistrationValidationTests(TestCase):
 
     def setUp(self):
-        self.user = User.objects.create_user(username='gamer1', password='password')
+        self.user = User.objects.create_user(username='gamer1', password='password', first_name='Gamer', last_name='Eins')
         self.event = Event.objects.create(
             title='Main Event',
             slug='main-event',
@@ -514,7 +514,7 @@ class EventRegistrationValidationTests(TestCase):
         EventRegistration.objects.create(user=self.user, event=self.event)
 
         # Zweite Registrierung muss fehlschlagen
-        user2 = User.objects.create_user(username='gamer2', password='password')
+        user2 = User.objects.create_user(username='gamer2', password='password', first_name='Gamer', last_name='Zwei')
         self.client.login(username='gamer2', password='password')
         response = self.client.post(reverse('register_for_event', args=[self.event.id]))
         self.assertEqual(response.status_code, 302)
@@ -1176,7 +1176,7 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
         self.assertEqual(lines[7], 'EUR35.50')
         self.assertEqual(lines[8], '')
         self.assertEqual(lines[9], '')
-        self.assertTrue(lines[10].startswith('gamer1'))
+        self.assertEqual(lines[10], reg_with_ticket.payment_reference)
         # Ohne Ticket -> Betrag bleibt leer
         user_no_ticket = User.objects.create_user(username='gamer_no_ticket', password='password')
         reg_no_ticket = EventRegistration.objects.create(
@@ -1188,7 +1188,7 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
         payload_no_ticket = generate_epc_qr_payload(reg_no_ticket, config=config)
         lines_no_ticket = payload_no_ticket.split('\n')
         self.assertEqual(lines_no_ticket[7], '')  # Betrag leer
-        self.assertTrue(lines_no_ticket[10].startswith('gamer_no_ticket'))
+        self.assertEqual(lines_no_ticket[10], f'{reg_no_ticket.short_code} gamer_no_ticket')
 
         # Prüfung gegen Zeilenumbruch-Injection im Kontoinhaber
         config.kontoinhaber = 'LAN e.V.\r\nATTACKER'
@@ -2012,7 +2012,7 @@ class EventFeedbackRegressionTests(TestCase):
             price=Decimal("25.00"),
             is_active=True,
         )
-        self.user_a = User.objects.create_user(username="user_a", email="a@test.com", password="password")
+        self.user_a = User.objects.create_user(username="user_a", email="a@test.com", password="password", first_name="Anna", last_name="Alpha")
         self.user_b = User.objects.create_user(username="user_b", email="b@test.com", password="password")
 
     def test_p2_checkin_service_rejects_cancelled_registration(self):

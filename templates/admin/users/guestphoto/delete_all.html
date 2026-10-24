@@ -1,0 +1,10 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h2>{% t "guest_photo_admin_delete_all" %}</h2>
+<p>{% t "guest_photo_admin_delete_intro" count=photo_count %}</p>
+<form method="post">
+  {% csrf_token %}
+  <button type="submit" class="button" {% if not photo_count %}disabled{% endif %}>{% t "guest_photo_admin_delete_confirm" %}</button>
+  <a href="{% url 'admin:users_guestphoto_changelist' %}">{% t "btn_cancel" "Abbrechen" %}</a>
+</form>
+{% endblock %}

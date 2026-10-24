@@ -20,10 +20,8 @@ def generate_transfer_qr_payload(beneficiary_name, iban, bic, amount, reference)
 
 def generate_epc_qr_payload(registration, config=None):
     config = config or GeneralConfiguration.load()
-    username = registration.user.username if registration.user else ''
-    suffix = f" {registration.short_code}" if getattr(registration, 'short_code', None) else f" #{registration.id}"
     return generate_transfer_qr_payload(config.kontoinhaber, config.iban, config.bic,
-        registration.effective_price, f'{username}{suffix}')
+        registration.effective_price, registration.payment_reference)
 
 
 def _qr_png(payload, box_size=8, border=2):

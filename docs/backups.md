@@ -16,7 +16,12 @@ Das Archiv wird mit AES-256-GCM authentifiziert verschlüsselt und blockweise
 verarbeitet; es wird nicht vollständig in den Arbeitsspeicher geladen.
 
 Nicht enthalten sind `.env`, Quellcode, TLS-Zertifikate, Datenbankrollen,
-Redis-Daten und generierte Static-Dateien. Eine Anwendungssicherung ersetzt
+Redis-Daten und generierte Static-Dateien. Gastfotos des
+[erweiterten Check-ins](extended-checkin.md) werden bewusst ausgelassen: weder
+die Tabelle `users_guestphoto` noch `private_media/guest_photos/` gelangen ins
+Archiv. Nach einer Wiederherstellung sind keine Gastfotos vorhanden; die Orga
+nimmt sie am Einlass neu auf. Bei einem Rollback bleiben die bisherigen Fotos
+erhalten. Eine Anwendungssicherung ersetzt
 daher keine Sicherung der Deployment-Konfiguration.
 
 In `.env` einen eigenen Schlüssel setzen:

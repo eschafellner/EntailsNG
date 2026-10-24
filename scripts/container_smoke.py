@@ -119,7 +119,7 @@ def main():
             run([*compose, 'up', '-d', '--wait', '--wait-timeout', '240'], timeout=300)
             versions = {}
             image_id = run(['docker', 'image', 'inspect', '--format', '{{.Id}}', image]).stdout.strip()
-            for service in ('web', 'email_worker', 'clan_seat_worker', 'backup_worker'):
+            for service in ('web', 'email_worker', 'clan_seat_worker', 'guest_photo_worker', 'backup_worker'):
                 probe = run([*compose, 'exec', '-T', service, 'python', 'scripts/dependency_inventory.py'])
                 versions[service] = json.loads(probe.stdout)
                 container_id = run([*compose, 'ps', '-q', service]).stdout.strip()
@@ -224,7 +224,7 @@ def main():
             # Newer Compose emits one JSON object per line; older versions emit an array.
             states = json.loads(states) if states.strip().startswith('[') else [json.loads(line) for line in states.splitlines()]
             assert all(item['State'] == 'running' for item in states), 'Worker did not stay running'
-            assert len(states) == 7, 'Expected web, database, Redis, Nginx and three workers'
+            assert len(states) == 8, 'Expected web, database, Redis, Nginx and four workers'
             result = {'container': 'passed', 'services': sorted(item['Service'] for item in states),
                       'image_id': image_id, 'django': runtime['django'],
                       'django_suite': 'full' if options.tests else 'security',

@@ -52,7 +52,7 @@ class UserModerationTests(TestCase):
         return ban_user(self.user.pk, actor=self.organizer, reason='Veranstaltungsverweis', **kwargs)
 
     def registration_data(self, email='target@example.com', username='another-name'):
-        return {'username': username, 'email': email, 'birthday': '2000-01-01',
+        return {'username': username, 'email': email, 'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '2000-01-01',
             'password1': 'Password123!', 'password2': 'Password123!'}
 
     def test_ban_logs_reason_and_preserves_bookings_and_password(self):
@@ -227,7 +227,7 @@ class UserModerationTests(TestCase):
 
     def test_email_changes_to_banned_address_are_rejected(self):
         ban_email('excluded@example.com', actor=self.organizer, reason='Bekannte Adresse')
-        form = UserProfileForm({'email': 'excluded@example.com', 'birthday': '2000-01-01'}, instance=self.user)
+        form = UserProfileForm({'email': 'excluded@example.com', 'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '2000-01-01'}, instance=self.user)
         self.assertFalse(form.is_valid())
         with self.assertRaises(ValidationError):
             UserService.request_email_change(self.user, 'excluded@example.com')

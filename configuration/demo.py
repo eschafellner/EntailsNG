@@ -76,6 +76,7 @@ def _create_objects():
     plan = remember(SeatingPlan.objects.create(event=event, name='Demo-Halle', columns=4, rows=2))
     guests = [remember(get_user_model().objects.create_user(
         username=f'demo_guest_{n}', email=f'demo_guest_{n}@example.invalid', password=None,
+        first_name='Demo', last_name=f'Gast {n}',
         is_active=True, email_verified=True)) for n in range(1, 5)]
     clan = remember(Clan.objects.create(name='Demo Clan', tag='DEMO', password=''))
     for index, guest in enumerate(guests):

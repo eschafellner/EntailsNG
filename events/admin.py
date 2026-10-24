@@ -7,6 +7,7 @@ from django.utils.safestring import mark_safe
 from configuration.cache import invalidate_active_event_cache
 from configuration.translations import get_translation
 from seating.models import SeatingCell, SeatingPlan
+from users.admin_filters import RegistrationRealNameFilter
 from .models import Event, EventRegistration, TicketType
 from .exceptions import EventFullError, EventLifecycleError
 from .services import EventLifecycleService
@@ -339,6 +340,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
     list_display = (
         'user',
+        'real_name',
         'short_code',
         'event',
         'ticket_type',
@@ -353,6 +355,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
         'is_checked_in',
         'payment_status',
         'ticket_type',
+        RegistrationRealNameFilter,
     )  # <-- NEU: Filter nach Check-in
     search_fields = ('user__username', 'user__first_name', 'user__last_name', 'short_code')
     readonly_fields = ('short_code', 'checkin_token', 'assigned_seat_picker', 'checked_in_at', 'paid_at', 'cancelled_at')
@@ -512,6 +515,10 @@ class EventRegistrationAdmin(admin.ModelAdmin):
                 level=messages.INFO,
             )
 
+
+    @admin.display(description="Name", ordering="user__last_name")
+    def real_name(self, obj):
+        return obj.user.get_full_name() or '—'
 
     @admin.display(description="Einlass-Status", ordering="is_checked_in")
     def check_in_badge(self, obj):

@@ -37,53 +37,53 @@
 
       <!-- Responsive Farb- & Symbol-Legende (100% Theme-reaktiv & Barrierefrei) -->
       <div class="seating-legend">
-        <span style="display:flex;align-items:center;gap:5px"><span style="color:#38bdf8">▣</span>{% t "clan_seat_legend" %}</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="color:#eab308">▣</span>{% t "clan_payment_legend_pending" %}</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="color:#22c55e">▣</span>{% t "clan_payment_legend_paid" %}</span>
+        <span class="seat-key-item"><span class="seat-key-glyph seat-key-clan" aria-hidden="true">▣</span>{% t "clan_seat_legend" %}</span>
+        <span class="seat-key-item"><span class="seat-key-glyph seat-key-pre" aria-hidden="true">▣</span>{% t "clan_payment_legend_pending" %}</span>
+        <span class="seat-key-item"><span class="seat-key-glyph seat-key-free" aria-hidden="true">▣</span>{% t "clan_payment_legend_paid" %}</span>
         <!-- Frei -->
-        <span style="display: flex; align-items: center; gap: 5px;">
-          <span style="width: 14px; height: 14px; background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3"><circle cx="12" cy="12" r="8"></circle></svg>
+        <span class="seat-key-item">
+          <span class="seat-key seat-key-free" aria-hidden="true">
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="8"></circle></svg>
           </span>
           {% t "seat_legend_free" "Frei" %}
         </span>
 
         <!-- Vorgemerkt (gestrichelt + Clock-SVG) -->
-        <span style="display: flex; align-items: center; gap: 5px;">
-          <span style="width: 14px; height: 14px; background: rgba(234, 179, 8, 0.15); border: 1.5px dashed #eab308; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span class="seat-key-item">
+          <span class="seat-key seat-key-pre" aria-hidden="true">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
           </span>
           {% t "seat_legend_prereserved" "Vorgemerkt" %}
         </span>
 
         <!-- Reserviert (solide + Lock-SVG) -->
-        <span style="display: flex; align-items: center; gap: 5px;">
-          <span style="width: 14px; height: 14px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="seat-key-item">
+          <span class="seat-key seat-key-reserved" aria-hidden="true">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
           </span>
           {% t "seat_legend_reserved" "Reserviert (Bezahlt)" %}
         </span>
 
         <!-- Dein Clan (Shield-SVG) -->
-        <span style="display: flex; align-items: center; gap: 5px;">
-          <span style="width: 14px; height: 14px; background: rgba(56, 189, 248, 0.25); border: 1.5px solid #38bdf8; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        <span class="seat-key-item">
+          <span class="seat-key seat-key-clan" aria-hidden="true">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           </span>
           {% t "seat_legend_clan" "Dein Clan" %}
         </span>
 
-        <!-- Eigener Platz (Star-SVG mit Glow) -->
-        <span style="display: flex; align-items: center; gap: 5px;">
-          <span style="width: 14px; height: 14px; background: var(--signal, #f8ab2d); border: 1.5px solid #ffffff; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 6px var(--signal, #f8ab2d);">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="var(--navy, #332719)" stroke="var(--navy, #332719)" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        <!-- Eigener Platz (Star-SVG) -->
+        <span class="seat-key-item">
+          <span class="seat-key seat-key-own" aria-hidden="true">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
           </span>
           {% t "seat_legend_own" "Dein Platz" %}
         </span>
 
         <!-- Gesperrt (Schraffur + Ban-SVG) -->
-        <span style="display: flex; align-items: center; gap: 5px;">
-          <span style="width: 14px; height: 14px; background: repeating-linear-gradient(45deg, #1f2937, #1f2937 2px, #374151 2px, #374151 4px); border: 1px solid #4b5563; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center;">
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+        <span class="seat-key-item">
+          <span class="seat-key seat-key-blocked" aria-hidden="true">
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
           </span>
           {% t "seat_legend_blocked" "Gesperrt" %}
         </span>

@@ -12,7 +12,7 @@ from django.apps import apps
 from django.conf import settings
 from django.db import models
 
-from .archive import safe_name
+from .archive import EXCLUDED_TABLE_DATA, safe_name
 from .errors import BackupError
 from .storage import require_space
 
@@ -54,6 +54,8 @@ def inspect_database(connection, *, verify_secrets=True):
             raise BackupError('backup_err_references')
         references = []
         for model in apps.get_models():
+            if model._meta.db_table in EXCLUDED_TABLE_DATA:
+                continue
             fields = [field for field in model._meta.local_fields if isinstance(field, models.FileField)]
             for field in fields:
                 cursor.execute(f'SELECT {quoted(field.column)} FROM {quoted(model._meta.db_table)}')
@@ -82,6 +84,9 @@ def post_restore_cleanup(connection):
     try:
         cursor.execute('DELETE FROM django_session')
         cursor.execute('DELETE FROM users_emailverificationcode')
+        # Ältere Sicherungen können Gastfotos enthalten; deren Dateien sind nicht im Archiv.
+        for table in EXCLUDED_TABLE_DATA:
+            cursor.execute(f'DELETE FROM {quoted(table)}')
         cursor.execute('UPDATE emails_generalemailsettings SET is_enabled = false')
         connection.commit()
     finally:
@@ -153,7 +158,8 @@ class PostgreSQLAdapter:
             size = connection.execute('SELECT pg_database_size(current_database())').fetchone()[0]
             inspection = inspect_database(connection, verify_secrets=False)
         require_space(snapshot, size * 2)
-        self.run('pg_dump', '--format=custom', '--file', destination)
+        excluded = [argument for table in EXCLUDED_TABLE_DATA for argument in ('--exclude-table-data', table)]
+        self.run('pg_dump', '--format=custom', *excluded, '--file', destination)
         os.chmod(destination, 0o600)
         return inspection
 

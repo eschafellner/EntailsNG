@@ -105,6 +105,20 @@
           <p id="scan-result-summary" class="scanner-feedback-summary" hidden></p>
         </div>
         <p id="scan-next-hint" class="scanner-next-hint">{% t "scanner_feedback_next" "Bereit für den nächsten Gast." %}</p>
+
+        <!-- Erweiterter Check-in: hinterlegtes Foto bzw. Aufnahme am Einlass -->
+        <figure id="scan-guest-photo-box" class="scanner-guest-photo" hidden>
+          <img id="scan-guest-photo" alt="{% t 'scanner_feedback_photo_alt' %}" width="160" height="160">
+          <figcaption>{% t "scanner_feedback_photo_compare" %}</figcaption>
+        </figure>
+        <div id="scan-photo-capture" class="scanner-photo-capture" hidden>
+          <p>{% t "scanner_feedback_photo_hint" %}</p>
+          <input type="file" id="scan-photo-input" accept="image/*" capture="environment" hidden>
+          <div class="scanner-photo-actions">
+            <button type="button" id="btn-take-photo" class="btn-photo-take">📷 {% t "scanner_feedback_photo_take" %}</button>
+            <button type="button" id="btn-cancel-photo" class="btn-camera-toggle">{% t "scanner_feedback_photo_cancel" %}</button>
+          </div>
+        </div>
       </div>
 
       <!-- Quick Details Card -->

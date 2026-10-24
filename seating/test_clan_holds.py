@@ -33,10 +33,10 @@ class ClanHoldTests(TestCase):
         self.plan = SeatingPlan.objects.create(event=self.event, name='Hall', columns=12, rows=2)
         self.seats = [SeatingCell.objects.create(plan=self.plan, x=i, y=1,
             cell_type='SEAT', seat_label=f'A{i}') for i in range(1, 13)]
-        self.admin = get_user_model().objects.create_user('clanadmin', email='a@example.test')
-        self.admin2 = get_user_model().objects.create_user('clanadmin2', email='b@example.test')
-        self.member = get_user_model().objects.create_user('member', email='m@example.test')
-        self.outsider = get_user_model().objects.create_user('outsider', email='o@example.test')
+        self.admin = get_user_model().objects.create_user('clanadmin', email='a@example.test', first_name='Clan', last_name='Admin')
+        self.admin2 = get_user_model().objects.create_user('clanadmin2', email='b@example.test', first_name='Clan', last_name='Admintwo')
+        self.member = get_user_model().objects.create_user('member', email='m@example.test', first_name='Clan', last_name='Member')
+        self.outsider = get_user_model().objects.create_user('outsider', email='o@example.test', first_name='Out', last_name='Sider')
         self.clan = Clan.objects.create(name='Test Clan', tag='TC')
         for user, role in [(self.admin, 'ADMIN'), (self.admin2, 'ADMIN'), (self.member, 'MEMBER')]:
             ClanMembership.objects.create(clan=self.clan, user=user, role=role)
@@ -456,3 +456,47 @@ class ClanHoldTests(TestCase):
             SeatingCell(plan=self.plan, x=i, y=2, cell_type='SEAT') for i in range(1, 13)])
         with self.assertNumQueries(4):
             self.client.get(reverse('api_event_seating', args=[self.event.pk]))
+
+    def start_event(self):
+        self.event.start_date = timezone.now() - timedelta(hours=1)
+        self.event.save()
+
+    def test_no_new_holds_after_event_start(self):
+        self.start_event()
+        with self.assertRaisesMessage(ClanSeatError, 'begonnen'):
+            self.select()
+        self.assertFalse(ClanSeatHold.objects.exists())
+
+    def test_selection_status_reports_closed_after_start(self):
+        self.start_event()
+        status = selection_status(self.clan, self.event)
+        self.assertFalse(status['enabled'])
+        self.assertTrue(status['selection_closed'])
+
+    def test_unpaid_holds_lose_protection_at_start_without_worker(self):
+        from .clan_services import check_clan_access, open_holds
+        self.select()
+        self.start_event()
+        self.assertFalse(open_holds(self.event.pk).exists())
+        self.assertEqual(check_clan_access(self.seats[0], self.outsider), (True, ''))
+        self.client.force_login(self.member)
+        cells = self.client.get(reverse('api_event_seating', args=[self.event.pk])).json()['cells']
+        first = next(c for c in cells if c['id'] == self.seats[0].pk)
+        self.assertEqual(first['status'], 'FREE')
+        self.assertFalse(first['can_claim_hold'])
+
+    def test_worker_expires_unpaid_allocation_at_start(self):
+        self.select()
+        self.start_event()
+        process_clan_holds()
+        allocation = ClanSeatAllocation.objects.get()
+        self.assertIsNotNone(allocation.expired_at)
+        self.assertFalse(allocation.holds.filter(protection_active=True).exists())
+        self.assertTrue(OutgoingEmail.objects.filter(template_key='clan_seat_expired', recipient_email=self.admin.email).exists())
+
+    def test_member_cannot_claim_hold_after_start(self):
+        self.select()
+        self.start_event()
+        success, message = self.seats[0].reserve_for_user(self.reg)
+        self.assertFalse(success)
+        self.assertIn('geschlossen', message)

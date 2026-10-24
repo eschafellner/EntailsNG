@@ -444,6 +444,53 @@ class NativeRoundTripTests(PrivateStorageMixin, TransactionTestCase):
         self.assertFalse((storage.root() / 'maintenance.json').exists())
         self.assertFalse((storage.root() / 'mail-paused.json').exists())
 
+    def add_guest_photo(self):
+        photo_dir = Path(settings.PRIVATE_MEDIA_ROOT) / 'guest_photos'
+        photo_dir.mkdir(exist_ok=True)
+        photo = photo_dir / 'face.jpg'
+        photo.write_bytes(b'guest-photo')
+        old = photo.stat().st_mtime - 7200
+        os.utime(photo, (old, old))
+        with database.adapter().connect() as native:
+            native.execute(
+                "INSERT INTO users_guestphoto (user_id, image, source, captured_at, delete_after) "
+                "VALUES (%s, 'guest_photos/face.jpg', 'SELF', now(), now() + interval '1 day')", (self.admin.pk,))
+            native.commit()
+        return photo
+
+    def count_guest_photos(self):
+        with database.adapter().connect() as native:
+            return native.execute('SELECT COUNT(*) FROM users_guestphoto').fetchone()[0]
+
+    def test_guest_photos_are_not_backed_up_and_removed_by_restore(self):
+        photo = self.add_guest_photo()
+        value = self.create_backup()
+        incoming = self.base / 'inspect'
+        manifest = archive.unpack(storage.artifact_path(value), incoming)
+        self.assertFalse([name for name in manifest['files'] if 'guest_photos' in name])
+        self.process('prepare', value)
+        job = self.process('restore', value)
+        self.assertEqual(job['state'], 'completed', job.get('error'))
+        self.assertEqual(self.count_guest_photos(), 0)
+        self.assertFalse(photo.exists())
+
+    def test_failed_restore_keeps_guest_photos(self):
+        value = self.create_backup()
+        photo = self.add_guest_photo()
+        self.process('prepare', value)
+        original = services.replace_media
+        calls = []
+        def fail_once(snapshot):
+            calls.append(snapshot)
+            if len(calls) == 1:
+                raise OSError('simulated media failure')
+            return original(snapshot)
+        with mock.patch('backups.services.replace_media', side_effect=fail_once):
+            job = self.process('restore', value)
+        self.assertEqual(job['state'], 'failed')
+        self.assertEqual(self.count_guest_photos(), 1)
+        self.assertEqual(photo.read_bytes(), b'guest-photo')
+
     def test_public_media_permissions_allow_nginx_after_restore(self):
         if os.name == 'nt':
             self.skipTest('POSIX file permissions are checked in Linux CI.')
