@@ -10,7 +10,7 @@
 
 {% block content %}
 
-{% if user.is_authenticated and not user.has_real_name %}
+{% if user.is_authenticated and user.requires_real_name and not user.has_real_name %}
 <ul class="message-list">
   <li class="message message-warning">
     <span class="message-badge">Hinweis</span>

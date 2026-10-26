@@ -201,19 +201,28 @@ class UserProfileForm(forms.ModelForm):
         from configuration.translations import get_translation
         # Gesperrte Felder: Django ignoriert übermittelte Werte und nutzt den gespeicherten Namen.
         self.real_name_locked = bool(self.instance and self.instance.is_real_name_locked)
+        # Orga-Konten dürfen den Namen leer lassen, damit Bestandskonten das Profil weiter speichern können.
+        self.real_name_optional = bool(self.instance and self.instance.pk and not self.instance.requires_real_name)
         for name in ("first_name", "last_name"):
             self.fields[name].error_messages['required'] = get_translation('real_name_required')
             self.fields[name].disabled = self.real_name_locked
+            self.fields[name].required = not self.real_name_optional
+
+    def _clean_real_name(self, name):
+        stored = getattr(self.instance, name)
+        if self.real_name_locked:
+            return stored
+        value = self.cleaned_data.get(name)
+        # Unveränderte Altwerte von Orga-Konten (z. B. "Einlass 1") nicht nachträglich ablehnen.
+        if self.real_name_optional and (not (value or '').strip() or value == stored):
+            return (value or '').strip()
+        return validate_real_name(value)
 
     def clean_first_name(self):
-        if self.real_name_locked:
-            return self.instance.first_name
-        return validate_real_name(self.cleaned_data.get('first_name'))
+        return self._clean_real_name('first_name')
 
     def clean_last_name(self):
-        if self.real_name_locked:
-            return self.instance.last_name
-        return validate_real_name(self.cleaned_data.get('last_name'))
+        return self._clean_real_name('last_name')
 
     def clean_email(self):
         email = self.cleaned_data.get('email', '').strip().lower()

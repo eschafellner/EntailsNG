@@ -147,7 +147,7 @@
           <label for="id_{{ field.name }}">{% if field.name == 'first_name' %}{% t "real_name_first_label" %}{% else %}{% t "real_name_last_label" %}{% endif %}</label>
           <input type="text" name="{{ field.name }}" id="id_{{ field.name }}" class="form-control" value="{{ field.value|default:'' }}" maxlength="150"
                  autocomplete="{% if field.name == 'first_name' %}given-name{% else %}family-name{% endif %}"
-                 {% if profile_form.real_name_locked %}disabled style="opacity: 0.7; cursor: not-allowed;"{% else %}required{% endif %}>
+                 {% if profile_form.real_name_locked %}disabled style="opacity: 0.7; cursor: not-allowed;"{% elif not profile_form.real_name_optional %}required{% endif %}>
           {% if field.errors %}
             <div style="color: var(--danger); font-size: 12px; margin-top: 4px;">{{ field.errors.0 }}</div>
           {% endif %}

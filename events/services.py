@@ -253,8 +253,8 @@ class RegistrationService:
         booking_price = selected_ticket.price if selected_ticket else None
 
         # Echter Name ist Pflicht (nach den fachlichen Event-/Ticketprüfungen);
-        # Clan-Sammelzahlungen (Zuweisung durch Orga/Clan-Admin) sind ausgenommen.
-        if not reserved_clan_slot and not user.has_real_name:
+        # Clan-Sammelzahlungen (Zuweisung durch Orga/Clan-Admin) und Orga-Konten sind ausgenommen.
+        if not reserved_clan_slot and user.requires_real_name and not user.has_real_name:
             raise RegistrationError(get_translation('real_name_missing_registration'))
 
         # 7. Registrierung erstellen oder stornierte Registrierung reaktivieren
