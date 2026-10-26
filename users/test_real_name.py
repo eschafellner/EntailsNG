@@ -199,3 +199,65 @@ class PaymentReferenceAndPrivacyTests(TestCase):
         self.assertNotIn('Müller', body)
         self.assertNotIn('M\\u00fcller', body)
         self.assertNotIn('Anna', body)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class OrgaAccountRealNameTests(TestCase):
+    """Bestandskonten von Admins/Mitarbeitern dürfen durch die Klarnamenpflicht nicht blockiert werden."""
+
+    def setUp(self):
+        cache.clear()
+        now = timezone.now()
+        self.event = Event.objects.create(title='LAN', slug='lan', is_active=True, status=Event.Status.REGISTRATION_OPEN,
+                                          start_date=now + timedelta(days=5), end_date=now + timedelta(days=7))
+        self.staff = User.objects.create_user('staffer', 'staff@example.com', 'pw', is_staff=True)
+        self.admin = User.objects.create_superuser('boss', 'boss@example.com', 'pw')
+
+    def test_orga_accounts_do_not_require_name(self):
+        self.assertFalse(self.staff.requires_real_name)
+        self.assertFalse(self.admin.requires_real_name)
+        self.assertTrue(User.objects.create_user('guest', 'guest@example.com', 'pw').requires_real_name)
+
+    def test_orga_can_register_without_name(self):
+        for user in (self.staff, self.admin):
+            registration, created, _ = RegistrationService.register_user(user, self.event.pk)
+            self.assertTrue(created)
+            self.assertEqual(registration.payment_reference, f'{registration.short_code} {user.username}')
+
+    def test_orga_profile_saves_without_name(self):
+        form = UserProfileForm(data={'email': self.staff.email, 'birthday': '1990-01-01', 'first_name': '', 'last_name': ''},
+                               instance=self.staff)
+        self.assertTrue(form.real_name_optional)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.staff.refresh_from_db()
+        self.assertEqual(str(self.staff.birthday), '1990-01-01')
+
+    def test_orga_profile_keeps_legacy_name_but_validates_new_one(self):
+        User.objects.filter(pk=self.staff.pk).update(first_name='Einlass', last_name='Kasse 1')
+        self.staff.refresh_from_db()
+        data = {'email': self.staff.email, 'birthday': '', 'first_name': 'Einlass', 'last_name': 'Kasse 1'}
+        self.assertTrue(UserProfileForm(data=data, instance=self.staff).is_valid())
+        form = UserProfileForm(data={**data, 'last_name': 'Kasse 2'}, instance=self.staff)
+        self.assertFalse(form.is_valid())
+        self.assertIn('last_name', form.errors)
+
+    def test_orga_name_never_locked(self):
+        User.objects.filter(pk=self.staff.pk).update(first_name='Eva', last_name='Einlass')
+        self.staff.refresh_from_db()
+        EventRegistration.objects.create(user=self.staff, event=self.event, is_checked_in=True,
+                                         payment_status=EventRegistration.PaymentStatus.PAID)
+        self.assertFalse(self.staff.is_real_name_locked)
+        form = UserProfileForm(data={'email': self.staff.email, 'birthday': '', 'first_name': 'Eva', 'last_name': 'Neu'},
+                               instance=self.staff)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.staff.refresh_from_db()
+        self.assertEqual(self.staff.last_name, 'Neu')
+
+    def test_orga_sees_no_name_banner_and_optional_inputs(self):
+        self.client.force_login(self.staff)
+        self.assertNotContains(self.client.get(reverse('dashboard')), 'Bitte ergänze deinen echten Namen')
+        profile = self.client.get(reverse('profile')).content.decode()
+        tag = profile[profile.index('id="id_last_name"'):]
+        self.assertNotIn('required', tag[:tag.index('>')])

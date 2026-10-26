@@ -95,12 +95,21 @@ class User(AbstractUser):
         return bool((self.first_name or '').strip() and (self.last_name or '').strip())
 
     @property
+    def requires_real_name(self):
+        """Mitarbeiter- und Admin-Konten (Orga) sind von der Klarnamenpflicht ausgenommen.
+
+        Sonst würden Bestandskonten der Orga nach dem Update bei Event-Anmeldung und Profil blockiert.
+        """
+        return not (self.is_staff or self.is_superuser)
+
+    @property
     def is_real_name_locked(self):
         """Nach Zahlung/Check-in zum aktiven Event darf nur noch die Orga den Namen ändern.
 
-        Ohne hinterlegten Namen bleibt das Nachtragen möglich (Bestandskonten).
+        Ohne hinterlegten Namen bleibt das Nachtragen möglich (Bestandskonten);
+        Orga-Konten pflegen ihren Namen selbst.
         """
-        if not self.pk or not self.has_real_name:
+        if not self.pk or not self.has_real_name or not self.requires_real_name:
             return False
         from events.models import EventRegistration
         return EventRegistration.objects.filter(user_id=self.pk, event__is_active=True).filter(
