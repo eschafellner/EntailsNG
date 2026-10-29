@@ -20,3 +20,32 @@ class DatabaseHealthCheckSettingTests(SimpleTestCase):
         result = subprocess.run([sys.executable, '-c', code, 'test'], env=env, capture_output=True, text=True,
                                 cwd=settings.BASE_DIR, check=True)
         self.assertEqual(result.stdout.strip().splitlines()[-1], 'False')
+
+
+class ServerErrorHandlerTests(SimpleTestCase):
+    """F-012: Die 500-Seite entsteht auch, wenn die Datenbank nicht erreichbar ist."""
+
+    def test_handler_renders_without_database(self):
+        from unittest.mock import patch
+        from django.db import OperationalError
+        from django.test import RequestFactory
+        from config.urls import custom_500_handler
+
+        request = RequestFactory().get('/kaputt/')
+        request.system_error_id = 4711
+        with patch('configuration.context_processors.feature_flags', side_effect=OperationalError('db down')), \
+                patch('configuration.models.NavigationItem.objects') as nav:
+            nav.filter.side_effect = OperationalError('db down')
+            response = custom_500_handler(request)
+        self.assertEqual(response.status_code, 500)
+        self.assertIn('#4711', response.content.decode())
+
+    def test_handler_falls_back_to_plain_text_if_template_fails(self):
+        from unittest.mock import patch
+        from django.test import RequestFactory
+        from config.urls import custom_500_handler
+
+        with patch('django.template.loader.render_to_string', side_effect=RuntimeError('template kaputt')):
+            response = custom_500_handler(RequestFactory().get('/'))
+        self.assertEqual(response.status_code, 500)
+        self.assertIn('500', response.content.decode())

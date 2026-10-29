@@ -88,7 +88,11 @@ def custom_500_handler(request):
     from django.http import HttpResponseServerError
     from django.template.loader import render_to_string
     error_id = getattr(request, 'system_error_id', None)
-    content = render_to_string('500.html', {'error_id': error_id, 'request': request}, request=request)
+    # Ohne request: keine Context-Processors, die bei DB-Ausfall selbst scheitern würden.
+    try:
+        content = render_to_string('500.html', {'error_id': error_id})
+    except Exception:
+        content = '<h1>Serverfehler (500)</h1>'
     return HttpResponseServerError(content)
 
 
