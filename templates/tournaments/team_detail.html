@@ -328,7 +328,10 @@ function copyInviteCode() {
 
   navigator.clipboard.writeText(code).then(function() {
     if (!btn) return;
-    btn.innerHTML = '✓ <span>{% t "team_invite_code_copied" "Code in Zwischenablage kopiert!" %}</span>';
+    // Systemtext nur als Text einsetzen (escapejs + textContent statt innerHTML).
+    var copied = document.createElement('span');
+    copied.textContent = '{% t "team_invite_code_copied" "Code in Zwischenablage kopiert!" as copied_text %}{{ copied_text|escapejs }}';
+    btn.replaceChildren('✓ ', copied);
     btn.style.background = '#047857';
     btn.style.color = '#ffffff';
 
@@ -340,7 +343,9 @@ function copyInviteCode() {
   }).catch(function(err) {
     console.error('Kopieren fehlgeschlagen:', err);
     if (!btn) return;
-    btn.innerHTML = '⚠️ <span>{% t "team_invite_code_copy_error" "Fehler beim Kopieren" %}</span>';
+    var failed = document.createElement('span');
+    failed.textContent = '{% t "team_invite_code_copy_error" "Fehler beim Kopieren" as copy_error %}{{ copy_error|escapejs }}';
+    btn.replaceChildren('⚠️ ', failed);
     btn.style.background = '#ef4444';
     btn.style.color = '#ffffff';
 

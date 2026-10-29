@@ -221,8 +221,8 @@ function toggleSponsorDesc(sponsorId) {
   if (!block || !btnTextEl) return;
 
   var isExpanded = block.classList.toggle('is-expanded');
-  var readMoreText = "{% t 'sponsors_read_more' %}";
-  var readLessText = "{% t 'sponsors_read_less' %}";
+  var readMoreText = "{% t 'sponsors_read_more' as read_more %}{{ read_more|escapejs }}";
+  var readLessText = "{% t 'sponsors_read_less' as read_less %}{{ read_less|escapejs }}";
 
   btnTextEl.textContent = isExpanded ? readLessText : readMoreText;
 }

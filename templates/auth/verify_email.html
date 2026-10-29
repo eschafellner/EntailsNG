@@ -140,7 +140,7 @@
       countdownEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
       if (--duration < 0) {
         clearInterval(timerInterval);
-        countdownEl.textContent = '{% t "verify_code_expired_badge" "ABGELAUFEN" %}';
+        countdownEl.textContent = '{% t "verify_code_expired_badge" "ABGELAUFEN" as expired_badge %}{{ expired_badge|escapejs }}';
         countdownEl.parentElement.style.background = 'rgba(239, 68, 68, 0.2)';
         countdownEl.parentElement.style.color = '#ef4444';
       }
