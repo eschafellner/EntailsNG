@@ -385,10 +385,18 @@ class UserService:
             # Andere Stores und signierte Cookies werden durch das geänderte
             # Passwort und user_can_authenticate ebenfalls unbrauchbar.
             return
-        for session in Session.objects.filter(expire_date__gt=timezone.now()).iterator(chunk_size=500):
-            data = session.get_decoded()
-            if str(data.get('_auth_user_id', '')) == str(user.pk) or data.get('pending_verification_user_id') == user.pk:
-                session.delete()
+        user_pk = user.pk
+
+        def erase():
+            for session in Session.objects.filter(expire_date__gt=timezone.now()).iterator(chunk_size=500):
+                data = session.get_decoded()
+                if str(data.get('_auth_user_id', '')) == str(user_pk) or data.get('pending_verification_user_id') == user_pk:
+                    session.delete()
+
+        # Erst nach dem Commit: Der Durchlauf über alle Sessions soll die Zeilensperren
+        # (User, Events, Anmeldungen) nicht halten. Bis dahin sperren session_version,
+        # deleted_at bzw. is_banned die alten Sessions bereits.
+        transaction.on_commit(erase)
 
 
 MAX_GUEST_PHOTO_BYTES = 10 * 1024 * 1024

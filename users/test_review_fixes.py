@@ -134,3 +134,22 @@ class PasswordResetLinkBaseUrlTests(TestCase):
         body = OutgoingEmail.objects.get(template_key='password_reset').body_text
         self.assertIn('https://lan.example.org/password-reset-confirm/', body)
         self.assertNotIn('127.0.0.1', body)
+
+
+class SessionEraseAfterCommitTests(TestCase):
+    """F-018: Sessions werden erst nach dem Commit durchsucht, nicht unter den Zeilensperren."""
+
+    def test_sessions_removed_after_commit(self):
+        from django.contrib.sessions.models import Session
+        from django.test import Client
+        from .services import UserService
+        user = User.objects.create_user('erase-me', 'erase@example.com', 'StrongPass123!')
+        other = Client()
+        other.force_login(user)
+        key = other.session.session_key
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            UserService.delete_account(user, 'StrongPass123!')
+        self.assertTrue(Session.objects.filter(session_key=key).exists())
+        for callback in callbacks:
+            callback()
+        self.assertFalse(Session.objects.filter(session_key=key).exists())

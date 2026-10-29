@@ -295,7 +295,9 @@ class AccountDeletionTests(TestCase):
         other_session.force_login(self.user)
         old_token = default_token_generator.make_token(self.user)
         old_uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-        self.delete()
+        # Sessions werden seit F-018 nach dem Commit entfernt; Commit-Callbacks wie im Betrieb ausführen.
+        with self.captureOnCommitCallbacks(execute=True):
+            self.delete()
         self.assertEqual(other_session.get(reverse('profile')).status_code, 302)
         self.assertNotIn('_auth_user_id', other_session.session)
         self.assertFalse(self.client.login(username='delete-me', password='StrongPass123!'))
