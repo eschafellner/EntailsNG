@@ -53,3 +53,18 @@ class OverbookingWarningTests(TestCase):
         warnings = [str(m) for m in get_messages(response.wsgi_request) if 'mehr Plätze gebucht' in str(m)]
         self.assertEqual(len(warnings), 1)
         self.assertIn('(2/1 Plätze)', warnings[0])
+
+
+class GuestListToastTests(TestCase):
+    """F-035: API-Meldungen (Systemtexte) erscheinen im Toast nur als Text."""
+
+    def test_toast_uses_text_content(self):
+        staff = User.objects.create_superuser('toast-orga', 'toast@example.org', 'password')
+        start = timezone.now() + timedelta(days=2)
+        Event.objects.create(title='Toast LAN', slug='toast-lan', is_active=True,
+            status=Event.Status.REGISTRATION_OPEN, start_date=start, end_date=start + timedelta(days=1))
+        self.client.force_login(staff)
+        content = self.client.get(reverse('guest_list')).content.decode()
+        self.assertIn('function showToast', content)
+        self.assertNotIn('toast.innerHTML', content)
+        self.assertIn("toast.textContent = (isError ? '⚠️ ' : '✓ ') + message;", content)

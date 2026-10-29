@@ -108,7 +108,11 @@ function initMinimap() {
     .then(res => res.json())
     .then(data => {
       if (!data.cells || data.cells.length === 0) {
-        container.innerHTML = `<span class="minimap-empty">${container.dataset.notConfiguredText || 'Sitzplan noch nicht konfiguriert'}</span>`;
+        // Systemtext aus data-Attribut nur als Text einsetzen (dataset dekodiert HTML-Entities).
+        const empty = document.createElement('span');
+        empty.className = 'minimap-empty';
+        empty.textContent = container.dataset.notConfiguredText || 'Sitzplan noch nicht konfiguriert';
+        container.replaceChildren(empty);
         return;
       }
 

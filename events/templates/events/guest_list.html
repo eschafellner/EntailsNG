@@ -378,7 +378,7 @@
     if (!toast) return;
     toast.style.background = isError ? '#991b1b' : '#166534';
     toast.style.border = isError ? '1px solid #ef4444' : '1px solid #22c55e';
-    toast.innerHTML = (isError ? '⚠️ ' : '✓ ') + message;
+    toast.textContent = (isError ? '⚠️ ' : '✓ ') + message;
     toast.style.display = 'flex';
     toast.style.opacity = '1';
     toast.style.transform = 'translateY(0)';
