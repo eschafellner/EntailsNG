@@ -21,6 +21,8 @@ Diese Anleitung aktualisiert eine vorhandene Installation. Ein frisches Setup st
 
    Mails verschickt ab diesem Stand nur noch der `email_worker`; der zusätzliche Versand-Thread im Webprozess ist standardmäßig aus (`EMAIL_INLINE_TRIGGER=False`). In Compose ändert sich nichts Sichtbares, solange der Mail-Worker läuft (Healthcheck beachten). Wer lokal ohne Worker entwickelt, setzt `EMAIL_INLINE_TRIGGER=True` in der eigenen `.env`.
 
+   Images sind ab diesem Stand mit Tag und Digest festgelegt: nginx 1.30.6 (Wechsel vom nicht mehr gepflegten Mainline-Zweig 1.27 auf den Stable-Zweig; Konfiguration mit `nginx -t` auf 1.30.6 geprüft), PostgreSQL 16.15 und Redis 7.4.12 (gleiche Hauptversion wie bisher, vorhandene Volumes bleiben nutzbar), Python 3.12.16. `docker compose pull` bzw. `up -d --build` lädt sie; danach `docker compose exec -T nginx nginx -t`. Spätere Updates erfolgen bewusst durch neuen Tag und Digest.
+
    Eigene SVG-Menüicons werden ab diesem Stand beim Speichern neu aus dem geprüften Baum erzeugt (Kommentare, XML-Deklaration und fremde Namespace-Attribute entfallen); `style`-Attribute und Verweise außerhalb des Icons (`href` ohne `#`) werden abgelehnt. Gespeicherte Icons ändern sich erst beim nächsten Speichern. Nach dem Update Einträge auflisten, die davon abweichen oder abgelehnt würden, und diese im Admin unter „Navigation“ prüfen und speichern bzw. das Icon ersetzen (schreibfrei; leer = nichts zu tun):
 
    ```bash

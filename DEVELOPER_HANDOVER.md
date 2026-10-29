@@ -32,7 +32,7 @@ Die Kernassets, Fonts, TinyMCE und QR-Erzeugung sind lokal. Optional eingebettet
 | Python/Django | Image und CI: Python 3.12; Django 6.0.9. Lokal zusätzlich Python 3.14.8 geprüft; keine allgemeine Python-Versionsmatrix. NetworkX 3.6.1 schließt 3.14.1 aus. Python 3.15 ist mit den aktuellen Pins nicht installierbar (kein Wheel für psycopg-binary 3.2.13). |
 | Pythonpakete | Vollständig gepinnt in [requirements.txt](requirements.txt): django-tinymce, psycopg[binary], Pillow, redis, Gunicorn, WhiteNoise, python-dotenv, cryptography, qrcode und NetworkX. |
 | DB/Cache | Compose/CI: PostgreSQL 16 und Redis 7. PostgreSQL ist verbindlich; native Backup-Tools müssen dieselbe Hauptversion wie der Server haben. |
-| Web | Python-Slim-Bookworm-Image, Nginx 1.27; Certbot 5.8.0 und cloudflared 2026.10.0 auf konkrete Digests festgelegt. Definitionen: [Dockerfile](Dockerfile), [Compose](docker-compose.yml). |
+| Web | Python 3.12.16-slim-bookworm, Nginx 1.30.6 (Stable-Zweig), PostgreSQL 16.15 und Redis 7.4.12 (jeweils Alpine) sowie Certbot 5.8.0 und cloudflared 2026.10.0 sind mit Tag und Digest festgelegt (Stand 29.10.2026, Compose, Dockerfile und CI-Dienste); Updates bewusst durch Anpassen von Tag und Digest. Definitionen: [Dockerfile](Dockerfile), [Compose](docker-compose.yml). |
 | Frontend | Vanilla-JavaScript und CSS-Variablen; lokale Fonts Barlow Condensed, DM Sans, JetBrains Mono. Node nur für Tests (CI: 22). |
 
 ## Lokales Setup auf einer frischen Entwicklungsdatenbank

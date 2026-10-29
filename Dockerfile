@@ -1,5 +1,5 @@
 # Build-Stufe: Wheels bauen bzw. laden; Compiler und -dev-Pakete bleiben hier (Befund F-038).
-FROM python:3.12-slim-bookworm AS wheels
+FROM python:3.12.16-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337 AS wheels
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -13,7 +13,7 @@ RUN python -m pip install --no-cache-dir pip==26.2.1 && \
     python -m pip wheel --no-cache-dir --wheel-dir /wheels -r /tmp/requirements.txt
 
 
-FROM python:3.12-slim-bookworm
+FROM python:3.12.16-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
