@@ -103,7 +103,7 @@ Event im Entwurf mit künftigen Terminen, Ort, Kapazität und aktiven Tickets an
 ```bash
 python manage.py process_email_queue --daemon --interval 5
 python manage.py process_clan_seat_holds --daemon --interval 60
-python manage.py purge_guest_photos --daemon --interval 3600
+python manage.py purge_guest_photos --daemon --interval 3600   # auch Löschfrist des Fehlerprotokolls
 # Optional nach Einrichtung von Schlüssel, Speicher und passenden PG-Tools:
 python manage.py process_backup_jobs --daemon
 ```

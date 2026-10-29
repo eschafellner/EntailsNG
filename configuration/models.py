@@ -1,4 +1,7 @@
 import re
+from datetime import timedelta
+
+from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator
@@ -7,6 +10,7 @@ from django.db.models.functions import Lower
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
 
 from .validators import (
     parse_contact_recipients, validate_contact_recipients,
@@ -650,6 +654,10 @@ class SystemErrorLog(models.Model):
     ip_address = models.CharField(max_length=45, blank=True, null=True, verbose_name="IP-Adresse")
     resolved = models.BooleanField(default=False, db_index=True, verbose_name="Behoben?")
     resolved_at = models.DateTimeField(null=True, blank=True, verbose_name="Behoben am")
+    # Gleiche offene Fehler (Typ, URL-Muster, auslösende Codezeile) werden gezählt statt neu angelegt.
+    fingerprint = models.CharField(max_length=64, blank=True, default="", db_index=True, verbose_name="Fingerabdruck")
+    occurrences = models.PositiveIntegerField(default=1, verbose_name="Anzahl")
+    last_seen = models.DateTimeField(default=timezone.now, db_index=True, verbose_name="Zuletzt aufgetreten")
 
     class Meta:
         verbose_name = "System-Fehlerprotokoll"
@@ -659,6 +667,16 @@ class SystemErrorLog(models.Model):
     def __str__(self):
         time_str = self.timestamp.strftime('%d.%m.%Y %H:%M') if self.timestamp else 'Neu'
         return f"#{self.pk} [{time_str}] {self.exception_type} an {self.path}"
+
+    @classmethod
+    def purge_expired(cls, days=None, dry_run=False):
+        """Löscht Einträge, deren letztes Auftreten länger als die Aufbewahrungsfrist zurückliegt."""
+        if days is None:
+            days = settings.SYSTEM_ERROR_LOG_RETENTION_DAYS
+        expired = cls.objects.filter(last_seen__lt=timezone.now() - timedelta(days=days))
+        if dry_run:
+            return expired.count()
+        return expired.delete()[0]
 
 
 @receiver(post_save, sender=SystemTranslation)

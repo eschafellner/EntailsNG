@@ -260,12 +260,16 @@ class SystemErrorLogAdmin(admin.ModelAdmin):
         'path',
         'exception_type_badge',
         'user',
+        'occurrences',
+        'last_seen',
         'resolved_badge',
     )
     list_filter = ('resolved', 'method', 'exception_type', 'timestamp')
     search_fields = ('path', 'error_message', 'traceback', 'user', 'ip_address')
     readonly_fields = (
         'timestamp',
+        'last_seen',
+        'occurrences',
         'path',
         'method',
         'exception_type',
@@ -277,6 +281,8 @@ class SystemErrorLogAdmin(admin.ModelAdmin):
     )
     fields = (
         'timestamp',
+        'last_seen',
+        'occurrences',
         'resolved',
         'resolved_at',
         'path',

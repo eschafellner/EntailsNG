@@ -1,14 +1,27 @@
+import hashlib
 import logging
 import sys
 import traceback
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from django.db.models import F
 from django.http import Http404, HttpResponseServerError
 from django.template.loader import render_to_string
+from django.utils import timezone
 from django.views.debug import technical_500_response
 from .models import GeneralConfiguration
 
 logger = logging.getLogger(__name__)
+
+
+def _error_fingerprint(request, exception):
+    """Ausnahmetyp, URL-Muster (statt konkretem Pfad mit IDs) und auslösende Codezeile."""
+    match = getattr(request, 'resolver_match', None)
+    route = match.route if match else (request.path[:500] if request else '')
+    frames = traceback.extract_tb(exception.__traceback__)
+    origin = f'{frames[-1].filename}:{frames[-1].lineno}' if frames else ''
+    raw = '|'.join((exception.__class__.__name__, route, origin))
+    return hashlib.sha256(raw.encode('utf-8', 'replace')).hexdigest()
 
 
 class RequestCacheMiddleware:
@@ -68,18 +81,28 @@ class DynamicDebugMiddleware:
             if user and user.is_authenticated:
                 user_str = getattr(user, 'username', str(user))
 
-            tb_str = traceback.format_exc()
-            error_log = SystemErrorLog.objects.create(
-                path=request.path[:500] if request else "",
-                method=request.method if request else "GET",
-                exception_type=exception.__class__.__name__,
-                error_message=str(exception),
-                traceback=tb_str,
-                user=user_str,
-                ip_address=get_client_ip(request) if request else None,
+            fingerprint = _error_fingerprint(request, exception)
+            error_id = (
+                SystemErrorLog.objects.filter(fingerprint=fingerprint, resolved=False)
+                .order_by('-pk').values_list('pk', flat=True).first()
             )
+            if error_id is not None:
+                SystemErrorLog.objects.filter(pk=error_id).update(
+                    occurrences=F('occurrences') + 1, last_seen=timezone.now()
+                )
+            else:
+                error_id = SystemErrorLog.objects.create(
+                    path=request.path[:500] if request else "",
+                    method=request.method if request else "GET",
+                    exception_type=exception.__class__.__name__,
+                    error_message=str(exception),
+                    traceback=traceback.format_exc(),
+                    user=user_str,
+                    ip_address=get_client_ip(request) if request else None,
+                    fingerprint=fingerprint,
+                ).pk
             if request:
-                request.system_error_id = error_log.id
+                request.system_error_id = error_id
         except Exception as log_err:
             logger.error("Fehler beim Erfassen des SystemErrorLog: %s", log_err)
 

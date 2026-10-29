@@ -5,13 +5,15 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 from backups.errors import BackupError
 from backups.locking import access_guard
+from configuration.models import SystemErrorLog
 from users.services import GuestPhotoService
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Löscht Gastfotos nach Ablauf der Frist sowie verwaiste Fotodateien und Datensätze.'
+    help = ('Löscht Gastfotos nach Ablauf der Frist sowie verwaiste Fotodateien und Datensätze; '
+            'entfernt außerdem abgelaufene Einträge des System-Fehlerprotokolls.')
 
     def add_arguments(self, parser):
         parser.add_argument('--daemon', action='store_true')
@@ -25,6 +27,11 @@ class Command(BaseCommand):
             try:
                 with access_guard():
                     result = GuestPhotoService.purge(dry_run=options['dry_run'])
+                    # Gleicher Löschfristen-Takt für das Fehlerprotokoll (enthält IP-Adressen).
+                    error_logs = SystemErrorLog.purge_expired(dry_run=options['dry_run'])
+                if error_logs:
+                    logger.info('Fehlerprotokolle nach Ablauf der Aufbewahrungsfrist %s: %s',
+                                'gefunden' if options['dry_run'] else 'gelöscht', error_logs)
                 if not options['daemon'] or any(result.values()):
                     message = (
                         f"Gastfotos {'gefunden' if options['dry_run'] else 'gelöscht'}: "

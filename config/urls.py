@@ -66,7 +66,6 @@ urlpatterns = [
     # 4. Modul-Routen
     path('', include('configuration.urls')),
     path('kontakt/', include('contact.urls')),
-    path('tinymce/', include('tinymce.urls')),
     path('info/', include('info.urls')),
     path('knowledge/', include('knowledge.urls')),
     path('news/', include('news.urls')),

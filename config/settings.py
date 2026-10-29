@@ -295,6 +295,8 @@ EMAIL_ASYNC_QUEUE = env_bool('EMAIL_ASYNC_QUEUE', default=True)
 EMAIL_QUEUE_LEASE_TIMEOUT_SECONDS = int(os.environ.get('EMAIL_QUEUE_LEASE_TIMEOUT_SECONDS', '300'))
 # Gültigkeit von Passwort-Reset-Links in Sekunden (Django-Standard wären 3 Tage).
 PASSWORD_RESET_TIMEOUT = int(os.environ.get('PASSWORD_RESET_TIMEOUT', '3600'))
+# Aufbewahrungsfrist des System-Fehlerprotokolls (enthält IP-Adressen), gemessen am letzten Auftreten
+SYSTEM_ERROR_LOG_RETENTION_DAYS = int(os.environ.get('SYSTEM_ERROR_LOG_RETENTION_DAYS', '30'))
 
 
 # -----------------------------------------------------------------------------
