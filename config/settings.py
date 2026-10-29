@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.csp import CSP
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -102,6 +103,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
     'backups.middleware.BackupMaintenanceMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -113,6 +115,23 @@ MIDDLEWARE = [
     'configuration.middleware.RequestCacheMiddleware',
     'configuration.middleware.DynamicDebugMiddleware',
 ]
+
+# Content-Security-Policy (F-006): zunächst nur Report-Only, damit Verstöße (Inline-Skripte,
+# externe Quellen) in der Browserkonsole sichtbar werden, ohne etwas zu blockieren. Seitenbezogene
+# erzwungene Policies (Info-Einbettungen, Wissensbasis-Anhänge) bleiben unberührt.
+CSP_REPORT_ONLY = env_bool('CSP_REPORT_ONLY', default=True)
+SECURE_CSP_REPORT_ONLY = {
+    'default-src': [CSP.SELF],
+    'script-src': [CSP.SELF],
+    'style-src': [CSP.SELF, CSP.UNSAFE_INLINE],
+    'img-src': [CSP.SELF, 'data:', 'https:'],
+    'font-src': [CSP.SELF],
+    'connect-src': [CSP.SELF],
+    'frame-src': ['https:'],
+    'object-src': [CSP.NONE],
+    'base-uri': [CSP.SELF],
+    'form-action': [CSP.SELF],
+} if CSP_REPORT_ONLY else {}
 
 ROOT_URLCONF = 'config.urls'
 

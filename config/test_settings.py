@@ -74,3 +74,19 @@ class EnvironmentDetectionTests(SimpleTestCase):
         explicit = self.load('pytest', DJANGO_ENV='test')
         self.assertIn('IS_TESTING True', explicit.stdout, explicit.stderr[-500:])
         self.assertIn('CACHE LocMemCache', explicit.stdout)
+
+
+class ContentSecurityPolicyReportOnlyTests(SimpleTestCase):
+    """F-006: Projektweite CSP zunächst als Report-Only."""
+
+    def test_report_only_header_on_regular_pages(self):
+        from django.test import RequestFactory
+        from django.http import HttpResponse
+        from django.middleware.csp import ContentSecurityPolicyMiddleware
+        response = ContentSecurityPolicyMiddleware(lambda request: HttpResponse('ok'))(RequestFactory().get('/'))
+        policy = response.headers.get('Content-Security-Policy-Report-Only', '')
+        for directive in ("default-src 'self'", "script-src 'self'", "object-src 'none'", "base-uri 'self'"):
+            self.assertIn(directive, policy)
+        self.assertNotIn("'unsafe-inline'", policy.split('script-src', 1)[1].split(';', 1)[0])
+        self.assertNotIn('Content-Security-Policy', response.headers)
+        self.assertIn('django.middleware.csp.ContentSecurityPolicyMiddleware', settings.MIDDLEWARE)
