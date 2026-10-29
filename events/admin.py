@@ -637,13 +637,18 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 
 
 def _check_overbooking(request):
+    from seating.clan_payments import reserved_ticket_count
     overbooked_events = []
     for event in Event.objects.filter(is_active=True):
         if event.effective_status in [Event.Status.FINISHED, Event.Status.CANCELLED]:
             continue
-        if event.max_guests and event.registrations.count() > event.max_guests:
+        if not event.max_guests:
+            continue
+        # Wie Event.is_full: aktive (nicht stornierte) Anmeldungen plus reservierte Clan-Tickets.
+        booked = event.active_registrations_count + reserved_ticket_count(event.pk)
+        if booked > event.max_guests:
             overbooked_events.append(
-                f"'{event.title}' ({event.registrations.count()}/{event.max_guests} Plätze)"
+                f"'{event.title}' ({booked}/{event.max_guests} Plätze)"
             )
 
     if overbooked_events:

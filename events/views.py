@@ -18,6 +18,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST, require_http_methods
 
 from clans.models import ClanMembership
@@ -807,6 +808,14 @@ def guest_list_view(request, slug=None):
     return render(request, 'events/guest_list.html', context)
 
 
+def _safe_referer(request):
+    """Referer nur, wenn er auf diese Installation zeigt (kein offener Redirect)."""
+    referer = request.META.get('HTTP_REFERER')
+    if referer and url_has_allowed_host_and_scheme(referer, {request.get_host()}, require_https=request.is_secure()):
+        return referer
+    return None
+
+
 @login_required
 @require_POST
 def update_payment_check_api(request, event_id):
@@ -859,7 +868,7 @@ def update_payment_check_api(request, event_id):
             if _wants_json(request) or request.content_type == 'application/json':
                 return JsonResponse({'status': 'error', 'message': error_msg}, status=400)
             messages.error(request, error_msg)
-            return redirect(request.META.get('HTTP_REFERER') or 'guest_list')
+            return redirect(_safe_referer(request) or 'guest_list')
 
         if timezone.is_naive(parsed_dt):
             parsed_dt = timezone.make_aware(parsed_dt)
@@ -886,4 +895,4 @@ def update_payment_check_api(request, event_id):
         })
 
     messages.success(request, success_msg)
-    return redirect(request.META.get('HTTP_REFERER') or 'guest_list')
+    return redirect(_safe_referer(request) or 'guest_list')

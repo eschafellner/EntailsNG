@@ -1937,7 +1937,7 @@ class GuestListAndPaymentCheckTests(TestCase):
         self.assertEqual(local_time.hour, 14)
         self.assertEqual(local_time.minute, 30)
 
-        # Route-Alias /events/api/event/<id>/update-payment-check/ testen
+        # F-026: Der unbenannte Route-Alias /events/api/event/<id>/update-payment-check/ ist entfernt.
         alias_url = f"/events/api/event/{self.event.id}/update-payment-check/"
         resp_alias = self.client.post(
             alias_url,
@@ -1945,12 +1945,9 @@ class GuestListAndPaymentCheckTests(TestCase):
             content_type='application/json',
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(resp_alias.status_code, 200)
+        self.assertEqual(resp_alias.status_code, 404)
         self.event.refresh_from_db()
-        local_time2 = timezone.localtime(self.event.last_payment_check)
-        self.assertEqual(local_time2.day, 21)
-        self.assertEqual(local_time2.hour, 16)
-        self.assertEqual(local_time2.minute, 45)
+        self.assertEqual(timezone.localtime(self.event.last_payment_check).day, 20)
 
     def test_update_payment_check_api_invalid_date(self):
         """Ungültiger Datumswert liefert HTTP 400 Bad Request."""
