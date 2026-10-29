@@ -84,14 +84,21 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
-      - SKIP_ENTRYPOINT_WAIT=1
-      - SKIP_ENTRYPOINT_MIGRATION=1
+      - SKIP_ENTRYPOINT_INIT=1
+      - WORKER_HEARTBEAT_FILE=/tmp/worker-heartbeat
     volumes:
       - media_data:/app/media
       - backup_data:/app/backups_data
     depends_on:
       web:
         condition: service_healthy
+    healthcheck:
+      # Heartbeat nach jedem erfolgreichen Durchlauf (configuration/heartbeat.py).
+      test: ["CMD-SHELL", "find \"$$WORKER_HEARTBEAT_FILE\" -mmin -2 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
 
   clan_seat_worker:
     build: .
@@ -105,11 +112,19 @@ services:
       - DB_PORT=5432
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
       - SKIP_ENTRYPOINT_INIT=1
+      - WORKER_HEARTBEAT_FILE=/tmp/worker-heartbeat
     volumes:
       - backup_data:/app/backups_data
     depends_on:
       web:
         condition: service_healthy
+    healthcheck:
+      # Heartbeat nach jedem erfolgreichen Durchlauf (configuration/heartbeat.py).
+      test: ["CMD-SHELL", "find \"$$WORKER_HEARTBEAT_FILE\" -mmin -5 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
 
   guest_photo_worker:
     build: .
@@ -123,12 +138,20 @@ services:
       - DB_PORT=5432
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
       - SKIP_ENTRYPOINT_INIT=1
+      - WORKER_HEARTBEAT_FILE=/tmp/worker-heartbeat
     volumes:
       - private_media_data:/app/private_media
       - backup_data:/app/backups_data
     depends_on:
       web:
         condition: service_healthy
+    healthcheck:
+      # Heartbeat nach jedem erfolgreichen Durchlauf (configuration/heartbeat.py).
+      test: ["CMD-SHELL", "find \"$$WORKER_HEARTBEAT_FILE\" -mmin -125 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
 
   backup_worker:
     build: .

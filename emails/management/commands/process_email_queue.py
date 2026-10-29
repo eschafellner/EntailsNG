@@ -4,6 +4,7 @@ import threading
 import time
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
+from configuration.heartbeat import touch_heartbeat
 from emails.services import process_email_queue
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ class Command(BaseCommand):
                 try:
                     close_old_connections()
                     sent, failed = process_email_queue(limit=limit)
+                    touch_heartbeat()
                     if sent > 0 or failed > 0:
                         self.stdout.write(
                             self.style.SUCCESS(f"[{time.strftime('%X')}] {sent} gesendet, {failed} fehlgeschlagen.")

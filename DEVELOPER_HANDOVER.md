@@ -76,7 +76,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Admin: `http://127.0.0.1:8000/admin/`. Keine Standardkonten oder Standardpasswörter. Alternativ initialisiert `./install.sh` eine lokale Umgebung und ergänzt nur bei fehlender `.env` lokale Vorgaben samt Zufallsschlüsseln; vorhandene Konfiguration bleibt erhalten. `./start.sh` startet den Entwicklungsserver auf 0.0.0.0:8000. Für dauerhaften Veranstaltungsbetrieb Gunicorn/Nginx verwenden.
+Admin: `http://127.0.0.1:8000/admin/`. Keine Standardkonten oder Standardpasswörter. Alternativ initialisiert `./install.sh` eine lokale Umgebung und ergänzt nur bei fehlender `.env` lokale Vorgaben samt Zufallsschlüsseln; vorhandene Konfiguration bleibt erhalten. `./start.sh` startet den Entwicklungsserver auf 127.0.0.1:8000; Zugriff aus dem LAN nur ausdrücklich mit `RUNSERVER_ADDR=0.0.0.0:8000 ./start.sh` (Warnung bei `DEBUG=True`). Für dauerhaften Veranstaltungsbetrieb Gunicorn/Nginx verwenden.
 
 Die drei System-Seeds ergänzen fehlende Werte; vorhandene Texte/Vorlagen bleiben bestehen. `seed_features` ergänzt auch fehlende Standardicons und normalisiert alte Menünamen; `--reset` setzt Menükonfiguration ausdrücklich zurück. Automatisches `post_migrate`-Seeding ist vorhanden, ersetzt aber die expliziten, auf Fehler geprüften Startkommandos nicht.
 
@@ -98,7 +98,7 @@ Unter „Allgemeine E-Mail Einstellungen“ Versandweg und Absender setzen; fris
 
 Event im Entwurf mit künftigen Terminen, Ort, Kapazität und aktiven Tickets anlegen. Für kostenpflichtige Tickets Bankdaten ergänzen. Die Adminaktion „Bereitschaft prüfen und Anmeldung öffnen“ prüft diese Voraussetzungen erneut und öffnet atomar. Abschluss ist erst nach Beendigung/Absage aller internen Turniere möglich; er deaktiviert das Event und archiviert Teams.
 
-`runserver` startet keine dauerhaften Worker. In separaten Terminals mit derselben venv:
+`runserver` startet keine dauerhaften Worker. In Compose melden Mail-, Clan- und Gastfoto-Worker erfolgreiche Durchläufe über `WORKER_HEARTBEAT_FILE`; ihr Healthcheck wird „unhealthy“, wenn der Heartbeat ausbleibt (2, 5 bzw. 125 Minuten). Der Backup-Worker hat wegen langer Sicherungs-/Restorejobs keinen. In separaten Terminals mit derselben venv:
 
 ```bash
 python manage.py process_email_queue --daemon --interval 5

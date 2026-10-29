@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 from backups.errors import BackupError
 from backups.locking import access_guard
+from configuration.heartbeat import touch_heartbeat
 from configuration.models import SystemErrorLog
 from users.services import GuestPhotoService
 
@@ -29,6 +30,7 @@ class Command(BaseCommand):
                     result = GuestPhotoService.purge(dry_run=options['dry_run'])
                     # Gleicher Löschfristen-Takt für das Fehlerprotokoll (enthält IP-Adressen).
                     error_logs = SystemErrorLog.purge_expired(dry_run=options['dry_run'])
+                touch_heartbeat()
                 if error_logs:
                     logger.info('Fehlerprotokolle nach Ablauf der Aufbewahrungsfrist %s: %s',
                                 'gefunden' if options['dry_run'] else 'gelöscht', error_logs)
@@ -45,6 +47,7 @@ class Command(BaseCommand):
             except BackupError:
                 if not options['daemon']:
                     raise
+                touch_heartbeat()  # Wartungspause während eines Restores ist kein Hänger.
             except Exception:
                 if not options['daemon']:
                     raise

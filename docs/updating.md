@@ -17,6 +17,8 @@ Diese Anleitung aktualisiert eine vorhandene Installation. Ein frisches Setup st
 
    `events.0015_registration_protect` ändert keine Daten (SQL no-op): Benutzer und Events mit Eventanmeldungen lassen sich danach nicht mehr löschen, auch nicht im Admin; stattdessen gibt es die Admin-Aktion „Konto anonymisieren“ ([Kontolöschung](account-deletion.md)).
 
+   Mail-, Clan- und Gastfoto-Worker erhalten Heartbeat-Healthchecks; `docker compose ps` zeigt einen hängenden oder dauerhaft scheiternden Worker als `unhealthy` (Docker startet ihn dadurch nicht automatisch neu; dann Logs prüfen und den Dienst neu erstellen). Der Mail-Worker überspringt die Initialisierung jetzt vollständig (`SKIP_ENTRYPOINT_INIT=1`), Migrationen und Seeds bleiben Aufgabe des Web-Containers.
+
    Eigene SVG-Menüicons werden ab diesem Stand beim Speichern neu aus dem geprüften Baum erzeugt (Kommentare, XML-Deklaration und fremde Namespace-Attribute entfallen); `style`-Attribute und Verweise außerhalb des Icons (`href` ohne `#`) werden abgelehnt. Gespeicherte Icons ändern sich erst beim nächsten Speichern. Nach dem Update Einträge auflisten, die davon abweichen oder abgelehnt würden, und diese im Admin unter „Navigation“ prüfen und speichern bzw. das Icon ersetzen (schreibfrei; leer = nichts zu tun):
 
    ```bash

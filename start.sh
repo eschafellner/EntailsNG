@@ -66,4 +66,17 @@ echo -e "${CYAN} 🛠️ Admin-Bereich:          ${NC} http://127.0.0.1:8000/adm
 echo -e "${YELLOW}💡 Hinweis: Drücke [STRG] + [C] im Terminal, um den Server zu beenden.${NC}"
 echo -e "${BLUE}=====================================================${NC}\n"
 
-python manage.py runserver 0.0.0.0:8000
+# Standard nur lokal: Mit DEBUG=True zeigt Django Fehlerseiten samt aller URL-Muster.
+# Für Zugriff aus dem LAN ausdrücklich RUNSERVER_ADDR=0.0.0.0:8000 ./start.sh verwenden.
+RUNSERVER_ADDR="${RUNSERVER_ADDR:-127.0.0.1:8000}"
+case "$RUNSERVER_ADDR" in
+    127.0.0.1:*|localhost:*|\[::1\]:*) ;;
+    *)
+        if [ "${DEBUG:-False}" = "True" ] || [ "${DEBUG:-False}" = "true" ] || [ "${DEBUG:-False}" = "1" ]; then
+            echo -e "${YELLOW}⚠️  Achtung: Entwicklungsserver mit DEBUG=True ist unter $RUNSERVER_ADDR aus dem Netzwerk erreichbar.${NC}"
+            echo -e "${YELLOW}   Fehlerseiten zeigen dann allen Geräten interne Details. Nicht während einer Veranstaltung verwenden.${NC}\n"
+        fi
+        ;;
+esac
+
+python manage.py runserver "$RUNSERVER_ADDR"

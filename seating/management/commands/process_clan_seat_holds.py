@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db import connections
 from backups.errors import BackupError
 from backups.locking import access_guard
+from configuration.heartbeat import touch_heartbeat
 from seating.clan_services import process_clan_holds
 
 logger = logging.getLogger(__name__)
@@ -25,9 +26,11 @@ class Command(BaseCommand):
             try:
                 with access_guard():
                     process_clan_holds()
+                touch_heartbeat()
             except BackupError:
                 if not options['daemon']:
                     raise
+                touch_heartbeat()  # Wartungspause während eines Restores ist kein Hänger.
             except Exception:
                 if not options['daemon']:
                     raise
