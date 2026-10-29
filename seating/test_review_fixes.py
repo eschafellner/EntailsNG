@@ -83,3 +83,18 @@ class SeatingLabelWhitelistTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('(2,3)', response.json()['message'])
         self.assertFalse(self.plan.cells.exists())
+
+
+class SeatingEditorContextTests(TestCase):
+    """F-030: Der Editor übergibt die Zellen nur noch per json_script (cells_data)."""
+
+    def test_editor_context_has_no_unused_cells_json(self):
+        start = timezone.now() + timedelta(days=5)
+        event = Event.objects.create(title='Editor LAN', slug='editor-lan', status=Event.Status.REGISTRATION_OPEN,
+                                     start_date=start, end_date=start + timedelta(days=1))
+        plan = SeatingPlan.objects.create(event=event, name='Halle', columns=2, rows=2)
+        self.client.force_login(User.objects.create_superuser('editor_admin', 'editor@example.com', 'password'))
+        response = self.client.get(reverse('seating_editor', kwargs={'plan_id': plan.id}))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('cells_data', response.context)
+        self.assertNotIn('cells_json', response.context)

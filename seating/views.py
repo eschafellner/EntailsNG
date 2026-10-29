@@ -56,7 +56,6 @@ def seating_editor(request, plan_id):
     context = {
         'plan': plan,
         'cells_data': cells_data,
-        'cells_json': json.dumps(cells_data),
     }
     return render(request, 'seating/editor.html', context)
 
