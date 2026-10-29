@@ -1,6 +1,8 @@
 import logging
 import time
+from importlib import import_module
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 from backups.errors import BackupError
@@ -14,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = ('Löscht Gastfotos nach Ablauf der Frist sowie verwaiste Fotodateien und Datensätze; '
-            'entfernt außerdem abgelaufene Einträge des System-Fehlerprotokolls.')
+            'entfernt außerdem abgelaufene Einträge des System-Fehlerprotokolls und abgelaufene Sessions.')
 
     def add_arguments(self, parser):
         parser.add_argument('--daemon', action='store_true')
@@ -30,6 +32,9 @@ class Command(BaseCommand):
                     result = GuestPhotoService.purge(dry_run=options['dry_run'])
                     # Gleicher Löschfristen-Takt für das Fehlerprotokoll (enthält IP-Adressen).
                     error_logs = SystemErrorLog.purge_expired(dry_run=options['dry_run'])
+                    if not options['dry_run']:
+                        # Wie "manage.py clearsessions": abgelaufene Sessions entfernen.
+                        import_module(settings.SESSION_ENGINE).SessionStore.clear_expired()
                 touch_heartbeat()
                 if error_logs:
                     logger.info('Fehlerprotokolle nach Ablauf der Aufbewahrungsfrist %s: %s',

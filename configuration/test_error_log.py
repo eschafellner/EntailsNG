@@ -104,3 +104,16 @@ class SystemErrorLogRetentionTests(TestCase):
         module.copy_timestamp_to_last_seen(apps, None)
         log.refresh_from_db()
         self.assertEqual(log.last_seen, log.timestamp)
+
+
+class ExpiredSessionCleanupTests(TestCase):
+    """F-032: Der stündliche Löschfristen-Worker entfernt abgelaufene Sessions."""
+
+    def test_expired_sessions_are_removed(self):
+        from django.contrib.sessions.models import Session
+        now = timezone.now()
+        Session.objects.create(session_key='a' * 32, session_data='x', expire_date=now - timedelta(seconds=1))
+        Session.objects.create(session_key='b' * 32, session_data='x', expire_date=now + timedelta(days=1))
+        with patch('users.management.commands.purge_guest_photos.connections'):
+            call_command('purge_guest_photos', stdout=StringIO())
+        self.assertEqual(list(Session.objects.values_list('session_key', flat=True)), ['b' * 32])
