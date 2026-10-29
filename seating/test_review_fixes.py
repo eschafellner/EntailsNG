@@ -98,3 +98,18 @@ class SeatingEditorContextTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('cells_data', response.context)
         self.assertNotIn('cells_json', response.context)
+
+
+class ReserveSeatUnknownEventTests(TestCase):
+    """F-028: Unbekannte Event-ID ergibt 404 statt HTTP 500 und Fehlerprotokolleintrag."""
+
+    def test_unknown_event_returns_404(self):
+        from django.test import Client
+        from configuration.models import SystemErrorLog
+        client = Client(raise_request_exception=False)
+        client.force_login(User.objects.create_user('seat_guest', 'seat_guest@example.com', 'password'))
+        response = client.post(reverse('api_reserve_seat', args=[999999]),
+                               data=json.dumps({'x': 1, 'y': 1}), content_type='application/json')
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()['status'], 'error')
+        self.assertFalse(SystemErrorLog.objects.exists())

@@ -250,6 +250,8 @@ def reserve_seat_api(request, event_id):
         registration = EventRegistration.objects.select_for_update().get(
             event_id=event_id, user=request.user
         )
+    except Event.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': get_translation('msg_event_not_found')}, status=404)
     except EventRegistration.DoesNotExist:
         return JsonResponse(
             {
