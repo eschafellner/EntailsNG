@@ -29,6 +29,12 @@ def env_bool(key, default=False):
 DEBUG = env_bool('DEBUG', default=False)
 DEMO_MODE = env_bool('DEMO_MODE', default=False)
 
+# Laufumgebung: ausdrücklich per DJANGO_ENV=test (z. B. andere Testrunner), sonst nur
+# über das Unterkommando ("manage.py test"), nicht über beliebige weitere Argumente.
+MANAGEMENT_COMMAND = sys.argv[1] if len(sys.argv) > 1 else ''
+DJANGO_ENV = os.environ.get('DJANGO_ENV', '').strip().lower()
+IS_TESTING = DJANGO_ENV == 'test' or (not DJANGO_ENV and MANAGEMENT_COMMAND == 'test')
+
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
     raise ImproperlyConfigured(
@@ -37,7 +43,7 @@ if not SECRET_KEY:
 
 FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', '')
 USER_BAN_HMAC_KEY = os.environ.get('USER_BAN_HMAC_KEY', '')
-if not FIELD_ENCRYPTION_KEY and not DEBUG and 'test' not in sys.argv:
+if not FIELD_ENCRYPTION_KEY and not DEBUG and not IS_TESTING:
     import warnings
     warnings.warn(
         "FIELD_ENCRYPTION_KEY ist nicht gesetzt. Gespeicherte SMTP-Passwörter "
@@ -143,7 +149,7 @@ db_password = os.environ.get('DB_PASSWORD')
 db_host = os.environ.get('DB_HOST', 'db')
 db_port = os.environ.get('DB_PORT', '5432')
 
-if not DEBUG and 'test' not in sys.argv:
+if not DEBUG and not IS_TESTING:
     missing_db_vars = []
     if not db_name:
         missing_db_vars.append('DB_NAME')
@@ -176,9 +182,9 @@ DATABASES = {
 # -----------------------------------------------------------------------------
 REDIS_URL = os.environ.get('REDIS_URL')
 CLI_COMMANDS_FALLBACK = {'test', 'makemigrations', 'showmigrations', 'migrate', 'check', 'collectstatic', 'help', 'diffsettings'}
-is_cli_fallback = any(arg in sys.argv for arg in CLI_COMMANDS_FALLBACK)
+is_cli_fallback = IS_TESTING or MANAGEMENT_COMMAND in CLI_COMMANDS_FALLBACK
 
-if REDIS_URL and 'test' not in sys.argv:
+if REDIS_URL and not IS_TESTING:
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',
@@ -233,7 +239,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-if not DEBUG and 'test' not in sys.argv:
+if not DEBUG and not IS_TESTING:
     _staticfiles_storage_backend = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 else:
     _staticfiles_storage_backend = "whitenoise.storage.CompressedStaticFilesStorage"

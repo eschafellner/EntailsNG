@@ -49,3 +49,28 @@ class ServerErrorHandlerTests(SimpleTestCase):
             response = custom_500_handler(RequestFactory().get('/'))
         self.assertEqual(response.status_code, 500)
         self.assertIn('500', response.content.decode())
+
+
+class EnvironmentDetectionTests(SimpleTestCase):
+    """F-007: Testmodus nur über das Unterkommando 'test' oder ausdrücklich DJANGO_ENV=test."""
+
+    def load(self, *argv, **env):
+        code = ("import django, os; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings'); "
+                "django.setup(); from django.conf import settings; print('IS_TESTING', settings.IS_TESTING); "
+                "print('CACHE', settings.CACHES['default']['BACKEND'].rsplit('.', 1)[-1])")
+        environ = {**os.environ, 'DEBUG': 'False', 'ALLOWED_HOSTS': 'example.org',
+                   'REDIS_URL': 'redis://127.0.0.1:1/1', **env}
+        environ.pop('DJANGO_ENV', None) if 'DJANGO_ENV' not in env else None
+        return subprocess.run([sys.executable, '-c', code, *argv], env=environ, capture_output=True, text=True,
+                              cwd=settings.BASE_DIR)
+
+    def test_word_test_as_later_argument_is_not_test_mode(self):
+        result = self.load('seed_features', 'test')
+        self.assertIn('IS_TESTING False', result.stdout, result.stderr[-500:])
+        self.assertIn('CACHE RedisCache', result.stdout)
+
+    def test_subcommand_and_explicit_environment(self):
+        self.assertIn('IS_TESTING True', self.load('test').stdout)
+        explicit = self.load('pytest', DJANGO_ENV='test')
+        self.assertIn('IS_TESTING True', explicit.stdout, explicit.stderr[-500:])
+        self.assertIn('CACHE LocMemCache', explicit.stdout)

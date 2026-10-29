@@ -5,7 +5,7 @@ from django.test import SimpleTestCase, override_settings
 from . import services
 
 
-@patch.object(services.sys, 'argv', ['manage.py', 'runserver'])
+@override_settings(IS_TESTING=False)
 class InlineQueueTriggerTests(SimpleTestCase):
     """F-021: Standardmäßig versendet nur der Mail-Worker, nicht ein Thread im Webprozess."""
 
@@ -14,7 +14,7 @@ class InlineQueueTriggerTests(SimpleTestCase):
             services.trigger_queue_processing()
         thread.assert_not_called()
 
-    @override_settings(EMAIL_INLINE_TRIGGER=True)
+    @override_settings(EMAIL_INLINE_TRIGGER=True, IS_TESTING=False)
     def test_optional_thread_closes_its_connection(self):
         with patch.object(services.threading, 'Thread') as thread, \
                 patch.object(services.transaction, 'get_connection') as get_connection:

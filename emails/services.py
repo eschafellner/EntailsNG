@@ -1,7 +1,6 @@
 import datetime
 import logging
 import re
-import sys
 import threading
 import uuid
 
@@ -116,7 +115,7 @@ def queue_system_email(template_key, recipient_email, context_data, trigger_work
 
 def trigger_queue_processing():
     """Startet die Hintergrundverarbeitung der E-Mail-Queue (nach DB-Commit)."""
-    if 'test' in sys.argv or getattr(settings, 'IS_TESTING', False):
+    if settings.IS_TESTING:
         return
     # F-021: Standardmäßig versendet nur der Mail-Worker; der Thread im Webprozess ist optional
     # (z. B. lokale Entwicklung ohne laufenden Worker).
@@ -299,12 +298,12 @@ def send_system_email(template_key, recipient_email, context_data, immediate=Non
     Wenn immediate=None:
         - Im normalen Betrieb (oder wenn FORCE_EMAIL_ASYNC_QUEUE gesetzt ist) wird settings.EMAIL_ASYNC_QUEUE
           beachtet (Standard: True -> E-Mail wird in die Queue gestellt).
-        - In Unit-Tests ('test' in sys.argv und nicht FORCE_EMAIL_ASYNC_QUEUE) bleibt immediate=True
+        - In Unit-Tests (settings.IS_TESTING und nicht FORCE_EMAIL_ASYNC_QUEUE) bleibt immediate=True
           als Standard, damit bestehende synchrone Test-Assertions auf mail.outbox ohne manuelles
           process_email_queue funktionieren.
     """
     if immediate is None:
-        is_testing = 'test' in sys.argv
+        is_testing = settings.IS_TESTING
         force_async = getattr(settings, 'FORCE_EMAIL_ASYNC_QUEUE', False)
         async_enabled = getattr(settings, 'EMAIL_ASYNC_QUEUE', True)
         if is_testing and not force_async:
