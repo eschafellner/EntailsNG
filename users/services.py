@@ -215,11 +215,12 @@ class UserService:
         return blockers
 
     @staticmethod
-    def delete_account(user, password):
+    def delete_account(user, password, verify_password=True):
         """Entfernt persönliche Daten endgültig; Historie bleibt an der alten ID.
 
         Sperrreihenfolge: User -> Events -> Turniere -> Teams -> Anmeldungen.
         Passwortfehler werden außerhalb der zurückrollbaren Löschung persistiert.
+        verify_password=False nur für die Admin-Aktion „Konto anonymisieren“.
         """
         from events.models import Event, EventRegistration
         from events.services import PaymentService
@@ -230,11 +231,11 @@ class UserService:
             locked_user = User.objects.select_for_update(no_key=True).get(pk=user.pk)
             if locked_user.deleted_at:
                 raise AccountDeletionError(get_translation('account_delete_already_deleted'), 'deleted')
-            if locked_user.is_locked():
+            if verify_password and locked_user.is_locked():
                 failure = AccountDeletionError(get_translation(
                     'account_delete_locked', 'Zu viele Passwortfehlversuche. Bitte versuche es nach Ablauf der Kontosperre erneut.',
                 ), 'locked')
-            elif not password or not locked_user.check_password(password):
+            elif verify_password and (not password or not locked_user.check_password(password)):
                 if password:
                     locked_user.register_failed_login()
                 failure = AccountDeletionError(get_translation(

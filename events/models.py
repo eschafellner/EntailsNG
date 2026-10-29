@@ -323,15 +323,16 @@ class EventRegistration(models.Model):
         PAID = 'PAID', 'Bezahlt'
         CANCELLED = 'CANCELLED', 'Storniert'
 
+    # PROTECT: Anmeldungen sind Zahlungs-/Check-in-Nachweise; Konten werden anonymisiert, nicht gelöscht.
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='registrations',
         verbose_name="Benutzer",
     )
     event = models.ForeignKey(
         Event,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='registrations',
         verbose_name="Veranstaltung",
     )

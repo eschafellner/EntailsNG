@@ -64,6 +64,22 @@ Freitexte, bereits versendete E-Mails, heruntergeladene PDFs, Serverlogs oder Ba
 Die Behandlung dieser Kopien muss im Betrieb separat geregelt werden. Ein bereits
 an den Mailserver übergebener Versand kann nicht zurückgerufen werden.
 
+## Anonymisieren und Löschen im Admin
+
+Konten und Events mit Eventanmeldungen lassen sich im Admin nicht löschen; die
+Datenbank verhindert es zusätzlich (`EventRegistration.user`/`.event` mit
+`PROTECT`, Migration `events.0015_registration_protect`). Konten ohne Anmeldungen
+und Events ohne Anmeldungen bleiben wie bisher löschbar.
+
+Statt zu löschen bietet die Benutzerliste die Aktion „Konto anonymisieren
+(Anmeldungen bleiben erhalten)“. Sie benötigt `users.delete_user`, zeigt vorher
+eine Bestätigungsseite und ruft `UserService.delete_account()` ohne
+Passwortprüfung auf; Ergebnis und Sperrgründe sind dieselben wie bei der
+Selbstlöschung. Bezahlte Anmeldungen, Mitarbeiterkonten und Clan-Sammelzahlungen
+blockieren also weiterhin (vorher stornieren bzw. Rolle entziehen), gesperrte
+Konten und das eigene Konto werden übersprungen. Übersprungene Konten nennt der
+Admin mit Grund.
+
 ## Transaktionen und Installation
 
 `UserService.delete_account()` prüft das Passwort und die Sperrgründe erneut unter

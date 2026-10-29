@@ -117,6 +117,12 @@ class EventAdmin(admin.ModelAdmin):
     inlines = [TicketTypeInline]
     actions = ['action_open_registration', 'action_set_payment_check_now', 'action_finish_event']
 
+    def has_delete_permission(self, request, obj=None):
+        # F-024: Events mit Anmeldungen (Zahlungs-/Check-in-Historie) bleiben erhalten.
+        if obj is not None and obj.registrations.exists():
+            return False
+        return super().has_delete_permission(request, obj)
+
     @admin.action(description="📋 Bereitschaft prüfen und Anmeldung öffnen", permissions=['change'])
     def action_open_registration(self, request, queryset):
         if queryset.count() != 1:

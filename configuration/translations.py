@@ -1309,6 +1309,13 @@ DEFAULT_TEXTS = {
     'msg_payment_check_forbidden': 'Du hast keine Berechtigung, den Kontocheck zu aktualisieren.',
     'msg_payment_check_invalid_date': 'Ungültiges Datumsformat übergeben.',
     'admin_outgoing_email_sensitive_hidden': 'Der Inhalt dieser Nachricht enthält einen Zugangslink und wird nicht angezeigt. Er wird nach Versand, Ablauf oder endgültigem Fehlschlag gelöscht.',
+    'admin_user_anonymize_title': 'Konten anonymisieren',
+    'admin_user_anonymize_intro': 'Name, E-Mail-Adresse, Benutzername und Anmeldedaten der folgenden Konten werden endgültig entfernt. Offene Anmeldungen werden storniert, Anmeldungen und Zahlungshistorie bleiben ohne Personenbezug erhalten. Bezahlte Anmeldungen, Mitarbeiterkonten und gesperrte Konten werden übersprungen.',
+    'admin_user_anonymize_confirm': 'Ja, endgültig anonymisieren',
+    'admin_user_anonymize_done': '{count} Konto/Konten anonymisiert.',
+    'admin_user_anonymize_skipped': '{username} nicht anonymisiert: {reason}',
+    'admin_user_anonymize_self': 'Das eigene Konto kann nicht anonymisiert werden.',
+    'admin_user_anonymize_banned': 'Gesperrte Konten bleiben zur Durchsetzung der Sperre unverändert.',
     'seating_label_invalid_chars': 'Die Bezeichnung „{label}“ enthält unzulässige Zeichen. Erlaubt sind Buchstaben, Ziffern, Leerzeichen und {allowed}',
 }
 

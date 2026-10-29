@@ -36,7 +36,7 @@ class CustomUserAdmin(UserAdmin):
     @admin.display(description='Name', ordering='last_name')
     def real_name(self, obj):
         return obj.get_full_name() or '—'
-    actions = ['action_unlock_accounts']
+    actions = ['action_unlock_accounts', 'action_anonymize_accounts']
 
     # Fügt die neuen Felder zum Bearbeitungs-Formular hinzu
     fieldsets = UserAdmin.fieldsets + (
@@ -64,7 +64,39 @@ class CustomUserAdmin(UserAdmin):
         return super().has_change_permission(request, obj)
 
     def has_delete_permission(self, request, obj=None):
-        return not (obj and obj.is_banned) and super().has_delete_permission(request, obj)
+        # F-024: Konten mit Anmeldungen werden anonymisiert statt gelöscht.
+        if obj is not None and (obj.is_banned or obj.registrations.exists()):
+            return False
+        return super().has_delete_permission(request, obj)
+
+    @admin.action(permissions=['delete'], description="Konto anonymisieren (Anmeldungen bleiben erhalten)")
+    def action_anonymize_accounts(self, request, queryset):
+        from .exceptions import AccountDeletionError
+        from .services import UserService
+        users = list(queryset.order_by('pk'))
+        if request.POST.get('confirm') != 'yes':
+            return TemplateResponse(request, 'admin/users/user/anonymize_confirmation.html', {
+                **self.admin_site.each_context(request), 'opts': self.model._meta,
+                'title': tr('admin_user_anonymize_title'), 'users': users,
+                'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
+            })
+        done = 0
+        for user in users:
+            if user.pk == request.user.pk:
+                reason = tr('admin_user_anonymize_self')
+            elif user.is_banned:
+                reason = tr('admin_user_anonymize_banned')
+            else:
+                try:
+                    UserService.delete_account(user, None, verify_password=False)
+                except AccountDeletionError as exc:
+                    reason = str(exc)
+                else:
+                    done += 1
+                    continue
+            self.message_user(request, tr('admin_user_anonymize_skipped', username=user.username, reason=reason),
+                              level='warning')
+        self.message_user(request, tr('admin_user_anonymize_done', count=done))
 
     def get_readonly_fields(self, request, obj=None):
         return self.readonly_fields + (('is_active', 'email', 'username', 'password') if obj and obj.is_banned else ())
