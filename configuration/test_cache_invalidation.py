@@ -23,3 +23,14 @@ class SingleInvalidationTests(TestCase):
         self.assertEqual(self.callbacks(GeneralConfiguration.load().save), 1)
         # Eigener Cache plus Texte und Navigation (Theme-/Textabhängigkeiten).
         self.assertEqual(self.callbacks(SiteCustomization.load().save), 3)
+
+
+class SeededNavigationIconTests(TestCase):
+    """F-013: Vom Seed angelegte Menüpunkte bestehen die Modellvalidierung (Admin-Speichern)."""
+
+    def test_guest_icon_is_a_valid_choice(self):
+        from django.core.management import call_command
+        from io import StringIO
+        call_command('seed_features', stdout=StringIO())
+        item = NavigationItem.objects.get(icon_name='guests')
+        item.full_clean()

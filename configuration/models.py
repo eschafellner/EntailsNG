@@ -60,6 +60,7 @@ class NavigationItem(models.Model):
         SHOP = 'shop', 'Shop & Catering (Einkaufswagen)'
         SETTINGS = 'settings', 'Einstellungen (Regler)'
         SPONSORS = 'sponsors', 'Sponsoren (Stern / Partner)'
+        GUESTS = 'guests', 'Gäste (Personen)'
         CUSTOM = 'custom', 'Benutzerdefiniertes SVG (Nur Superuser)'
 
     title = models.CharField(
