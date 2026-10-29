@@ -1,4 +1,5 @@
 import logging
+from email.utils import formataddr
 
 from django.conf import settings as dj
 from django.core.mail.backends.base import BaseEmailBackend
@@ -137,10 +138,8 @@ class ConfiguredSMTPBackend(BaseEmailBackend):
     def _apply_sender(cfg, email_messages):
         if not cfg.sender_email:
             return
-        sender = (
-            f"{cfg.sender_name} <{cfg.sender_email}>"
-            if cfg.sender_name else cfg.sender_email
-        )
+        # formataddr quotet Namen mit Komma/Anführungszeichen (RFC 5322) statt zwei Mailboxen zu erzeugen.
+        sender = formataddr((cfg.sender_name, cfg.sender_email)) if cfg.sender_name else cfg.sender_email
         for msg in email_messages:
             msg.from_email = sender
             if cfg.reply_to_email and not msg.reply_to:
