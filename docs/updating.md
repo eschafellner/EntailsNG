@@ -19,6 +19,8 @@ Diese Anleitung aktualisiert eine vorhandene Installation. Ein frisches Setup st
 
    Mail-, Clan- und Gastfoto-Worker erhalten Heartbeat-Healthchecks; `docker compose ps` zeigt einen hängenden oder dauerhaft scheiternden Worker als `unhealthy` (Docker startet ihn dadurch nicht automatisch neu; dann Logs prüfen und den Dienst neu erstellen). Der Mail-Worker überspringt die Initialisierung jetzt vollständig (`SKIP_ENTRYPOINT_INIT=1`), Migrationen und Seeds bleiben Aufgabe des Web-Containers.
 
+   Mails verschickt ab diesem Stand nur noch der `email_worker`; der zusätzliche Versand-Thread im Webprozess ist standardmäßig aus (`EMAIL_INLINE_TRIGGER=False`). In Compose ändert sich nichts Sichtbares, solange der Mail-Worker läuft (Healthcheck beachten). Wer lokal ohne Worker entwickelt, setzt `EMAIL_INLINE_TRIGGER=True` in der eigenen `.env`.
+
    Eigene SVG-Menüicons werden ab diesem Stand beim Speichern neu aus dem geprüften Baum erzeugt (Kommentare, XML-Deklaration und fremde Namespace-Attribute entfallen); `style`-Attribute und Verweise außerhalb des Icons (`href` ohne `#`) werden abgelehnt. Gespeicherte Icons ändern sich erst beim nächsten Speichern. Nach dem Update Einträge auflisten, die davon abweichen oder abgelehnt würden, und diese im Admin unter „Navigation“ prüfen und speichern bzw. das Icon ersetzen (schreibfrei; leer = nichts zu tun):
 
    ```bash

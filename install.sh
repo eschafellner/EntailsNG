@@ -61,6 +61,8 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     sed -i "s|hier-ein-sicheres-redis-passwort-eintragen|${RANDOM_REDIS_PASSWORD}|g" .env
     sed -i "s|@redis:6379/1|@127.0.0.1:6379/1|" .env
     sed -i "s|BEHIND_PROXY=True|BEHIND_PROXY=False|" .env
+    # Lokal läuft meist kein Mail-Worker: Mails direkt nach dem Einreihen verarbeiten.
+    sed -i "s|EMAIL_INLINE_TRIGGER=False|EMAIL_INLINE_TRIGGER=True|" .env
     echo -e "${GREEN}✓ .env erfolgreich initialisiert.${NC}\n"
 fi
 

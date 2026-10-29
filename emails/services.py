@@ -8,7 +8,7 @@ import uuid
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.utils import timezone
 from django.utils.html import escape, strip_tags
 
@@ -118,9 +118,19 @@ def trigger_queue_processing():
     """Startet die Hintergrundverarbeitung der E-Mail-Queue (nach DB-Commit)."""
     if 'test' in sys.argv or getattr(settings, 'IS_TESTING', False):
         return
+    # F-021: Standardmäßig versendet nur der Mail-Worker; der Thread im Webprozess ist optional
+    # (z. B. lokale Entwicklung ohne laufenden Worker).
+    if not getattr(settings, 'EMAIL_INLINE_TRIGGER', False):
+        return
+
+    def _process():
+        try:
+            process_email_queue(limit=25)
+        finally:
+            connection.close()
 
     def _run_worker():
-        thread = threading.Thread(target=process_email_queue, kwargs={'limit': 25}, daemon=True)
+        thread = threading.Thread(target=_process, daemon=True)
         thread.start()
 
     try:

@@ -98,7 +98,7 @@ Unter „Allgemeine E-Mail Einstellungen“ Versandweg und Absender setzen; fris
 
 Event im Entwurf mit künftigen Terminen, Ort, Kapazität und aktiven Tickets anlegen. Für kostenpflichtige Tickets Bankdaten ergänzen. Die Adminaktion „Bereitschaft prüfen und Anmeldung öffnen“ prüft diese Voraussetzungen erneut und öffnet atomar. Abschluss ist erst nach Beendigung/Absage aller internen Turniere möglich; er deaktiviert das Event und archiviert Teams.
 
-`runserver` startet keine dauerhaften Worker. In Compose melden Mail-, Clan- und Gastfoto-Worker erfolgreiche Durchläufe über `WORKER_HEARTBEAT_FILE`; ihr Healthcheck wird „unhealthy“, wenn der Heartbeat ausbleibt (2, 5 bzw. 125 Minuten). Der Backup-Worker hat wegen langer Sicherungs-/Restorejobs keinen. In separaten Terminals mit derselben venv:
+`runserver` startet keine dauerhaften Worker; Mails verschickt nur der Mail-Worker, außer `EMAIL_INLINE_TRIGGER=True` (lokale Vorgabe von `install.sh`). In Compose melden Mail-, Clan- und Gastfoto-Worker erfolgreiche Durchläufe über `WORKER_HEARTBEAT_FILE`; ihr Healthcheck wird „unhealthy“, wenn der Heartbeat ausbleibt (2, 5 bzw. 125 Minuten). Der Backup-Worker hat wegen langer Sicherungs-/Restorejobs keinen. In separaten Terminals mit derselben venv:
 
 ```bash
 python manage.py process_email_queue --daemon --interval 5

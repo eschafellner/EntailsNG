@@ -294,6 +294,8 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', '')
 SERVER_EMAIL = os.environ.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
 EMAIL_ASYNC_QUEUE = env_bool('EMAIL_ASYNC_QUEUE', default=True)
+# Zusätzlicher Versand-Thread im Webprozess nach dem Einreihen (nur ohne Mail-Worker sinnvoll)
+EMAIL_INLINE_TRIGGER = env_bool('EMAIL_INLINE_TRIGGER', default=False)
 EMAIL_QUEUE_LEASE_TIMEOUT_SECONDS = int(os.environ.get('EMAIL_QUEUE_LEASE_TIMEOUT_SECONDS', '300'))
 # Gültigkeit von Passwort-Reset-Links in Sekunden (Django-Standard wären 3 Tage).
 PASSWORD_RESET_TIMEOUT = int(os.environ.get('PASSWORD_RESET_TIMEOUT', '3600'))
