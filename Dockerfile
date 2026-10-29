@@ -1,3 +1,18 @@
+# Build-Stufe: Wheels bauen bzw. laden; Compiler und -dev-Pakete bleiben hier (Befund F-038).
+FROM python:3.12-slim-bookworm AS wheels
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+RUN python -m pip install --no-cache-dir pip==26.2.1 && \
+    python -m pip wheel --no-cache-dir --wheel-dir /wheels -r /tmp/requirements.txt
+
+
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
@@ -5,13 +20,9 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# System-Abhängigkeiten für PostgreSQL-Treiber, Bildverarbeitung (Pillow) und Healthchecks
+# Laufzeit: curl (Healthcheck, PGDG-Schlüssel), Zertifikate und JPEG-Laufzeitbibliothek für Pillow
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    libjpeg-dev \
-    zlib1g-dev \
-    netcat-openbsd \
+    libjpeg62-turbo \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -31,8 +42,9 @@ RUN groupadd -g 1000 appuser && \
 
 COPY requirements.txt /app/
 # Keep the installer itself on a corrected, audited version as well.
-RUN python -m pip install --no-cache-dir pip==26.2.1 && \
-    python -m pip install --no-cache-dir -r requirements.txt && \
+RUN --mount=type=bind,from=wheels,source=/wheels,target=/wheels \
+    python -m pip install --no-cache-dir pip==26.2.1 && \
+    python -m pip install --no-cache-dir --no-index --find-links /wheels -r requirements.txt && \
     python -m pip check
 
 COPY . /app/
