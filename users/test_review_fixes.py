@@ -153,3 +153,26 @@ class SessionEraseAfterCommitTests(TestCase):
         for callback in callbacks:
             callback()
         self.assertFalse(Session.objects.filter(session_key=key).exists())
+
+
+class PasswordResetEmailLimitTests(TestCase):
+    """F-016 (Variante B): Reset-Selbsthilfe bleibt trotz fremder Anfragen länger möglich."""
+
+    def setUp(self):
+        from django.core.cache import cache as default_cache
+        default_cache.clear()
+        User.objects.create_user('limit-user', 'limit@example.com', 'StrongPass123!')
+
+    def request_reset(self, email, ip):
+        return self.client.post(reverse('password_reset'), {'email': email}, REMOTE_ADDR=ip)
+
+    def test_five_resets_per_hour_for_existing_account(self):
+        from emails.models import OutgoingEmail
+        for i in range(6):
+            self.request_reset('limit@example.com', f'198.51.100.{i}')
+        self.assertEqual(OutgoingEmail.objects.filter(template_key='password_reset').count(), 5)
+
+    def test_unknown_addresses_do_not_consume_the_quota(self):
+        from django.core.cache import cache as default_cache
+        self.request_reset('niemand@example.com', '198.51.100.50')
+        self.assertIsNone(default_cache.get('rate_limit_pwd_reset_email_niemand@example.com'))

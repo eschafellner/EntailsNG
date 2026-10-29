@@ -334,15 +334,19 @@ class CustomPasswordResetForm(forms.Form):
             logger.warning("Password reset IP-Rate-Limit erreicht für IP %s", client_ip)
             return
 
-        email_key = f"rate_limit_pwd_reset_email_{email}"
-        if not reserve_rate_limit(email_key, limit=3, timeout=3600):
-            logger.warning("Password reset E-Mail-Rate-Limit erreicht")
-            return
-
         if token_generator is None:
             token_generator = password_reset_token_generator
 
         active_users = User.objects.filter(email__iexact=email, is_active=True, is_banned=False, deleted_at__isnull=True)
+        # F-016: Das Limit pro Adresse zählt nur, wenn wirklich eine Reset-Mail entsteht, und ist so
+        # bemessen, dass fremde Anfragen die Selbsthilfe eines ausgesperrten Gasts nicht schnell
+        # erschöpfen (ältere Links bleiben bis PASSWORD_RESET_TIMEOUT gültig). Die Antwort ist für
+        # alle Adressen gleich.
+        if active_users.exists():
+            email_key = f"rate_limit_pwd_reset_email_{email}"
+            if not reserve_rate_limit(email_key, limit=5, timeout=3600):
+                logger.warning("Password reset E-Mail-Rate-Limit erreicht")
+                return
         for user in active_users:
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = token_generator.make_token(user)
