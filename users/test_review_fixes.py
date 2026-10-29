@@ -60,3 +60,31 @@ class ActivationPrivacyTests(TestCase):
     def test_correct_password_can_still_resume_verification(self):
         self.client.post(reverse('login'), {'username': 'privateguest', 'password': 'Password123!'})
         self.assertEqual(self.client.session['pending_verification_user_id'], self.user.pk)
+
+
+class UsernameCaseCollisionTests(TestCase):
+    """F-015: Registrierung lehnt Benutzernamen ab, die sich nur in der Schreibweise unterscheiden."""
+
+    def setUp(self):
+        User.objects.create_user('ReviewBob', 'bob@example.com', 'StrongPass123!')
+
+    def form(self, username):
+        from .forms import CustomUserCreationForm
+        return CustomUserCreationForm(data={
+            'username': username, 'email': f'{username.strip().lower()}-new@example.com',
+            'first_name': 'Max', 'last_name': 'Mustermann', 'birthday': '1990-01-01',
+            'password1': 'StrongPass123!', 'password2': 'StrongPass123!',
+        })
+
+    def test_case_variant_of_existing_username_is_rejected(self):
+        for username in ('reviewbob', 'REVIEWBOB', ' reviewBob '):
+            with self.subTest(username=username):
+                form = self.form(username)
+                self.assertFalse(form.is_valid())
+                self.assertIn('username', form.errors)
+
+    def test_new_username_and_own_checks_still_apply(self):
+        self.assertTrue(self.form('ReviewAlice').is_valid())
+        form = self.form('bob@example')
+        self.assertFalse(form.is_valid())
+        self.assertIn('@', str(form.errors['username']))

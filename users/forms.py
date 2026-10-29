@@ -124,7 +124,8 @@ class CustomUserCreationForm(UserCreationForm):
         self.fields["birthday"].widget.attrs["max"] = today_str
 
     def clean_username(self):
-        username = self.cleaned_data.get('username', '').strip()
+        # super() behält Djangos Prüfung auf Namen, die sich nur in der Schreibweise unterscheiden.
+        username = (super().clean_username() or '').strip()
         if '@' in username:
             raise forms.ValidationError("Der Benutzername darf kein @-Zeichen enthalten.")
         if User.objects.filter(email__iexact=username).exists():
