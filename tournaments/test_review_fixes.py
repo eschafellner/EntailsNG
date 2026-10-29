@@ -114,3 +114,41 @@ class TournamentReviewTests(TestCase):
                 self.assertEqual(response.status_code, 302)
                 team.refresh_from_db()
                 self.assertTrue(team.is_archived)
+
+
+@override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
+class TournamentDetailTranslationPlaceholderTests(TestCase):
+    """F-009: Die Mitglieder-Notiz übergibt dem Übersetzungstext nur Strings, kein Team-Objekt."""
+    setUpTestData = classmethod(audit_tests.TournamentAuditTests.setUpTestData.__func__)
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_member_notice_does_not_expose_team_object(self):
+        from datetime import timedelta
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+        from configuration.models import SystemTranslation
+        from events.models import EventRegistration
+
+        captain, member = self.teams[0].captain, get_user_model().objects.create_user('f009-member')
+        team = Team.objects.create(name='F009 Team', game=self.team_game, captain=captain, event=self.event)
+        TeamMember.objects.create(team=team, user=captain, role=TeamMember.Role.CAPTAIN)
+        TeamMember.objects.create(team=team, user=member, status=TeamMember.Status.ACCEPTED)
+        EventRegistration.objects.create(user=member, event=self.event, is_checked_in=True)
+        now = timezone.now()
+        tournament = Tournament.objects.create(title='F009 Turnier', event=self.event, game=self.team_game,
+            status=Tournament.Status.REGISTRATION_OPEN,
+            registration_start=now - timedelta(hours=1), registration_end=now + timedelta(hours=1))
+        SystemTranslation.objects.update_or_create(key='tournament_detail_member_team_notice',
+            defaults={'text': 'Team {team_name} / {team_name.__class__}'})
+        cache.clear()
+
+        self.client.force_login(member)
+        response = self.client.get(reverse('tournament_detail', args=[tournament.slug]))
+
+        self.assertContains(response, 'Team {team_name} / {team_name.__class__}')
+        self.assertNotContains(response, 'tournaments.models')

@@ -227,7 +227,7 @@
               {% elif user_member_team %}
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 440px;">
                   <div style="background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); padding: 10px 14px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink); line-height: 1.4; text-align: right;">
-                    🛡️ {% t "tournament_detail_member_team_notice" "Du bist Mitglied im Team '{team_name}'. Die Turnieranmeldung kann nur dein Kapitän ({captain_name}) vornehmen." team_name=user_member_team captain_name=user_member_team.captain.display_name %}
+                    🛡️ {% t "tournament_detail_member_team_notice" "Du bist Mitglied im Team '{team_name}'. Die Turnieranmeldung kann nur dein Kapitän ({captain_name}) vornehmen." team_name=user_member_team|stringformat:"s" captain_name=user_member_team.captain.display_name %}
                   </div>
                   <a href="{% url 'team_detail' slug=user_member_team.slug %}" class="btn">
                     👥 {% t "tournament_detail_view_team_btn" "Team ansehen →" %}

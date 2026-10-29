@@ -1312,6 +1312,8 @@ DEFAULT_TEXTS = {
 
 
 
+import string
+
 from configuration.cache import (
     get_request_cache,
     init_request_cache,
@@ -1351,6 +1353,28 @@ def _load_translations(request=None):
     return texts
 
 
+class _PlainPlaceholderFormatter(string.Formatter):
+    """Erlaubt nur einfache benannte Platzhalter wie {name}.
+
+    Attribut-/Indexzugriffe ({x.attr}, {x[0]}), Positionsplatzhalter und
+    Formatangaben ({x:>999}) werden abgelehnt, weil die Texte im Admin
+    editierbar sind und sonst Objekte traversieren könnten.
+    """
+
+    def get_field(self, field_name, args, kwargs):
+        if not field_name.isidentifier():
+            raise KeyError(field_name)
+        return kwargs[field_name], field_name
+
+    def format_field(self, value, format_spec):
+        if format_spec:
+            raise ValueError(format_spec)
+        return value
+
+
+_PLACEHOLDER_FORMATTER = _PlainPlaceholderFormatter()
+
+
 def get_translation(key: str, default: str = None, request=None, **kwargs) -> str:
     """
     Gibt die Übersetzung für den angegebenen Schlüssel zurück.
@@ -1372,7 +1396,7 @@ def get_translation(key: str, default: str = None, request=None, **kwargs) -> st
 
     if kwargs and isinstance(text, str):
         try:
-            return text.format(**kwargs)
+            return _PLACEHOLDER_FORMATTER.vformat(text, (), {name: str(value) for name, value in kwargs.items()})
         except Exception:
             return text
 
