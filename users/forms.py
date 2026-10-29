@@ -2,6 +2,7 @@ import logging
 from datetime import timedelta
 from django import forms
 from django.conf import settings
+from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.utils import timezone
@@ -346,9 +347,12 @@ class CustomPasswordResetForm(forms.Form):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = token_generator.make_token(user)
 
-            protocol = "https" if use_https else "http"
-            domain = domain_override or (request.get_host() if request else "127.0.0.1:8000")
-            reset_link = f"{protocol}://{domain}/password-reset-confirm/{uid}/{token}/"
+            path = reverse('password_reset_confirm', args=[uid, token])
+            if domain_override:
+                reset_link = f"{'https' if use_https else 'http'}://{domain_override}{path}"
+            else:
+                # Konfigurierte öffentliche Adresse statt Host-Header/X-Forwarded-Proto der Anfrage.
+                reset_link = f"{settings.PUBLIC_BASE_URL}{path}"
 
             context_data = {
                 "username": user.username,

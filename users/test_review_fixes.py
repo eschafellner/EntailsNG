@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 from django.core.cache import cache
-from django.test import TestCase, SimpleTestCase, RequestFactory
+from django.test import TestCase, SimpleTestCase, RequestFactory, override_settings
 from django.urls import reverse
 
 from .auth_backends import EmailOrUsernameBackend
@@ -117,3 +117,20 @@ class RateLimitPublicApiTests(SimpleTestCase):
         with patch('users.rate_limits.cache', fake), self.assertLogs('users.rate_limits', level='WARNING'):
             self.assertFalse(reserve_rate_limit('pub-down', limit=3, timeout=60))
             self.assertTrue(reserve_rate_limit('pub-down', limit=3, timeout=60, fail_open=True))
+
+
+@override_settings(PUBLIC_BASE_URL='https://lan.example.org')
+class PasswordResetLinkBaseUrlTests(TestCase):
+    """F-019: Reset-Links nutzen PUBLIC_BASE_URL statt Host-Header/X-Forwarded-Proto."""
+
+    def test_link_ignores_request_host(self):
+        from django.core.cache import cache as default_cache
+        from emails.models import OutgoingEmail
+        default_cache.clear()
+        User.objects.create_user('reset-host', 'reset-host@example.com', 'StrongPass123!')
+        response = self.client.post(reverse('password_reset'), {'email': 'reset-host@example.com'},
+                                    HTTP_HOST='127.0.0.1')
+        self.assertIn(response.status_code, (200, 302))
+        body = OutgoingEmail.objects.get(template_key='password_reset').body_text
+        self.assertIn('https://lan.example.org/password-reset-confirm/', body)
+        self.assertNotIn('127.0.0.1', body)
