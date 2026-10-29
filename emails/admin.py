@@ -14,6 +14,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.views.decorators.csrf import csrf_protect
 
+from configuration.translations import get_translation as tr
 from .dns_checker import check_domain_dns_health
 from .models import EmailTemplate, GeneralEmailSettings, OutgoingEmail
 from .services import send_test_email
@@ -450,6 +451,13 @@ class OutgoingEmailAdmin(admin.ModelAdmin):
             'fields': ('subject', 'body_text', 'body_html'),
         }),
     )
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if obj is None or not obj.has_sensitive_content:
+            return fieldsets
+        hidden = {'fields': ('subject',), 'description': tr('admin_outgoing_email_sensitive_hidden')}
+        return [(name, hidden if name == 'Inhalt' else options) for name, options in fieldsets]
 
     def has_add_permission(self, request):
         return False

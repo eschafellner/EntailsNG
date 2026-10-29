@@ -3,6 +3,7 @@
 | ID | Status | Verantwortliche Rolle | Entscheidung und Prüfanlass |
 | --- | --- | --- | --- |
 | USERS-03 | Bestätigt, ausdrücklich zurückgestellt | Sicherheits-/Betriebsverantwortung | Bestehende Rechtepolitik beibehalten. Vor jeder weiteren Delegation von Benutzerverwaltung erneut prüfen; konkrete Person und Kalendertermin durch das Betreiberteam festzulegen. |
+| EMAILS-F020 | Teilweise behoben, Rechtehinweis offen | Sicherheits-/Betriebsverantwortung | Inhalte von Passwort-Reset-Mails sind im Admin unter „Ausgehende E-Mails“ nicht mehr sichtbar und werden nach Versand, Ablauf oder endgültigem Fehlschlag geleert. `emails.change_generalemailsettings` bleibt faktisch superuser-äquivalent: Wer den Testmodus mit eigener Umleitungsadresse aktiviert, erhält alle Mails einschließlich Reset-Links. Dieses Recht nur Superusern geben. |
 
 `users/admin.py` übernimmt die Rechtefelder von Djangos UserAdmin. Ein aktiver Staff mit effektivem `users.change_user` besitzt dadurch weitreichende Benutzerverwaltungsbefugnisse bis zur Änderung privilegierter Konten/Rechte. Reines `is_staff` ist dafür nicht ausreichend. Historische Entscheidung: `../review/users-findings.md`, Abschnitt USERS-03. Dieser Stand wird nicht als behoben bezeichnet.
 

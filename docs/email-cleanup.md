@@ -58,3 +58,13 @@ Zusätzlich im Browser mit einer separaten PostgreSQL-Vorschaudatenbank geprüft
 alle vier Einträge im Aktionsmenü, Start ohne Zeilenauswahl, Vorschau, Abbrechen
 und bestätigte Löschung. Von zwölf Testnachrichten wurden neun passende gelöscht;
 die zwei jüngeren und die gerade versendete Nachricht blieben erhalten.
+
+## Inhalte von Passwort-Reset-Mails
+
+Für die Vorlage `password_reset` zeigt die Detailansicht nur den Betreff, nicht
+den Text- oder HTML-Inhalt, da dieser einen gültigen Reset-Link enthält. Nach
+Versand, Ablauf oder endgültigem Fehlschlag wird der Inhalt geleert; solche
+Einträge lassen sich nicht erneut einreihen, der Gast fordert stattdessen einen
+neuen Link an. Migration `emails.0010` leert bereits abgeschlossene Einträge
+einmalig. Die Liste sensibler Vorlagen steht in
+`emails.models.SENSITIVE_TEMPLATE_KEYS`.

@@ -303,6 +303,12 @@ class EmailTemplate(models.Model):
         return f"{self.name} ({self.key}) - {status}"
 
 
+# Vorlagen, deren Inhalt ein Zugangsgeheimnis enthält (z. B. Passwort-Reset-Link).
+# Der Inhalt wird im Admin nicht angezeigt und nach Versand, Ablauf oder endgültigem
+# Fehlschlag geleert.
+SENSITIVE_TEMPLATE_KEYS = frozenset({'password_reset'})
+
+
 class OutgoingEmail(models.Model):
     """
     Persistente Versandwarteschlange (Transactional Outbox) für ausgehende System-E-Mails.
@@ -441,6 +447,13 @@ class OutgoingEmail(models.Model):
         return OutgoingEmail.objects.filter(pk=self.pk, status=self.Status.PROCESSING,
                                             worker_id=worker, sent_at__isnull=True)
 
+    @property
+    def has_sensitive_content(self):
+        return self.template_key in SENSITIVE_TEMPLATE_KEYS
+
+    def _cleared_content(self):
+        return {'body_text': '', 'body_html': ''} if self.has_sensitive_content else {}
+
     def _worker_update(self, values, worker_id=None):
         rows = self._owned_queryset(worker_id).update(**values)
         if rows:
@@ -471,11 +484,13 @@ class OutgoingEmail(models.Model):
     def mark_sent(self, worker_id=None):
         now = timezone.now()
         return self._worker_update({'status': self.Status.SENT, 'sent_at': now, 'last_error': '',
-                                    'worker_id': '', 'lease_expires_at': None, 'updated_at': now}, worker_id)
+                                    'worker_id': '', 'lease_expires_at': None, 'updated_at': now,
+                                    **self._cleared_content()}, worker_id)
 
     def mark_expired(self, reason="Nachricht vor Versand abgelaufen.", *, worker_id=None):
         return self._worker_update({'status': self.Status.EXPIRED, 'last_error': reason[:2000],
-                                    'worker_id': '', 'lease_expires_at': None, 'updated_at': timezone.now()}, worker_id)
+                                    'worker_id': '', 'lease_expires_at': None, 'updated_at': timezone.now(),
+                                    **self._cleared_content()}, worker_id)
 
     def mark_paused(self, reason="E-Mail-Versand ist vorübergehend deaktiviert.", delay_seconds=30, *, worker_id=None):
         now = timezone.now()
@@ -490,9 +505,10 @@ class OutgoingEmail(models.Model):
         attempts = self.attempts + 1
         status = self.Status.FAILED if attempts >= self.max_attempts else self.Status.PENDING
         scheduled = self.scheduled_at if status == self.Status.FAILED else now + timedelta(seconds=60 * (2 ** (attempts - 1)))
+        cleared = self._cleared_content() if status == self.Status.FAILED else {}
         return self._worker_update({'attempts': attempts, 'last_error': error_message[:2000], 'status': status,
                                     'scheduled_at': scheduled, 'worker_id': '', 'lease_expires_at': None,
-                                    'updated_at': now}, worker_id)
+                                    'updated_at': now, **cleared}, worker_id)
 
     def mark_stale_recovered(self, timeout_seconds: int):
         """Atomares Zurücksetzen auf PENDING oder FAILED, nur wenn noch PROCESSING und ungesendet."""
@@ -505,6 +521,7 @@ class OutgoingEmail(models.Model):
         else:
             new_status = self.Status.PENDING
             new_scheduled = now
+        cleared = self._cleared_content() if new_status == self.Status.FAILED else {}
 
         rows = OutgoingEmail.objects.filter(
             pk=self.pk,
@@ -525,8 +542,11 @@ class OutgoingEmail(models.Model):
             worker_id='',
             lease_expires_at=None,
             updated_at=now,
+            **cleared,
         )
         if rows:
+            for key, value in cleared.items():
+                setattr(self, key, value)
             self.attempts = new_attempts
             self.last_error = err
             self.status = new_status
@@ -538,6 +558,9 @@ class OutgoingEmail(models.Model):
 
     def reset_for_retry(self, reset_attempts: bool = True):
         """Retry only a still retryable, unsent snapshot; never revoke a worker lease."""
+        if self.has_sensitive_content and self.status != self.Status.PENDING:
+            # Inhalt wurde bereits geleert; der Empfänger fordert einen neuen Link an.
+            return False
         now = timezone.now()
         values = {'status': self.Status.PENDING, 'scheduled_at': now, 'worker_id': '',
                   'lease_expires_at': None, 'updated_at': now}
