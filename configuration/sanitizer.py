@@ -192,9 +192,60 @@ def sanitize_and_validate_svg(svg_code: str) -> str:
 
         for attr, val in list(elem.attrib.items()):
             attr_clean = clean_tag(attr)
-            if DISALLOWED_ATTRIBUTES_REGEX.match(attr_clean):
+            if DISALLOWED_ATTRIBUTES_REGEX.match(attr_clean) or attr_clean == 'style':
                 raise ValidationError({'icon_svg': f"Nicht erlaubtes Attribut '{attr}' im SVG gefunden."})
             if attr_clean in ('href', 'xlink:href', 'src') and DANGEROUS_PROTOCOLS_REGEX.match(str(val)):
                 raise ValidationError({'icon_svg': f"Gefährliche URI im Attribut '{attr}' gefunden."})
+            if attr_clean in ('href', 'src') and not str(val).strip().startswith('#'):
+                raise ValidationError({'icon_svg': f"Im Attribut '{attr}' sind nur Verweise innerhalb des Icons (#id) erlaubt."})
 
-    return raw
+    # Nicht den Rohstring zurückgeben: ElementTree verwirft Kommentare und Processing
+    # Instructions, die der HTML-Parser des Browsers anders liest (Bypass über '<?…>').
+    return _serialize_svg(root)
+
+
+SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+_SVG_ATTRIBUTE_PREFIXES = {
+    'http://www.w3.org/1999/xlink': 'xlink',
+    'http://www.w3.org/XML/1998/namespace': 'xml',
+}
+
+
+def _split_name(name):
+    if name.startswith('{'):
+        namespace, local = name[1:].split('}', 1)
+        return namespace, local
+    return None, name
+
+
+def _serialize_svg(elem, is_root=True):
+    """Serialisiert den validierten Baum; Attribute fremder Namespaces entfallen."""
+    namespace, tag = _split_name(elem.tag)
+    parts = ['<', tag]
+    if is_root:
+        if namespace == SVG_NAMESPACE:
+            parts.append(f' xmlns="{SVG_NAMESPACE}"')
+        used = {_split_name(attr)[0] for node in elem.iter() for attr in node.attrib}
+        for ns_uri, prefix in _SVG_ATTRIBUTE_PREFIXES.items():
+            if ns_uri in used and prefix != 'xml':
+                parts.append(f' xmlns:{prefix}="{ns_uri}"')
+    for name, value in elem.attrib.items():
+        attr_ns, local = _split_name(name)
+        if attr_ns is not None:
+            if attr_ns not in _SVG_ATTRIBUTE_PREFIXES:
+                continue
+            local = f'{_SVG_ATTRIBUTE_PREFIXES[attr_ns]}:{local}'
+        parts.append(f' {local}="{html.escape(value, quote=True)}"')
+    children = list(elem)
+    if not children and not elem.text:
+        parts.append('/>')
+        return ''.join(parts)
+    parts.append('>')
+    if elem.text:
+        parts.append(html.escape(elem.text, quote=False))
+    for child in children:
+        parts.append(_serialize_svg(child, is_root=False))
+        if child.tail:
+            parts.append(html.escape(child.tail, quote=False))
+    parts.append(f'</{tag}>')
+    return ''.join(parts)

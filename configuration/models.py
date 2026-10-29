@@ -182,6 +182,9 @@ class NavigationItem(models.Model):
             self.icon_svg = SYSTEM_ICONS.get(self.icon_name, '')
         elif not self.icon_svg:
             self.icon_svg = SYSTEM_ICONS.get('dashboard', '')
+        else:
+            # Auch Speichern ohne clean() (Shell, Fixtures, Datenmigrationen) nur mit geprüftem SVG.
+            self.icon_svg = sanitize_and_validate_svg(self.icon_svg)
         super().save(*args, **kwargs)
         invalidate_navigation_cache()
 

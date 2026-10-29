@@ -14,6 +14,22 @@ Diese Anleitung aktualisiert eine vorhandene Installation. Ein frisches Setup st
    ```
 
    `configuration.0028_systemerrorlog_dedup_retention` ergänzt im Fehlerprotokoll Fingerabdruck, Zähler und letztes Auftreten (Bestandseinträge: Zeitpunkt des Eintrags; rückwärts ohne Datenänderung). Gleiche offene Fehler werden danach gezählt statt neu angelegt. Der Worker `guest_photo_worker` löscht beim nächsten stündlichen Lauf alle Einträge, die länger als `SYSTEM_ERROR_LOG_RETENTION_DAYS` (Default 30 Tage) zurückliegen, auch noch offene; wer ältere Einträge braucht, vorher den Wert in der `.env` erhöhen. Die öffentlichen Routen unter `/tinymce/` entfallen; der Editor im Admin lädt TinyMCE weiterhin aus den statischen Dateien.
+
+   Eigene SVG-Menüicons werden ab diesem Stand beim Speichern neu aus dem geprüften Baum erzeugt (Kommentare, XML-Deklaration und fremde Namespace-Attribute entfallen); `style`-Attribute und Verweise außerhalb des Icons (`href` ohne `#`) werden abgelehnt. Gespeicherte Icons ändern sich erst beim nächsten Speichern. Nach dem Update Einträge auflisten, die davon abweichen oder abgelehnt würden, und diese im Admin unter „Navigation“ prüfen und speichern bzw. das Icon ersetzen (schreibfrei; leer = nichts zu tun):
+
+   ```bash
+   docker compose exec -T web python manage.py shell -c "
+   from configuration.models import NavigationItem as N
+   from configuration.sanitizer import sanitize_and_validate_svg as clean
+   for n in N.objects.filter(icon_name=N.IconChoices.CUSTOM):
+       try:
+           ok = clean(n.icon_svg) == n.icon_svg
+       except Exception:
+           ok = False
+       if not ok:
+           print(n.pk, n.title)
+   "
+   ```
 4. Für den Compose-Healthcheck zusätzlich zur öffentlichen Domain `127.0.0.1` in `ALLOWED_HOSTS` setzen. Öffentliche Domain/CSRF-Origins und `PUBLIC_BASE_URL` weiterhin für die tatsächliche Installation konfigurieren. `DEMO_MODE=False` für den normalen Betrieb belassen.
 5. Bei Änderungen, die nicht mit gleichzeitig laufendem altem Code kompatibel sind, schreibenden Zugriff in einem geplanten Wartungsfenster unterbinden und Mail-/Clan-/Gastfoto-/Backup-Worker kontrolliert stoppen. Ein Reverseproxy-Wartungsfenster ersetzt kein Datenbankbackup.
 
