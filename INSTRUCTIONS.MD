@@ -30,8 +30,8 @@ EntailsNG nutzt **Docker**. Das bedeutet: Du musst keine Datenbanken, Webserver 
 
 ```mermaid
 graph TD
-    User["Besucher (Browser)"] -->|HTTPS| Cloudflare["Cloudflare / Let's Encrypt"]
-    Cloudflare -->|HTTP| Nginx["Nginx Webserver (Port 80/443)"]
+    User["Besucher (Browser)"] -->|HTTPS| Cloudflare["Cloudflare Tunnel / Let's Encrypt"]
+    Cloudflare -->|"HTTP intern 8080 (Tunnel) bzw. 80/443 (VPS)"| Nginx["Nginx Webserver"]
     Nginx -->|Static / Media| StaticFiles["Statische Dateien & Bilder"]
     Nginx -->|App Requests| Django["EntailsNG (Gunicorn / Django)"]
     Django --> Postgres["PostgreSQL Datenbank (Daten & User)"]
@@ -42,7 +42,8 @@ graph TD
 * **`db` (PostgreSQL):** Sichere Speicherung aller Benutzer, Events, Sitzplätze und Turniere.
 * **`redis` (Redis Cache):** Ultraschneller Arbeitsspeicher-Cache für Platzreservierungen und Live-Zähler.
 * **`nginx` (Webserver):** Liefert Bilder und CSS aus und leitet Anfragen sicher an Django weiter.
-* **`certbot` / `cloudflared`:** Automatische Verschlüsselung (HTTPS / SSL).
+* **`email_worker`, `clan_seat_worker`, `guest_photo_worker`:** Hintergrunddienste für Mailversand, ablaufende Clan-Vormerkungen und das Löschen alter Gastfotos.
+* **`certbot` / `cloudflared`:** Automatische Verschlüsselung (HTTPS / SSL) bzw. Tunnel zu Cloudflare.
 
 ---
 
@@ -60,13 +61,14 @@ graph TD
 
 ## 🛠️ Schritt 1: Server vorbereiten (Einmalig)
 
-Logge dich per SSH auf deinem Linux-Server ein (z. B. Ubuntu Server 22.04 / 24.04 LTS oder Debian 12):
+Logge dich per SSH auf deinem Linux-Server ein (z. B. Ubuntu Server 24.04 / 26.04 LTS):
 
 ### 1.1 System aktualisieren & Basis-Tools installieren:
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y git curl ufw docker.io docker-compose-v2
 ```
+> *Unter Debian gibt es das Paket `docker-compose-v2` nicht in allen Versionen. Installiere Docker dort am einfachsten über das offizielle Docker-Repository (Anleitung: docs.docker.com → „Install Docker Engine on Debian“), das Docker Compose v2 als `docker-compose-plugin` mitbringt. Test: `docker compose version`.*
 
 ### 1.2 Docker-Berechtigungen für deinen Benutzer setzen:
 Damit du Docker ohne `sudo` steuern kannst:
@@ -80,15 +82,24 @@ newgrp docker
 
 ## 📥 Schritt 2: Projekt auf den Server holen
 
-Klone das Repository auf deinen Server:
+Klone das Repository auf deinen Server. `/opt` gehört root, daher das Zielverzeichnis zuerst anlegen und deinem Benutzer übergeben:
 
 ```bash
+# Zielverzeichnis anlegen und deinem Benutzer übergeben:
+sudo mkdir -p /opt/entailsng
+sudo chown "$USER": /opt/entailsng
+
 # In das Zielverzeichnis klonen:
 git clone https://github.com/DEIN_BENUTZERNAME/DEIN_REPO.git /opt/entailsng
 
 # In das Verzeichnis wechseln:
 cd /opt/entailsng
 ```
+
+> [!NOTE]
+> **Privates Repository:** Der Server braucht einen eigenen Lesezugang zu GitHub. Empfohlen ist ein **Deploy-Key**: auf dem Server `ssh-keygen -t ed25519 -f ~/.ssh/entailsng_deploy -N ""` ausführen, den Inhalt von `~/.ssh/entailsng_deploy.pub` im GitHub-Repository unter *Settings → Deploy keys* (nur Lesezugriff) hinterlegen und per SSH klonen:
+> `GIT_SSH_COMMAND="ssh -i ~/.ssh/entailsng_deploy" git clone git@github.com:DEIN_BENUTZERNAME/DEIN_REPO.git /opt/entailsng`
+> Damit auch spätere `git pull` den Schlüssel nutzen: `git config core.sshCommand "ssh -i ~/.ssh/entailsng_deploy"` im Projektverzeichnis.
 
 ---
 
@@ -98,8 +109,12 @@ Kopiere die Vorlage `.env.example` in eine neue `.env`-Datei:
 
 ```bash
 cp .env.example .env
+chmod 600 .env
 nano .env
 ```
+
+> [!IMPORTANT]
+> Die fertige `.env` enthält alle Schlüssel und Passwörter. Bewahre eine Kopie **außerhalb des Servers** auf (z. B. im Passwortmanager). Ohne `FIELD_ENCRYPTION_KEY`, `BACKUP_ENCRYPTION_KEY` und `USER_BAN_HMAC_KEY` sind gespeicherte Zugangsdaten, Backups und Sperrlisten nach einem Serververlust nicht mehr nutzbar.
 
 ### 📋 Alle Einstellungen im Detail erklärt:
 
@@ -117,10 +132,13 @@ nano .env
   > [!IMPORTANT]
   > Setze den `FIELD_ENCRYPTION_KEY` **einmalig vor dem ersten Start** und ändere ihn danach nicht mehr. Er ist unabhängig vom `SECRET_KEY`, sodass der `SECRET_KEY` bei Bedarf gefahrlos rotiert werden kann.
 
+* **`USER_BAN_HMAC_KEY`**: Dritter, eigener Schlüssel (mindestens 32 Zeichen) für die E-Mail-Fingerabdrücke der Orga-Sperrliste. Vor der ersten Benutzersperre setzen und danach nicht mehr ändern. Generieren wie oben.
 * **`DEBUG`**: Im Produktivbetrieb **immer `False`**! Schützt interne Fehlermeldungen und aktiviert strikte Security-Header (HSTS, Secure Cookies).
 * **`DOMAIN_NAME`**: Deine Domain oder Subdomain (z. B. `lan.meinedomain.de`).
-* **`ALLOWED_HOSTS`**: Erlaubte Hostnamen, durch Komma getrennt (z. B. `lan.meinedomain.de,localhost,127.0.0.1`).
+* **`ALLOWED_HOSTS`**: Erlaubte Hostnamen, durch Komma getrennt (z. B. `lan.meinedomain.de,127.0.0.1`). `127.0.0.1` ist **Pflicht**, sonst schlägt der interne Healthcheck des Web-Containers fehl.
 * **`CSRF_TRUSTED_ORIGINS`**: Deine Domain mit `https://` (z. B. `https://lan.meinedomain.de`).
+* **`PUBLIC_BASE_URL`**: Öffentliche Adresse mit `https://` (z. B. `https://lan.meinedomain.de`). Daraus werden die Links in Passwort-Reset- und Clan-Mails gebaut; ohne diesen Wert zeigen sie auf `http://localhost:8000`.
+* **`SECURE_HSTS_PRELOAD`**: Nur auf `True` lassen, wenn du die Hauptdomain wirklich in die HSTS-Preload-Liste eintragen willst; für Test- oder Vorschau-Subdomains `False` setzen.
 * **`BEHIND_PROXY`**: Im Docker- und Reverse-Proxy-Betrieb (Nginx / Cloudflare) auf `True` belassen (`HTTP_X_FORWARDED_PROTO: https`).
 
 #### 2. Datenbank (PostgreSQL) & Redis
@@ -141,7 +159,10 @@ nano .env
   ```
 * Diese Einstellung steht bewusst nicht im CMS-Admin: Der Admin kann laufende Gunicorn-Prozesse nicht selbst dauerhaft neu konfigurieren. PostgreSQLs `max_worker_processes` ist ein eigener Serverparameter, für den ein Datenbank-Neustart nötig ist; er behebt keine Warteschlange an der Event-Zeilensperre.
 
-#### 4. E-Mail Warteschlange (Asynchroner Versand)
+#### 4. E-Mail-Versand (SMTP)
+* **`EMAIL_BACKEND`**: Auf `emails.backends.ConfiguredSMTPBackend` belassen. Nur dieses Backend berücksichtigt Absender, Sandbox-Modus und Versandweg aus dem Admin-Bereich.
+* **`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `EMAIL_USE_SSL`**: Zugangsdaten deines Mailanbieters. Beispiel Resend: `smtp.resend.com`, Port `587`, TLS `True`, Benutzer `resend`, Passwort = API-Key.
+* Diese Werte werden **nur** verwendet, wenn im Admin unter *Allgemeine E-Mail Einstellungen* der Versandweg **„Vom Server vorgegeben (.env)“** gewählt ist (siehe [Schritt 6](#-schritt-6-e-mail-versand-smtp--warteschlange-einrichten--testen)). Alternativ lassen sich die Zugangsdaten dort direkt als „Eigener SMTP-Server“ eintragen; dann bleiben die `EMAIL_*`-Werte leer.
 * **`EMAIL_ASYNC_QUEUE`**: Standardmäßig `True`. E-Mails (Tickets, Verifizierungen) werden non-blocking in einer DB-Warteschlange abgelegt und blockieren den Web-Request des Nutzers nicht.
 
 #### 5. Speichern in `nano`:
@@ -156,8 +177,8 @@ nano .env
 
 ### 1. Tunnel im Cloudflare Dashboard anlegen:
 1. Öffne das [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) → **Networks** → **Tunnels**.
-2. Klicke auf **Add a tunnel** → Wähle **Cloudflared** → Name vergeben (z. B. `entailsng`) → **Save tunnel**.
-3. Wähle als Installationsumgebung **Docker**. Kopiere den langen Token (beginnt mit `eyJhIj...`).
+2. Klicke auf **Create a tunnel** → Wähle **Cloudflared** → Name vergeben (z. B. `entailsng`) → **Save tunnel**.
+3. Kopiere auf der Seite „Install connector“ nur den langen Token (beginnt mit `eyJhIj...`) aus dem angezeigten Befehl – egal welches Betriebssystem ausgewählt ist. Installieren musst du nichts, das übernimmt der Container `cloudflared`. Den Token nicht in Chats oder Tickets weitergeben; bei Verdacht im Dashboard über **Refresh token** erneuern.
 4. Öffne deine `.env` auf dem Server (`nano .env`) und trage den Token ein:
    ```env
    CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoi...
@@ -168,7 +189,9 @@ nano .env
    * **Type:** `HTTP`
    * **URL:** `nginx:8080`
 6. Klicke auf **Save hostname**.
-7. Stelle unter *Cloudflare Dashboard* → *Deine Domain* → *SSL/TLS* die Verschlüsselung auf **Full** (oder **Full (strict)**).
+
+> [!NOTE]
+> Laufen auf demselben Server bereits andere Projekte mit eigenem Tunnel, lege für EntailsNG einen **eigenen Tunnel** an. Ein fremder `cloudflared`-Container liegt in einem anderen Docker-Netz und erreicht `nginx:8080` nicht.
 
 > [!TIP]
 > **Tipp für Heimserver mit Pi-hole oder bestehendem Webserver:**
@@ -178,6 +201,14 @@ nano .env
 ```bash
 docker compose --profile tunnel up -d --build
 ```
+
+### 3. Prüfen:
+```bash
+docker compose --profile tunnel ps
+docker compose exec -T web python manage.py check_runtime --health-host 127.0.0.1 --require-redis
+docker compose logs cloudflared | grep "Registered tunnel connection"
+```
+Alle Dienste außer `nginx` und `cloudflared` sollten `healthy` melden. Danach die Seite von außen über `https://lan.meinedomain.de` aufrufen – ein grüner interner Check bestätigt die Cloudflare-Einstellung nicht.
 
 Nginx nimmt Tunnel-Anfragen über den internen Port 8080 entgegen. Mit diesem Tunnel-Ziel und dem integrierten Fallback-Zertifikat ist deine LAN-Party-Webseite unter `https://lan.meinedomain.de` erreichbar.
 
@@ -209,7 +240,7 @@ Das Skript erstellt die Zertifikate automatisch, bindet sie ein und startet alle
 
 Für lokales Testen oder Vor-Ort-Betrieb in einer Halle ohne Internetverbindung:
 
-* **100% Offline-fähig:** EntailsNG benötigt im Betrieb keinen Internetzugang. Alle Schriften (*Inter* und *JetBrains Mono*) sind als WOFF2 direkt unter `/static/fonts/` lokal im Projekt abgelegt (keine Abrufe von Google Fonts). Auch QR-Codes und Tickets werden rein server- bzw. clientseitig erzeugt.
+* **100% Offline-fähig:** EntailsNG benötigt im Betrieb keinen Internetzugang. Alle Schriften (*Barlow Condensed*, *DM Sans* und *JetBrains Mono*) sind als WOFF2 direkt unter `/static/fonts/` lokal im Projekt abgelegt (keine Abrufe von Google Fonts). Auch QR-Codes und Tickets werden rein server- bzw. clientseitig erzeugt.
 * **PostgreSQL erforderlich:** Auch Entwicklung und Offline-Betrieb verwenden PostgreSQL. `start.sh` und `install.sh` prüfen die konfigurierte Datenbankverbindung und versuchen bei Bedarf, PostgreSQL und Redis via Podman/Docker zu starten. Ist PostgreSQL nicht erreichbar, brechen sie mit einer Fehlermeldung ab. Bei einer nativen Installation PostgreSQL vorher starten und `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST` und `DB_PORT` in `.env` setzen; für lokale Container `DB_HOST=127.0.0.1` verwenden.
 
 ```bash
@@ -273,10 +304,15 @@ EntailsNG versendet E-Mail-Verifizierungscodes, Buchungsbestätigungen, Tickets 
 
 ### 2. Im Admin-Bereich konfigurieren:
 1. Öffne im Django-Admin den Menüpunkt **Allgemeine E-Mail Einstellungen**.
-2. Wähle den gewünschten Versandweg:
-   - **Eigener SMTP-Server:** Hostname, Port (z. B. `587` mit TLS oder `465` mit SSL), Benutzername und Passwort eintragen.
-3. Klicke auf **Verbindung testen**.
-4. Wenn der Test erfolgreich ist: Schalter **Gäste erhalten E-Mails** aktivieren.
+2. Wähle den gewünschten **Versandweg** (frische Installationen stehen auf „Noch nicht eingerichtet“ und versenden nichts):
+   - **Vom Server vorgegeben (.env):** nutzt `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` usw. aus der `.env` (siehe [Schritt 3](#-schritt-3-konfigurationsdatei-env-befüllen)).
+   - **Eigener SMTP-Server:** Hostname, Port (z. B. `587` mit TLS oder `465` mit SSL), Benutzername und Passwort hier eintragen (das Passwort wird verschlüsselt gespeichert).
+3. Trage die **Absenderadresse** ein (sie muss zu einer beim Anbieter verifizierten Domain gehören) und optional **Absendername** und **Reply-To**.
+4. Klicke auf **Verbindung testen**.
+5. Prüfe, dass der Schalter **Gäste erhalten E-Mails** aktiv ist (Standard: an).
+
+> [!NOTE]
+> Nach Änderungen an den `EMAIL_*`-Werten in der `.env` Web- und Worker-Container neu erstellen: `docker compose --profile tunnel up -d` (bzw. mit deinen Profilen). Ein bloßes `restart` übernimmt geänderte Umgebungsvariablen nicht.
 
 ### 3. Asynchrone Warteschlange (E-Mail Queue):
 Um Seitenladezeiten im Browser zu minimieren, werden E-Mails standardmäßig asynchron in eine Datenbank-Warteschlange eingereiht (`EMAIL_ASYNC_QUEUE=True`) und im Hintergrund versendet.
@@ -373,14 +409,20 @@ git pull
 
 Wähle danach die Befehle für deine Deployment-Variante. Migrationen laufen beim Start des Web-Containers automatisch.
 
+> [!IMPORTANT]
+> Gib bei jedem Update **alle** Profile an, die du nutzt (z. B. `--profile tunnel --profile backups`). Nur die Dienste der angegebenen Profile werden neu gebaut – ein vergessener Backup-Worker liefe sonst mit altem Code weiter.
+
 ### Weg A: Cloudflare Tunnel
 
 **Bei bestehenden Installationen mit dem bisherigen Tunnel-Ziel `nginx:80` ist eine einmalige Umstellung erforderlich:** Öffne im Cloudflare Dashboard den öffentlichen Hostnamen deines Tunnels und stelle den Service auf **Typ `HTTP`**, **URL `nginx:8080`**. Port 8080 ist containerintern und muss nicht am Server freigegeben werden.
 
 ```bash
 docker compose --profile tunnel up -d --build
-# Nginx liest die aktualisierten Konfigurationsvorlagen beim Neustart ein:
-docker compose restart nginx
+# Nginx liest die aktualisierten Konfigurationsvorlagen beim Neuerstellen ein:
+docker compose --profile tunnel up -d --force-recreate nginx cloudflared
+# Prüfen:
+docker compose exec -T web python manage.py check_runtime --health-host 127.0.0.1 --require-redis
+docker compose --profile tunnel ps
 ```
 
 Der öffentliche Port 80 leitet auf HTTPS um. Zeigt der Tunnel weiterhin auf `nginx:80`, kann deshalb eine Weiterleitungsschleife entstehen (siehe Problem 5 unten). Das Löschen von Cookies behebt diese serverseitige Konfiguration nicht.
@@ -389,12 +431,15 @@ Der öffentliche Port 80 leitet auf HTTPS um. Zeigt der Tunnel weiterhin auf `ng
 
 ```bash
 docker compose --profile vps up -d --build
-docker compose restart nginx
+docker compose --profile vps up -d --force-recreate nginx
+# Prüfen:
+docker compose exec -T web python manage.py check_runtime --health-host 127.0.0.1 --require-redis
+docker compose --profile vps ps
 ```
 
 Das Profil `vps` startet auch den Certbot-Dienst zur Zertifikatserneuerung.
 
-Weitere verwendete Profile ebenfalls aktivieren, z. B. `--profile tunnel --profile backups` für Tunnelbetrieb mit Backup-Worker. Die bestehenden Daten-Volumes werden von diesen Update-Befehlen weiterverwendet.
+Die bestehenden Daten-Volumes werden von diesen Update-Befehlen weiterverwendet. Details und Rückfallhinweise: [docs/updating.md](docs/updating.md).
 
 ---
 
@@ -418,8 +463,9 @@ Weitere verwendete Profile ebenfalls aktivieren, z. B. `--profile tunnel --profi
 ### ❌ Problem 3: `E-Mail-Versand schlägt fehl / Port 587 Timeout`
 * **Ursache:** Viele Cloud-Hoster (z. B. Hetzner, DigitalOcean) sperren Port 587 für Neukunden standardmäßig gegen Spam.
 * **Lösung:** 
-  1. Nutze Port `465` mit SSL (`EMAIL_PORT=465`, `EMAIL_USE_SSL=True`).
+  1. Nutze Port `465` mit SSL (`EMAIL_PORT=465`, `EMAIL_USE_SSL=True`, `EMAIL_USE_TLS=False`).
   2. Oder nutze Resend auf Port `2587`.
+  > Diese `.env`-Werte wirken nur beim Versandweg „Vom Server vorgegeben (.env)“; beim Versandweg „Eigener SMTP-Server“ Port und Verschlüsselung im Admin ändern.
   3. Prüfe die Diagnose mit `docker compose exec web python manage.py email_doctor`.
 
 ### ❌ Problem 4: `FATAL: password authentication failed for user`
@@ -436,7 +482,7 @@ Weitere verwendete Profile ebenfalls aktivieren, z. B. `--profile tunnel --profi
 * **Lösung:** Stelle im Cloudflare Dashboard beim öffentlichen Hostnamen den Service auf **Typ `HTTP`**, **URL `nginx:8080`**. Führe danach auf dem Server aus:
   ```bash
   docker compose --profile tunnel up -d --build
-  docker compose restart nginx
+  docker compose --profile tunnel up -d --force-recreate nginx cloudflared
   ```
   Cookie-Löschen oder Inkognito-Modus beheben die serverseitige Weiterleitungsschleife nicht. Falls die Seite danach weiterhin nicht erreichbar ist, prüfe Status und Logs:
   ```bash
@@ -450,7 +496,7 @@ Weitere verwendete Profile ebenfalls aktivieren, z. B. `--profile tunnel --profi
 
 | Was möchtest du tun? | Befehl mit Docker | Befehl ohne Docker (lokal) |
 | :--- | :--- | :--- |
-| **Status aller Container** | `docker compose ps` | – |
+| **Status aller Container** | `docker compose --profile tunnel ps` (bzw. deine Profile) | – |
 | **Live-Logs verfolgen** | `docker compose logs -f web` | Im Terminal von `./start.sh` |
 | **Administrator anlegen** | `docker compose exec web python manage.py createsuperuser` | `python manage.py createsuperuser` |
 | **System-Seeds einspielen** | `docker compose exec web python manage.py seed_translations` | `python manage.py seed_translations` |
@@ -462,8 +508,9 @@ Weitere verwendete Profile ebenfalls aktivieren, z. B. `--profile tunnel --profi
 | **Backup-Worker-Logs** | `docker compose logs -f backup_worker` | Ausgabe des Backup-Workers |
 | **E-Mail-Diagnose / Test** | `docker compose exec web python manage.py email_doctor` | `python manage.py email_doctor` |
 | **Sicherheits-Check** | `docker compose exec web python manage.py check --deploy` | `python manage.py check --deploy` |
-| **Server neu starten** | `docker compose restart` | `./start.sh` neu ausführen |
-| **Server stoppen** | `docker compose down` | `Strg + C` |
-| **Update mit Cloudflare Tunnel** | `git pull && docker compose --profile tunnel up -d --build && docker compose restart nginx` (Tunnel-Service: `HTTP` → `nginx:8080`) | – |
-| **Update auf VPS mit Let's Encrypt** | `git pull && docker compose --profile vps up -d --build && docker compose restart nginx` | – |
+| **Runtime-Check** | `docker compose exec -T web python manage.py check_runtime --health-host 127.0.0.1 --require-redis` | – |
+| **Server neu starten** | `docker compose --profile tunnel restart` (bzw. deine Profile) | `./start.sh` neu ausführen |
+| **Server stoppen** | `docker compose --profile tunnel down` (bzw. deine Profile; **nie** `-v`, das löscht alle Daten) | `Strg + C` |
+| **Update mit Cloudflare Tunnel** | `git pull && docker compose --profile tunnel up -d --build && docker compose --profile tunnel up -d --force-recreate nginx cloudflared` (Tunnel-Service: `HTTP` → `nginx:8080`) | – |
+| **Update auf VPS mit Let's Encrypt** | `git pull && docker compose --profile vps up -d --build && docker compose --profile vps up -d --force-recreate nginx` | – |
 | **Update lokal durchführen** | – | `git pull && ./start.sh` |
