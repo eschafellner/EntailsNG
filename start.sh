@@ -19,10 +19,12 @@ fi
 
 source .venv/bin/activate
 
-# Prüfen ob Abhängigkeiten vollständig sind (z. B. nach git pull)
-if ! python3 -c "import whitenoise, qrcode, cryptography, psycopg" 2>/dev/null; then
+# Prüfen ob die installierten Pakete exakt den Pins entsprechen (z. B. nach git pull;
+# eine veraltete venv würde sonst Sicherheitskorrekturen wie Django 6.0.9 auslassen).
+if ! python3 scripts/check_requirements.py requirements.txt; then
     echo -e "${YELLOW}📦 Aktualisiere Python-Pakete aus requirements.txt...${NC}"
-    pip install -r requirements.txt --quiet 2>/dev/null || python3 -m pip install -r requirements.txt --quiet
+    python3 -m pip install -r requirements.txt --quiet
+    python3 scripts/check_requirements.py requirements.txt
 fi
 
 # Lade Umgebungsvariablen aus .env falls vorhanden

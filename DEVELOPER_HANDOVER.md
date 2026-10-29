@@ -76,7 +76,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Admin: `http://127.0.0.1:8000/admin/`. Keine Standardkonten oder Standardpasswörter. Alternativ initialisiert `./install.sh` eine lokale Umgebung und ergänzt nur bei fehlender `.env` lokale Vorgaben samt Zufallsschlüsseln; vorhandene Konfiguration bleibt erhalten. `./start.sh` startet den Entwicklungsserver auf 127.0.0.1:8000; Zugriff aus dem LAN nur ausdrücklich mit `RUNSERVER_ADDR=0.0.0.0:8000 ./start.sh` (Warnung bei `DEBUG=True`). Für dauerhaften Veranstaltungsbetrieb Gunicorn/Nginx verwenden.
+Admin: `http://127.0.0.1:8000/admin/`. Keine Standardkonten oder Standardpasswörter. Alternativ initialisiert `./install.sh` eine lokale Umgebung und ergänzt nur bei fehlender `.env` lokale Vorgaben samt Zufallsschlüsseln; vorhandene Konfiguration bleibt erhalten. `./start.sh` gleicht die venv mit den Pins in `requirements.txt` ab (`scripts/check_requirements.py`, installiert bei Abweichung nach und bricht ab, wenn das nicht gelingt) und startet den Entwicklungsserver auf 127.0.0.1:8000; Zugriff aus dem LAN nur ausdrücklich mit `RUNSERVER_ADDR=0.0.0.0:8000 ./start.sh` (Warnung bei `DEBUG=True`). Für dauerhaften Veranstaltungsbetrieb Gunicorn/Nginx verwenden.
 
 Die drei System-Seeds ergänzen fehlende Werte; vorhandene Texte/Vorlagen bleiben bestehen. `seed_features` ergänzt auch fehlende Standardicons und normalisiert alte Menünamen; `--reset` setzt Menükonfiguration ausdrücklich zurück. Automatisches `post_migrate`-Seeding ist vorhanden, ersetzt aber die expliziten, auf Fehler geprüften Startkommandos nicht.
 
