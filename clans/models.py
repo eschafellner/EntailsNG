@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password, identify_hasher
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
-from django.db import models
+from django.db import models, transaction
 from django.utils.text import slugify
 
 
@@ -75,7 +75,12 @@ class Clan(models.Model):
                 identify_hasher(self.password).decode(self.password)
             except (ValueError, TypeError, AssertionError, KeyError, IndexError):
                 self.password = make_password(self.password)
+        old_logo = Clan.objects.filter(pk=self.pk).values_list('logo', flat=True).first() if self.pk else None
         super().save(*args, **kwargs)
+        if old_logo and old_logo != self.logo.name:
+            # Ersetztes Logo erst nach dem Commit löschen (bei Rollback bleibt es gültig).
+            storage = self.logo.storage
+            transaction.on_commit(lambda: storage.delete(old_logo))
         if self.seat_limit_override == 0:
             from seating.models import ClanSeatHold
             from seating.clan_services import release_holds

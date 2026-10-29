@@ -2,7 +2,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import Http404
-from django.db import transaction
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.db.models import Count, IntegerField, Q, Value
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -163,14 +164,31 @@ def clan_create_view(request):
     if request.method == 'POST':
         form = ClanForm(request.POST, request.FILES)
         if form.is_valid():
-            with transaction.atomic():
-                clan = form.save()
-                ClanMembership.objects.create(
-                    user=request.user,
-                    clan=clan,
-                    role=ClanMembership.Role.ADMIN,
-                    status=ClanMembership.Status.ACCEPTED,
-                )
+            try:
+                with transaction.atomic():
+                    # Doppel-Submit/zweiter Tab: unter Sperre des eigenen Kontos erneut prüfen.
+                    get_user_model().objects.select_for_update().get(pk=request.user.pk)
+                    existing = ClanMembership.objects.filter(
+                        user=request.user, status=ClanMembership.Status.ACCEPTED,
+                    ).select_related('clan').first()
+                    if existing:
+                        messages.warning(
+                            request,
+                            f'Du bist bereits Mitglied im Clan "{existing.clan.name}". '
+                            'Du musst deinen aktuellen Clan zuerst verlassen, um einen neuen zu erstellen.',
+                        )
+                        return redirect('clan_detail', slug=existing.clan.slug)
+                    clan = form.save()
+                    ClanMembership.objects.create(
+                        user=request.user,
+                        clan=clan,
+                        role=ClanMembership.Role.ADMIN,
+                        status=ClanMembership.Status.ACCEPTED,
+                    )
+            except IntegrityError:
+                # Gleichnamiger Clan parallel angelegt (eindeutiger Name).
+                form.add_error('name', get_translation('msg_clan_name_taken'))
+                return render(request, 'clans/clan_form.html', {'form': form, 'title': 'Neuen Clan erstellen'})
             messages.success(
                 request, f'Der Clan "{clan.name}" wurde erfolgreich erstellt!'
             )

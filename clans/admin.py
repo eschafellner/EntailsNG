@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Count, Q
 from .forms import ClanForm
 from .models import Clan, ClanMembership
 from seating.clan_admin_forms import ClanQuotaForm
@@ -37,9 +38,14 @@ class ClanAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     inlines = [ClanMembershipInline]
 
-    @admin.display(description="Mitglieder")
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(
+            accepted_member_count=Count('memberships', filter=Q(memberships__status=ClanMembership.Status.ACCEPTED)),
+        )
+
+    @admin.display(description="Mitglieder", ordering='accepted_member_count')
     def member_count(self, obj):
-        return obj.memberships.filter(status=ClanMembership.Status.ACCEPTED).count()
+        return obj.accepted_member_count
 
 
 @admin.register(ClanMembership)
