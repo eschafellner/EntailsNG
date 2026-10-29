@@ -2,7 +2,6 @@ import os
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import PasswordResetForm
 from django.core import mail
@@ -16,7 +15,6 @@ from emails.backends import ConfiguredSMTPBackend
 from emails.context_processors import email_status
 from emails.crypto import (
     SecretUnreadable,
-    _get_fernet_key,
     decrypt_secret,
     encrypt_secret,
     is_readable,
@@ -29,7 +27,6 @@ from emails.services import (
     send_system_email,
     send_test_email,
 )
-from events.models import Event, EventRegistration
 
 User = get_user_model()
 
@@ -356,7 +353,7 @@ class ConfiguredSMTPBackendTests(TestCase):
     @patch('emails.backends.SMTPBackend')
     def test_django_password_reset_form_uses_db_configuration(self, mock_smtp_cls):
         """D7: Django PasswordResetForm nutzt das ConfiguredSMTPBackend."""
-        user = User.objects.create_user(username="resetuser", email="reset@example.com", password="password")
+        User.objects.create_user(username="resetuser", email="reset@example.com", password="password")
         mock_smtp_instance = MagicMock()
         mock_smtp_instance.send_messages.return_value = 1
         mock_smtp_cls.return_value = mock_smtp_instance
@@ -587,7 +584,7 @@ class AdminAndContextProcessorTests(TestCase):
 
     def test_admin_views_permission_denied_for_unprivileged_staff(self):
         """Staff-Benutzer ohne change_generalemailsettings-Berechtigung erhalten 403 Forbidden."""
-        staff_user = User.objects.create_user(
+        User.objects.create_user(
             username='staff_noperm', email='staffnoperm@example.com', password='password', is_staff=True
         )
         self.client.login(username='staff_noperm', password='password')

@@ -1,4 +1,3 @@
-import math
 from django.db import transaction
 from .locking import lock_tournament, event_is_closed
 from .validation import integer, identifier, note
@@ -11,10 +10,8 @@ from tournaments.models import (
     Tournament,
     TournamentMatch,
     TournamentRegistration,
-    TournamentMatchParticipant,
 )
 from tournaments.exceptions import (
-    TournamentError,
     TournamentMatchError,
     MatchAlreadyCompletedError,
     InvalidScoreError,

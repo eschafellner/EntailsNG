@@ -8,7 +8,6 @@ from events.models import Event, EventRegistration
 from tournaments.exceptions import (
     TournamentAlreadyRegisteredError,
     TournamentBracketError,
-    TournamentError,
     TournamentFullError,
     TournamentNotCheckedInError,
     TournamentNotOpenError,

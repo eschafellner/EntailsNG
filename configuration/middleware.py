@@ -5,8 +5,7 @@ import traceback
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db.models import F
-from django.http import Http404, HttpResponseServerError
-from django.template.loader import render_to_string
+from django.http import Http404
 from django.utils import timezone
 from django.views.debug import technical_500_response
 from .models import GeneralConfiguration
@@ -71,7 +70,6 @@ class DynamicDebugMiddleware:
             return None
 
         # 1. System-Fehlerprotokoll in der Datenbank erfassen
-        error_log = None
         try:
             from users.auth_backends import get_client_ip
             from .models import SystemErrorLog

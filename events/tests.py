@@ -1219,7 +1219,7 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
             payment_status=EventRegistration.PaymentStatus.UNPAID,
         )
 
-        other_user = User.objects.create_user(username='stranger', password='password')
+        User.objects.create_user(username='stranger', password='password')
         url = reverse('registration_payment_qr', kwargs={'registration_id': registration.id})
 
         # 1. Anonym -> Redirect zu Login
@@ -1299,7 +1299,7 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
             payment_status=EventRegistration.PaymentStatus.UNPAID,
         )
 
-        other_user = User.objects.create_user(username='qr_stranger', password='password')
+        User.objects.create_user(username='qr_stranger', password='password')
         url = reverse('registration_checkin_qr', kwargs={'registration_id': reg.id})
 
         # 1. Anonym -> Redirect zu Login
@@ -1412,7 +1412,7 @@ class PaymentQrAndDashboardEventInfoTests(TestCase):
         # 3. EventRegistration.seat_label
         self.assertIsNone(reg.seat_label)
         plan = SeatingPlan.objects.create(event=self.event, name="Halle", columns=5, rows=5)
-        cell = SeatingCell.objects.create(
+        SeatingCell.objects.create(
             plan=plan, x=1, y=1, cell_type=SeatingCell.CellType.SEAT,
             seat_label="Reihe 1 / Platz 1", registration=reg
         )
@@ -2048,7 +2048,7 @@ class EventFeedbackRegressionTests(TestCase):
         self.assertFalse(self.event.is_full)
 
         # User B bucht den letzten freien Platz und bezahlt
-        reg_b = EventRegistration.objects.create(
+        EventRegistration.objects.create(
             user=self.user_b,
             event=self.event,
             ticket_type=self.ticket,

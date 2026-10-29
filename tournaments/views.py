@@ -3,7 +3,7 @@ from itertools import groupby
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
-from django.http import JsonResponse, Http404, HttpResponseForbidden, HttpResponseBadRequest
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.utils import timezone
@@ -25,7 +25,6 @@ from tournaments.models import (
 
 from tournaments.exceptions import (
     TournamentError,
-    TournamentRegistrationError,
     TournamentBracketError,
     TournamentMatchError,
     MatchPermissionDeniedError,
@@ -41,10 +40,7 @@ from tournaments.services import (
     TournamentRegistrationService,
     TournamentLifecycleService,
     SwissTournamentService, SwissStandingService,
-    advance_match_winner,
     check_user_event_checkin,
-    generate_bracket,
-    get_or_create_solo_team,
 )
 
 
@@ -661,7 +657,7 @@ def match_update_score(request, match_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=403)
     except TournamentError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
-    except Exception as e:
+    except Exception:
         logger.exception('Ergebniseingabe für Match %s fehlgeschlagen', match_id)
         return JsonResponse({'success': False, 'error': get_translation('audit_score_save_failed', 'Das Ergebnis konnte nicht gespeichert werden.')}, status=500)
 
@@ -710,7 +706,7 @@ def match_update_ffa_score(request, match_id):
         )
     except TournamentError as e:
         messages.error(request, str(e))
-    except Exception as e:
+    except Exception:
         logger.exception('FFA-Ergebniseingabe für Match %s fehlgeschlagen', match_id)
         messages.error(request, get_translation('audit_score_save_failed', 'Das Ergebnis konnte nicht gespeichert werden.'))
 

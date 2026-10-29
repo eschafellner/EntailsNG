@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import SeatingPlan, SeatingCell
-from . import clan_payment_admin  # Register the immutable payment administration.
+from . import clan_payment_admin  # noqa: F401 – Register the immutable payment administration.
 
 
 class SeatingPlanAdminForm(forms.ModelForm):

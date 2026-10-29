@@ -20,7 +20,7 @@ from tournaments.exceptions import TournamentError, SwissPairingError
 from tournaments.models import Game, Team, TeamMember, Tournament, TournamentMatch, TournamentRegistration
 from tournaments.services import (
     FFAMatchService, TournamentBracketService, TournamentMatchService, TournamentPodiumService,
-    LeagueStandingService, GroupStageStandingService, SwissPairingService, SwissTournamentService, forfeit_team_in_active_tournaments,
+    LeagueStandingService, SwissPairingService, SwissTournamentService, forfeit_team_in_active_tournaments,
 )
 
 

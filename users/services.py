@@ -3,7 +3,6 @@ import uuid
 from datetime import timedelta
 from io import BytesIO
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
@@ -11,9 +10,8 @@ from django.db.models import Max, OuterRef, Q, Subquery
 from PIL import Image, ImageOps, UnidentifiedImageError
 from configuration.translations import get_translation
 from django.utils import timezone
-from emails.models import GeneralEmailSettings
 from emails.services import send_system_email
-from .exceptions import AccountDeletionError, VerificationCodeCooldownError, VerificationCodeLimitError
+from .exceptions import AccountDeletionError
 from .models import GUEST_PHOTO_DIR, EmailVerificationCode, GuestPhoto
 
 logger = logging.getLogger(__name__)

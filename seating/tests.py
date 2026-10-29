@@ -199,7 +199,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.assertEqual(self.seat_cell.reservation_status, SeatingCell.ReservationStatus.FREE)
 
     def test_save_seating_plan_bulk_update(self):
-        admin_user = User.objects.create_superuser(
+        User.objects.create_superuser(
             username='seating_admin', email='admin@example.com', password='password'
         )
         self.client.login(username='seating_admin', password='password')
@@ -220,7 +220,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.assertEqual(self.seat_cell.seat_label, 'B1-Updated')
 
     def test_save_seating_plan_blocked_cells(self):
-        admin_user = User.objects.create_superuser(
+        User.objects.create_superuser(
             username='seating_admin_block', email='sablock@example.com', password='password'
         )
         self.client.login(username='seating_admin_block', password='password')
@@ -239,7 +239,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.assertEqual(blocked_cell.reservation_status, SeatingCell.ReservationStatus.BLOCKED)
 
     def test_save_seating_plan_editor_validations(self):
-        admin_user = User.objects.create_superuser(
+        User.objects.create_superuser(
             username='seating_validator', email='val@example.com', password='password'
         )
         self.client.login(username='seating_validator', password='password')
@@ -283,7 +283,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
 
 
     def test_admin_assign_seat_validations(self):
-        admin_user = User.objects.create_superuser(
+        User.objects.create_superuser(
             username='staff_seating', email='staff@example.com', password='password'
         )
         user_c = User.objects.create_user(
@@ -292,11 +292,11 @@ class SeatingConsistencyAndSignalTests(TestCase):
         reg_c = EventRegistration.objects.create(user=user_c, event=self.event)
 
         # 1. Wand-Kachel erstellen
-        wall_cell = SeatingCell.objects.create(
+        SeatingCell.objects.create(
             plan=self.plan, x=3, y=3, cell_type=SeatingCell.CellType.WALL
         )
         # 2. Blockierten Sitz erstellen
-        blocked_cell = SeatingCell.objects.create(
+        SeatingCell.objects.create(
             plan=self.plan, x=4, y=4, cell_type=SeatingCell.CellType.SEAT,
             reservation_status=SeatingCell.ReservationStatus.BLOCKED
         )
@@ -499,7 +499,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.seat_cell.save()
 
         # 2. Zweiter Platz (2,2) ist blockiert
-        blocked_cell = SeatingCell.objects.create(
+        SeatingCell.objects.create(
             plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.SEAT,
             reservation_status=SeatingCell.ReservationStatus.BLOCKED
         )
@@ -523,7 +523,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
     def test_concurrent_reservation_rejection_for_second_caller(self):
         """Regressionstest: Zwei Anmeldungen konkurrieren um denselben Platz -> Zweiter Aufrufer wird abgewiesen."""
         user_rival = User.objects.create_user(username='rival_gamer', password='password')
-        reg_rival = EventRegistration.objects.create(user=user_rival, event=self.event)
+        EventRegistration.objects.create(user=user_rival, event=self.event)
 
         # 1. Erster Gast reserviert Platz (1,1)
         self.client.force_login(self.user)
@@ -652,7 +652,7 @@ class SeatingConsistencyAndSignalTests(TestCase):
         self.seat_cell.save()
 
         # 2. Zielplatz (2,2) ist frei
-        target_cell = SeatingCell.objects.create(
+        SeatingCell.objects.create(
             plan=self.plan, x=2, y=2, cell_type=SeatingCell.CellType.SEAT,
             reservation_status=SeatingCell.ReservationStatus.FREE
         )
@@ -842,7 +842,7 @@ class SeatingServiceAndSignalTests(TestCase):
 
     def test_save_seating_plan_rejects_deleting_occupied_cell(self):
         """Sicherheitstest: Editor-API verhindert das Löschen belegter Kacheln."""
-        admin_user = User.objects.create_superuser(username='staff_editor', email='staff@example.com', password='password')
+        User.objects.create_superuser(username='staff_editor', email='staff@example.com', password='password')
         self.client.login(username='staff_editor', password='password')
         # seat1 (1,1) ist belegt durch reg1
         self.seat1.registration = self.reg1
@@ -954,7 +954,7 @@ class SeatingServiceAndSignalTests(TestCase):
         """Testet, dass die Sitzplan-Adminliste fehlerfrei rendert, wenn keine Events existieren oder Vorlagen angezeigt werden."""
         admin_user = User.objects.create_superuser(username='seating_admin', email='sadmin@example.com', password='password')
         self.client.force_login(admin_user)
-        template_plan = SeatingPlan.objects.create(name='Vorlage 1', columns=10, rows=10, is_template=True, event=None)
+        SeatingPlan.objects.create(name='Vorlage 1', columns=10, rows=10, is_template=True, event=None)
         response = self.client.get('/admin/seating/seatingplan/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Master-Vorlage')
@@ -1167,7 +1167,7 @@ class SeatingConcurrencyAndConstraintTests(TestCase):
 
     def test_admin_assign_seat_reassigns_cleanly_with_unique_constraint(self):
         """Prüft, dass der Admin-Platzwechsel sauber funktioniert und die Ein-Platz-Regel gewahrt bleibt."""
-        admin_user = User.objects.create_superuser(
+        User.objects.create_superuser(
             username='adminuser', email='admin@example.com', password='adminpassword'
         )
         self.client.login(username='adminuser', password='adminpassword')
@@ -1561,7 +1561,7 @@ class SeatingFeedbackRegressionTests(TestCase):
 
     def test_p6_shrinking_grid_with_occupied_seats_rejected(self):
         """P6: Verkleinern des Rasters lehnt ab, wenn belegte Plätze außerhalb des neuen Rasters liegen."""
-        far_seat = SeatingCell.objects.create(
+        SeatingCell.objects.create(
             plan=self.plan, x=9, y=9, cell_type=SeatingCell.CellType.SEAT,
             seat_label='Far-Seat', registration=self.registration
         )

@@ -29,7 +29,7 @@ class EventInfoViewTests(TestCase):
         self.assertContains(response, '<p>WLAN Passwort & Catering Infos</p>', html=True)
 
     def test_multiple_pages_and_slug_routing(self):
-        page2 = EventInfo.objects.create(
+        EventInfo.objects.create(
             title='Catering & Bar',
             slug='catering',
             subtitle='Pizza, Burger & Drinks',
@@ -295,7 +295,7 @@ class InfoServiceTests(TestCase):
         )
 
         # Anonymer User darf nicht den inaktiven Entwurf und nicht die geschützte Seite bekommen
-        anon_user = User.objects.create_user(username='anon', is_active=True)
+        User.objects.create_user(username='anon', is_active=True)
         from django.contrib.auth.models import AnonymousUser
         result = get_event_info(user=AnonymousUser())
         self.assertEqual(result, public_page)

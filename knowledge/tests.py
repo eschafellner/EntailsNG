@@ -222,7 +222,7 @@ class KnowledgeTests(TestCase):
         with self.assertRaises(ValidationError):
             save_page(actor=self.staff, space_id=self.space.pk, title='Level 21', parent=parent)
         separate = save_page(actor=self.staff, space_id=self.space.pk, title='Separate root')
-        descendant = save_page(actor=self.staff, space_id=self.space.pk, title='Separate child', parent=separate)
+        save_page(actor=self.staff, space_id=self.space.pk, title='Separate child', parent=separate)
         with self.assertRaises(ValidationError):
             save_page(actor=self.staff, space_id=self.space.pk, page_id=separate.pk,
                 expected_version=separate.version, title=separate.title, parent=parent.parent)

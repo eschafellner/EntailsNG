@@ -1,5 +1,4 @@
 # seating/services.py
-from django.core.cache import cache
 from django.db.models import Q
 from configuration.cache import invalidate_event_capacity_cache, safe_cache_get_or_set
 from django.core.exceptions import ValidationError

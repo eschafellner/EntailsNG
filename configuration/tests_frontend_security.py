@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles import finders
-from django.test import TestCase, RequestFactory
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -47,7 +47,7 @@ class FrontendAssetAndSecurityPositiveTests(TestCase):
         staff_user = User.objects.create_user(
             username='staff_scanner', email='staff@test.com', password='pw', is_staff=True
         )
-        event = Event.objects.create(
+        Event.objects.create(
             title="Scan Event", slug="scan-event", is_active=True,
             start_date=timezone.now(), end_date=timezone.now() + timezone.timedelta(days=1)
         )

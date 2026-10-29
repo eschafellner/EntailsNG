@@ -18,7 +18,7 @@ from events.models import Event, EventRegistration
 from events.services import CheckInService, RegistrationService
 from users.exceptions import RegistrationBlockedError, UserBanError
 from users.forms import CustomUserCreationForm, UserProfileForm
-from users.models import BannedEmail, EmailVerificationCode, UserBan, UserBanLog
+from users.models import EmailVerificationCode, UserBan, UserBanLog
 from users.moderation import ban_user, ban_email, revoke_ban, is_email_banned, ban_state
 from users.services import UserService
 

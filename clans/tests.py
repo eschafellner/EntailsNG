@@ -1,4 +1,3 @@
-from io import BytesIO
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -176,7 +175,7 @@ class ClanModuleTests(TestCase):
 
     def test_leave_clan_auto_admin_promotion(self):
         clan = Clan.objects.create(name='Team Liquid', password='liquidpass')
-        m_admin = ClanMembership.objects.create(
+        ClanMembership.objects.create(
             user=self.user_a, clan=clan, role=ClanMembership.Role.ADMIN, status=ClanMembership.Status.ACCEPTED
         )
         m_member = ClanMembership.objects.create(
@@ -298,7 +297,7 @@ class ClanModuleTests(TestCase):
         clan2 = Clan.objects.create(name='Clan Two', password='pass')
 
         # 1. Erste aktive Mitgliedschaft
-        m1 = ClanMembership.objects.create(
+        ClanMembership.objects.create(
             user=self.user_a, clan=clan1, role=ClanMembership.Role.MEMBER, status=ClanMembership.Status.ACCEPTED
         )
 
@@ -493,7 +492,7 @@ class ClanModuleTests(TestCase):
 
     def test_clan_tag_creation_and_auto_uppercase(self):
         self.client.login(username='leader', password='password')
-        response = self.client.post(
+        self.client.post(
             reverse('clan_create'),
             {
                 'name': 'Haag-networX',

@@ -417,7 +417,7 @@ class AuthBackendAndLockoutTests(TestCase):
             self.assertFalse(self.user.is_locked())
 
         # 5. fehlgeschlagener Versuch -> Konto wird für 15 Minuten gesperrt
-        response = self.client.post(
+        self.client.post(
             reverse('login'),
             {'username': 'authuser', 'password': 'WrongPassword'},
         )
@@ -445,7 +445,6 @@ class AuthBackendAndLockoutTests(TestCase):
     def test_admin_unlock_action(self):
         from datetime import timedelta
         from django.utils import timezone
-        from users.admin import CustomUserAdmin
 
         self.user.failed_login_attempts = 5
         self.user.locked_until = timezone.now() + timedelta(minutes=15)
@@ -534,7 +533,7 @@ class AuthBackendAndLockoutTests(TestCase):
         strikt NICHT angemeldet werden, selbst wenn das Passwort korrekt ist.
         """
         from django.contrib.auth import authenticate
-        inactive_user = User.objects.create_user(
+        User.objects.create_user(
             username='inactive_guest',
             email='inactive@example.com',
             password='CorrectPassword123!',
@@ -615,7 +614,6 @@ class VerificationCodeCooldownAndLimitTests(TestCase):
     def test_update_profile_cooldown_blocks_immediate_repeat(self):
         """Mehrfache Profil-Updates dürfen innerhalb des Cooldowns keine neuen Codes erzeugen und alte nicht entwerten."""
         from django.core import mail
-        from users.models import EmailVerificationCode
         self.client.login(username='cooldown_tester', password='Password123!')
 
         with self.captureOnCommitCallbacks(execute=True):
@@ -651,7 +649,6 @@ class VerificationCodeCooldownAndLimitTests(TestCase):
 
     def test_resend_email_change_cooldown_and_success(self):
         """Resend-Code beachtet Cooldown und erzeugt nach Ablauf einen neuen Code."""
-        from django.core import mail
         from django.utils import timezone
         from datetime import timedelta
         from users.models import EmailVerificationCode
@@ -676,7 +673,7 @@ class VerificationCodeCooldownAndLimitTests(TestCase):
 
         # Resend nach Cooldown erfolgreich
         with self.captureOnCommitCallbacks(execute=True):
-            resp2 = self.client.post(reverse('profile'), {'resend_email_change_code': '1'}, follow=True)
+            self.client.post(reverse('profile'), {'resend_email_change_code': '1'}, follow=True)
         self.assertEqual(self.user.verification_codes.count(), 2)
         code1.refresh_from_db()
         self.assertTrue(code1.is_used)  # Alter Code jetzt entwertet
@@ -743,7 +740,7 @@ class VerificationCodeCooldownAndLimitTests(TestCase):
         code1.save(update_fields=['created_at'])
 
         with self.captureOnCommitCallbacks(execute=True):
-            resp2 = self.client.post(reverse('resend_verification_code'), follow=True)
+            self.client.post(reverse('resend_verification_code'), follow=True)
         self.assertEqual(self.user.verification_codes.filter(new_email__isnull=True).count(), 2)
 
 
@@ -878,7 +875,7 @@ class ConcurrencyAndLockoutTests(TestCase):
         self.user.save()
 
         # Anderer User belegt spätere Zieladresse
-        other_user = User.objects.create_user(
+        User.objects.create_user(
             username='conflict_other', email='taken@example.com', password='Password123!'
         )
 
@@ -944,7 +941,7 @@ class UserFeedbackHardeningRegressionTests(TestCase):
             password='Password123!',
         )
         # Zweiter Nutzer mit Benutzername = victim@example.com
-        user_attacker = User.objects.create_user(
+        User.objects.create_user(
             username='victim@example.com',
             email='attacker@example.com',
             password='AttackerPass123!',
@@ -982,7 +979,7 @@ class UserFeedbackHardeningRegressionTests(TestCase):
         )
 
         # Nutzer speichert Formular
-        saved_user = form.save()
+        form.save()
         user.refresh_from_db()
 
         # Geburtstag wurde aktualisiert

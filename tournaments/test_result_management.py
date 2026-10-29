@@ -3,7 +3,7 @@ from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from tournaments import test_audit as audit
-from tournaments.models import Tournament, TournamentMatch, TournamentResultLog
+from tournaments.models import Tournament, TournamentMatch
 from tournaments.exceptions import TournamentError
 from tournaments.services import TournamentMatchService as Scores, FFAMatchService, TournamentLifecycleService as Life
 from tournaments.services.results import match_version, tournament_version

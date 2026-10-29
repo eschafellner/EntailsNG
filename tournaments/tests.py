@@ -7,7 +7,7 @@ from datetime import timedelta
 from users.models import User
 from events.models import Event, EventRegistration
 from tournaments.exceptions import (
-    InvalidWinnerError, MatchAlreadyCompletedError, TournamentError, TournamentRegistrationError, TournamentNotCheckedInError,
+    InvalidWinnerError, MatchAlreadyCompletedError, TournamentRegistrationError, TournamentNotCheckedInError,
     TournamentMatchError
 )
 from tournaments.models import (
@@ -131,8 +131,8 @@ class TournamentModelTests(TestCase):
 
     def test_team_leave_logic(self):
         team = Team.objects.create(name="Alpha Team", captain=self.user1, game=self.game)
-        m1 = TeamMember.objects.create(team=team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
-        m2 = TeamMember.objects.create(team=team, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
+        TeamMember.objects.create(team=team, user=self.user1, role=TeamMember.Role.CAPTAIN, status=TeamMember.Status.ACCEPTED)
+        TeamMember.objects.create(team=team, user=self.user2, role=TeamMember.Role.MEMBER, status=TeamMember.Status.ACCEPTED)
 
         # 1. Non-captain leaves
         res = team.leave_team(self.user2)
@@ -159,7 +159,7 @@ class TournamentModelTests(TestCase):
 
     def test_user_event_checkin_validation(self):
         self.assertFalse(check_user_event_checkin(self.user1, self.event))
-        reg = EventRegistration.objects.create(
+        EventRegistration.objects.create(
             user=self.user1,
             event=self.event,
             payment_status=EventRegistration.PaymentStatus.PAID,
@@ -309,7 +309,7 @@ class TournamentModelTests(TestCase):
         """Positiver Test: Neu gegründetes Team wird automatisch dem aktiven Event zugeordnet."""
         from django.urls import reverse
         self.client.login(username="player1", password="pass")
-        response = self.client.post(
+        self.client.post(
             reverse('team_create'),
             {'name': 'Active Event Team', 'tag': 'AET', 'game_id': self.game.id}
         )
@@ -895,7 +895,7 @@ class DoubleEliminationTests(TestCase):
         from tournaments.services import TournamentBracketService, TournamentMatchService
 
         tournament, teams = self._create_teams_and_tournament(3)
-        t1, t2, t3 = teams[0], teams[1], teams[2]
+        t1, _t2, t3 = teams[0], teams[1], teams[2]
 
         TournamentBracketService.generate_bracket(tournament.id)
 
@@ -1753,7 +1753,7 @@ class TeamFeedbackAndIntegrityTests(TestCase):
 
     def test_tournament_detail_inline_bracket_and_score_validation(self):
         """Turnieransicht führt zur geprüften Auslosung und nutzt Inline-Fehleranzeigen für Scores."""
-        staff_admin = User.objects.create_user(username="staff_admin_test", password="password", is_staff=True)
+        User.objects.create_user(username="staff_admin_test", password="password", is_staff=True)
         self.client.login(username="staff_admin_test", password="password")
         response = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
         self.assertEqual(response.status_code, 200)
@@ -1881,7 +1881,7 @@ class TeamFeedbackAndIntegrityTests(TestCase):
         self.assertNotIn('Admin-Vorschau', content_user)
 
         # 2. Admin sieht die Vorschau
-        admin = User.objects.create_user(username="tourn_admin_val", password="password", is_staff=True)
+        User.objects.create_user(username="tourn_admin_val", password="password", is_staff=True)
         self.client.login(username="tourn_admin_val", password="password")
         resp_admin = self.client.get(reverse('tournament_detail', kwargs={'slug': self.tournament.slug}))
         self.assertEqual(resp_admin.status_code, 200)
@@ -1917,7 +1917,7 @@ class TeamFeedbackAndIntegrityTests(TestCase):
         TournamentRegistration.objects.create(tournament=de_tourn, team=t3)
 
         # Als Admin aufrufen
-        admin = User.objects.create_user(username="de_admin", password="password", is_staff=True)
+        User.objects.create_user(username="de_admin", password="password", is_staff=True)
         self.client.login(username="de_admin", password="password")
         resp = self.client.get(reverse('tournament_detail', kwargs={'slug': de_tourn.slug}))
         self.assertEqual(resp.status_code, 200)
@@ -2387,7 +2387,7 @@ class TournamentResultProtectionTests(TestCase):
             status=TournamentMatch.Status.COMPLETED,
         )
         # Playoff match ist bereits IN_PROGRESS
-        playoff_match = TournamentMatch.objects.create(
+        TournamentMatch.objects.create(
             tournament=tournament,
             round_number=2,
             match_number=1,
@@ -2428,7 +2428,7 @@ class TournamentResultProtectionTests(TestCase):
             loser=self.t1,
             status=TournamentMatch.Status.COMPLETED,
         )
-        reset_match = TournamentMatch.objects.create(
+        TournamentMatch.objects.create(
             tournament=tournament,
             round_number=4,
             match_number=1,
@@ -2517,9 +2517,9 @@ class ForfeitedTeamAdvancementTests(TestCase):
             registration_end=timezone.now() + timedelta(days=1),
             status=Tournament.Status.IN_PROGRESS,
         )
-        reg1 = TournamentRegistration.objects.create(tournament=tournament, team=self.t1)
+        TournamentRegistration.objects.create(tournament=tournament, team=self.t1)
         reg2 = TournamentRegistration.objects.create(tournament=tournament, team=self.t2)
-        reg3 = TournamentRegistration.objects.create(tournament=tournament, team=self.t3)
+        TournamentRegistration.objects.create(tournament=tournament, team=self.t3)
 
         # Match in WB: T1 vs T2
         # Folgematch für Loser: lb_match
@@ -2706,7 +2706,7 @@ class LeagueAndGroupStageDrawTests(TestCase):
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
         self.assertEqual(resp.status_code, 200)
-        data = resp.json()
+        resp.json()
 class TournamentQueryPerformanceTests(TestCase):
     """
     Performance- und Regressions-Tests zur Sicherstellung optimierter Query-Budgets (keine N+1-Abfragen).
@@ -2868,7 +2868,7 @@ class TournamentRefactoringIntegrityTests(TestCase):
     def test_service_enforces_actor_permissions_under_lock(self):
         """Service prüft Berechtigungen direkt unter select_for_update Lock."""
         from tournaments.services import TournamentBracketService, TournamentMatchService
-        from tournaments.exceptions import MatchPermissionDeniedError, InvalidWinnerError, MatchNotReadyError
+        from tournaments.exceptions import MatchPermissionDeniedError, InvalidWinnerError
 
         TournamentBracketService.generate_bracket(self.tournament.id, actor=self.admin_user)
         match = self.tournament.matches.filter(

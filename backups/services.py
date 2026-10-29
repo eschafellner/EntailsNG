@@ -89,7 +89,7 @@ def upload_backup(upload, *, actor='', require_worker=False):
 
 def delete_backup(value):
     with FileLock('control.lock'):
-        record = storage.load('records', value)
+        storage.load('records', value)  # prüft, ob die Sicherung existiert
         if any(job['state'] in ACTIVE for job in storage.list_records('jobs')):
             raise BackupError('backup_err_busy')
         storage.artifact_path(value).unlink(missing_ok=True)

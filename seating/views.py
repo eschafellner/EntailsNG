@@ -18,7 +18,6 @@ from .services import SeatingPlanService, SeatingPlanValidationError
 from .clan_services import (ClanSeatError, seating_write, update_selection,
     selection_status, open_holds, check_clan_access, release_holds)
 from .models import ClanSeatHold
-from .clan_texts import TEXTS
 
 logger = logging.getLogger(__name__)
 

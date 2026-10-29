@@ -1,0 +1,6 @@
+# Linter (Befund F-003). Bewusst schmal: Pyflakes (F) und Syntaxfehler (E9).
+# Re-Exporte und Side-Effect-Importe werden mit "# noqa: F401" gekennzeichnet.
+extend-exclude = ["*/migrations/*", "staticfiles", "media", "private_media"]
+
+[lint]
+select = ["F", "E9"]

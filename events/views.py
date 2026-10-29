@@ -4,7 +4,6 @@ import logging
 import re
 import uuid
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
@@ -35,7 +34,7 @@ from users.models import GuestPhoto
 from users.services import GuestPhotoService
 
 from .exceptions import RegistrationError
-from .models import Event, EventRegistration, TicketType
+from .models import Event, EventRegistration
 from .payment_qr import generate_checkin_qr_png, generate_epc_qr_png
 from .services import RegistrationService
 

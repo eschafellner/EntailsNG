@@ -37,7 +37,6 @@ from django.urls import path, reverse
 from django.shortcuts import redirect, render
 from django.contrib import messages
 from django.core.management import call_command
-from django.utils.safestring import mark_safe
 from .models import GeneralConfiguration, SiteCustomization
 from .contact_admin import ContactCategoryInline
 from .translations import get_translation as tr
@@ -229,7 +228,7 @@ class SiteCustomizationAdmin(admin.ModelAdmin):
             try:
                 call_command('seed_demo_data')
                 messages.success(request, tr('demo_setup_success'))
-            except Exception as e:
+            except Exception:
                 logger.error("Demo-Einrichtung fehlgeschlagen", exc_info=True)
                 messages.error(request, tr('demo_setup_failed'))
             return redirect('/admin/configuration/sitecustomization/1/change/')

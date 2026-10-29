@@ -183,7 +183,6 @@ def _generate_bracket(tournament, preview=False, *, registration_order=None):
                 or set(registration_order) != set(by_id)):
             raise TournamentBracketError(get_translation('draw_invalid_teams'))
         teams = [by_id[registration_id] for registration_id in registration_order]
-    num_teams = len(teams)
 
     if tournament.mode == Tournament.Mode.FFA:
         return _generate_ffa(tournament, teams, preview)

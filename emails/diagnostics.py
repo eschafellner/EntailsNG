@@ -1,4 +1,3 @@
-import re
 import smtplib
 import socket
 import ssl

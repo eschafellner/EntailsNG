@@ -16,13 +16,13 @@ from clans.services import leave_clan, ClanManagementError
 from configuration.models import GeneralConfiguration
 from emails.defaults import DEFAULT_EMAIL_TEMPLATES
 from emails.models import EmailTemplate, OutgoingEmail
-from events.models import Event, EventRegistration, TicketType
-from events.services import RegistrationService, PaymentService, CheckInService
+from events.models import EventRegistration, TicketType
+from events.services import RegistrationService, PaymentService
 from events.exceptions import EventFullError
 from events.payment_qr import generate_transfer_qr_payload
 from users.services import UserService
 from . import test_clan_holds as hold_tests
-from .models import ClanSeatPayment, ClanSeatPaymentLog, ClanSeatHold, SeatingCell
+from .models import ClanSeatPayment, ClanSeatPaymentLog, ClanSeatHold
 from .clan_services import ClanSeatError, process_clan_holds, open_holds, update_selection, selection_status
 from .clan_payments import payment_preview, create_payment, confirm_payment, assign_member, cancel_payment, reserved_ticket_count
 from .services import SeatingPlanService, SeatingPlanValidationError, get_event_capacity_stats
@@ -145,7 +145,7 @@ class ClanPaymentTests(TestCase):
     def test_pending_capacity_blocks_regular_registration(self):
         self.event.max_guests = 4
         self.event.save()
-        payment = self.create()
+        self.create()
         self.assertTrue(self.event.is_full)
         self.assertEqual(reserved_ticket_count(self.event.pk), 2)
         with self.assertRaises(EventFullError):
@@ -350,7 +350,7 @@ class ClanPaymentTests(TestCase):
         self.assertEqual(payment.status, 'CANCELLED')
 
     def test_sitplan_editor_and_clean_protect_paid_seats(self):
-        payment = self.pay(self.create())
+        self.pay(self.create())
         self.seats[0].seat_label = 'Changed'
         with self.assertRaises(ValidationError): self.seats[0].full_clean()
         with self.assertRaises(SeatingPlanValidationError):
@@ -440,7 +440,7 @@ class ClanPaymentTests(TestCase):
         self.assertEqual(OutgoingEmail.objects.filter(template_key='clan_seat_reminder').count(), 0)
 
     def test_last_member_cannot_dissolve_clan_or_delete_account(self):
-        payment = self.create()
+        self.create()
         self.clan.memberships.exclude(user=self.admin).delete()
         with self.assertRaises(ClanManagementError): leave_clan(self.clan.pk, self.admin.pk)
         self.assertTrue(any(code == 'clan_payment' for code, _ in UserService.deletion_blockers(self.admin)))

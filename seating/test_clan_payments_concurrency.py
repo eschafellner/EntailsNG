@@ -1,10 +1,9 @@
 """Real PostgreSQL row-lock checks for clan purchases and ticket coverage."""
 from django.test import TransactionTestCase, skipUnlessDBFeature, override_settings
-from django.db import transaction
 from django.utils import timezone
 
 from clans.models import ClanMembership
-from events.models import Event, EventRegistration
+from events.models import EventRegistration
 from events.services import RegistrationService, PaymentService
 from events.exceptions import RegistrationError
 from tournaments import test_audit_concurrency as concurrency

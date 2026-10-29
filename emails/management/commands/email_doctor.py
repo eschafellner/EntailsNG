@@ -5,7 +5,6 @@ from django.conf import settings as dj_settings
 from django.core.management.base import BaseCommand
 
 from emails.crypto import is_readable
-from emails.diagnostics import explain_smtp_error
 from emails.models import EmailTemplate, GeneralEmailSettings
 from emails.services import send_test_email
 

@@ -2,7 +2,6 @@ import re
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator
 from django.db import models
@@ -17,22 +16,15 @@ from .validators import (
     validate_bic, validate_iban, validate_hex_color,
 )
 from .default_data import DEFAULT_DATENSCHUTZ_CONTENT, SYSTEM_ICONS
-from .themes import THEME_PRESETS, SCALE_MAP, build_css_variables
+from .themes import build_css_variables
 from .sanitizer import (
-    ALLOWED_SVG_TAGS,
-    DANGEROUS_CSS_PATTERNS,
-    DANGEROUS_PROTOCOLS_REGEX,
-    DISALLOWED_ATTRIBUTES_REGEX,
-    SafeHTMLSanitizer,
     sanitize_html,
     validate_custom_css,
     sanitize_and_validate_svg,
 )
 from configuration.cache import (
     safe_cache_delete,
-    safe_cache_delete_many,
     safe_cache_get_or_set,
-    invalidate_event_capacity_cache,
     invalidate_general_configuration_cache,
     invalidate_navigation_cache,
     invalidate_site_customization_cache,

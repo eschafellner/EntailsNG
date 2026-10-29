@@ -1,6 +1,4 @@
 import logging
-import secrets
-from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -10,9 +8,8 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_POST
 from emails.models import GeneralEmailSettings
@@ -23,7 +20,7 @@ from .auth_backends import get_client_ip
 from .exceptions import AccountDeletionError, RegistrationBlockedError, VerificationCodeCooldownError, VerificationCodeLimitError
 from .rate_limits import reserve_rate_limit
 from .forms import AccountDeletionForm, CustomUserCreationForm, GuestPhotoForm, UserProfileForm
-from .models import EmailVerificationCode, GuestPhoto
+from .models import GuestPhoto
 from .services import GuestPhotoService, UserService
 from .tokens import password_reset_token_generator
 

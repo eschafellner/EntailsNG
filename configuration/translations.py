@@ -1,4 +1,3 @@
-from django.core.cache import cache
 from configuration.cache import safe_cache_get_or_set
 from configuration.models import SystemTranslation
 
@@ -777,7 +776,6 @@ DEFAULT_TEXTS = {
     # News Modul
     'news_list_title': 'News & Ankündigungen',
     'news_list_empty': 'Aktuell sind keine News-Beiträge vorhanden.',
-    'news_author_by': 'von',
 
     # Info Modul
     'info_title': 'Event Information',
@@ -1323,7 +1321,7 @@ DEFAULT_TEXTS = {
 
 import string
 
-from configuration.cache import (
+from configuration.cache import (  # noqa: F401 – init/clear: Re-Export (Tests)
     get_request_cache,
     init_request_cache,
     clear_request_cache,

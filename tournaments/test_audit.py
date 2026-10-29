@@ -257,10 +257,10 @@ class TournamentAuditTests(TestCase):
         for mode in (Tournament.Mode.SINGLE_ELIMINATION, Tournament.Mode.DOUBLE_ELIMINATION,
                      Tournament.Mode.LEAGUE, Tournament.Mode.GROUP_STAGE):
             for count in range(4 if mode == Tournament.Mode.GROUP_STAGE else 2, 17):
-                for reverse in ([False, True] if mode == Tournament.Mode.DOUBLE_ELIMINATION else [False]):
-                    with self.subTest(mode=mode, count=count, reverse=reverse):
+                for reverse_order in ([False, True] if mode == Tournament.Mode.DOUBLE_ELIMINATION else [False]):
+                    with self.subTest(mode=mode, count=count, reverse=reverse_order):
                         tournament = self.start(mode, count)
-                        self.finish_legacy_matches(tournament, reverse=reverse)
+                        self.finish_legacy_matches(tournament, reverse=reverse_order)
                         played = tournament.matches.filter(is_bye=False)
                         if mode == Tournament.Mode.LEAGUE:
                             self.assertEqual(played.count(), count * (count-1)//2)

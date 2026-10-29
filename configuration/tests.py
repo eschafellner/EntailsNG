@@ -732,7 +732,7 @@ class ConfigurationModelTests(TestCase):
         from django.contrib.auth import get_user_model
         from unittest.mock import Mock
 
-        User = get_user_model()
+        get_user_model()
         staff_request = Mock()
         staff_request.user = Mock()
         staff_request.user.is_superuser = False
@@ -1121,9 +1121,9 @@ class RequestLevelTranslationCacheTests(TestCase):
                 # 5 Aufrufe hintereinander
                 res1 = get_translation('test_key_1')
                 res2 = get_translation('test_key_2')
-                res3 = get_translation('test_key_1')
-                res4 = get_translation('test_key_2')
-                res5 = get_translation('test_key_1')
+                get_translation('test_key_1')
+                get_translation('test_key_2')
+                get_translation('test_key_1')
 
             self.assertEqual(res1, 'Text 1')
             self.assertEqual(res2, 'Text 2')
@@ -1159,14 +1159,14 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         from unittest.mock import patch
 
         User = get_user_model()
-        staff_user = User.objects.create_user(
+        User.objects.create_user(
             username="staff_only",
             email="staff@example.com",
             password="password",
             is_staff=True,
             is_superuser=False,
         )
-        superuser = User.objects.create_superuser(
+        User.objects.create_superuser(
             username="admin_super",
             email="super@example.com",
             password="password",
@@ -1278,7 +1278,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
     def test_p4_cache_rollback_and_bulk_delete_invalidation(self):
         """P4: Cache-Invalidierung feuert erst nach Commit und Bulk-Löschungen invalidieren zuverlässig."""
         from django.db import transaction
-        from configuration.models import SystemTranslation, NavigationItem
+        from configuration.models import SystemTranslation
         from configuration.translations import get_translation
 
         # 1. Rollback-Test: Transaktionsabbruch darf keine unbestätigten Daten im Cache hinterlassen
@@ -1317,7 +1317,7 @@ class ConfigurationFeedbackHardeningTests(TestCase):
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
-        superuser = User.objects.create_superuser(
+        User.objects.create_superuser(
             username="admin_p5",
             email="p5@example.com",
             password="password",

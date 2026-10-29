@@ -3,17 +3,12 @@ from django.utils.functional import SimpleLazyObject
 from configuration.cache import safe_cache_get_or_set
 from configuration.models import GeneralConfiguration, NavigationItem, SiteCustomization
 from events.models import Event, EventRegistration
-from seating.services import (
+from seating.services import (  # noqa: F401 – Re-Export für Rückwärtskompatibilität
     get_event_capacity_stats,
     invalidate_event_capacity_cache,
     CAPACITY_CACHE_KEY_PREFIX,
-)  # Re-Export für Rückwärtskompatibilität
-from .translations import (
-    DEFAULT_TEXTS,
-    TRANSLATION_CACHE_KEY,
-    _load_translations,
-    get_translation,
 )
+from .translations import DEFAULT_TEXTS, get_translation  # noqa: F401 – Re-Export (Tests)
 
 NAV_CACHE_KEY = 'navigation_items'
 CACHE_SECONDS = 300

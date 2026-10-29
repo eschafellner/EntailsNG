@@ -304,7 +304,7 @@ class SponsorFrontendViewsTests(TestCase):
 
     def test_dashboard_with_active_logo_sponsor(self):
         """Dashboard zeigt aktiven Logo-Sponsor mit Name, Bild und URL."""
-        sponsor = Sponsor.objects.create(
+        Sponsor.objects.create(
             name="HardwareHero",
             logo_typ=Sponsor.LogoTyp.LOGO,
             url="https://hardware-hero.example.com",
@@ -322,7 +322,7 @@ class SponsorFrontendViewsTests(TestCase):
 
     def test_dashboard_with_active_banner_sponsor(self):
         """Dashboard zeigt aktiven Banner-Sponsor."""
-        sponsor = Sponsor.objects.create(
+        Sponsor.objects.create(
             name="MegaEnergy Drink",
             logo_typ=Sponsor.LogoTyp.BANNER,
             url="https://megaenergy.example.com",
@@ -337,7 +337,7 @@ class SponsorFrontendViewsTests(TestCase):
 
     def test_sponsor_list_view(self):
         """Die Sponsorenseite listet alle aktiven Sponsoren auf und schließt inaktive aus."""
-        s_active1 = Sponsor.objects.create(
+        Sponsor.objects.create(
             name="Gold Sponsor Alpha",
             logo_typ=Sponsor.LogoTyp.BANNER,
             rang=10,
@@ -346,7 +346,7 @@ class SponsorFrontendViewsTests(TestCase):
             aktiv_modus=Sponsor.AktivModus.DAUERHAFT,
             bild=create_dummy_image('alpha.png'),
         )
-        s_active2 = Sponsor.objects.create(
+        Sponsor.objects.create(
             name="Silber Sponsor Beta",
             logo_typ=Sponsor.LogoTyp.LOGO,
             rang=20,
@@ -354,7 +354,7 @@ class SponsorFrontendViewsTests(TestCase):
             aktiv_modus=Sponsor.AktivModus.DAUERHAFT,
             bild=create_dummy_image('beta.png'),
         )
-        s_inactive = Sponsor.objects.create(
+        Sponsor.objects.create(
             name="Ehemaliger Sponsor Gamma",
             rang=5,
             aktiv_modus=Sponsor.AktivModus.INAKTIV,
@@ -475,7 +475,7 @@ class SponsorNavigationAndSeedFeaturesTests(TestCase):
 
     def test_dashboard_and_list_sponsor_without_url(self):
         """Sponsor ohne URL wird auf Dashboard und Sponsorenseite ohne Klick-Link gerendert."""
-        sponsor = Sponsor.objects.create(
+        Sponsor.objects.create(
             name="No URL Sponsor",
             logo_typ=Sponsor.LogoTyp.LOGO,
             url="",

@@ -9,7 +9,6 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from configuration.cache import (
-    invalidate_event_capacity_cache,
     invalidate_active_event_cache,
     get_request_cache,
     safe_cache_get,

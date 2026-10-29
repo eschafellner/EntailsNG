@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.utils.safestring import mark_safe
 from configuration.cache import invalidate_active_event_cache
 from configuration.translations import get_translation
-from seating.models import SeatingCell, SeatingPlan
+from seating.models import SeatingPlan
 from users.admin_filters import RegistrationRealNameFilter
 from .models import Event, EventRegistration, TicketType
 from .exceptions import EventFullError, EventLifecycleError
