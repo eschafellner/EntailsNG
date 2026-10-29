@@ -1,6 +1,9 @@
-import time
 import logging
+import signal
+import threading
+import time
 from django.core.management.base import BaseCommand
+from django.db import close_old_connections
 from emails.services import process_email_queue
 
 logger = logging.getLogger(__name__)
@@ -43,13 +46,25 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(f"Starte E-Mail Queue Worker im Daemon-Modus (Intervall: {interval}s, Limit: {limit})...")
         )
+        stop = threading.Event()
+        previous_handler = signal.signal(signal.SIGTERM, lambda *_: stop.set())
         try:
-            while True:
-                sent, failed = process_email_queue(limit=limit)
-                if sent > 0 or failed > 0:
-                    self.stdout.write(
-                        self.style.SUCCESS(f"[{time.strftime('%X')}] {sent} gesendet, {failed} fehlgeschlagen.")
-                    )
-                time.sleep(interval)
+            while not stop.is_set():
+                # Fehler eines Durchlaufs (z. B. DB-Verbindungsabbruch) beenden den Worker nicht.
+                try:
+                    close_old_connections()
+                    sent, failed = process_email_queue(limit=limit)
+                    if sent > 0 or failed > 0:
+                        self.stdout.write(
+                            self.style.SUCCESS(f"[{time.strftime('%X')}] {sent} gesendet, {failed} fehlgeschlagen.")
+                        )
+                except Exception:
+                    logger.exception('Queue-Durchlauf fehlgeschlagen; neuer Versuch nach Intervall')
+                stop.wait(interval)
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("\nE-Mail Queue Worker durch Benutzer beendet."))
+        else:
+            self.stdout.write(self.style.WARNING("E-Mail Queue Worker nach SIGTERM beendet."))
+        finally:
+            signal.signal(signal.SIGTERM, previous_handler)
+            close_old_connections()
