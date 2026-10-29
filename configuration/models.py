@@ -178,11 +178,6 @@ class NavigationItem(models.Model):
             # Auch Speichern ohne clean() (Shell, Fixtures, Datenmigrationen) nur mit geprüftem SVG.
             self.icon_svg = sanitize_and_validate_svg(self.icon_svg)
         super().save(*args, **kwargs)
-        invalidate_navigation_cache()
-
-    def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
-        invalidate_navigation_cache()
 
 
 class SystemTranslation(models.Model):
@@ -204,14 +199,6 @@ class SystemTranslation(models.Model):
 
     def __str__(self):
         return f'{self.key}: {self.text[:30]}'
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        invalidate_system_translations_cache()
-
-    def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
-        invalidate_system_translations_cache()
 
 
 class ClanSeatConfiguration(models.Model):
@@ -402,8 +389,6 @@ class GeneralConfiguration(models.Model):
         if self.kontoinhaber:
             self.kontoinhaber = self.kontoinhaber.strip()
         super().save(*args, **kwargs)
-        safe_cache_delete('general_configuration')
-        invalidate_general_configuration_cache()
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Die Systemeinstellungen können nicht gelöscht werden.")
@@ -602,7 +587,7 @@ class SiteCustomization(models.Model):
         self.clean()
         self.pk = 1
         super().save(*args, **kwargs)
-        invalidate_site_customization_cache()
+        # Eigener Cache über den post_save-Receiver; Texte/Navigation hängen zusätzlich davon ab.
         invalidate_system_translations_cache()
         invalidate_navigation_cache()
 
@@ -674,6 +659,8 @@ class SystemErrorLog(models.Model):
         return expired.delete()[0]
 
 
+# Zentrale Cache-Invalidierung: Receiver greifen bei save()/delete() und QuerySet.delete();
+# die Singleton-delete()-Methoden sperren nur Einzelobjekte.
 @receiver(post_save, sender=SystemTranslation)
 @receiver(post_delete, sender=SystemTranslation)
 def _on_translation_change(sender, **kwargs):

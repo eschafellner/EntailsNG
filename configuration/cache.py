@@ -4,6 +4,7 @@ Verhindert zirkuläre Importe zwischen events, seating, configuration und contex
 Fängt Verbindungsfehler (z. B. temporärer Redis-Ausfall) robust ab.
 """
 import logging
+import threading
 from django.core.cache import cache
 from django.db import transaction
 
@@ -107,8 +108,6 @@ def invalidate_general_configuration_cache():
     """Invalidiert den Cache für die allgemeine Systemkonfiguration."""
     transaction.on_commit(lambda: safe_cache_delete('general_configuration'))
 
-
-import threading
 
 _request_local = threading.local()
 

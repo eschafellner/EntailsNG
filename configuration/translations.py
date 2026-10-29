@@ -1,4 +1,11 @@
-from configuration.cache import safe_cache_get_or_set
+import string
+
+from configuration.cache import (  # noqa: F401 – init/clear: Re-Export (Tests)
+    clear_request_cache,
+    get_request_cache,
+    init_request_cache,
+    safe_cache_get_or_set,
+)
 from configuration.models import SystemTranslation
 
 TRANSLATION_CACHE_KEY = 'system_translations'
@@ -1316,16 +1323,6 @@ DEFAULT_TEXTS = {
     'admin_user_anonymize_banned': 'Gesperrte Konten bleiben zur Durchsetzung der Sperre unverändert.',
     'seating_label_invalid_chars': 'Die Bezeichnung „{label}“ enthält unzulässige Zeichen. Erlaubt sind Buchstaben, Ziffern, Leerzeichen und {allowed}',
 }
-
-
-
-import string
-
-from configuration.cache import (  # noqa: F401 – init/clear: Re-Export (Tests)
-    get_request_cache,
-    init_request_cache,
-    clear_request_cache,
-)
 
 
 
