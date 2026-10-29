@@ -34,6 +34,7 @@
             <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #38bdf8; text-transform: uppercase;">{% t "guest_list_stat_total" "Angemeldet" %}</div>
             <div style="font-size: 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: bold; color: var(--ink);">{{ total_count }} / {{ event.max_guests }}</div>
           </div>
+          {% if show_payment_status %}
           <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 10px; padding: 8px 14px; text-align: center;">
             <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #22c55e; text-transform: uppercase;">{% t "guest_list_stat_paid" "Bezahlt" %}</div>
             <div style="font-size: 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: bold; color: #22c55e;">{{ paid_count }} ({{ paid_percent }}%)</div>
@@ -42,6 +43,7 @@
             <div style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #eab308; text-transform: uppercase;">{% t "guest_list_stat_unpaid" "Offen" %}</div>
             <div style="font-size: 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: bold; color: #eab308;">{{ unpaid_count }}</div>
           </div>
+          {% endif %}
         </div>
       </div>
 
@@ -113,7 +115,8 @@
             </select>
           </div>
 
-          <!-- Status-Filter -->
+          {% if show_payment_status %}
+          <!-- Status-Filter (nur Orga) -->
           <div class="guest-select-box">
             <select id="status-filter-select" class="guest-input-field guest-select-field">
               <option value="">💳 {% t "guest_list_status_filter_all" "Alle Bezahlstatus" %}</option>
@@ -121,6 +124,7 @@
               <option value="unpaid" {% if selected_status == 'unpaid' %}selected{% endif %}>⏳ {% t "guest_list_status_filter_unpaid" "Zahlung offen" %}</option>
             </select>
           </div>
+          {% endif %}
         </div>
 
         <!-- Treffer-Zähler Badge -->
@@ -155,7 +159,7 @@
                   data-username="{{ reg.user.username|lower }}" 
                   data-clan="{% if reg.cached_clan %}{{ reg.cached_clan.slug|lower }}{% else %}none{% endif %}" 
                   data-clan-name="{% if reg.cached_clan %}{{ reg.cached_clan.name|lower }}{% endif %}"
-                  data-paid="{% if reg.payment_status == 'PAID' %}paid{% else %}unpaid{% endif %}"
+                  data-paid="{% if show_payment_status or user.is_authenticated and reg.user_id == user.id %}{% if reg.payment_status == 'PAID' %}paid{% else %}unpaid{% endif %}{% endif %}"
                   style="border-bottom: 1px solid var(--line); transition: background 0.15s ease; {% if user.is_authenticated and reg.user_id == user.id %}background: rgba(248, 171, 45, 0.05);{% endif %}">
                 
                 <!-- 1. Index -->
@@ -214,7 +218,9 @@
 
                 <!-- 5. Bezahlstatus -->
                 <td class="col-payment" style="padding: 14px 16px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
-                  {% if reg.payment_status == 'PAID' %}
+                  {% if not show_payment_status and not user.is_authenticated or not show_payment_status and reg.user_id != user.id %}
+                    <span style="color: var(--muted); opacity: 0.6;">–</span>
+                  {% elif reg.payment_status == 'PAID' %}
                     <span class="payment-badge payment-paid" style="display: inline-flex; align-items: center; gap: 5px; background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: bold; white-space: nowrap;" title="Bezahlt">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="20 6 9 17 4 12"></polyline>

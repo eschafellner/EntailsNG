@@ -1866,6 +1866,8 @@ class GuestListAndPaymentCheckTests(TestCase):
 
     def test_guest_list_filter_by_payment_status(self):
         """Statusfilter trennt nach bezahlt und unbezahlt."""
+        # Seit F-025 steht der Statusfilter nur der Orga zur Verfügung.
+        self.client.force_login(self.staff_admin)
         resp_paid = self.client.get(reverse('guest_list'), {'status': 'paid'})
         self.assertEqual(len(resp_paid.context['registrations']), 2)
 

@@ -713,10 +713,17 @@ def guest_list_view(request, slug=None):
     Zeigt Username, Clan (verlinkt), Sitzplatz (mit Highlighting-Link) und Bezahlstatus (Icon).
     Beinhaltet Suchfunktion für Username und Filter für Clans sowie die Anzeige des letzten Kontochecks.
     """
+    # F-025: Ohne Staff-Konto nur veröffentlichte Events (keine Entwürfe, beendeten/abgesagten Events).
+    published = (Event.Status.REGISTRATION_OPEN, Event.Status.RUNNING)
+    is_staff = request.user.is_authenticated and request.user.is_staff
     if slug:
         event = get_object_or_404(Event, slug=slug)
+        if not is_staff and event.effective_status not in published:
+            raise Http404
     else:
         event = get_active_event()
+        if event and not is_staff and event.effective_status not in published:
+            event = None
 
     registrations = []
     total_count = 0
@@ -733,9 +740,12 @@ def guest_list_view(request, slug=None):
             or request.user.is_superuser
         )
 
+    # Zahlungsstatus nur für die Orga; Gäste sehen ihn nur bei der eigenen Anmeldung.
+    show_payment_status = is_staff or can_update_payment_check
+
     q = request.GET.get('q', '').strip()
     clan_filter = request.GET.get('clan', '').strip()
-    status_filter = request.GET.get('status', '').strip()
+    status_filter = request.GET.get('status', '').strip() if show_payment_status else ''
 
     if event:
         # 1. Alle aktiven (nicht stornierten) Anmeldungen mit Sitzen und User laden
@@ -803,6 +813,7 @@ def guest_list_view(request, slug=None):
         'selected_clan': clan_filter,
         'selected_status': status_filter,
         'can_update_payment_check': can_update_payment_check,
+        'show_payment_status': show_payment_status,
         'last_payment_check': event.last_payment_check if event else None,
     }
     return render(request, 'events/guest_list.html', context)

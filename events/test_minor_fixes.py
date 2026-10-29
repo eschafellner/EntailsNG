@@ -68,3 +68,48 @@ class GuestListToastTests(TestCase):
         self.assertIn('function showToast', content)
         self.assertNotIn('toast.innerHTML', content)
         self.assertIn("toast.textContent = (isError ? '⚠️ ' : '✓ ') + message;", content)
+
+
+class GuestListVisibilityTests(TestCase):
+    """F-025: Öffentliche Gästeliste nur für veröffentlichte Events, Zahlungsstatus nur für Orga/eigene Anmeldung."""
+
+    def setUp(self):
+        now = timezone.now()
+        self.open_event = Event.objects.create(title='Offene LAN', slug='offene-lan', is_active=True,
+            status=Event.Status.REGISTRATION_OPEN, start_date=now + timedelta(days=2), end_date=now + timedelta(days=3))
+        self.draft = Event.objects.create(title='Geheimer Entwurf', slug='geheimer-entwurf', status=Event.Status.DRAFT,
+            start_date=now + timedelta(days=20), end_date=now + timedelta(days=21))
+        self.past = Event.objects.create(title='Alte LAN', slug='alte-lan', status=Event.Status.FINISHED,
+            start_date=now - timedelta(days=30), end_date=now - timedelta(days=29))
+        self.payer = User.objects.create_user('gl-payer')
+        self.guest = User.objects.create_user('gl-guest')
+        for event in (self.open_event, self.draft, self.past):
+            EventRegistration.objects.create(user=self.payer, event=event, payment_status=EventRegistration.PaymentStatus.PAID)
+        EventRegistration.objects.create(user=self.guest, event=self.open_event)
+
+    def test_only_published_events_are_public(self):
+        self.assertEqual(self.client.get(reverse('guest_list_slug', args=['offene-lan'])).status_code, 200)
+        for slug in ('geheimer-entwurf', 'alte-lan'):
+            with self.subTest(slug=slug):
+                self.assertEqual(self.client.get(reverse('guest_list_slug', args=[slug])).status_code, 404)
+        self.client.force_login(User.objects.create_user('gl-staff', is_staff=True))
+        self.assertContains(self.client.get(reverse('guest_list_slug', args=['geheimer-entwurf'])), 'gl-payer')
+
+    def test_payment_status_only_for_orga_or_own_registration(self):
+        url = reverse('guest_list_slug', args=['offene-lan'])
+        anonymous = self.client.get(url).content.decode()
+        self.assertNotIn('payment-paid', anonymous)
+        self.assertNotIn('payment-unpaid', anonymous)
+        self.assertNotIn('data-paid="paid"', anonymous)
+        self.assertNotIn('<select id="status-filter-select"', anonymous)
+        self.assertEqual(self.client.get(url, {'status': 'paid'}).context['registrations'].__len__(), 2)
+
+        self.client.force_login(self.payer)
+        own = self.client.get(url).content.decode()
+        self.assertEqual(own.count('payment-badge payment-'), 1)
+        self.assertIn('payment-paid', own)
+
+        self.client.force_login(User.objects.create_user('gl-orga', is_staff=True))
+        orga = self.client.get(url).content.decode()
+        self.assertEqual(orga.count('payment-badge payment-'), 2)
+        self.assertIn('<select id="status-filter-select"', orga)
