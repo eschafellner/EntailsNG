@@ -290,16 +290,16 @@ class ContactDeliveryTests(ContactFixtures, TestCase):
             queue_system_email('contact_request', 'orga@example.com', {}, reply_to_email='guest@example.com\nBcc: thief@example.com')
         self.assertFalse(OutgoingEmail.objects.exists())
 
-    @override_settings(IS_TESTING=False)
+    # Seit F-021 ist der Versand-Thread optional (EMAIL_INLINE_TRIGGER); seit F-007 zählt IS_TESTING statt argv.
+    @override_settings(IS_TESTING=False, EMAIL_INLINE_TRIGGER=True)
     def test_worker_starts_once_after_the_complete_transaction_commits(self):
-        with patch('emails.services.sys.argv', ['manage.py', 'runserver']):
-            with patch('emails.services.threading.Thread') as worker:
-                with self.captureOnCommitCallbacks(execute=True):
-                    with transaction.atomic():
-                        self.submit()
-                        worker.assert_not_called()
-                worker.return_value.start.assert_called_once()
-                self.assertEqual(OutgoingEmail.objects.count(), 2)
+        with patch('emails.services.threading.Thread') as worker:
+            with self.captureOnCommitCallbacks(execute=True):
+                with transaction.atomic():
+                    self.submit()
+                    worker.assert_not_called()
+            worker.return_value.start.assert_called_once()
+            self.assertEqual(OutgoingEmail.objects.count(), 2)
 
     def test_account_deletion_erases_contact_copies_even_with_other_reply_address(self):
         user = get_user_model().objects.create_user('contact_guest', 'account@example.com', 'password')
