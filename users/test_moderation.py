@@ -111,6 +111,8 @@ class UserModerationTests(TestCase):
 
     def test_fingerprints_and_ban_survive_hard_deletion(self):
         ban = self.ban()
+        # Seit F-024 verhindert PROTECT das Löschen von Konten mit Anmeldungen.
+        self.registration.delete()
         self.user.delete()
         ban.refresh_from_db()
         self.assertIsNone(ban.user_id)

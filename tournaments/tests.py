@@ -1616,6 +1616,8 @@ class TeamFeedbackAndIntegrityTests(TestCase):
             TournamentRegistrationService.register_team(self.tournament.id, self.captain, self.team.id)
         self.assertIn("maximal 5 Spieler erlaubt", str(cm.exception))
         m6.delete()
+        # Anmeldungen sind seit F-024 geschützt (PROTECT); Hilfskonto samt Anmeldung entfernen.
+        EventRegistration.objects.filter(user=player6).delete()
         player6.delete()
 
         # 6. Teammitglied nicht eingecheckt wird abgelehnt
