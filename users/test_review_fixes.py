@@ -88,3 +88,32 @@ class UsernameCaseCollisionTests(TestCase):
         form = self.form('bob@example')
         self.assertFalse(form.is_valid())
         self.assertIn('@', str(form.errors['username']))
+
+
+class RateLimitPublicApiTests(SimpleTestCase):
+    """F-017: Nur öffentliche Cache-API, Ablauf bleibt auch nach Neuanlage durch incr gesetzt."""
+
+    def public_cache(self, **behaviour):
+        from unittest.mock import MagicMock
+        fake = MagicMock(spec=['add', 'incr', 'touch'])
+        for name, value in behaviour.items():
+            getattr(fake, name).side_effect = value
+        return fake
+
+    def test_works_with_public_cache_api_only(self):
+        fake = self.public_cache(add=[True])
+        with patch('users.rate_limits.cache', fake):
+            self.assertTrue(reserve_rate_limit('pub-limit', limit=3, timeout=60))
+        fake.add.assert_called_once_with('pub-limit', 1, timeout=60)
+
+    def test_counter_recreated_by_incr_gets_expiry(self):
+        fake = self.public_cache(add=[False], incr=[1])
+        with patch('users.rate_limits.cache', fake):
+            self.assertTrue(reserve_rate_limit('pub-recreated', limit=3, timeout=60))
+        fake.touch.assert_called_once_with('pub-recreated', 60)
+
+    def test_cache_failure_policy_is_explicit(self):
+        fake = self.public_cache(add=RuntimeError('cache down'))
+        with patch('users.rate_limits.cache', fake), self.assertLogs('users.rate_limits', level='WARNING'):
+            self.assertFalse(reserve_rate_limit('pub-down', limit=3, timeout=60))
+            self.assertTrue(reserve_rate_limit('pub-down', limit=3, timeout=60, fail_open=True))
