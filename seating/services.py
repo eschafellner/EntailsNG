@@ -2,7 +2,8 @@
 from django.core.cache import cache
 from django.db.models import Q
 from configuration.cache import invalidate_event_capacity_cache, safe_cache_get_or_set
-from .models import SeatingCell, SeatingPlan
+from django.core.exceptions import ValidationError
+from .models import SeatingCell, SeatingPlan, validate_seat_label, validate_text_label
 
 CAPACITY_CACHE_KEY_PREFIX = 'event_capacity_stats_'
 CACHE_SECONDS = 300
@@ -162,6 +163,11 @@ class SeatingPlanService:
             # 3. Feldlängen validieren
             seat_label = str(c.get('seat_label', '') or '').strip()[:20]
             text_label = str(c.get('text_label', '') or '').strip()[:50]
+            for validator, value in ((validate_seat_label, seat_label), (validate_text_label, text_label)):
+                try:
+                    validator(value)
+                except ValidationError as exc:
+                    raise SeatingPlanValidationError(f'Position ({x},{y}): {exc.messages[0]}')
             raw_res_status = c.get('reservation_status')
             reservation_status = (
                 SeatingCell.ReservationStatus.BLOCKED

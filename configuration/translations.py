@@ -1309,6 +1309,7 @@ DEFAULT_TEXTS = {
     'msg_payment_check_forbidden': 'Du hast keine Berechtigung, den Kontocheck zu aktualisieren.',
     'msg_payment_check_invalid_date': 'Ungültiges Datumsformat übergeben.',
     'admin_outgoing_email_sensitive_hidden': 'Der Inhalt dieser Nachricht enthält einen Zugangslink und wird nicht angezeigt. Er wird nach Versand, Ablauf oder endgültigem Fehlschlag gelöscht.',
+    'seating_label_invalid_chars': 'Die Bezeichnung „{label}“ enthält unzulässige Zeichen. Erlaubt sind Buchstaben, Ziffern, Leerzeichen und {allowed}',
 }
 
 

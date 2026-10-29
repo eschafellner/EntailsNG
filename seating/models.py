@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
+import re
 import uuid
 from configuration.cache import invalidate_event_capacity_cache
 from emails.services import send_system_email
@@ -142,6 +143,28 @@ class SeatingPlan(models.Model):
         return new_plan
 
 
+# F-034: Sitz- und Beschriftungstexte erscheinen in Admin-, Editor- und Gastansichten.
+# Nur unkritische Zeichen zulassen (keine Anführungszeichen, spitzen Klammern, Backslashes).
+SEAT_LABEL_ALLOWED_EXTRA = ' .-/#'
+TEXT_LABEL_ALLOWED_EXTRA = ' .,:!?&+()-/#'
+_SEAT_LABEL_RE = re.compile(r'[\w%s]*' % re.escape(SEAT_LABEL_ALLOWED_EXTRA))
+_TEXT_LABEL_RE = re.compile(r'[\w%s]*' % re.escape(TEXT_LABEL_ALLOWED_EXTRA))
+
+
+def label_error_message(label, allowed_extra):
+    from configuration.translations import get_translation
+    return get_translation('seating_label_invalid_chars', label=label, allowed=allowed_extra.strip())
+
+
+def validate_seat_label(value):
+    if not _SEAT_LABEL_RE.fullmatch(value or ''):
+        raise ValidationError(label_error_message(value, SEAT_LABEL_ALLOWED_EXTRA))
+
+
+def validate_text_label(value):
+    if not _TEXT_LABEL_RE.fullmatch(value or ''):
+        raise ValidationError(label_error_message(value, TEXT_LABEL_ALLOWED_EXTRA))
+
 
 class SeatingCell(models.Model):
     """Eine einzelne Kachel im Raster (Sitzplatz, Wand, Tür, Label)"""
@@ -177,10 +200,12 @@ class SeatingCell(models.Model):
     )
 
     seat_label = models.CharField(
-        max_length=20, blank=True, verbose_name="Sitzplatz-Bezeichnung"
+        max_length=20, blank=True, verbose_name="Sitzplatz-Bezeichnung",
+        validators=[validate_seat_label],
     )
     text_label = models.CharField(
-        max_length=50, blank=True, verbose_name="Beschriftungstext"
+        max_length=50, blank=True, verbose_name="Beschriftungstext",
+        validators=[validate_text_label],
     )
 
     registration = models.ForeignKey(

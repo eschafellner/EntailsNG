@@ -36,11 +36,16 @@ function loadModalGrid(eventId) {
     .then(res => res.json())
     .then(data => {
       if (data.error) {
-        container.innerHTML = data.error;
+        container.textContent = data.error;
         return;
       }
 
-      let gridHtml = `<div style="display: grid; grid-template-columns: repeat(${data.columns}, 32px); gap: 4px;">`;
+      // Serverdaten (Sitz-/Beschriftungstexte, Benutzernamen) nur per textContent/title
+      // ausgeben, nie als HTML-String: Sitzpläne sind durch Staff frei beschriftbar.
+      const grid = document.createElement('div');
+      grid.style.display = 'grid';
+      grid.style.gridTemplateColumns = `repeat(${Number(data.columns) || 0}, 32px)`;
+      grid.style.gap = '4px';
       const cellMap = {};
       data.cells.forEach(c => cellMap[`${c.x}_${c.y}`] = c);
 
@@ -48,7 +53,12 @@ function loadModalGrid(eventId) {
         for (let x = 1; x <= data.columns; x++) {
           const c = cellMap[`${x}_${y}`];
           if (!c) {
-            gridHtml += `<div style="width:32px; height:32px; background:#1e293b; border-radius:4px;"></div>`;
+            const empty = document.createElement('div');
+            empty.style.width = '32px';
+            empty.style.height = '32px';
+            empty.style.background = '#1e293b';
+            empty.style.borderRadius = '4px';
+            grid.appendChild(empty);
             continue;
           }
 
@@ -86,13 +96,23 @@ function loadModalGrid(eventId) {
             }
           }
 
-          const clickAttr = isClickable ? `onclick="selectSeatForUser(${regId}, ${x}, ${y}, '${c.seat_label || ''}', '${username}')"` : '';
-          gridHtml += `<div ${clickAttr} title="${title}" style="background: ${bg}; width: 32px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: white; cursor: ${cursor}; user-select: none;">${content}</div>`;
+          const cell = document.createElement('div');
+          cell.title = title;
+          cell.textContent = content;
+          Object.assign(cell.style, {
+            background: bg, width: '32px', height: '32px', borderRadius: '4px', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold',
+            color: 'white', cursor: cursor, userSelect: 'none'
+          });
+          if (isClickable) {
+            const seatLabel = c.seat_label || '';
+            cell.addEventListener('click', () => selectSeatForUser(Number(regId), x, y, seatLabel, username));
+          }
+          grid.appendChild(cell);
         }
       }
 
-      gridHtml += '</div>';
-      container.innerHTML = gridHtml;
+      container.replaceChildren(grid);
     });
 }
 
