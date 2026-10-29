@@ -165,6 +165,8 @@ DATABASES = {
         'HOST': db_host,
         'PORT': db_port,
         'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '600')),
+        # Persistente Verbindungen nach DB-Neustart/Restore vor Wiederverwendung prüfen.
+        'CONN_HEALTH_CHECKS': env_bool('DB_CONN_HEALTH_CHECKS', default=True),
     }
 }
 
