@@ -67,4 +67,6 @@ Versand, Ablauf oder endgültigem Fehlschlag wird der Inhalt geleert; solche
 Einträge lassen sich nicht erneut einreihen, der Gast fordert stattdessen einen
 neuen Link an. Migration `emails.0010` leert bereits abgeschlossene Einträge
 einmalig. Die Liste sensibler Vorlagen steht in
-`emails.models.SENSITIVE_TEMPLATE_KEYS`.
+`emails.models.SENSITIVE_TEMPLATE_KEYS`. Reset-Links gelten standardmäßig eine
+Stunde (`PASSWORD_RESET_TIMEOUT`); eine bis dahin nicht versendete Reset-Mail
+läuft ab, statt einen ungültigen Link zu verschicken.

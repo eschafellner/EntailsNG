@@ -116,3 +116,30 @@ class SensitiveOutboxContentTests(TestCase):
         self.assertEqual((finished.body_text, finished.body_html), ('', ''))
         self.assertEqual(pending.body_text, 'Link')
         self.assertEqual(regular.body_text, 'Normaler Inhalt')
+
+
+class PasswordResetLifetimeTests(TestCase):
+    """F-020: Reset-Links gelten standardmäßig eine Stunde; die Mail läuft gleichzeitig ab."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = get_user_model().objects.create_user('f020-gast', email='gast@example.org', password='Sehr-sicheres-Passwort-42')
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_default_reset_timeout_is_one_hour(self):
+        from django.conf import settings
+        self.assertEqual(settings.PASSWORD_RESET_TIMEOUT, 3600)
+
+    def test_reset_mail_expires_with_link(self):
+        from datetime import timedelta
+        from django.conf import settings
+        from django.utils import timezone
+        before = timezone.now()
+        self.client.post(reverse('password_reset'), {'email': self.user.email})
+        outgoing = OutgoingEmail.objects.get(template_key='password_reset', recipient_email=self.user.email)
+        self.assertIsNotNone(outgoing.expires_at)
+        lifetime = timedelta(seconds=settings.PASSWORD_RESET_TIMEOUT)
+        self.assertGreaterEqual(outgoing.expires_at, before + lifetime)
+        self.assertLessEqual(outgoing.expires_at, timezone.now() + lifetime)

@@ -1,5 +1,7 @@
 import logging
+from datetime import timedelta
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.utils import timezone
@@ -352,4 +354,6 @@ class CustomPasswordResetForm(forms.Form):
                 "full_name": user.get_full_name() or user.username,
                 "reset_link": reset_link,
             }
-            queue_system_email("password_reset", user.email, context_data)
+            # Die Mail verfällt zusammen mit dem Link, statt verspätet einen ungültigen Link zu senden.
+            expires_at = timezone.now() + timedelta(seconds=settings.PASSWORD_RESET_TIMEOUT)
+            queue_system_email("password_reset", user.email, context_data, expires_at=expires_at)
