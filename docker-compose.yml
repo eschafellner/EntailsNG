@@ -23,6 +23,18 @@ services:
       - "127.0.0.1:6379:6379"
     container_name: entailsng_redis
     restart: unless-stopped
+    # Passwort über stdin statt Kommandozeile, damit es nicht in der Prozessliste des Hosts steht;
+    # exec hält redis-server als PID 1 (geordnetes Beenden bei SIGTERM).
+    command:
+      - sh
+      - -c
+      - |
+        exec redis-server - <<EOF
+        requirepass $$REDIS_PASSWORD
+        EOF
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD muss in der .env gesetzt sein (siehe .env.example)}
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
 
@@ -41,7 +53,7 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/1
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
       - BEHIND_PROXY=True
       - FORWARDED_ALLOW_IPS=*
     volumes:
@@ -71,7 +83,7 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/1
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
       - SKIP_ENTRYPOINT_WAIT=1
       - SKIP_ENTRYPOINT_MIGRATION=1
     volumes:
@@ -91,7 +103,7 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/1
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
       - SKIP_ENTRYPOINT_INIT=1
     volumes:
       - backup_data:/app/backups_data
@@ -109,7 +121,7 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/1
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
       - SKIP_ENTRYPOINT_INIT=1
     volumes:
       - private_media_data:/app/private_media
@@ -132,7 +144,7 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/1
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
       - SKIP_ENTRYPOINT_INIT=1
     volumes:
       - media_data:/app/media

@@ -48,7 +48,7 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-In der neuen `.env` SECRET_KEY und FIELD_ENCRYPTION_KEY jeweils separat generieren, etwa mit `python -c "import secrets; print(secrets.token_urlsafe(50))"`; ein eigenes DB-Passwort setzen. Für einen auf dem Host gestarteten Webprozess außerdem:
+In der neuen `.env` SECRET_KEY, FIELD_ENCRYPTION_KEY und REDIS_PASSWORD jeweils separat generieren, etwa mit `python -c "import secrets; print(secrets.token_urlsafe(50))"`; ein eigenes DB-Passwort setzen. Für einen auf dem Host gestarteten Webprozess außerdem:
 
 ```dotenv
 DEBUG=True
@@ -56,7 +56,7 @@ ALLOWED_HOSTS=localhost,127.0.0.1,testserver
 CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
 DB_HOST=127.0.0.1
 DB_PORT=5432
-REDIS_URL=redis://127.0.0.1:6379/1
+REDIS_URL=redis://:<REDIS_PASSWORD>@127.0.0.1:6379/1
 BEHIND_PROXY=False
 PUBLIC_BASE_URL=http://127.0.0.1:8000
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend

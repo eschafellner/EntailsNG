@@ -61,12 +61,12 @@ def main():
             'DB_NAME': 'entails_smoke_container', 'DB_USER': 'entails_smoke', 'DB_HOST': 'db',
             'DEBUG': 'False', 'ALLOWED_HOSTS': 'localhost,127.0.0.1',
             'DOMAIN_NAME': 'localhost', 'HTTP_PORT': '0', 'HTTPS_PORT': '0',
-            'PUBLIC_BASE_URL': 'https://localhost', 'REDIS_URL': 'redis://redis:6379/1',
+            'PUBLIC_BASE_URL': 'https://localhost', 'REDIS_PASSWORD': secrets.token_urlsafe(32),
             'EMAIL_BACKEND': 'django.core.mail.backends.locmem.EmailBackend',
             'DEMO_MODE': 'False', 'CLOUDFLARE_TUNNEL_TOKEN': '', 'CERTBOT_EMAIL': 'smoke@example.invalid',
             'BACKUP_ENCRYPTION_KEY': base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
         }
-        secret_values.append(environment['BACKUP_ENCRYPTION_KEY'])
+        secret_values.extend([environment['BACKUP_ENCRYPTION_KEY'], environment['REDIS_PASSWORD']])
         (stage / '.env').write_text(''.join(f'{key}={value}\n' for key, value in environment.items()))
         (stage / '.env').chmod(0o600)
         initial = ['docker', 'compose', '--project-directory', str(stage), '-f', str(stage / 'docker-compose.yml'), '--env-file', str(stage / '.env'), '--profile', 'backups']

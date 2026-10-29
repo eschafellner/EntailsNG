@@ -32,6 +32,13 @@ Diese Anleitung aktualisiert eine vorhandene Installation. Ein frisches Setup st
            print(n.pk, n.title)
    "
    ```
+   **Redis-Passwort (ab diesem Stand Pflicht):** Vor dem Update in der bestehenden `.env` ergänzen, sonst bricht jedes `docker compose`-Kommando mit „REDIS_PASSWORD muss in der .env gesetzt sein“ ab:
+
+   ```bash
+   echo "REDIS_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> .env
+   ```
+
+   Nur URL-sichere Zeichen verwenden (der Wert steht in `REDIS_URL`). Einen eigenen `REDIS_URL`-Eintrag in der `.env` brauchen die Compose-Dienste nicht, sie setzen ihn selbst. Wer Django zusätzlich direkt auf dem Host startet, trägt dort `REDIS_URL=redis://:<REDIS_PASSWORD>@127.0.0.1:6379/1` ein. Redis und alle Anwendungsdienste müssen neu erstellt werden, ein Neustart genügt nicht; das geschieht mit dem `up -d --build` unten, zur Sicherheit zusätzlich `docker compose up -d --force-recreate redis web email_worker clan_seat_worker guest_photo_worker` (bei Backupprofil mit `--profile backups`). Der Redis-Inhalt ist nur Cache; das Volume bleibt erhalten. Prüfen: `docker compose exec -T redis redis-cli ping` (→ `PONG`, Authentisierung über `REDISCLI_AUTH`) und `docker compose exec -T web python manage.py check_runtime --health-host 127.0.0.1 --require-redis`.
 4. Für den Compose-Healthcheck zusätzlich zur öffentlichen Domain `127.0.0.1` in `ALLOWED_HOSTS` setzen. Öffentliche Domain/CSRF-Origins und `PUBLIC_BASE_URL` weiterhin für die tatsächliche Installation konfigurieren. `DEMO_MODE=False` für den normalen Betrieb belassen.
 5. Bei Änderungen, die nicht mit gleichzeitig laufendem altem Code kompatibel sind, schreibenden Zugriff in einem geplanten Wartungsfenster unterbinden und Mail-/Clan-/Gastfoto-/Backup-Worker kontrolliert stoppen. Ein Reverseproxy-Wartungsfenster ersetzt kein Datenbankbackup.
 

@@ -48,6 +48,7 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     RANDOM_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
     RANDOM_ENCRYPT=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
     RANDOM_DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+    RANDOM_REDIS_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
     sed -i "s|SECRET_KEY=hier-einen-langen-zufaelligen-secret-key-eintragen|SECRET_KEY=${RANDOM_SECRET}|" .env
     sed -i "s|FIELD_ENCRYPTION_KEY=hier-einen-langen-zufaelligen-schluessel-eintragen|FIELD_ENCRYPTION_KEY=${RANDOM_ENCRYPT}|" .env
     sed -i "s|DB_PASSWORD=hier-ein-sicheres-datenbank-passwort-eintragen|DB_PASSWORD=${RANDOM_DB_PASSWORD}|" .env
@@ -57,7 +58,8 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     sed -i "s|ALLOWED_HOSTS=lan.meinedomain.de,127.0.0.1|ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0|" .env
     sed -i "s|CSRF_TRUSTED_ORIGINS=https://lan.meinedomain.de|CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000|" .env
     sed -i "s|DB_HOST=db|DB_HOST=127.0.0.1|" .env
-    sed -i "s|REDIS_URL=redis://redis:6379/1|REDIS_URL=redis://127.0.0.1:6379/1|" .env
+    sed -i "s|hier-ein-sicheres-redis-passwort-eintragen|${RANDOM_REDIS_PASSWORD}|g" .env
+    sed -i "s|@redis:6379/1|@127.0.0.1:6379/1|" .env
     sed -i "s|BEHIND_PROXY=True|BEHIND_PROXY=False|" .env
     echo -e "${GREEN}✓ .env erfolgreich initialisiert.${NC}\n"
 fi

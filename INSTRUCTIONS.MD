@@ -129,7 +129,8 @@ nano .env
 * **`DB_PASSWORD`**: Ein starkes, frei erfundenes Passwort (z. B. `MeinGeheimesDBPasswort2026!`).
 * **`DB_HOST`**: `db` (im Docker-Netzwerk) bzw. `127.0.0.1` (bei direktem Host-Betrieb)
 * **`DB_PORT`**: `5432`
-* **`REDIS_URL`**: `redis://redis:6379/1` (für Multi-Worker-Konsistenz und Sitzplatzreservierungen)
+* **`REDIS_PASSWORD`**: Pflicht für Compose; langes Zufallspasswort aus URL-sicheren Zeichen, z. B. `python -c "import secrets; print(secrets.token_urlsafe(32))"`. Compose startet ohne diesen Wert nicht.
+* **`REDIS_URL`**: `redis://:<REDIS_PASSWORD>@redis:6379/1` (für Multi-Worker-Konsistenz und Sitzplatzreservierungen; Compose setzt den Wert für seine Dienste selbst aus `REDIS_PASSWORD`)
 
 #### 3. Web-Worker (Gunicorn)
 * **`WEB_CONCURRENCY`**: Anzahl der Web-Worker im Docker-Service `web`, standardmäßig `3`. Trage zum Beispiel `WEB_CONCURRENCY=2` in `.env` ein, wenn du die Zahl ändern möchtest. Das ist **keine** Einstellung für PostgreSQL-Parallel-Worker oder den separaten `email_worker`.

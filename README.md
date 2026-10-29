@@ -71,7 +71,8 @@ pip install -r requirements.txt
 
 # 3. Konfiguration anlegen und PostgreSQL starten
 Copy-Item .env.example .env
-# .env bearbeiten: Schlüssel setzen, DEBUG=True, DB_HOST=127.0.0.1, BEHIND_PROXY=False
+# .env bearbeiten: Schlüssel und REDIS_PASSWORD setzen, DEBUG=True, DB_HOST=127.0.0.1, BEHIND_PROXY=False,
+# REDIS_URL=redis://:<REDIS_PASSWORD>@127.0.0.1:6379/1
 docker compose up -d db redis
 
 # 4. Datenbank strukturieren & Seeds ausführen
