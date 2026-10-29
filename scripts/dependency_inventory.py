@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def inventory():
     import django
 
-    match = re.search(r'^Django==([0-9.]+)$', (ROOT / 'requirements.txt').read_text(), re.MULTILINE)
+    # requirements.txt ist ein pip-compile-Lockfile: "django==6.0.9 \\" mit folgenden --hash-Zeilen.
+    match = re.search(r'^django==([0-9.]+)\s*\\?\s*$', (ROOT / 'requirements.txt').read_text(), re.MULTILINE | re.IGNORECASE)
     if not match:
         raise RuntimeError('An exact Django pin is required in requirements.txt.')
     expected = match.group(1)

@@ -85,6 +85,17 @@ class DependencyGateTests(SimpleTestCase):
         self.assertFalse(summary['complete'])
         self.assertIn('TimeoutExpired', summary['error'])
 
+    def test_lockfile_pin_with_hashes_is_recognised(self):
+        import django
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'requirements.txt').write_text(
+                f'asgiref==3.13.0 \\\n    --hash=sha256:00\ndjango=={django.get_version()} \\\n'
+                '    --hash=sha256:11 \\\n    --hash=sha256:22\n    # via -r requirements.in\n')
+            with patch.object(dependency_inventory, 'ROOT', root):
+                packages = dependency_inventory.inventory()
+            self.assertTrue(packages)
+
     def test_downgrading_pin_and_runtime_does_not_bypass_security_floor(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
