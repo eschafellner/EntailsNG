@@ -139,10 +139,11 @@ python manage.py check
 python manage.py makemigrations --check --dry-run
 python manage.py test --noinput
 node --test scripts/tests/*.test.cjs
+ruff check .   # ruff==0.17.3 in separater Tool-Umgebung
 python manage.py check_runtime --health-host 127.0.0.1 --require-redis
 ```
 
-Die [CI](.github/workflows/ci.yml) läuft für main/master mit Python 3.12, PostgreSQL 16, Redis 7 und Node 22. Sie prüft Django/JavaScript/Migrationen, ein frisches Setup samt Demo-Wiederholung, echten prozessübergreifenden Redis sowie einen isolierten Imagebau/Compose-Start. Dieser prüft auch HTTPS, statische Dateien, alle Worker und HTTP-Lastszenarien. Keine pauschale WCAG-Aussage aus diesen Tests ableiten. Ein separater Formatter-/Linterlauf ist derzeit nicht konfiguriert.
+Die [CI](.github/workflows/ci.yml) läuft für main/master mit Python 3.12, PostgreSQL 16, Redis 7 und Node 22. Sie prüft Django/JavaScript/Migrationen, ein frisches Setup samt Demo-Wiederholung, echten prozessübergreifenden Redis sowie einen isolierten Imagebau/Compose-Start. Dieser prüft auch HTTPS, statische Dateien, alle Worker und HTTP-Lastszenarien. Keine pauschale WCAG-Aussage aus diesen Tests ableiten. Die CI prüft zusätzlich mit ruff 0.17.3 (Regeln F und E9, Konfiguration [ruff.toml](ruff.toml); lokal `ruff check .`), läuft mit `permissions: contents: read` und bindet Actions per Commit-SHA. Ein Formatter ist nicht konfiguriert.
 
 Seit B1 exportieren `scripts/dependency_inventory.py` und der Container-Smoke den vollständigen installierten Paketbestand einschließlich pip. Ein separater pip-audit-2.10.1-Prozess prüft die Inventare der Testumgebung und des Images; Befunde, übersprungene Pakete, unvollständige Ergebnisse und Abruffehler verhindern einen erfolgreichen Prüfschritt. Zusätzlich wird Django gegen den exakten Pin und mindestens 6.0.9 geprüft. Image/CI verwenden pip 26.2.1; python-dotenv ist auf 1.2.4 aktualisiert. Pillow ist seit 23.10.2026 auf 13.0.0 angehoben, weil pip-audit für 12.3.0 35 Sicherheitsbefunde meldete. Ein lokaler Auditlauf braucht ebenfalls pip 26.2.1, sonst meldet er Befunde zu älteren pip-Versionen. Offizielle Django-Sicherheitshinweise bleiben zusätzlich maßgeblich, da ein Scanner nicht alle aktuellen Korrekturen erfassen muss.
 
