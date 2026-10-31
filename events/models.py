@@ -293,6 +293,13 @@ class TicketType(models.Model):
     price = models.DecimalField(max_digits=6, decimal_places=2, verbose_name="Preis (€)")
     description = models.CharField(max_length=200, blank=True, verbose_name="Hinweis")
     is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    payment_deadline = models.DateField(
+        null=True, blank=True, verbose_name="Zahlungsfrist",
+        help_text=(
+            "Optional: Letzter Tag für den Zahlungseingang (einschließlich). Danach ist die Kategorie "
+            "nicht mehr buchbar, und offene kostenpflichtige Anmeldungen werden automatisch storniert."
+        ),
+    )
 
     class Meta:
         verbose_name = "Ticket-Kategorie"
@@ -300,6 +307,29 @@ class TicketType(models.Model):
 
     def __str__(self):
         return f"{self.event.title} - {self.name} ({self.price} €)"
+
+    @staticmethod
+    def deadline_cutoff(today=None):
+        """Fristen vor diesem Tag (Europe/Vienna) sind abgelaufen; der Fristtag selbst zählt noch."""
+        return today or timezone.localdate()
+
+    @property
+    def is_payment_deadline_passed(self):
+        return self.payment_deadline is not None and self.payment_deadline < self.deadline_cutoff()
+
+    @property
+    def is_bookable(self):
+        return self.is_active and not self.is_payment_deadline_passed
+
+    def clean(self):
+        super().clean()
+        try:
+            event = self.event  # im Admin-Inline beim Neuanlegen ungespeichert, aber gesetzt
+        except Event.DoesNotExist:
+            event = None
+        if self.payment_deadline and event and event.end_date:
+            if self.payment_deadline > timezone.localdate(event.end_date):
+                raise ValidationError({'payment_deadline': "Die Zahlungsfrist darf nicht nach dem Ende der Veranstaltung liegen."})
 
 
 class CheckInResult(tuple):
@@ -598,6 +628,77 @@ class EventRegistration(models.Model):
             self.short_code = code
 
         super().save(*args, **kwargs)
+
+    @property
+    def payment_deadline(self):
+        """Zahlungsfrist der gebuchten Ticketkategorie (None = keine Frist)."""
+        return self.ticket_type.payment_deadline if self.ticket_type_id else None
+
+    @property
+    def requires_payment(self):
+        price = self.effective_price
+        return self.payment_status == self.PaymentStatus.UNPAID and price is not None and price > 0
+
+    def _guest_mail_context(self):
+        price = self.effective_price
+        deadline = self.payment_deadline
+        return {
+            'username': self.user.username,
+            'full_name': self.user.get_full_name() or self.user.username,
+            'event_title': self.event.title,
+            'event_start': timezone.localtime(self.event.start_date).strftime('%d.%m.%Y, %H:%M Uhr'),
+            'event_end': timezone.localtime(self.event.end_date).strftime('%d.%m.%Y, %H:%M Uhr'),
+            'event_location': self.event.location or 'Wird noch bekannt gegeben',
+            'ticket_type': self.ticket_type.name if self.ticket_type else 'Standard Ticket',
+            'price': f'{price:.2f}' if price is not None else '0.00',
+            'payment_reference': self.payment_reference,
+            'payment_deadline': deadline.strftime('%d.%m.%Y') if deadline else '',
+            'dashboard_url': f"{settings.PUBLIC_BASE_URL}/",
+        }
+
+    def send_registration_confirmation_email(self):
+        """Anmeldebestätigung; mit GiroCode und Bankdaten, solange eine Zahlung offen ist."""
+        from django.contrib.auth import get_user_model
+        from configuration.models import GeneralConfiguration
+        from configuration.translations import get_translation
+        from .payment_qr import generate_epc_qr_payload
+        if get_user_model().objects.filter(pk=self.user_id, deleted_at__isnull=False).exists():
+            return
+        try:
+            context_data = self._guest_mail_context()
+            if self.requires_payment and self.payment_deadline:
+                context_data['payment_deadline_hint'] = get_translation(
+                    'mail_payment_deadline_hint', deadline=context_data['payment_deadline'])
+            else:
+                context_data['payment_deadline_hint'] = get_translation('mail_payment_no_deadline_hint')
+
+            config = GeneralConfiguration.load()
+            if self.can_show_payment_qr and self.requires_payment:
+                context_data.update({
+                    'account_holder': config.kontoinhaber,
+                    'iban': config.iban,
+                    'bic': config.bic or '–',
+                })
+                send_system_email('event_registration_confirmation', self.user.email, context_data,
+                                  inline_qr_payload=generate_epc_qr_payload(self, config))
+                return
+            if not self.requires_payment:
+                context_data['payment_hint'] = get_translation('mail_registration_free_hint')
+            else:
+                context_data['payment_hint'] = get_translation('mail_registration_payment_pending_hint')
+            send_system_email('event_registration_confirmation_free', self.user.email, context_data)
+        except Exception as e:
+            logger.exception("Fehler beim Auslösen der Anmeldebestätigung für Anmeldung %s: %s", self.id, e)
+
+    def send_payment_expired_email(self):
+        """Hinweis an den Gast, dass die Anmeldung wegen abgelaufener Zahlungsfrist storniert wurde."""
+        from django.contrib.auth import get_user_model
+        if get_user_model().objects.filter(pk=self.user_id, deleted_at__isnull=False).exists():
+            return
+        try:
+            send_system_email('registration_payment_expired', self.user.email, self._guest_mail_context())
+        except Exception as e:
+            logger.exception("Fehler beim Auslösen der Stornohinweis-Mail für Anmeldung %s: %s", self.id, e)
 
     def send_payment_confirmation_email(self):
         """Sendet die automatische E-Mail-Zahlungsbestätigung an den Gast."""

@@ -196,3 +196,84 @@ DEFAULT_EMAIL_TEMPLATES.update({
         'placeholder_info': '{username}, {event_title}, {seat_label}, {registration_status}',
     },
 })
+
+_REGISTRATION_EVENT_BOX = '''<div style="background: #1e293b; color: #ffffff; padding: 16px; border-radius: 8px; margin: 16px 0;">
+  <p><strong>Veranstaltung:</strong> {event_title}</p>
+  <p><strong>Beginn:</strong> {event_start}</p>
+  <p><strong>Ende:</strong> {event_end}</p>
+  <p><strong>Ort:</strong> {event_location}</p>
+  <p><strong>Benutzername:</strong> {username}</p>
+  <p><strong>Ticket:</strong> {ticket_type}</p>
+  <p><strong>Preis:</strong> {price} €</p>
+</div>'''
+
+_REGISTRATION_PLACEHOLDERS = '''- {username}: Benutzername des Gastes
+- {full_name}: Vor- und Nachname (oder Benutzername)
+- {event_title}: Name der Veranstaltung
+- {event_start} / {event_end}: Beginn und Ende (Europe/Vienna)
+- {event_location}: Veranstaltungsort
+- {ticket_type}: Gebuchte Ticketkategorie
+- {price}: Ticketpreis zum Zeitpunkt der Anmeldung in Euro
+- {payment_reference}: Verwendungszweck (Kurzcode + Name)
+- {payment_deadline}: Zahlungsfrist der Ticketkategorie (TT.MM.JJJJ, leer ohne Frist)
+- {dashboard_url}: Link zum Dashboard'''
+
+DEFAULT_EMAIL_TEMPLATES.update({
+    'event_registration_confirmation': {
+        'name': 'Anmeldebestätigung (mit Zahlung)',
+        'subject': 'Anmeldebestätigung für {event_title}',
+        'content': '''<h2>Anmeldebestätigung</h2>
+<p>Hallo <strong>{full_name}</strong>,</p>
+<p>vielen Dank für deine Anmeldung zur Veranstaltung <strong>{event_title}</strong>!</p>
+''' + _REGISTRATION_EVENT_BOX + '''
+<h3>Zahlung</h3>
+<p>{payment_deadline_hint}</p>
+<p>Scanne den QR-Code mit deiner Banking-App oder überweise mit diesen Daten:</p>
+<p style="text-align: center;"><img src="cid:payment_qr" alt="Zahlungs-QR-Code (GiroCode)" width="200" height="200" style="background: #ffffff; padding: 8px;"></p>
+<div style="background: #f1f5f9; color: #0f172a; padding: 16px; border-radius: 8px; margin: 16px 0;">
+  <p><strong>Kontoinhaber:</strong> {account_holder}</p>
+  <p><strong>IBAN:</strong> {iban}</p>
+  <p><strong>BIC:</strong> {bic}</p>
+  <p><strong>Betrag:</strong> {price} €</p>
+  <p><strong>Verwendungszweck:</strong> {payment_reference}</p>
+</div>
+<p>Nach Zahlungseingang erhältst du eine Bestätigung, und dein Einlass-QR-Code wird im <a href="{dashboard_url}">Dashboard</a> freigeschaltet.</p>
+<p>Viele Grüße,<br>Dein EntailsNG Event Team</p>''',
+        'is_active': True,
+        'placeholder_info': '''Wird bei einer Anmeldung mit offenem Betrag versendet. Das QR-Bild wird über <img src="cid:payment_qr"> eingebunden.
+''' + _REGISTRATION_PLACEHOLDERS + '''
+- {payment_deadline_hint}: Satz zur Zahlungsfrist (Text über Systemtexte anpassbar)
+- {account_holder}, {iban}, {bic}: Bankdaten aus der Allgemeinen Konfiguration''',
+    },
+    'event_registration_confirmation_free': {
+        'name': 'Anmeldebestätigung (ohne Zahlungsdaten)',
+        'subject': 'Anmeldebestätigung für {event_title}',
+        'content': '''<h2>Anmeldebestätigung</h2>
+<p>Hallo <strong>{full_name}</strong>,</p>
+<p>vielen Dank für deine Anmeldung zur Veranstaltung <strong>{event_title}</strong>!</p>
+''' + _REGISTRATION_EVENT_BOX + '''
+<p>{payment_hint}</p>
+<p>Alle Details findest du jederzeit im <a href="{dashboard_url}">Dashboard</a>.</p>
+<p>Viele Grüße,<br>Dein EntailsNG Event Team</p>''',
+        'is_active': True,
+        'placeholder_info': '''Wird bei kostenlosen Tickets versendet oder wenn noch keine Bankdaten hinterlegt sind.
+''' + _REGISTRATION_PLACEHOLDERS + '''
+- {payment_hint}: Hinweis zur Zahlung (Text über Systemtexte anpassbar)''',
+    },
+    'registration_payment_expired': {
+        'name': 'Anmeldung storniert (Zahlungsfrist abgelaufen)',
+        'subject': 'Deine Anmeldung für {event_title} wurde storniert',
+        'content': '''<h2>Anmeldung storniert</h2>
+<p>Hallo <strong>{full_name}</strong>,</p>
+<p>für deine Anmeldung zur Veranstaltung <strong>{event_title}</strong> ist bis zum Ende der Zahlungsfrist am <strong>{payment_deadline}</strong> kein Zahlungseingang verbucht worden. Die Anmeldung wurde deshalb automatisch storniert, ein eventuell gewählter Sitzplatz ist wieder freigegeben.</p>
+<div style="background: #1e293b; color: #ffffff; padding: 16px; border-radius: 8px; margin: 16px 0;">
+  <p><strong>Ticket:</strong> {ticket_type}</p>
+  <p><strong>Preis:</strong> {price} €</p>
+  <p><strong>Verwendungszweck:</strong> {payment_reference}</p>
+</div>
+<p>Bitte überweise nicht mehr auf diese Anmeldung. Falls du bereits bezahlt hast, melde dich bitte beim Orga-Team.</p>
+<p>Viele Grüße,<br>Dein EntailsNG Event Team</p>''',
+        'is_active': True,
+        'placeholder_info': _REGISTRATION_PLACEHOLDERS,
+    },
+})

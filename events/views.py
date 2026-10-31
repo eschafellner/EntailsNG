@@ -67,7 +67,7 @@ def dashboard_view(request):
     registration = None
     ticket_types = []
     if event:
-        ticket_types = list(event.ticket_types.filter(is_active=True))
+        ticket_types = [ticket for ticket in event.ticket_types.filter(is_active=True) if ticket.is_bookable]
         if request.user.is_authenticated:
             registration = (
                 EventRegistration.objects.filter(event=event, user=request.user)

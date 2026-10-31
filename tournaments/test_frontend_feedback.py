@@ -150,6 +150,17 @@ class TournamentFrontendFeedbackTests(TestCase):
         self.assertContains(response, 'Turnierstart:', count=1)
         self.assertContains(response, 'Orga-Team')
 
+    def test_team_manager_button_visible_only_when_logged_in(self):
+        team_list_link = f'href="{reverse("team_list")}"'
+        self.client.logout()
+        response = self.client.get(reverse('tournament_list'))
+        self.assertNotContains(response, 'Teammanager öffnen')
+        self.assertNotContains(response, team_list_link)
+        self.client.force_login(self.guest)
+        response = self.client.get(reverse('tournament_list'))
+        self.assertContains(response, 'Teammanager öffnen', count=1)
+        self.assertContains(response, team_list_link)
+
     def test_original_link_removed_while_backend_provenance_is_preserved(self):
         edition = Tournament.objects.create(title='Feedback new edition', event=self.event,
             game=self.game, status=Tournament.Status.REGISTRATION_OPEN,

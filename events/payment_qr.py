@@ -24,7 +24,7 @@ def generate_epc_qr_payload(registration, config=None):
         registration.effective_price, registration.payment_reference)
 
 
-def _qr_png(payload, box_size=8, border=2):
+def generate_qr_png(payload, box_size=8, border=2):
     qr = qrcode.QRCode(version=None, error_correction=ERROR_CORRECT_M, box_size=box_size, border=border)
     qr.add_data(payload)
     qr.make(fit=True)
@@ -34,11 +34,11 @@ def _qr_png(payload, box_size=8, border=2):
 
 
 def generate_transfer_qr_png(beneficiary_name, iban, bic, amount, reference):
-    return _qr_png(generate_transfer_qr_payload(beneficiary_name, iban, bic, amount, reference))
+    return generate_qr_png(generate_transfer_qr_payload(beneficiary_name, iban, bic, amount, reference))
 
 
 def generate_epc_qr_png(registration, config=None, box_size=8, border=2):
-    return _qr_png(generate_epc_qr_payload(registration, config), box_size, border)
+    return generate_qr_png(generate_epc_qr_payload(registration, config), box_size, border)
 
 
 def generate_checkin_qr_png(url, box_size=8, border=2):

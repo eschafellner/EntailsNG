@@ -93,6 +93,11 @@
           </button>
         {% endif %}
       </div>
+      {% if is_user_registered and registration.requires_payment and registration.payment_deadline %}
+        <p class="ticket-payment-deadline" role="status" style="margin: 8px 0 0; font-size: 13px; color: #fde68a;">
+          ⏳ {% t "dash_payment_deadline_label" deadline=registration.payment_deadline|date:"d.m.Y" %}
+        </p>
+      {% endif %}
 
       {% if general_config.extended_checkin_enabled and is_user_registered and not registration.is_checked_in and not guest_photo and not is_event_expired %}
       <p class="ticket-photo-hint" role="status" style="margin: 12px 0 0; padding: 10px 14px; border-left: 3px solid #eab308; background: rgba(234, 179, 8, 0.12); color: #f3f4f6; font-size: 13px;">
@@ -399,7 +404,7 @@
                     <label for="ticket_type_id" style="display: block; font-size: 11px; font-family: 'DM Sans', sans-serif; color: var(--muted); margin-bottom: 4px;">{% t "status_ticket_category_select" %}</label>
                     <select name="ticket_type_id" id="ticket_type_id" style="width: 100%; padding: 7px 10px; border-radius: 6px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); font-size: 13px; font-family: 'DM Sans', sans-serif;">
                       {% for tt in ticket_types %}
-                        <option value="{{ tt.id }}">{{ tt.name }} ({{ tt.price }} €)</option>
+                        <option value="{{ tt.id }}">{{ tt.name }} ({{ tt.price }} €){% if tt.payment_deadline and tt.price > 0 %} – {% t "ticket_payment_deadline_option" deadline=tt.payment_deadline|date:"d.m.Y" %}{% endif %}</option>
                       {% endfor %}
                     </select>
                   </div>

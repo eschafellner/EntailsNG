@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 
 from django.db import transaction
 from django.utils import timezone
@@ -12,6 +13,8 @@ from .exceptions import (
     InvalidTicketTypeError,
     EventLifecycleError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -243,12 +246,17 @@ class RegistrationService:
                 selected_ticket = ticket_query.first()
                 if not selected_ticket:
                     raise InvalidTicketTypeError("Der gewählte Tickettyp existiert nicht oder ist für dieses Event inaktiv.")
+                if not reserved_clan_slot and selected_ticket.is_payment_deadline_passed:
+                    raise InvalidTicketTypeError(get_translation('registration_ticket_deadline_passed'))
             except (ValueError, TypeError):
                 raise InvalidTicketTypeError("Ungültige Ticketkategorie übergeben.")
         else:
             active_tickets = list(event.ticket_types.filter(is_active=True))
-            if len(active_tickets) >= 1:
-                selected_ticket = active_tickets[0]
+            bookable_tickets = [ticket for ticket in active_tickets if ticket.is_bookable]
+            if bookable_tickets:
+                selected_ticket = bookable_tickets[0]
+            elif active_tickets:
+                raise InvalidTicketTypeError(get_translation('registration_ticket_deadline_passed'))
 
         booking_price = selected_ticket.price if selected_ticket else None
 
@@ -269,6 +277,8 @@ class RegistrationService:
             existing_reg.checked_in_at = None
             existing_reg.save()
             GuestPhotoService.refresh_delete_after(user)
+            if not reserved_clan_slot:
+                transaction.on_commit(existing_reg.send_registration_confirmation_email)
             return existing_reg, False, True
 
         registration = EventRegistration.objects.create(
@@ -278,6 +288,8 @@ class RegistrationService:
             booking_price=booking_price,
         )
         GuestPhotoService.refresh_delete_after(user)
+        if not reserved_clan_slot:
+            transaction.on_commit(registration.send_registration_confirmation_email)
         return registration, True, False
 
 
@@ -402,6 +414,49 @@ class PaymentService:
             invalidate_event_capacity_cache(reg.event_id)
 
         return reg
+
+
+class PaymentDeadlineService:
+    """Storniert offene kostenpflichtige Anmeldungen, deren Ticket-Zahlungsfrist abgelaufen ist."""
+
+    @staticmethod
+    def overdue_queryset(today=None):
+        return (EventRegistration.objects
+                .filter(payment_status=EventRegistration.PaymentStatus.UNPAID,
+                        ticket_type__payment_deadline__lt=TicketType.deadline_cutoff(today))
+                .exclude(event__status__in=[Event.Status.FINISHED, Event.Status.CANCELLED]))
+
+    @staticmethod
+    def cancel_overdue_registrations(today=None):
+        """Gibt die Anzahl der stornierten Anmeldungen zurück; jede Anmeldung in eigener Transaktion."""
+        cancelled = 0
+        for registration_id in PaymentDeadlineService.overdue_queryset(today).values_list('pk', flat=True):
+            if PaymentDeadlineService._cancel_if_overdue(registration_id, today):
+                cancelled += 1
+        return cancelled
+
+    @staticmethod
+    @transaction.atomic
+    def _cancel_if_overdue(registration_id, today=None):
+        from django.contrib.auth import get_user_model
+        from seating.models import ClanSeatHold
+        # Gleiche Sperrreihenfolge wie PaymentService: User -> Event -> Anmeldung.
+        row = EventRegistration.objects.filter(pk=registration_id).values_list('user_id', 'event_id').first()
+        if row is None:
+            return False
+        get_user_model().objects.select_for_update(no_key=True).get(pk=row[0])
+        Event.objects.select_for_update().get(pk=row[1])
+        reg = (PaymentDeadlineService.overdue_queryset(today)
+               .select_for_update(of=('self',)).select_related('ticket_type', 'event', 'user')
+               .filter(pk=registration_id).first())
+        # Erneut unter Sperre prüfen: Zahlung, Fristverlängerung oder Clan-Deckung seit der Abfrage.
+        if (reg is None or not reg.requires_payment or reg.is_checked_in
+                or ClanSeatHold.objects.filter(funded_registration=reg).exists()):
+            return False
+        PaymentService.mark_cancelled(reg)
+        logger.info("Anmeldung %s wegen abgelaufener Zahlungsfrist (%s) storniert.", reg.pk, reg.payment_deadline)
+        transaction.on_commit(reg.send_payment_expired_email)
+        return True
 
 
 class CheckInService:

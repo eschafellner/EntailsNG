@@ -32,9 +32,11 @@
             ⚠️ {% t "tournament_checkin_needed" "Nicht eingecheckt (Check-in am Einlass nötig)" %}
           </span>
         {% endif %}
-        <a href="{% url 'team_list' %}" class="btn-action-primary">
-          👥 {% t "tournament_teammanager_btn" "Teammanager öffnen" %}
-        </a>
+        {% if user.is_authenticated %}
+          <a href="{% url 'team_list' %}" class="btn-action-primary">
+            👥 {% t "tournament_teammanager_btn" "Teammanager öffnen" %}
+          </a>
+        {% endif %}
       </div>
     </div>
   </div>

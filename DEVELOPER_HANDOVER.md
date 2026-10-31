@@ -102,7 +102,7 @@ Event im Entwurf mit künftigen Terminen, Ort, Kapazität und aktiven Tickets an
 
 ```bash
 python manage.py process_email_queue --daemon --interval 5
-python manage.py process_clan_seat_holds --daemon --interval 60
+python manage.py process_clan_seat_holds --daemon --interval 60   # auch Ticket-Zahlungsfristen (einmalig: process_payment_deadlines)
 python manage.py purge_guest_photos --daemon --interval 3600   # auch Fehlerprotokoll-Frist und abgelaufene Sessions
 # Optional nach Einrichtung von Schlüssel, Speicher und passenden PG-Tools:
 python manage.py process_backup_jobs --daemon
@@ -115,7 +115,7 @@ Die vollständige [Env-Matrix](docs/configuration.md) beschreibt Defaults und Be
 | App/Paket | Verantwortung und Einstieg |
 | --- | --- |
 | `config` | Projektsettings, Root-URLs, WSGI/ASGI, Testrunner (`config/testing.py`); keine eigene registrierte Fachapp. |
-| `events` | Event, **TicketType**, EventRegistration, Zahlungs-/Anmelde-/Check-in-Services; `/checkin/scanner/`; [Scanner](docs/scanner-feedback.md), [erweiterter Check-in mit Gastfoto](docs/extended-checkin.md). |
+| `events` | Event, **TicketType**, EventRegistration, Zahlungs-/Anmelde-/Check-in-Services; `/checkin/scanner/`; [Scanner](docs/scanner-feedback.md), [erweiterter Check-in mit Gastfoto](docs/extended-checkin.md), [Anmeldebestätigung und Zahlungsfrist](docs/registration-confirmation.md). |
 | `users` | E-Mail-/Username-Login über EmailOrUsernameBackend, Verifizierung, Profil, Kontolöschung, Orga-Sperren; [Löschung](docs/account-deletion.md), [Sperren](docs/user-bans.md). |
 | `tournaments` | Sechs Modi, Teams/Kader/Einladungen, Vorschau/Start, Ergebnisse/Bestätigung, Neustarts und externe Turniere. Services im **Paket** `tournaments/services/`; [Auslosung](docs/tournament-draws.md), [Ergebnisse](docs/tournament-result-management.md), [Einladungen](docs/team-recruitment.md), [externe Turniere](docs/external-tournaments.md). Podium erst nach expliziter Bestätigung und FINISHED. |
 | `seating` | Rastereditor, Reservierungen, Clanvormerkungen und Sammelzahlungen; [Vormerkungen](docs/clan-seat-holds.md), [Zahlungen](docs/clan-seat-payments.md). |
@@ -125,7 +125,7 @@ Die vollständige [Env-Matrix](docs/configuration.md) beschreibt Defaults und Be
 | `info` | CMS-Seiten und freigegebene Einbettungen; [Einbettungen](docs/external-embedding.md). |
 | `knowledge` | Mitarbeiterwissen mit Revisionen, Veröffentlichung, Konfliktprüfung und privaten Anhängen; [Wissensbasis](docs/internal-knowledge-base.md). |
 | `news` | Veröffentlichte Artikel, angepinnte Meldung und Dashboardkarussell; [Karussell](docs/news-carousel.md). |
-| `emails` | Dynamisch konfiguriertes SMTP-Backend, verschlüsselte Zugangsdaten, persistente Outbox/Leases, Adminbereinigung; [Bereinigung](docs/email-cleanup.md). |
+| `emails` | Dynamisch konfiguriertes SMTP-Backend, verschlüsselte Zugangsdaten, persistente Outbox/Leases, eingebettetes QR-Bild (`inline_qr_payload` → `cid:payment_qr`), Adminbereinigung; [Bereinigung](docs/email-cleanup.md). |
 | `media_designer` | Eventgebundene Badge-/Urkundenvorlagen, verwaltete Fonts, lokale 300-DPI-PDFs; Einstieg `/media-designer/` für Mitarbeiter. |
 | `sponsors` | Partner, Sponsoren, Logos und öffentliche Übersicht. |
 | `backups` | Verschlüsselte native PG-/Mediensicherungen, isolierte Vorprüfung, Wartungsfenster und Recovery; [Betriebsanleitung](docs/backups.md). |

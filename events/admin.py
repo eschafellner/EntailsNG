@@ -28,7 +28,7 @@ class EventAdminForm(forms.ModelForm):
         queryset=Event.objects.all(),
         required=False,
         label="🎟️ Ticket-Kategorien übernehmen von",
-        help_text="Optional: Kopiert alle Ticket-Kategorien (Namen, Preise, Hinweise) eines anderen Events für dieses Event.",
+        help_text="Optional: Kopiert alle Ticket-Kategorien (Namen, Preise, Hinweise) eines anderen Events für dieses Event. Zahlungsfristen werden nicht übernommen und müssen neu gesetzt werden.",
     )
 
     class Meta:

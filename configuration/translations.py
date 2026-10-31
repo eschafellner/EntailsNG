@@ -1324,6 +1324,13 @@ DEFAULT_TEXTS = {
     'admin_user_anonymize_self': 'Das eigene Konto kann nicht anonymisiert werden.',
     'admin_user_anonymize_banned': 'Gesperrte Konten bleiben zur Durchsetzung der Sperre unverändert.',
     'seating_label_invalid_chars': 'Die Bezeichnung „{label}“ enthält unzulässige Zeichen. Erlaubt sind Buchstaben, Ziffern, Leerzeichen und {allowed}',
+    'mail_payment_deadline_hint': 'Bitte überweise den Betrag so, dass er bis spätestens {deadline} bei uns eingeht. Ohne Zahlungseingang bis dahin wird deine Anmeldung automatisch storniert.',
+    'mail_payment_no_deadline_hint': 'Bitte überweise den Betrag rechtzeitig vor der Veranstaltung.',
+    'mail_registration_free_hint': 'Dein Ticket ist kostenlos – es ist keine Zahlung nötig.',
+    'mail_registration_payment_pending_hint': 'Die Zahlungsdaten erhältst du in Kürze vom Orga-Team bzw. findest du im Dashboard, sobald sie hinterlegt sind.',
+    'ticket_payment_deadline_option': 'Zahlung bis {deadline}',
+    'dash_payment_deadline_label': 'Zahlungsfrist: {deadline} – danach wird die Anmeldung automatisch storniert.',
+    'registration_ticket_deadline_passed': 'Die Zahlungsfrist dieser Ticketkategorie ist abgelaufen; sie ist nicht mehr buchbar.',
 }
 
 

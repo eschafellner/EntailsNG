@@ -6,13 +6,15 @@ from django.db import connections
 from backups.errors import BackupError
 from backups.locking import access_guard
 from configuration.heartbeat import touch_heartbeat
+from events.services import PaymentDeadlineService
 from seating.clan_services import process_clan_holds
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Gibt abgelaufene Clan-Vormerkungen frei und löst Erinnerungs- und Ablaufmails aus.'
+    help = ('Gibt abgelaufene Clan-Vormerkungen frei, löst Erinnerungs- und Ablaufmails aus und storniert '
+            'Anmeldungen mit abgelaufener Ticket-Zahlungsfrist.')
 
     def add_arguments(self, parser):
         parser.add_argument('--daemon', action='store_true')
@@ -26,6 +28,7 @@ class Command(BaseCommand):
             try:
                 with access_guard():
                     process_clan_holds()
+                    PaymentDeadlineService.cancel_overdue_registrations()
                 touch_heartbeat()
             except BackupError:
                 if not options['daemon']:

@@ -73,7 +73,30 @@ def render_system_email(template_key, recipient_email, context_data):
     return template, subject, text_content, html_content
 
 
-def queue_system_email(template_key, recipient_email, context_data, trigger_worker=True, expires_at=None, *, reply_to_email='', submitted_by=None):
+INLINE_QR_CID = 'payment_qr'
+
+
+class InlineQrEmail(EmailMultiAlternatives):
+    """Hängt optional ein QR-Bild als multipart/related an den HTML-Teil (Referenz: cid:payment_qr)."""
+
+    def __init__(self, *args, inline_qr_payload='', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.inline_qr_payload = inline_qr_payload
+
+    def message(self, *args, **kwargs):
+        msg = super().message(*args, **kwargs)
+        if self.inline_qr_payload:
+            from events.payment_qr import generate_qr_png
+            html_part = msg.get_body(preferencelist=('html',))
+            if html_part is not None:
+                html_part.add_related(
+                    generate_qr_png(self.inline_qr_payload), maintype='image', subtype='png',
+                    cid=f'<{INLINE_QR_CID}>', disposition='inline', filename='zahlungs-qr.png',
+                )
+        return msg
+
+
+def queue_system_email(template_key, recipient_email, context_data, trigger_worker=True, expires_at=None, *, reply_to_email='', submitted_by=None, inline_qr_payload=''):
     """
     Stellt eine System-E-Mail in die persistente Versandwarteschlange (OutgoingEmail / Outbox).
     Wird innerhalb der aktuellen DB-Transaktion gespeichert (Transactional Outbox).
@@ -101,6 +124,7 @@ def queue_system_email(template_key, recipient_email, context_data, trigger_work
         subject=subject,
         body_text=text_content,
         body_html=html_content,
+        inline_qr_payload=inline_qr_payload,
         status=OutgoingEmail.Status.PENDING,
         scheduled_at=timezone.now(),
         expires_at=expires_at,
@@ -249,11 +273,12 @@ def process_email_queue(limit=50, email_ids=None):
             outgoing.mark_paused("Versand während Queue-Durchlauf administrativ pausiert.", worker_id=worker_uuid)
             continue
 
-        msg = EmailMultiAlternatives(
+        msg = InlineQrEmail(
             subject=outgoing.subject,
             body=outgoing.body_text,
             to=[outgoing.recipient_email],
             reply_to=[outgoing.reply_to_email] if outgoing.reply_to_email else None,
+            inline_qr_payload=outgoing.inline_qr_payload,
         )
         msg.attach_alternative(outgoing.body_html, "text/html")
 
@@ -290,7 +315,7 @@ def process_email_queue(limit=50, email_ids=None):
 
 
 
-def send_system_email(template_key, recipient_email, context_data, immediate=None, *, reply_to_email='', submitted_by=None):
+def send_system_email(template_key, recipient_email, context_data, immediate=None, *, reply_to_email='', submitted_by=None, inline_qr_payload=''):
     """
     Versendet eine System-E-Mail auf Basis eines Templates.
     Bei immediate=True wird die Mail direkt synchron versendet.
@@ -315,6 +340,7 @@ def send_system_email(template_key, recipient_email, context_data, immediate=Non
         outgoing = queue_system_email(
             template_key, recipient_email, context_data,
             reply_to_email=reply_to_email, submitted_by=submitted_by,
+            inline_qr_payload=inline_qr_payload,
         )
         return outgoing is not None
 
@@ -326,11 +352,12 @@ def send_system_email(template_key, recipient_email, context_data, immediate=Non
     if not template:
         return False
 
-    msg = EmailMultiAlternatives(
+    msg = InlineQrEmail(
         subject=subject,
         body=text_content,
         to=[recipient_email],
         reply_to=[reply_to_email] if reply_to_email else None,
+        inline_qr_payload=inline_qr_payload,
     )
     msg.attach_alternative(html_content, "text/html")
 
