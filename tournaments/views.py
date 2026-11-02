@@ -221,6 +221,18 @@ def tournament_detail(request, slug):
     podium = TournamentPodiumService.calculate(
         tournament, league_standings=league_standings, ffa_participants=ffa_participants,
     )
+    shared_placements = TournamentPodiumService.shared_placements(tournament, league_standings=league_standings)
+
+    # 1v1: Die Orga kann eingecheckte Spieler stellvertretend anmelden.
+    organizer_players = []
+    if is_admin and tournament.game.team_size == 1 and tournament.is_registration_open and not tournament.is_generated:
+        registered_users = TeamMember.objects.filter(status=TeamMember.Status.ACCEPTED,
+            team__tournament_registrations__tournament=tournament).values('user_id')
+        organizer_players = [registration.user for registration in EventRegistration.objects.filter(
+            event=tournament.event, is_checked_in=True, user__is_active=True, user__is_banned=False,
+            user__deleted_at__isnull=True,
+        ).exclude(payment_status=EventRegistration.PaymentStatus.CANCELLED).exclude(
+            user_id__in=registered_users).select_related('user').order_by('user__username')]
 
     # Read-only presentation data; registration services remain authoritative.
     candidate_teams = list(my_user_teams)
@@ -260,15 +272,18 @@ def tournament_detail(request, slug):
             else:
                 name = first.round_name
             bracket_rounds.append({'name': name, 'matches': round_matches})
+    withdrawn_ids = set(tournament.registrations.filter(is_forfeited=True).values_list('team_id', flat=True))
     for match in match_list:
         match.tournament = tournament
         match.lock_reason = result_lock_reason(match, tournament,
-            latest_swiss_round=swiss_current_round.number if swiss_current_round else None)
+            latest_swiss_round=swiss_current_round.number if swiss_current_round else None, withdrawn=withdrawn_ids)
         match.result_editable = not match.lock_reason
         match.result_version = match_version(match)
-    # Reuse these annotated instances in every bracket view.
-    wb_matches = [m for m in match_list if m.bracket_type == TournamentMatch.BracketType.WINNERS]
-    lb_matches = [m for m in match_list if m.bracket_type == TournamentMatch.BracketType.LOSERS]
+    # Reuse these annotated instances in every bracket view. Empty bye-vs-bye
+    # matches only exist for bracket structure and are hidden from DE/list views.
+    visible_matches = [m for m in match_list if not (m.is_bye and not m.team1_id and not m.team2_id)]
+    wb_matches = [m for m in visible_matches if m.bracket_type == TournamentMatch.BracketType.WINNERS]
+    lb_matches = [m for m in visible_matches if m.bracket_type == TournamentMatch.BracketType.LOSERS]
     grand_final_matches = sorted([m for m in match_list if m.bracket_type in (TournamentMatch.BracketType.GRAND_FINAL, TournamentMatch.BracketType.GRAND_FINAL_RESET)], key=lambda m: (m.round_number, m.pk))
     if ffa_match:
         ffa_match = next(m for m in match_list if m.pk == ffa_match.pk)
@@ -292,6 +307,7 @@ def tournament_detail(request, slug):
             'team1Id': match.team1_id, 'team2Id': match.team2_id,
             'score1': match.score_team1, 'score2': match.score_team2,
             'winner': match.winner_id, 'reason': match.decision_reason,
+            'walkover': match.result_type == TournamentMatch.ResultType.WALKOVER,
             'version': match.result_version, 'correction': match.status == TournamentMatch.Status.COMPLETED and is_admin,
             'isAdmin': is_admin, 'role': role,
             'allowsDraw': tournament.mode == Tournament.Mode.LEAGUE or match.bracket_type == TournamentMatch.BracketType.GROUP
@@ -323,7 +339,7 @@ def tournament_detail(request, slug):
         'user_roster_notice': user_roster_notice,
         'user_roster_count': user_roster_count,
         'team_registration_ready': any(row['ready'] for row in team_readiness),
-        'match_list_cards': sorted(match_list, key=lambda m: (
+        'match_list_cards': sorted(visible_matches, key=lambda m: (
             {TournamentMatch.Status.IN_PROGRESS: 0, TournamentMatch.Status.READY: 1,
              TournamentMatch.Status.PENDING: 2, TournamentMatch.Status.COMPLETED: 3}.get(m.status, 4),
             m.round_number,
@@ -334,6 +350,8 @@ def tournament_detail(request, slug):
             m.match_number,
         )),
         'score_matches': score_matches,
+        'shared_placements': shared_placements,
+        'organizer_players': organizer_players,
         'tournament': tournament,
         'restart_editions': tournament.restart_editions.visible_to(request.user).order_by('created_at'),
         'user_checkin': user_checkin,
@@ -424,6 +442,7 @@ def tournament_register(request, slug):
             user=request.user,
             team_id=team_id,
             actor=request.user,
+            player_id=request.POST.get('player_id'),
         )
         if created:
             messages.success(
@@ -630,6 +649,7 @@ def match_update_score(request, match_id):
             decision_reason=decision_reason,
             actor=request.user,
             expected_state=request.POST.get('expected_state'),
+            walkover=request.POST.get('walkover') in ('1', 'on', 'true'),
         )
 
         if winner_team:

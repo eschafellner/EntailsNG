@@ -297,7 +297,18 @@
   {% if is_admin %}{% include 'tournaments/includes/result_history.html' %}{% endif %}
 
   <!-- Siegerehrung / Podium Card bei beendetem Turnier -->
-  {% if tournament.status == 'FINISHED' and podium.first and tournament.mode != 'SWISS' %}
+  {% if tournament.status == 'FINISHED' and shared_placements %}
+    <div class="card" style="padding: 24px 32px; border-radius: 12px; border: 2px solid #f59e0b;">
+      <h3 style="margin: 0 0 4px; text-align: center; font-family: 'Barlow Condensed', sans-serif; font-size: 28px; color: #b45309;">
+        {% t "tournament_podium_title" "Siegerehrung & Endstand" %}
+      </h3>
+      <p style="margin: 0 0 16px; text-align: center; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted);">{% t "results_shared_placements" %}</p>
+      {% regroup shared_placements by rank as places %}
+      <div class="swiss-podium" aria-label="{% t 'tournament_podium_title' 'Siegerehrung & Endstand' %}">
+        {% for place in places %}<div class="ux-card"><strong>{{ place.grouper }}. {% t "swiss_place" "Platz" %}</strong>{% for item in place.list %}<p>{{ item.team.name }}</p>{% endfor %}</div>{% endfor %}
+      </div>
+    </div>
+  {% elif tournament.status == 'FINISHED' and podium.first and tournament.mode != 'SWISS' %}
     <div class="card" style="padding: 24px 32px; border-radius: 12px; background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(251, 191, 36, 0.04) 100%); border: 2px solid #f59e0b; box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);">
       <div style="text-align: center; margin-bottom: 24px;">
         <span style="font-size: 36px;">🏆</span>
@@ -1005,6 +1016,19 @@
       <h3 id="teams-title" style="margin: 0 0 16px 0; font-family: 'Barlow Condensed', sans-serif; font-size: 24px;">
         {% t "tournament_tab_teams" "Angemeldete Teams" %}
       </h3>
+      {% if organizer_players %}
+        <form method="post" action="{% url 'tournament_register' slug=tournament.slug %}" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px;">
+          {% csrf_token %}
+          <label for="organizer_player_id" style="font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: bold;">{% t "tournament_organizer_register_label" %}</label>
+          <select id="organizer_player_id" name="player_id" required style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); font-family: 'DM Sans', sans-serif; font-size: 14px;">
+            <option value="">{% t "tournament_organizer_register_placeholder" %}</option>
+            {% for player in organizer_players %}
+              <option value="{{ player.pk }}">{{ player.display_name }}{% if player.display_name != player.username %} ({{ player.username }}){% endif %}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn-action-primary">{% t "tournament_organizer_register_btn" %}</button>
+        </form>
+      {% endif %}
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 14px;">
         {% for reg in registrations %}
           <div style="padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
@@ -1091,6 +1115,16 @@
             <option value="">{% t "tournament_modal_winner_auto" "-- Automatisch nach Punkten --" %}</option>
           </select>
         </div>
+
+        {% if is_admin %}
+        <div id="walkover_row">
+          <label style="display: flex; align-items: center; gap: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink);">
+            <input type="checkbox" id="walkover" name="walkover" value="1" aria-describedby="walkover_hint">
+            {% t "results_walkover_label" %}
+          </label>
+          <p id="walkover_hint" style="margin: 4px 0 0; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--muted);">{% t "results_walkover_hint" %}</p>
+        </div>
+        {% endif %}
 
         <div>
           <label for="decision_reason" style="display: block; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--muted); margin-bottom: 4px;">{% t "tournament_modal_reason_label" "Entscheidungsgrund / Notiz:" %}</label>

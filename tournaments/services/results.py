@@ -7,7 +7,7 @@ import json
 
 from configuration.translations import get_translation as tr
 from tournaments.exceptions import TournamentMatchError, MatchAlreadyCompletedError, MatchNotReadyError
-from tournaments.models import Tournament, TournamentMatch, TournamentResultLog
+from tournaments.models import Tournament, TournamentMatch, TournamentRegistration, TournamentResultLog
 from .locking import event_is_closed
 
 
@@ -49,14 +49,28 @@ def log_result(match, before, actor, reason, *, action='RESULT'):
             before=before, after=after)
 
 
-def result_lock_reason(match, tournament, *, latest_swiss_round=None):
+def is_automatic_result(match, withdrawn=None):
+    """Freilose und Wertungen aus Rückzügen; manuelle Walkovers bleiben korrigierbar."""
+    if match.is_bye or match.result_type in (TournamentMatch.ResultType.BYE, TournamentMatch.ResultType.DOUBLE_FORFEIT):
+        return True
+    if match.result_type != TournamentMatch.ResultType.WALKOVER:
+        return False
+    if not match.loser_id:
+        return True
+    if withdrawn is None:
+        return TournamentRegistration.objects.filter(
+            tournament_id=match.tournament_id, team_id=match.loser_id, is_forfeited=True).exists()
+    return match.loser_id in withdrawn
+
+
+def result_lock_reason(match, tournament, *, latest_swiss_round=None, withdrawn=None):
     if event_is_closed(tournament):
         return tr('results_event_locked')
     if tournament.status in (Tournament.Status.FINISHED, Tournament.Status.CANCELLED):
         return tr('results_final_locked')
     if tournament.status not in (Tournament.Status.IN_PROGRESS, Tournament.Status.RESULTS_REVIEW):
         return tr('results_not_running')
-    if match.is_bye or match.result_type != TournamentMatch.ResultType.PLAYED:
+    if is_automatic_result(match, withdrawn):
         return tr('results_automatic_locked')
     if tournament.mode == Tournament.Mode.SWISS:
         later = latest_swiss_round > match.round_number if latest_swiss_round is not None else tournament.swiss_round_records.filter(number__gt=match.round_number).exists()
@@ -102,8 +116,9 @@ def repair_descendants(match, actor, reason):
     """Reset only dependent, unplayed matches; rebuild them from all feeders."""
     from .matches import check_and_advance_match
     affected = descendants(match)
+    withdrawn = set(match.tournament.registrations.filter(is_forfeited=True).values_list('team_id', flat=True))
     if any(m.status == TournamentMatch.Status.IN_PROGRESS or
-           (m.status == TournamentMatch.Status.COMPLETED and not m.is_bye) for m in affected):
+           (m.status == TournamentMatch.Status.COMPLETED and not is_automatic_result(m, withdrawn)) for m in affected):
         raise MatchAlreadyCompletedError(tr('results_followup_locked'))
     before = {m.pk: snapshot(m) for m in affected}
     for m in affected:
@@ -117,6 +132,7 @@ def repair_descendants(match, actor, reason):
         m.team1 = m.team2 = m.winner = m.loser = None
         m.score_team1 = m.score_team2 = None
         m.is_bye = False
+        m.result_type = TournamentMatch.ResultType.PLAYED
         m.status = TournamentMatch.Status.PENDING
         m.decision_reason = ''
         m.save()
@@ -168,12 +184,15 @@ def reset_unreleased_playoffs(tournament, actor, reason):
     """Requalification may replace teams propagated through automatic byes."""
     rows = list(tournament.matches.exclude(bracket_type=TournamentMatch.BracketType.GROUP))
     before = {m.pk: snapshot(m) for m in rows}
+    withdrawn = set(tournament.registrations.filter(is_forfeited=True).values_list('team_id', flat=True))
     for m in rows:
-        if m.status == TournamentMatch.Status.IN_PROGRESS or (m.status == TournamentMatch.Status.COMPLETED and not m.is_bye):
+        if m.status == TournamentMatch.Status.IN_PROGRESS or (
+                m.status == TournamentMatch.Status.COMPLETED and not is_automatic_result(m, withdrawn)):
             raise MatchAlreadyCompletedError(tr('results_qualification_locked'))
         m.team1 = m.team2 = m.winner = m.loser = None
         m.score_team1 = m.score_team2 = None
         m.is_bye = False
+        m.result_type = TournamentMatch.ResultType.PLAYED
         m.status = TournamentMatch.Status.PENDING
         m.decision_reason = ''
         m.save()

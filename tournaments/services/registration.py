@@ -33,24 +33,29 @@ def validate_start_roster(tournament):
     registrations = list(tournament.registrations.filter(is_forfeited=False).order_by('pk'))
     teams = {team.pk: team for team in Team.objects.select_for_update().filter(
         pk__in=[registration.team_id for registration in registrations]).order_by('pk')}
-    seen_users = set()
+    seen_users = {}
     problems = []
     for registration in registrations:
         team = teams[registration.team_id]
         members = list(team.get_accepted_members())
         member_ids = {member.user_id for member in members}
+        duplicates = [member for member in members if member.user_id in seen_users]
         valid = (not team.is_archived and team.game_id == tournament.game_id
             and team.event_id in (None, tournament.event_id)
             and tournament.roster_size_allowed(len(members), for_start=True) and team.captain_id in member_ids
             and all(member.user.is_active and not member.user.deleted_at for member in members)
-            and not member_ids.intersection(seen_users))
+            and not duplicates)
         if not valid:
             if not tournament.roster_size_allowed(len(members), for_start=True):
                 problems.append(get_translation('roster_start_size_problem', team=team.name,
                     count=len(members), size=tournament.game.team_size))
+            elif duplicates:
+                problems.append(get_translation('roster_start_duplicate_player', team=team.name,
+                    players=', '.join(member.user.username for member in duplicates),
+                    other=seen_users[duplicates[0].user_id]))
             else:
                 problems.append(get_translation('roster_start_team_invalid', team=team.name))
-        seen_users.update(member_ids)
+        seen_users.update({user_id: team.name for user_id in member_ids if user_id not in seen_users})
     if problems:
         raise TournamentBracketError(get_translation('roster_start_blocked', teams='; '.join(problems)))
 
@@ -190,23 +195,45 @@ def get_or_create_solo_team(user, game, event=None):
     return _get_or_reactivate_solo_team(user, game, event, locked_events)
 
 
+def _lock_solo_target_player(game_id, team_id, player_id):
+    """Spieler, den die Orga in einem 1v1-Turnier anmelden möchte (per Spieler- oder Team-ID)."""
+    from django.contrib.auth import get_user_model
+    from configuration.translations import get_translation
+    if player_id:
+        pk = identifier(player_id, error=TournamentRegistrationError)
+    else:
+        pk = Team.objects.filter(pk=identifier(team_id, error=TournamentRegistrationError),
+                                 game_id=game_id).values_list('captain_id', flat=True).first()
+    target = get_user_model().objects.select_for_update(no_key=True).filter(pk=pk).first() if pk else None
+    if target is None:
+        raise TournamentRegistrationError(get_translation('tournament_register_player_not_found'))
+    return target
+
+
 class TournamentRegistrationService:
     @staticmethod
-    def register_team(tournament_id, user, team_id=None, actor=None):
+    def register_team(tournament_id, user, team_id=None, actor=None, player_id=None):
         """
         Meldet ein Team oder einen Solo-Spieler transaktionssicher für ein Turnier an.
         Prüft Zeitfenster, Vor-Ort Check-in, Kapazitätslimits und Team-Berechtigungen.
+
+        In 1v1-Turnieren kann die Turnierleitung über ``player_id`` (oder die ``team_id``
+        eines Solo-Teams) einen anderen Spieler anmelden; sonst meldet sich ``user`` selbst an.
         """
         with transaction.atomic():
             from django.contrib.auth import get_user_model
             from configuration.translations import get_translation
-            user = get_user_model().objects.select_for_update(no_key=True).get(pk=user.pk)
+            event_id, game_id, team_size = Tournament.objects.values_list(
+                'event_id', 'game_id', 'game__team_size').get(pk=tournament_id)
+            requester_id = user.pk
+            if team_size == 1 and (player_id or team_id):
+                user = _lock_solo_target_player(game_id, team_id, player_id)
+            else:
+                user = get_user_model().objects.select_for_update(no_key=True).get(pk=user.pk)
             if user.deleted_at or user.is_banned or not user.is_active:
                 raise TournamentRegistrationError(get_translation('account_deleted_registration_blocked'))
             # Nach dem User sperren Turnieranmeldungen dieselbe Event-Zeile wie der Eventabschluss.
             # So kann keine Turnieranmeldung zwischen Abschlussprüfung und Archivierung erfolgen.
-            event_id, game_id, team_size = Tournament.objects.values_list(
-                'event_id', 'game_id', 'game__team_size').get(pk=tournament_id)
             locked_events = _lock_solo_events(user, game_id, event_id) if team_size == 1 else None
             event = locked_events[event_id] if locked_events is not None else Event.objects.select_for_update().get(pk=event_id)
             if event.effective_status in (Event.Status.FINISHED, Event.Status.CANCELLED):
@@ -223,6 +250,8 @@ class TournamentRegistrationService:
 
             # 1. Privilegien-Check (Staff / Superuser / Turnier-Admin)
             is_privileged = tournament.is_managed_by(actor)
+            if user.pk != requester_id and not is_privileged:
+                raise TournamentRegistrationError(get_translation('tournament_register_other_player_forbidden'))
 
             # 2. Vor-Ort Check-in des anmeldenden Benutzers prüfen
             if not is_privileged and not check_user_event_checkin(user, tournament.event):
@@ -309,6 +338,19 @@ class TournamentRegistrationService:
                 if tournament.max_teams and tournament.registrations.count() >= tournament.max_teams:
                     raise TournamentFullError(reason)
                 raise TournamentRegistrationError(reason)
+
+            # 4.1 Spieler dürfen nur für ein Team desselben Turniers angemeldet sein
+            duplicates = list(TeamMember.objects.filter(
+                status=TeamMember.Status.ACCEPTED,
+                user_id__in=team.memberships.filter(status=TeamMember.Status.ACCEPTED).values('user_id'),
+                team__tournament_registrations__tournament=tournament,
+                team__tournament_registrations__is_forfeited=False,
+            ).exclude(team=team).select_related('user', 'team').order_by('team_id', 'user__username'))
+            if duplicates:
+                other = duplicates[0].team
+                raise TournamentRegistrationError(get_translation(
+                    'roster_duplicate_player', other=other.name,
+                    players=', '.join(m.user.username for m in duplicates if m.team_id == other.pk)))
 
             # 5. Kapazitätslimit unter DB-Row-Lock prüfen
             current_count = tournament.registrations.select_for_update().count()

@@ -299,6 +299,7 @@ def _generate_single_elimination(tournament, registered_teams, preview=False):
 
             if t2 is None:
                 m.is_bye = True
+                m.result_type = TournamentMatch.ResultType.BYE
                 m.winner = t1
                 m.status = TournamentMatch.Status.COMPLETED
                 m.save()
@@ -574,12 +575,13 @@ def _generate_double_elimination(tournament, registered_teams, preview=False):
                 match_obj.save(update_fields=['team1', 'team2', 'status'])
             elif t1 and not t2:
                 match_obj.is_bye = True
+                match_obj.result_type = TournamentMatch.ResultType.BYE
                 match_obj.winner = t1
                 match_obj.loser = None
                 match_obj.score_team1 = 0
                 match_obj.score_team2 = 0
                 match_obj.status = TournamentMatch.Status.COMPLETED
-                match_obj.save(update_fields=['team1', 'team2', 'is_bye', 'winner', 'loser', 'score_team1', 'score_team2', 'status'])
+                match_obj.save(update_fields=['team1', 'team2', 'is_bye', 'result_type', 'winner', 'loser', 'score_team1', 'score_team2', 'status'])
 
                 # t1 direkt ins WB Folgematch rücken
                 target_wb = match_obj.next_match_winner
@@ -597,8 +599,9 @@ def _generate_double_elimination(tournament, registered_teams, preview=False):
                     check_and_advance_match(match_obj.next_match_loser)
             elif not t1 and not t2:
                 match_obj.is_bye = True
+                match_obj.result_type = TournamentMatch.ResultType.BYE
                 match_obj.status = TournamentMatch.Status.COMPLETED
-                match_obj.save(update_fields=['team1', 'team2', 'is_bye', 'status'])
+                match_obj.save(update_fields=['team1', 'team2', 'is_bye', 'result_type', 'status'])
                 if match_obj.next_match_loser:
                     check_and_advance_match(match_obj.next_match_loser)
 

@@ -1385,3 +1385,24 @@ h3 {
     border-color: var(--signal);
     font-weight: 700;
 }
+
+/* =============================================================================
+   SPONSOR-BEREICH AUF UNTERSEITEN (sponsors/includes/sponsor_banner.html)
+   ============================================================================= */
+.sponsor-banner-card { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.sponsor-banner-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.sponsor-banner-header .eyebrow { margin: 0 0 4px 0; }
+.sponsor-banner-header h3 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; color: var(--ink); }
+.sponsor-banner-media { display: flex; justify-content: center; }
+.sponsor-banner-link { display: flex; align-items: center; justify-content: center; gap: 14px; max-width: 100%; }
+.sponsor-banner-media > .sponsor-banner-logo + .sponsor-banner-name { margin-left: 14px; align-self: center; }
+.sponsor-banner-img { display: block; max-width: 100%; max-height: 160px; width: auto; height: auto; object-fit: contain; border-radius: 6px; }
+.sponsor-banner-logo { display: block; max-height: 80px; max-width: 160px; object-fit: contain; border-radius: 6px; }
+.sponsor-banner-name { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; color: var(--ink); overflow-wrap: anywhere; }
+
+/* Kompakte Leiste, z. B. unter dem Sitzplan */
+.sponsor-strip { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.sponsor-strip-label { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.sponsor-strip .sponsor-banner-img { max-height: 70px; }
+.sponsor-strip .sponsor-banner-logo { max-height: 48px; max-width: 110px; }
+.sponsor-strip .sponsor-banner-name { font-size: 16px; }

@@ -306,7 +306,8 @@ class SwissTournamentService:
 
     @staticmethod
     def validate_score_change(match, tournament):
-        if match.result_type != TournamentMatch.ResultType.PLAYED:
+        from .results import is_automatic_result
+        if is_automatic_result(match):
             raise MatchAlreadyCompletedError('Freilose und kampflose Ergebnisse können nicht als gespieltes Match geändert werden.')
         if tournament.status not in (Tournament.Status.IN_PROGRESS, Tournament.Status.RESULTS_REVIEW):
             raise MatchAlreadyCompletedError('Das Schweizer Turnier läuft nicht.')

@@ -7,8 +7,8 @@ logger = logging.getLogger(__name__)
 def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
     """
     Wickelt alle offenen Matches eines Teams in generierten oder laufenden Turnieren
-    als Walkover / Freilos für den jeweiligen Gegner ab, sodass der Turnierbaum
-    nicht blockiert wird.
+    als Walkover für den jeweiligen Gegner ab, sodass der Turnierbaum nicht
+    blockiert wird. Steht der Gegner noch nicht fest, folgt der Walkover automatisch.
     """
     from tournaments.models import Tournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration
     from .matches import TournamentMatchService, check_and_advance_match
@@ -88,13 +88,10 @@ def forfeit_team_in_active_tournaments(team, reason="Walkover / Aufgabe"):
                     automatic_result=True,
                 )
             else:
-                # Noch kein Gegner vorhanden: Slot des forfeiting Teams leeren
-                if match.team1 == team:
-                    match.team1 = None
-                if match.team2 == team:
-                    match.team2 = None
+                # Noch kein Gegner vorhanden: Das Team bleibt im Slot und verliert
+                # kampflos, sobald der Gegner feststeht (zeitunabhängige Wertung).
                 match.decision_reason = reason
-                match.save(update_fields=['team1', 'team2', 'decision_reason'])
+                match.save(update_fields=['decision_reason'])
                 check_and_advance_match(match)
 
         from .standings import GroupStageStandingService

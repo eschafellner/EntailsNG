@@ -1,4 +1,5 @@
 {% extends 'tournaments/base.html' %}
+{% load sponsor_tags %}
 
 {% block title %}{% t "team_manager_title" "Teammanager" %} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
@@ -258,6 +259,9 @@
     {% endif %}
   </div>
 
+  <!-- SPONSOR (ganz unten, entfällt ohne aktiven Sponsor) -->
+  {% subpage_sponsor as page_sponsor %}
+  {% include 'sponsors/includes/sponsor_banner.html' with sponsor=page_sponsor %}
 
 </div>
 

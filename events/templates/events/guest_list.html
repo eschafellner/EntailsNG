@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static sponsor_tags %}
 
 {% block title %}{% t "guest_list_title" "Gästeliste" %} – {{ event.title|default:site_customization.site_name }}{% endblock %}
 
@@ -272,6 +272,10 @@
       </p>
     </div>
   {% endif %}
+
+  <!-- SPONSOR (ganz unten, entfällt ohne aktiven Sponsor) -->
+  {% subpage_sponsor as page_sponsor %}
+  {% include 'sponsors/includes/sponsor_banner.html' with sponsor=page_sponsor %}
 
 </div>
 

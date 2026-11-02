@@ -57,6 +57,28 @@ class EventDashboardTests(TestCase):
         response_user = self.client.get(reverse('dashboard'))
         self.assertContains(response_user, 'Saalbelegung')
 
+    def test_dashboard_seat_preview_shown_by_default(self):
+        response = self.client.get(reverse('dashboard'))
+        self.assertContains(response, 'id="minimap-container"')
+        self.assertNotContains(response, 'dash-split--compact')
+
+    def test_dashboard_seat_preview_can_be_disabled(self):
+        from django.core.cache import cache
+        from configuration.models import GeneralConfiguration
+
+        # Die Konfiguration wird gecacht; nicht in andere Tests durchsickern lassen.
+        self.addCleanup(cache.clear)
+        config = GeneralConfiguration.load()
+        config.dashboard_seat_preview_enabled = False
+        config.save()
+
+        response = self.client.get(reverse('dashboard'))
+        self.assertNotContains(response, 'id="minimap-container"')
+        self.assertContains(response, 'dash-split--compact')
+        # Belegung und Sitzplan-Buttons bleiben sichtbar.
+        self.assertContains(response, 'Saalbelegung')
+        self.assertContains(response, reverse('seating_plan'))
+
     def test_dashboard_query_budget(self):
         """Dashboard-Abfragen für eingeloggten User mit aktiver Registrierung bleiben innerhalb des Budgets."""
         from django.db import connection

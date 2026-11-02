@@ -63,6 +63,16 @@
     overflow: hidden; max-width: 70ch; max-height: 19.2em; font-size: 16px;
   }
 }
+@media (min-width: 901px) {
+  /* Kompakter Modus (Sitzplan-Vorschau aus): niedrigere News, damit das Sponsoren-Banner auf Full-HD ohne Scrollen sichtbar ist. */
+  .dash-split--compact .news-widget { gap: 14px; padding: 20px; }
+  .dash-split--compact .news-image-preview { min-height: 160px; }
+  .dash-split--compact .news-slide-body { padding: 16px 18px; gap: 8px; }
+  .dash-split--compact .news-slide h4 { font-size: 22px; }
+  .dash-split--compact .news-excerpt-desktop { -webkit-line-clamp: 5; max-height: 8em; font-size: 15px; }
+  .dash-split--compact .news-control { min-height: 36px; min-width: 36px; font-size: 18px; }
+  .dash-split--compact .news-rotation { min-height: 36px; }
+}
 @media (max-width: 900px) {
   .news-slide { flex-basis: 92%; grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .news-slide-text { grid-template-rows: 1fr; }

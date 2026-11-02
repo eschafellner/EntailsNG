@@ -304,6 +304,21 @@ class GeneralConfiguration(models.Model):
         verbose_name="Verhalten bei abgelaufenen Veranstaltungen",
         help_text="Bestimmt das Verhalten der Ticket-Karte auf dem Dashboard, wenn das Event-Enddatum überschritten ist.",
     )
+    dashboard_seat_preview_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Sitzplan-Vorschau im Dashboard anzeigen",
+        help_text="Wenn deaktiviert, entfällt die Mini-Map auf dem Dashboard. Belegung und Status rücken nach oben, die News werden kompakter und das Sponsoren-Banner rückt nach oben.",
+    )
+    checkin_qr_sponsor_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Sponsor im Check-in-QR-Fenster anzeigen",
+        help_text="Zeigt unter QR-Code, Gastfoto und Name den Sponsor der Dashboard-Sponsorenkarte (nicht verlinkt). Ohne aktiven Sponsor entfällt der Bereich.",
+    )
+    subpage_sponsor_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Sponsor auf Unterseiten anzeigen",
+        help_text="Zeigt einen zufälligen aktiven Sponsor unten auf Gästeliste und Teams sowie als Leiste unter dem Sitzplan (der Plan wird dafür etwas niedriger).",
+    )
     extended_checkin_enabled = models.BooleanField(
         default=False,
         verbose_name="Erweiterter Check-in (Gastfoto)",

@@ -29,7 +29,11 @@ def check_and_advance_match(match, visited=None):
     und unterscheidet präzise zwischen:
     - 'FILLED': Ein Team ist für diesen Slot bereits gesetzt oder verfügbar.
     - 'PENDING': Der Zubringer für diesen Slot ist noch nicht COMPLETED (Teilnehmer steht noch aus).
+    - 'FORFEITED': Ein zurückgezogenes Team hat den Slot erreicht und verliert kampflos (WALKOVER).
     - 'EMPTY': Der Slot bleibt endgültig leer (kein Zubringer vorhanden oder Zubringer COMPLETED ohne Teilnehmer).
+
+    Die Wertung hängt damit nicht vom Zeitpunkt eines Rückzugs ab: Ein zurückgezogener
+    Finalist erhält wie bei einem bereits besetzten Finale Platz 2.
     """
     if visited is None:
         visited = set()
@@ -55,13 +59,9 @@ def check_and_advance_match(match, visited=None):
     def evaluate_slot(slot_num):
         team = match.team1 if slot_num == 1 else match.team2
         if team is not None:
-            if is_forfeited(team):
-                if slot_num == 1:
-                    match.team1 = None
-                else:
-                    match.team2 = None
-                return 'EMPTY', None
-            return 'FILLED', team
+            # Zurückgezogene Teams behalten ihren erreichten Platz im Baum und
+            # verlieren kampflos, sobald der Gegner feststeht.
+            return ('FORFEITED' if is_forfeited(team) else 'FILLED'), team
 
         prev_w = list(match.prev_matches_winner.filter(next_match_winner_slot=slot_num))
         prev_l = list(match.prev_matches_loser.filter(next_match_loser_slot=slot_num))
@@ -76,8 +76,8 @@ def check_and_advance_match(match, visited=None):
 
         # Alle Zubringer sind COMPLETED. Prüfen, ob ein Teilnehmer bereitsteht
         for f in prev_w:
-            if f.winner and not is_forfeited(f.winner):
-                return 'FILLED', f.winner
+            if f.winner:
+                return ('FORFEITED' if is_forfeited(f.winner) else 'FILLED'), f.winner
         for f in prev_l:
             if f.loser and not is_forfeited(f.loser):
                 return 'FILLED', f.loser
@@ -90,13 +90,16 @@ def check_and_advance_match(match, visited=None):
     state1, team1 = evaluate_slot(1)
     state2, team2 = evaluate_slot(2)
 
-    updated_teams = (match.team1 != orig_team1) or (match.team2 != orig_team2)
-    if state1 == 'FILLED' and match.team1 != team1:
+    # Ein zurückgezogenes Team ohne möglichen Gegner erhält keine Wertung.
+    if state1 == 'FORFEITED' and state2 == 'EMPTY':
+        state1, team1 = 'EMPTY', None
+    if state2 == 'FORFEITED' and state1 == 'EMPTY':
+        state2, team2 = 'EMPTY', None
+    if state1 != 'PENDING':
         match.team1 = team1
-        updated_teams = True
-    if state2 == 'FILLED' and match.team2 != team2:
+    if state2 != 'PENDING':
         match.team2 = team2
-        updated_teams = True
+    updated_teams = (match.team1 != orig_team1) or (match.team2 != orig_team2)
 
     # Fall 1: Beide Slots besetzt -> Match ist spielbereit
     if state1 == 'FILLED' and state2 == 'FILLED':
@@ -111,10 +114,43 @@ def check_and_advance_match(match, visited=None):
             match.save(update_fields=['team1', 'team2'])
         return
 
+    # Fall 2a: Ein Team hat sich zurückgezogen -> kampfloser Sieg des Gegners
+    if {state1, state2} == {'FILLED', 'FORFEITED'}:
+        active_team = team1 if state1 == 'FILLED' else team2
+        forfeited_team = team2 if state1 == 'FILLED' else team1
+        match.is_bye = False
+        match.result_type = TournamentMatch.ResultType.WALKOVER
+        match.winner = active_team
+        match.loser = forfeited_team
+        match.score_team1 = 1 if active_team == team1 else 0
+        match.score_team2 = 1 if active_team == team2 else 0
+        match.status = TournamentMatch.Status.COMPLETED
+        if not match.decision_reason:
+            match.decision_reason = get_translation('results_walkover_withdrawn')
+        match.save(update_fields=['team1', 'team2', 'is_bye', 'result_type', 'winner', 'loser',
+                                  'score_team1', 'score_team2', 'status', 'decision_reason'])
+        _advance_automatic_winner(match, active_team, visited)
+        return
+
+    # Fall 2b: Beide Teams haben sich zurückgezogen -> keine Wertung
+    if state1 == 'FORFEITED' and state2 == 'FORFEITED':
+        match.is_bye = False
+        match.result_type = TournamentMatch.ResultType.DOUBLE_FORFEIT
+        match.winner = None
+        match.loser = None
+        match.score_team1 = None
+        match.score_team2 = None
+        match.status = TournamentMatch.Status.COMPLETED
+        match.save(update_fields=['team1', 'team2', 'is_bye', 'result_type', 'winner', 'loser',
+                                  'score_team1', 'score_team2', 'status'])
+        _advance_automatic_winner(match, None, visited)
+        return
+
     # Fall 3: Genau ein Slot besetzt, der andere endgültig leer -> FREILOS (BYE)
     if (state1 == 'FILLED' and state2 == 'EMPTY') or (state1 == 'EMPTY' and state2 == 'FILLED'):
         active_team = team1 if state1 == 'FILLED' else team2
         match.is_bye = True
+        match.result_type = TournamentMatch.ResultType.BYE
         match.winner = active_team
         match.loser = None
         match.score_team1 = 0
@@ -122,45 +158,41 @@ def check_and_advance_match(match, visited=None):
         match.status = TournamentMatch.Status.COMPLETED
         if not match.decision_reason:
             match.decision_reason = "Freilos (BYE)"
-        match.save(update_fields=['team1', 'team2', 'is_bye', 'winner', 'loser', 'score_team1', 'score_team2', 'status', 'decision_reason'])
-
-        # Sieger ins Folgematch weiterreichen
-        if match.next_match_winner:
-            next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
-            if match.next_match_winner_slot == 1:
-                next_w.team1 = active_team
-            elif match.next_match_winner_slot == 2:
-                next_w.team2 = active_team
-            else:
-                if not next_w.team1:
-                    next_w.team1 = active_team
-                elif not next_w.team2:
-                    next_w.team2 = active_team
-            next_w.save()
-            check_and_advance_match(next_w, visited)
-
-        # Falls ein Verlierer-Folgematch existiert (wobei Loser=None ist)
-        if match.next_match_loser:
-            next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
-            check_and_advance_match(next_l, visited)
-
+        match.save(update_fields=['team1', 'team2', 'is_bye', 'result_type', 'winner', 'loser', 'score_team1', 'score_team2', 'status', 'decision_reason'])
+        _advance_automatic_winner(match, active_team, visited)
         return
 
     # Fall 4: Beide Slots endgültig leer -> leeres Match abschließen
     if state1 == 'EMPTY' and state2 == 'EMPTY':
         match.is_bye = True
+        match.result_type = TournamentMatch.ResultType.BYE
         match.winner = None
         match.loser = None
         match.status = TournamentMatch.Status.COMPLETED
-        match.save(update_fields=['team1', 'team2', 'is_bye', 'winner', 'loser', 'status'])
-
-        if match.next_match_winner:
-            next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
-            check_and_advance_match(next_w, visited)
-        if match.next_match_loser:
-            next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
-            check_and_advance_match(next_l, visited)
+        match.save(update_fields=['team1', 'team2', 'is_bye', 'result_type', 'winner', 'loser', 'status'])
+        _advance_automatic_winner(match, None, visited)
         return
+
+
+def _advance_automatic_winner(match, winner, visited):
+    """Reicht den Sieger eines automatisch entschiedenen Matches weiter und prüft beide Folgematches."""
+    if match.next_match_winner:
+        next_w = TournamentMatch.objects.select_for_update().get(pk=match.next_match_winner_id)
+        if winner:
+            if match.next_match_winner_slot == 1:
+                next_w.team1 = winner
+            elif match.next_match_winner_slot == 2:
+                next_w.team2 = winner
+            elif not next_w.team1:
+                next_w.team1 = winner
+            elif not next_w.team2:
+                next_w.team2 = winner
+            next_w.save()
+        check_and_advance_match(next_w, visited)
+    # Zurückgezogene Verlierer rücken nicht ins Verlierer-Folgematch.
+    if match.next_match_loser:
+        next_l = TournamentMatch.objects.select_for_update().get(pk=match.next_match_loser_id)
+        check_and_advance_match(next_l, visited)
 
 
 def check_and_advance_bye_in_loser_bracket(lb_match):
@@ -178,10 +210,14 @@ def check_and_advance_bye_or_walkover(match):
 
 class TournamentMatchService:
     @staticmethod
-    def update_match_score(match_id, score1, score2, winner_id=None, decision_reason=None, actor=None, expected_state=None, automatic_result=False):
+    def update_match_score(match_id, score1, score2, winner_id=None, decision_reason=None, actor=None, expected_state=None, automatic_result=False, walkover=None):
         """
         Trägt das Spielergebnis für ein Match ein, validiert Berechtigungen, Scores & Sieger
         atomar unter Row-Locks, und rückt Sieger/Verlierer in die Folgematches vor.
+
+        ``walkover=True`` wertet das Match als kampflos (Nichtantreten) für den gewählten
+        Sieger, ohne das Team aus dem Turnier zurückzuziehen; ``False`` setzt es auf
+        „gespielt“, ``None`` behält die bisherige Ergebnisart.
         """
         from tournaments.services.standings import GroupStageStandingService
 
@@ -269,6 +305,16 @@ class TournamentMatchService:
             if not match.is_bye and (not match.team1 or not match.team2):
                 raise MatchNotReadyError("Das Match ist noch nicht vollständig mit Teams besetzt.")
 
+            if walkover:
+                if not is_admin:
+                    raise MatchPermissionDeniedError(get_translation('results_walkover_permission'))
+                if not winner_id:
+                    raise InvalidWinnerError(get_translation('results_walkover_winner_required'))
+                if not decision_reason:
+                    raise InvalidWinnerError(get_translation('results_walkover_reason_required'))
+            elif walkover is not None and not is_admin:
+                walkover = None
+
             # 3. Sieger bestimmen und plausibilisieren
             allows_draw = (
                 match.bracket_type == TournamentMatch.BracketType.GROUP
@@ -333,8 +379,10 @@ class TournamentMatchService:
                 match.loser = None
             match.decision_reason = str(decision_reason).strip() if decision_reason else ""
             match.status = TournamentMatch.Status.COMPLETED
-            if automatic_result:
+            if automatic_result or walkover:
                 match.result_type = TournamentMatch.ResultType.WALKOVER
+            elif walkover is not None:
+                match.result_type = TournamentMatch.ResultType.PLAYED
             match.save()
 
             if old_qualification is not None and playoffs_locked(tournament):

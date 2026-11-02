@@ -28,7 +28,7 @@
     <strong>{{ match.score_team2|default_if_none:"-" }}</strong>
   </div>
 
-  {% if match.bracket_type == 'SWISS' and match.result_type != 'PLAYED' %}
+  {% if match.result_type != 'PLAYED' and match.bracket_type == 'SWISS' or match.result_type == 'WALKOVER' or match.result_type == 'DOUBLE_FORFEIT' %}
     <p class="swiss-match-note">{{ match.get_result_type_display }}{% if match.decision_reason %} · {{ match.decision_reason }}{% endif %}</p>
   {% endif %}
   {% if is_admin and not results_locked and match.status == 'COMPLETED' and match.result_editable %}

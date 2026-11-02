@@ -1,0 +1,32 @@
+{% comment %}
+  Sponsor-Bereich für Unterseiten (Schalter: Allgemeine Konfiguration → Dashboard-Anzeige).
+  Parameter:
+    sponsor  – Sponsor-Objekt (ohne Sponsor wird nichts ausgegeben)
+    compact  – schmale Leiste ohne Kopfzeile (z. B. unter dem Sitzplan)
+{% endcomment %}
+{% if sponsor %}
+<section class="{% if compact %}sponsor-strip{% else %}card sponsor-banner-card{% endif %}" aria-label="{% t 'dash_sponsors_title' %}">
+  {% if compact %}
+    <span class="sponsor-strip-label">{% t "dash_sponsors_supported_by" %}</span>
+  {% else %}
+    <div class="sponsor-banner-header">
+      <div>
+        <p class="eyebrow">{% t "dash_sponsors_eyebrow" %}</p>
+        <h3>{% t "dash_sponsors_title" %}</h3>
+      </div>
+      <a href="{% url 'sponsor_list' %}" class="text-link">{% t "dash_sponsors_all_link" %}</a>
+    </div>
+  {% endif %}
+
+  <div class="sponsor-banner-media">
+    {% if sponsor.url %}<a href="{{ sponsor.url }}" target="_blank" rel="noopener noreferrer" class="link-media sponsor-banner-link">{% endif %}
+    {% if sponsor.logo_typ == 'banner' %}
+      <img src="{{ sponsor.bild.url }}" alt="{{ sponsor.name }} Banner" class="sponsor-banner-img" loading="lazy">
+    {% else %}
+      <img src="{{ sponsor.bild.url }}" alt="{{ sponsor.name }} Logo" class="sponsor-banner-logo" loading="lazy">
+      <strong class="sponsor-banner-name">{{ sponsor.name }}{% if sponsor.url %} ↗{% endif %}</strong>
+    {% endif %}
+    {% if sponsor.url %}</a>{% endif %}
+  </div>
+</section>
+{% endif %}

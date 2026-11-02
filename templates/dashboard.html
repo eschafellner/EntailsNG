@@ -108,10 +108,10 @@
 
       {% if is_user_registered and registration and registration.payment_status == 'PAID' %}
       <!-- FULLSCREEN MODAL / POPUP FÜR QR CODE AM EINLASS -->
-      <div id="qr-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px;">
+      <div id="qr-modal" class="qr-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); justify-content: center; padding: 20px;">
         
         <!-- Modal Box -->
-        <div style="background: #ffffff; color: #111827; padding: 32px; border-radius: 20px; max-width: 360px; width: 100%; text-align: center; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+        <div class="qr-modal-box" style="background: #ffffff; color: #111827; padding: 32px; border-radius: 20px; max-width: 360px; width: 100%; text-align: center; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
           
           <!-- Schließen X Button -->
           <button type="button" onclick="closeQrModal()" style="position: absolute; top: 16px; right: 16px; background: #f3f4f6; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; cursor: pointer; color: #4b5563; display: flex; align-items: center; justify-content: center; line-height: 1;">
@@ -141,6 +141,21 @@
           <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #374151; font-weight: bold; display: block; margin-top: 12px;">
             {% t "dash_guest_label" %}: {{ request.user.username }}
           </span>
+
+          {% if general_config.checkin_qr_sponsor_enabled and active_sponsor %}
+          <!-- SPONSOR (bewusst nicht verlinkt: ein Antippen am Einlass darf den QR-Code nicht verdrängen) -->
+          <div class="qr-modal-sponsor">
+            <span class="qr-modal-sponsor-label">{% t "dash_qr_sponsor_label" "Präsentiert von" %}</span>
+            {% if active_sponsor.logo_typ == 'banner' %}
+              <img src="{{ active_sponsor.bild.url }}" alt="{{ active_sponsor.name }}" class="qr-modal-sponsor-banner">
+            {% else %}
+              <div class="qr-modal-sponsor-logo-row">
+                <img src="{{ active_sponsor.bild.url }}" alt="" class="qr-modal-sponsor-logo">
+                <strong class="qr-modal-sponsor-name">{{ active_sponsor.name }}</strong>
+              </div>
+            {% endif %}
+          </div>
+          {% endif %}
         </div>
 
       </div>
@@ -211,7 +226,7 @@
   <!-- ======================================================================
        ZWEISPALTIGER BEREICH: NEWS (2/3 BREITE) & SITZPLATZ/STATUS (1/3 BREITE)
        ====================================================================== -->
-  <div class="dash-split">
+  <div class="dash-split{% if not general_config.dashboard_seat_preview_enabled %} dash-split--compact{% endif %}">
 
     <!-- ------------------------------------------------------------------
          LINKES ELEMENT: NEWS WIDGET (2/3 BREITE)
@@ -303,8 +318,8 @@
           {% endif %}
         </div>
 
-        <!-- SITZPLAN MINI-MAP VORSCHAU -->
-        {% if upcoming_event %}
+        <!-- SITZPLAN MINI-MAP VORSCHAU (abschaltbar in der Allgemeinen Konfiguration) -->
+        {% if upcoming_event and general_config.dashboard_seat_preview_enabled %}
           <div class="minimap-wrapper">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
               <span style="font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #9ca3af; text-transform: uppercase;">{% t "dash_seat_preview_label" %}</span>

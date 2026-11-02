@@ -40,4 +40,11 @@ TEXTS = {
     'results_stale': 'Die Ergebnisse haben sich inzwischen geändert. Bitte die Seite neu laden und die aktuellen Werte prüfen.',
     'results_score_only_hint': 'Punktestände können korrigiert werden. Ein Siegerwechsel ist gesperrt, sobald ein betroffenes Folgematch gestartet wurde.',
     'results_group_hint': 'Nach Freigabe der K.-o.-Phase sind Korrekturen nur erlaubt, wenn Qualifikation und Setzung unverändert bleiben.',
+    'results_walkover_withdrawn': 'Kampflos – Gegner hat sich zurückgezogen',
+    'results_walkover_label': 'Kampflos / Nichtantreten',
+    'results_walkover_hint': 'Wertet das Match als kampflosen Sieg des gewählten Teams. Das andere Team bleibt im Turnier.',
+    'results_walkover_permission': 'Kampflose Wertungen kann nur die Turnierleitung vornehmen.',
+    'results_walkover_winner_required': 'Für eine kampflose Wertung bitte den Sieger auswählen.',
+    'results_walkover_reason_required': 'Für eine kampflose Wertung bitte einen Grund angeben (z. B. Nichtantreten).',
+    'results_shared_placements': 'Endstand mit geteilten Plätzen',
 }

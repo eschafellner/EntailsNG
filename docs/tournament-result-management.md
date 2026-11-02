@@ -52,8 +52,28 @@ Platzierungen bleiben möglich. Zurückgezogene Teilnehmer bleiben disqualifizie
 - **FFA:** Vollständige Wertung und Korrektur im Backend und Frontend bis zur
   endgültigen Abschlussbestätigung.
 
-Freilose und kampflose Wertungen können nicht über die reguläre
-Ergebniseingabe in ein gespieltes Match umgewandelt werden. Abgesagte Turniere,
+## Rückzug und kampflose Wertung
+
+- **Kampflos / Nichtantreten:** In der Ergebniseingabe (Frontend-Modal und
+  **Ergebnisse verwalten**) kann die Turnierleitung ein einzelnes Match als
+  kampflos werten. Sieger und Grund sind Pflicht. Das Match erhält die
+  Ergebnisart `WALKOVER`, das unterlegene Team bleibt im Turnier. Diese
+  manuelle Wertung lässt sich wie ein normales Ergebnis korrigieren, auch
+  zurück zu „gespielt“. Im Schweizer System zählt sie als kampfloser Sieg.
+- **Rückzug eines Teams** (Admin-Aktion für alle aktiven Turniere des Teams):
+  In K.-o.-Modi verliert das Team jedes offene Match kampflos (`WALKOVER`).
+  Steht der Gegner noch nicht fest, bleibt das Team im Turnierbaum stehen und
+  verliert kampflos, sobald der Gegner feststeht. Die Wertung hängt damit nicht
+  vom Zeitpunkt ab: Ein zurückgezogener Finalist erhält in SE/DE immer Platz 2.
+  Zurückgezogene Verlierer rücken nicht ins Loser Bracket bzw. ins Spiel um
+  Platz 3 nach. Treffen zwei zurückgezogene Teams aufeinander, wird das Match als
+  `DOUBLE_FORFEIT` ohne Sieger abgeschlossen. In Liga, Swiss und FFA erhalten
+  zurückgezogene Teams weiterhin keinen Rang.
+- **Ergebnisarten:** Automatisch entschiedene Matches tragen immer `BYE`
+  (Freilos), `WALKOVER` oder `DOUBLE_FORFEIT`, nie `PLAYED`.
+
+Freilose und kampflose Wertungen aus einem Rückzug können nicht über die
+reguläre Ergebniseingabe in ein gespieltes Match umgewandelt werden. Abgesagte Turniere,
 beendete/abgesagte Veranstaltungen und bestätigte Endergebnisse bleiben gesperrt.
 Eine Veränderung bereits gestarteter Folgespiele wird nicht automatisch
 zurückgerollt; für einen vollständigen Neustart gibt es weiterhin die separate

@@ -689,6 +689,7 @@ class TournamentHardeningServiceTests(TestCase):
         # 4. Wenn das Folgematch beendet ist, darf semi_match nicht mehr modifiziert werden
         final_match.status = TournamentMatch.Status.COMPLETED
         final_match.is_bye = False
+        final_match.result_type = TournamentMatch.ResultType.PLAYED
         final_match.save()
 
         with self.assertRaises(MatchAlreadyCompletedError):

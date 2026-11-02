@@ -6,7 +6,7 @@ from tournaments.services.standings import LeagueStandingService
 
 class TournamentPodiumService:
     @staticmethod
-    def placements(tournament, *, swiss_standings=None):
+    def placements(tournament, *, swiss_standings=None, league_standings=None):
         """All placements, including shared Swiss ranks, for UI and certificates."""
         if not tournament.is_generated or tournament.status != Tournament.Status.FINISHED:
             return []
@@ -15,14 +15,24 @@ class TournamentPodiumService:
             rows = swiss_standings if swiss_standings is not None else SwissStandingService.calculate(tournament)
             return [{'rank': row['rank'], 'team': row['team']} for row in rows if row['rank'] is not None]
         if tournament.mode == Tournament.Mode.LEAGUE:
-            return [{'rank': row['rank'], 'team': row['team']}
-                    for row in LeagueStandingService.calculate_league_standings(tournament) if row['rank'] is not None]
+            rows = league_standings if league_standings is not None else LeagueStandingService.calculate_league_standings(tournament)
+            return [{'rank': row['rank'], 'team': row['team']} for row in rows if row['rank'] is not None]
         if tournament.mode == Tournament.Mode.FFA:
             participants = tournament.matches.filter(bracket_type=TournamentMatch.BracketType.FFA).first()
             return [{'rank': p.rank, 'team': p.team} for p in
                     participants.participants.filter(is_disqualified=False, rank__isnull=False).select_related('team').order_by('rank', 'pk')] if participants else []
         return [{'rank': number, 'team': team} for number, team in
                 enumerate(TournamentPodiumService.calculate(tournament).values(), 1) if team is not None]
+
+    @staticmethod
+    def shared_placements(tournament, *, league_standings=None):
+        """Plätze 1–3, falls dort Ränge geteilt werden und das Podium daher unvollständig bleibt."""
+        if tournament.mode not in (Tournament.Mode.LEAGUE, Tournament.Mode.FFA):
+            return []
+        top = [p for p in TournamentPodiumService.placements(tournament, league_standings=league_standings)
+               if p['rank'] <= 3]
+        ranks = [p['rank'] for p in top]
+        return top if len(ranks) != len(set(ranks)) else []
 
     @staticmethod
     def calculate(tournament, *, league_standings=None, ffa_participants=None):

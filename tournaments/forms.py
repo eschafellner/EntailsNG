@@ -53,6 +53,7 @@ class MatchResultForm(forms.Form):
     score_team1 = forms.IntegerField(min_value=0, max_value=2**31-1)
     score_team2 = forms.IntegerField(min_value=0, max_value=2**31-1)
     winner_id = forms.ChoiceField(required=False)
+    walkover = forms.BooleanField(required=False)
     decision_reason = forms.CharField(required=False, max_length=255)
     expected_state = forms.CharField(widget=forms.HiddenInput)
 
@@ -67,6 +68,9 @@ class MatchResultForm(forms.Form):
             (str(team.pk), team.name) for team in (match.team1, match.team2) if team]
         self.fields['winner_id'].initial = match.winner_id or ''
         self.fields['winner_id'].label = get_translation('tournament_modal_select_winner_label')
+        self.fields['walkover'].label = get_translation('results_walkover_label')
+        self.fields['walkover'].help_text = get_translation('results_walkover_hint')
+        self.fields['walkover'].initial = match.result_type == TournamentMatch.ResultType.WALKOVER
         self.fields['decision_reason'].label = get_translation('results_reason' if match.status == TournamentMatch.Status.COMPLETED else 'tournament_modal_reason_label')
         self.fields['decision_reason'].required = match.status == TournamentMatch.Status.COMPLETED
         self.fields['expected_state'].initial = match_version(match)

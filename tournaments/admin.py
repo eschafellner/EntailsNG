@@ -182,7 +182,7 @@ class TournamentAdmin(admin.ModelAdmin):
                         TournamentMatchService.update_match_score(match.pk, actor=request.user,
                             score1=bound_form.cleaned_data['score_team1'], score2=bound_form.cleaned_data['score_team2'],
                             winner_id=bound_form.cleaned_data['winner_id'], decision_reason=bound_form.cleaned_data['decision_reason'],
-                            expected_state=bound_form.cleaned_data['expected_state'])
+                            expected_state=bound_form.cleaned_data['expected_state'], walkover=bound_form.cleaned_data['walkover'])
                     else:
                         raise TournamentError(get_translation('results_invalid_form'))
                 elif match and action == 'ffa':
@@ -197,10 +197,11 @@ class TournamentAdmin(admin.ModelAdmin):
             else:
                 self.message_user(request, get_translation('results_action_success'), messages.SUCCESS)
                 return redirect('admin:tournaments_tournament_results', tournament.pk)
+        withdrawn = set(tournament.registrations.filter(is_forfeited=True).values_list('team_id', flat=True))
         for match in matches:
             match.tournament = tournament
             match.lock_reason = result_lock_reason(match, tournament,
-                latest_swiss_round=max((m.round_number for m in matches), default=0))
+                latest_swiss_round=max((m.round_number for m in matches), default=0), withdrawn=withdrawn)
             match.result_version = match_version(match)
             match.score_form = bound_form if bound_form and str(match.pk) == request.POST.get('match_id') else MatchResultForm(match=match)
         context = {**self.admin_site.each_context(request), 'opts': self.model._meta, 'original': tournament,

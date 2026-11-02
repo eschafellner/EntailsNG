@@ -122,12 +122,18 @@
   const first = document.getElementById('score_team1'), second = document.getElementById('score_team2');
   const winner = document.getElementById('winner_id');
   const reason = document.getElementById('decision_reason');
+  const walkover = document.getElementById('walkover');
   const error = document.getElementById('scoreFormError');
   const submit = document.getElementById('btn_submit_score');
   let current = null;
   const format = (text, values) => text.replace(/\{(\w+)\}/g, (token, key) => values[key] ?? token);
   function validationMessage() {
     if (!current || first.value === '' || second.value === '') return messages.enterScores;
+    if (walkover?.checked) {
+      if (!winner.value) return messages.walkoverWinner;
+      if (!reason.value.trim()) return messages.walkoverReason;
+      return '';
+    }
     const a = Number(first.value), b = Number(second.value);
     if (a === b && !current.isAdmin && !current.allowsDraw) return messages.tie;
     if (a === b && !winner.value && !current.allowsDraw) return messages.tie;
@@ -150,9 +156,10 @@
     const problem = validationMessage();
     const a = Number(first.value), b = Number(second.value);
     const selected = winner.value ? winner.options[winner.selectedIndex].text : a > b ? current.team1 : b > a ? current.team2 : messages.draw;
-    document.getElementById('score-summary').textContent = problem || format(messages.summary, {
+    const summary = format(messages.summary, {
       team1: current.team1, team2: current.team2, score1: first.value, score2: second.value, winner: selected,
     });
+    document.getElementById('score-summary').textContent = problem || (walkover?.checked ? `${summary} · ${messages.walkover}` : summary);
   }
   window.openScoreModal = button => {
     current = matches[button.dataset.matchId];
@@ -179,6 +186,7 @@
       winner.add(new Option(current.team2, current.team2Id));
       winner.value = current.winner ?? '';
       reason.value = current.correction ? '' : current.reason || '';
+      if (walkover) walkover.checked = Boolean(current.walkover);
     } else {
       const loserName = current.role === 1 ? current.team1 : current.team2;
       const winnerName = current.role === 1 ? current.team2 : current.team1;
@@ -190,7 +198,8 @@
     updateSummary();
     openDialog('scoreModal');
   };
-  [first, second, winner, reason].forEach(el => el.addEventListener('input', updateSummary));
+  [first, second, winner, reason, walkover].forEach(el => el?.addEventListener('input', updateSummary));
+  walkover?.addEventListener('change', updateSummary);
   window.submitScore = async event => {
     event.preventDefault();
     if (saving || !form.reportValidity()) return;

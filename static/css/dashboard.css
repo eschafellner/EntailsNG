@@ -406,3 +406,76 @@
 .minimap-cell-obstacle {
   background: #374151;
 }
+
+/* =============================================================================
+   CHECK-IN QR MODAL & SPONSOR
+   QR-Code, Ticket-Code und Gastfoto haben Vorrang: das Fenster scrollt statt
+   abzuschneiden, und der Sponsor-Bereich wird auf niedrigen Bildschirmen kleiner.
+   ============================================================================= */
+
+.qr-modal {
+  align-items: flex-start;
+  overflow-y: auto;
+  max-height: 100dvh;
+  overscroll-behavior: contain;
+}
+
+/* margin: auto zentriert, solange Platz ist, und richtet sonst oben aus. */
+.qr-modal-box { margin: auto; }
+
+.qr-modal-sponsor {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.qr-modal-sponsor-label {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.qr-modal-sponsor-banner {
+  display: block;
+  max-width: 100%;
+  max-height: 60px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.qr-modal-sponsor-logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 100%;
+}
+
+.qr-modal-sponsor-logo {
+  display: block;
+  max-height: 48px;
+  max-width: 96px;
+  object-fit: contain;
+}
+
+.qr-modal-sponsor-name {
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+
+@media (max-height: 700px) {
+  .qr-modal-sponsor { margin-top: 10px; padding-top: 8px; gap: 4px; }
+  .qr-modal-sponsor-banner { max-height: 36px; }
+  .qr-modal-sponsor-logo { max-height: 28px; max-width: 64px; }
+  .qr-modal-sponsor-name { font-size: 12px; }
+}

@@ -70,6 +70,16 @@ class GeneralConfigurationAdmin(admin.ModelAdmin):
             },
         ),
         (
+            'Dashboard-Anzeige',
+            {
+                'fields': ('dashboard_seat_preview_enabled', 'checkin_qr_sponsor_enabled', 'subpage_sponsor_enabled'),
+                'description': (
+                    'Layout der Startseite. Ohne Sitzplan-Vorschau wird der mittlere Bereich '
+                    '(News und Veranstaltung) niedriger, damit das Sponsoren-Banner früher sichtbar ist.'
+                ),
+            },
+        ),
+        (
             'Zahlungsdaten für Banküberweisungen / GiroCode',
             {
                 'fields': (
