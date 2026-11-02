@@ -39,7 +39,7 @@
         <div>
           <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
             {% if item.clan.logo %}
-              <img src="{{ item.clan.logo.url }}" alt="{{ item.clan.name }}" style="width: 48px; height: 48px; flex-shrink: 0; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
+              <img src="{{ item.clan.logo.url }}" alt="{{ item.clan.name }}" style="width: 48px; height: 48px; flex-shrink: 0; object-fit: contain; background: var(--paper); border-radius: 8px; border: 1px solid var(--line);">
             {% else %}
               <div style="width: 48px; height: 48px; flex-shrink: 0; background: var(--navy); color: var(--signal); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: bold;">
                 {{ item.clan.name|slice:":2"|upper }}

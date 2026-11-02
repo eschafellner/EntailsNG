@@ -1,4 +1,4 @@
-/* Native touch scrolling, with optional rotation only on desktop. */
+/* Native touch scrolling; rotation starts by itself only on desktop, elsewhere on request. */
 (() => {
   'use strict';
 
@@ -22,16 +22,18 @@
     const rotation = root.querySelector('[data-news-rotation]');
     const position = root.querySelector('[data-news-position]');
     const desktop = window.matchMedia('(min-width: 901px) and (hover: hover) and (pointer: fine)');
+    const hoverable = window.matchMedia('(hover: hover) and (pointer: fine)');
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let index = 0;
-    let paused = false;
+    // null until the visitor decides; until then the device decides.
+    let pausedByVisitor = null;
     let hovered = root.matches(':hover');
     let timer = null;
     let scrollTimer = null;
     let pointerRotationState = null;
 
-    const canRotate = () => desktop.matches && !reducedMotion.matches;
-    const isRotating = () => canRotate() && !paused && !hovered && !document.hidden;
+    const isPaused = () => pausedByVisitor ?? (!desktop.matches || reducedMotion.matches);
+    const isRotating = () => !isPaused() && !hovered && !document.hidden;
 
     function showPosition() {
       position.textContent = `${index + 1} ${position.dataset.positionLabel} ${slides.length}`;
@@ -45,14 +47,13 @@
     function schedule() {
       window.clearTimeout(timer);
       timer = null;
-      rotation.hidden = !canRotate();
-      rotation.textContent = paused ? root.dataset.startLabel : root.dataset.pauseLabel;
+      rotation.textContent = isPaused() ? root.dataset.startLabel : root.dataset.pauseLabel;
       position.setAttribute('aria-live', isRotating() ? 'off' : 'polite');
       if (isRotating()) timer = window.setTimeout(() => goTo(index + 1), 8000);
     }
 
     function pause() {
-      paused = true;
+      pausedByVisitor = true;
       schedule();
     }
 
@@ -74,11 +75,11 @@
     });
     rotation.addEventListener('pointerdown', () => {
       // Remember the intended action before focusin pauses automatic movement.
-      pointerRotationState = !paused;
+      pointerRotationState = !isPaused();
     });
     rotation.addEventListener('pointercancel', () => { pointerRotationState = null; });
     rotation.addEventListener('click', event => {
-      paused = event.detail && pointerRotationState !== null ? pointerRotationState : !paused;
+      pausedByVisitor = event.detail && pointerRotationState !== null ? pointerRotationState : !isPaused();
       pointerRotationState = null;
       schedule();
     });
@@ -92,7 +93,8 @@
         goTo(index + (event.key === 'ArrowRight' ? 1 : -1));
       }
     });
-    root.addEventListener('mouseenter', () => { hovered = true; schedule(); });
+    // Touch browsers emit mouseenter on tap without a matching mouseleave.
+    root.addEventListener('mouseenter', () => { hovered = hoverable.matches; schedule(); });
     root.addEventListener('mouseleave', () => { hovered = false; schedule(); });
     track.addEventListener('scroll', () => {
       window.clearTimeout(scrollTimer);
@@ -108,6 +110,7 @@
     reducedMotion.addEventListener('change', schedule);
     document.addEventListener('visibilitychange', schedule);
     controls.hidden = false;
+    rotation.hidden = false;
     showPosition();
     schedule();
   });

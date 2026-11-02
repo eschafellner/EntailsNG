@@ -13,7 +13,7 @@
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
       <div class="clan-banner-identity" style="display: flex; align-items: center; gap: 20px;">
         {% if clan.logo %}
-          <img src="{{ clan.logo.url }}" alt="{{ clan.name }}" style="width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 2px solid var(--line);">
+          <img src="{{ clan.logo.url }}" alt="{{ clan.name }}" style="width: 72px; height: 72px; object-fit: contain; background: var(--paper); border-radius: 12px; border: 2px solid var(--line);">
         {% else %}
           <div style="width: 72px; height: 72px; background: var(--navy); color: var(--signal); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: bold;">
             {{ clan.name|slice:":2"|upper }}

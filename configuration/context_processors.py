@@ -12,6 +12,8 @@ from .translations import DEFAULT_TEXTS, get_translation  # noqa: F401 – Re-Ex
 
 NAV_CACHE_KEY = 'navigation_items'
 CACHE_SECONDS = 300
+# Menüpunkte, die auch für ihre Unterseiten als aktiv gelten.
+NAV_SECTION_URLS = ('/info/', '/knowledge/')
 
 
 def _get_active_event():
@@ -45,6 +47,18 @@ def _get_user_pending_team_requests_count(request):
     return applications + received_invitations(request.user, _get_active_event()).count()
 
 
+def _get_active_nav_item_id(nav_items, path):
+    """Genau ein Menüpunkt ist aktiv: Ein eigener Eintrag der Seite geht dem Bereichs-Eintrag vor."""
+    urls = [(item.pk, item.get_url()) for item in nav_items]
+    for pk, url in urls:
+        if url and url == path:
+            return pk
+    for pk, url in urls:
+        if url in NAV_SECTION_URLS and path.startswith(url):
+            return pk
+    return None
+
+
 def feature_flags(request):
     """
     Schlanker Context Processor:
@@ -73,6 +87,7 @@ def feature_flags(request):
 
     return {
         'nav_items': nav_items,
+        'active_nav_item_id': _get_active_nav_item_id(nav_items, request.path),
         'features': {},
         'feature_flags': {},
         'site_customization': site_customization,

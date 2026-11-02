@@ -1,55 +1,67 @@
 import os
+from io import BytesIO
+
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import UploadedFile
 from django.contrib.auth.password_validation import validate_password
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
 from .models import Clan
 
-MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024  # Maximal 2 Megabyte
-MAX_DIMENSION = 500
+# Knapp unter client_max_body_size von nginx (25 MB), damit eine Formularmeldung statt HTTP 413 erscheint.
+MAX_LOGO_SIZE_BYTES = 20 * 1024 * 1024
+# Schützt den Speicher: Die Pixelzahl lässt sich an der Dateigröße nicht ablesen.
+MAX_LOGO_PIXELS = 40_000_000
+MAX_LOGO_EDGE = 500
+LOGO_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
+LOGO_FORMATS = {'JPEG', 'PNG', 'WEBP'}
 
 
-def validate_clan_logo(file):
+def normalize_clan_logo(upload):
     """
-    Validiert hochgeladene Clan-Logos sicher und robust:
-    1. Dateiendung (.jpg, .jpeg, .png, .webp)
-    2. Maximale Dateigröße (2 MB) zum Schutz vor DoS
-    3. Echte Bild-Header & Dimensionen (max. 500x500 px) via Pillow
+    Prüft ein hochgeladenes Logo und kodiert es neu, ohne Metadaten und mit höchstens 500 px Kantenlänge.
+    JPEG bleibt JPEG; PNG und WebP werden zu PNG, damit Transparenz erhalten bleibt.
     """
-    ext = os.path.splitext(file.name)[1].lower()
-    valid_extensions = ['.jpg', '.jpeg', '.png', '.webp']
-    if ext not in valid_extensions:
+    base_name, extension = os.path.splitext(os.path.basename(upload.name))
+    if extension.lower() not in LOGO_EXTENSIONS:
         raise ValidationError(
-            f"Ungültiges Dateiformat '{ext}'. Erlaubte Formate: .jpg, .jpeg, .png, .webp"
+            f"Ungültiges Dateiformat '{extension}'. Erlaubte Formate: .jpg, .jpeg, .png, .webp"
+        )
+    if upload.size > MAX_LOGO_SIZE_BYTES:
+        raise ValidationError(
+            f"Die Datei ist mit {upload.size / (1024 * 1024):.1f} MB zu groß. "
+            f"Maximal erlaubt sind {MAX_LOGO_SIZE_BYTES // (1024 * 1024)} MB."
         )
 
-    # 1. Dateigrößen-Check vor dem Laden in den RAM
-    file_size = getattr(file, 'size', None)
-    if file_size and file_size > MAX_LOGO_SIZE_BYTES:
-        raise ValidationError(
-            f"Die Datei ist mit {file_size / (1024 * 1024):.1f} MB zu groß. Maximal erlaubt sind 2 MB."
-        )
-
-    # 2. Sichere Header-Prüfung mittels Pillow ohne Dekomprimierung der gesamten Pixeldaten
+    invalid = ValidationError("Die hochgeladene Datei ist kein gültiges oder ein beschädigtes Bild.")
     try:
-        file.seek(0)
-        with Image.open(file) as img:
-            img.verify()
-
-        file.seek(0)
-        with Image.open(file) as img:
-            width, height = img.size
-            if width > MAX_DIMENSION or height > MAX_DIMENSION:
+        upload.seek(0)
+        with Image.open(upload) as image:
+            if image.format not in LOGO_FORMATS:
+                raise invalid
+            width, height = image.size
+            if width * height > MAX_LOGO_PIXELS:
                 raise ValidationError(
-                    f"Das Bild ist {width}x{height} Pixel groß. Maximal erlaubt sind {MAX_DIMENSION}x{MAX_DIMENSION} Pixel."
+                    f"Das Bild ist mit {width}x{height} Pixeln zu groß. "
+                    f"Maximal erlaubt sind {MAX_LOGO_PIXELS // 1_000_000} Megapixel."
                 )
-    except ValidationError:
-        raise
-    except Exception:
-        raise ValidationError("Die hochgeladene Datei ist kein gültiges oder ein beschädigtes Bild.")
+            is_jpeg = image.format == 'JPEG'
+            if is_jpeg:
+                image.draft('RGB', (MAX_LOGO_EDGE * 2, MAX_LOGO_EDGE * 2))
+            # Ausrichtung übernehmen, bevor die Metadaten verworfen werden.
+            logo = ImageOps.exif_transpose(image).convert('RGB' if is_jpeg else 'RGBA')
+        logo.thumbnail((MAX_LOGO_EDGE, MAX_LOGO_EDGE))
+        output = BytesIO()
+        if is_jpeg:
+            logo.save(output, format='JPEG', quality=90, optimize=True)
+        else:
+            logo.save(output, format='PNG', optimize=True)
+    except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+        raise invalid
     finally:
-        file.seek(0)
-
+        upload.seek(0)
+    return ContentFile(output.getvalue(), name=f"{base_name}{'.jpg' if is_jpeg else '.png'}")
 
 
 class ClanForm(forms.ModelForm):
@@ -73,7 +85,7 @@ class ClanForm(forms.ModelForm):
                 "class": "form-control", "placeholder": "www.clan.at",
                 "inputmode": "url", "autocapitalize": "none", "spellcheck": "false",
             }),
-            "logo": forms.FileInput(attrs={"class": "form-control", "accept": ".jpg,.jpeg,.png"}),
+            "logo": forms.FileInput(attrs={"class": "form-control", "accept": ".jpg,.jpeg,.png,.webp"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -95,8 +107,9 @@ class ClanForm(forms.ModelForm):
 
     def clean_logo(self):
         logo = self.cleaned_data.get('logo')
-        if logo and hasattr(logo, 'file'):
-            validate_clan_logo(logo)
+        # Ohne neuen Upload liefert das Feld das gespeicherte Logo; das bleibt unverändert.
+        if isinstance(logo, UploadedFile):
+            return normalize_clan_logo(logo)
         return logo
 
     def clean_password(self):

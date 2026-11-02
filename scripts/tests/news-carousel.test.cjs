@@ -74,16 +74,36 @@ test('desktop rotates after eight seconds and wraps to the first article', () =>
   s.advance(8000); assert.equal(s.position.textContent, '1 von 3');
 });
 
-test('mobile and reduced-motion preference never auto-rotate', () => {
+test('mobile and reduced-motion preference do not auto-rotate but offer the rotation button', () => {
   for (const options of [{ desktop: false }, { reduced: true }]) {
     const s = setup(options);
     s.advance(60000);
     assert.equal(s.track.calls.length, 0);
-    assert.equal(s.rotation.hidden, true);
+    assert.equal(s.rotation.hidden, false);
+    assert.equal(s.rotation.textContent, 'Start');
     s.next.fire('click');
     assert.equal(s.position.textContent, '2 von 3');
     if (options.reduced) assert.equal(s.track.calls[0].behavior, 'instant');
   }
+});
+
+test('the rotation button starts and pauses rotation on mobile and with reduced motion', () => {
+  for (const options of [{ desktop: false }, { reduced: true }]) {
+    const s = setup(options);
+    s.rotation.fire('pointerdown'); s.root.fire('focusin'); s.rotation.fire('click', { detail: 1 });
+    assert.equal(s.rotation.textContent, 'Pause');
+    s.advance(8000); assert.equal(s.position.textContent, '2 von 3');
+    if (options.reduced) assert.equal(s.track.calls[0].behavior, 'instant');
+    s.rotation.fire('pointerdown'); s.rotation.fire('click', { detail: 1 });
+    assert.equal(s.rotation.textContent, 'Start');
+    s.advance(16000); assert.equal(s.position.textContent, '2 von 3');
+  }
+});
+
+test('the tap that starts rotation on a touch device does not count as hovering', () => {
+  const s = setup({ desktop: false });
+  s.rotation.fire('pointerdown'); s.root.fire('mouseenter'); s.rotation.fire('click', { detail: 1 });
+  s.advance(8000); assert.equal(s.track.calls.length, 1);
 });
 
 test('manual next, previous, touch, wheel and keyboard focus stop rotation until restarted', () => {
@@ -128,8 +148,17 @@ test('changing screen size or reduced-motion preference cancels pending rotation
     if (mode === 'desktop') { s.desktopQuery.matches = false; s.desktopQuery.fire('change'); }
     else { s.reducedQuery.matches = true; s.reducedQuery.fire('change'); }
     s.advance(16000); assert.equal(s.track.calls.length, 0);
-    assert.equal(s.rotation.hidden, true);
+    assert.equal(s.rotation.hidden, false);
+    assert.equal(s.rotation.textContent, 'Start');
   }
+});
+
+test('a rotation started by the visitor survives a change of screen size', () => {
+  const s = setup({ desktop: false });
+  s.rotation.fire('click', { detail: 0 });
+  s.desktopQuery.matches = true; s.desktopQuery.fire('change');
+  s.desktopQuery.matches = false; s.desktopQuery.fire('change');
+  s.advance(8000); assert.equal(s.track.calls.length, 1);
 });
 
 test('swiping updates the position and makes only the visible article links accessible', () => {

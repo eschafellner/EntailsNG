@@ -253,6 +253,42 @@ class EventInfoViewTests(TestCase):
         self.assertContains(resp_staff, 'Noch nicht final')
 
 
+class InfoNavigationActiveStateTests(TestCase):
+    MENU_CLASSES = ('class="nav-item active"', 'class="mobile-item active"', 'class="mobile-modal-item active"')
+
+    def setUp(self):
+        self.section = NavigationItem.objects.create(title='Infos', url_name='/info/', order=1)
+        EventInfo.objects.create(title='Allgemein', slug='allgemein')
+        self.own_entry = EventInfo.objects.create(title='Geheim', slug='geheim', show_in_nav=True)
+        EventInfo.objects.create(title='Anreise', slug='anreise')
+
+    def assert_active(self, path, item):
+        response = self.client.get(path)
+        self.assertEqual(response.context['active_nav_item_id'], item.pk)
+        html = response.content.decode()
+        # Seitenleiste plus genau eine mobile Variante (Leiste oder Mehr-Menü).
+        self.assertEqual(sum(html.count(css) for css in self.MENU_CLASSES), 2)
+
+    def test_page_with_own_menu_entry_only_marks_that_entry(self):
+        self.assert_active('/info/geheim/', self.own_entry.nav_item)
+
+    def test_page_without_own_menu_entry_marks_the_info_section(self):
+        self.assert_active('/info/anreise/', self.section)
+
+    def test_info_overview_marks_the_info_section(self):
+        self.assert_active('/info/', self.section)
+
+    def test_hidden_own_entry_falls_back_to_the_info_section(self):
+        item = self.own_entry.nav_item
+        item.visibility = NavigationItem.Visibility.STAFF
+        item.save()
+        self.assert_active('/info/geheim/', self.section)
+
+    def test_other_pages_mark_no_info_entry(self):
+        response = self.client.get(reverse('news_list'))
+        self.assertIsNone(response.context['active_nav_item_id'])
+
+
 class InfoServiceTests(TestCase):
 
     def test_get_event_info_returns_instance(self):

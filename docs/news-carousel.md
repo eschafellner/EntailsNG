@@ -13,9 +13,10 @@ Scrollrichtung. Vor-/Zurück-Schaltflächen und die Positionsanzeige ergänzen d
 native Swipe- und Touchpad-Bedienung.
 
 Auf Desktop mit Maus/Trackpad startet alle acht Sekunden ein automatischer
-Wechsel. Smartphones und Geräte ohne präzisen Zeiger verwenden ausschließlich
-manuelle Navigation. Die Systemeinstellung für reduzierte Bewegung deaktiviert
-Rotation und sanftes Scrollen ebenfalls.
+Wechsel. Bis 900 Pixel Breite, auf Geräten ohne präzisen Zeiger und bei der
+Systemeinstellung für reduzierte Bewegung startet die Rotation nicht von selbst;
+die Schaltfläche steht dort auf „Rotation starten“. Bei reduzierter Bewegung
+wechseln die Karten auch nach dem Start ohne sanftes Scrollen.
 
 Manuelle Navigation, Tastaturfokus, Berührung und Scrollgesten pausieren die
 Rotation dauerhaft, bis „Rotation starten“ gewählt wird. Hover und ein inaktiver

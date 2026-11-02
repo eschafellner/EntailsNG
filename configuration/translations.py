@@ -698,7 +698,7 @@ DEFAULT_TEXTS = {
     'pw_reset_request_new_link': 'Neuen Link anfordern',
 
     # Clan-Modul
-    'clan_logo_help': 'Maximal 500x500 Pixel. Erlaubte Formate: .jpg, .jpeg, .png',
+    'clan_logo_upload_help': 'Bis 20 MB. Größere Bilder werden automatisch auf 500 Pixel verkleinert. Erlaubte Formate: .jpg, .jpeg, .png, .webp',
     'clan_list_title': 'Clans & Teams',
     'clan_list_subtitle': 'Alle registrierten Gaming-Clans & Teams im Überblick',
     'clan_create_btn': '+ Clan gründen',

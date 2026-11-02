@@ -22,6 +22,16 @@ class ExternalEmbeddingTests(TestCase):
         values.update(kwargs)
         return EventInfo.objects.create(**values)
 
+    def test_open_button_sits_in_title_row_and_provider_name_is_hidden(self):
+        provider = EmbedProvider.objects.create(name='Interner Anbietername', origin='https://intern.example.com')
+        page = self.page(slug='intern', embed_provider=provider, embed_url='https://intern.example.com/album',
+                         content='<p>Einleitung</p>')
+        html = self.client.get(page.get_absolute_url()).content.decode()
+        self.assertNotIn('Interner Anbietername', html)
+        self.assertEqual(html.count('href="https://intern.example.com/album"'), 1)
+        self.assertLess(html.index('<h1'), html.index('href="https://intern.example.com/album"'))
+        self.assertLess(html.index('href="https://intern.example.com/album"'), html.index('<hr'))
+
     def test_gallery_loads_directly_with_safe_attributes_and_fallback(self):
         page = self.page(content='<p>Fotos der LAN</p>')
         response = self.client.get(page.get_absolute_url())

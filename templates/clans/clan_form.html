@@ -43,7 +43,7 @@
       <label for="id_logo">{% t "clan_logo_label" "Clan-Logo (optional):" %}</label>
       {{ form.logo }}
       <small style="color: var(--muted); font-size: 11px; display: block; margin-top: 4px;">
-        ℹ️ {% t "clan_logo_help" "Maximal 500x500 Pixel. Erlaubte Formate: .jpg, .jpeg, .png" %}
+        ℹ️ {% t "clan_logo_upload_help" "Bis 20 MB. Größere Bilder werden automatisch auf 500 Pixel verkleinert. Erlaubte Formate: .jpg, .jpeg, .png, .webp" %}
       </small>
       {% if form.logo.errors %}
         <div style="color: var(--danger); font-size: 12px; margin-top: 4px;">{{ form.logo.errors.0 }}</div>

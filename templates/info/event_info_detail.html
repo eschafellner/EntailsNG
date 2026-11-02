@@ -28,15 +28,22 @@
       {% if event_info.subtitle %}
         <p class="eyebrow">{{ event_info.subtitle }}</p>
       {% endif %}
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
-        <h1 style="margin: 0;">{{ event_info.title }}</h1>
-        {% if perms.info.change_eventinfo or user.is_superuser %}
-          <a href="{% url 'admin:info_eventinfo_change' event_info.pk %}"
-             class="btn"
-             title="Im Admin-Bereich bearbeiten">
-            ✏️ Seite bearbeiten
-          </a>
-        {% endif %}
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <h1 style="margin: 0; min-width: 0; overflow-wrap: anywhere;">{{ event_info.title }}</h1>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+          {% if perms.info.change_eventinfo or user.is_superuser %}
+            <a href="{% url 'admin:info_eventinfo_change' event_info.pk %}"
+               class="btn"
+               title="Im Admin-Bereich bearbeiten">
+              ✏️ Seite bearbeiten
+            </a>
+          {% endif %}
+          {% if event_info.is_embed and embed_available %}
+            <a href="{{ event_info.embed_url }}" target="_blank" rel="noopener noreferrer" class="btn-action-primary">
+              {% t "info_embed_open" "Externe Seite separat öffnen" %}
+            </a>
+          {% endif %}
+        </div>
       </div>
       <hr style="border: 0; border-top: 1px solid var(--line); margin: 20px 0;">
 
@@ -49,12 +56,6 @@
       </div>
       {% if event_info.is_embed %}
         {% if embed_available %}
-          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0;">
-            <a href="{{ event_info.embed_url }}" target="_blank" rel="noopener noreferrer" class="btn-action-primary">
-              {% t "info_embed_open" "Externe Seite separat öffnen" %}
-            </a>
-            <span style="color: var(--muted); overflow-wrap: anywhere;">{{ event_info.embed_provider.name }}</span>
-          </div>
           <iframe src="{{ event_info.embed_url }}"
                   title="{{ event_info.title }}"
                   sandbox="{{ event_info.embed_sandbox }}"
