@@ -326,16 +326,18 @@
               const logo = document.createElement('img');
               logo.src = cellData.hold_clan_logo;
               logo.alt = cellData.hold_clan_name;
-              logo.style.cssText = 'width:18px;height:18px;object-fit:contain;pointer-events:none';
+              // Nimmt nur den neben der Beschriftung freien Platz, damit das Logo in der Kachel bleibt.
+              logo.style.cssText = 'flex:1 1 0;min-height:0;width:100%;max-width:18px;max-height:18px;object-fit:contain;pointer-events:none';
               cellEl.appendChild(logo);
             } else {
               const tag = document.createElement('span');
               tag.textContent = cellData.hold_clan_tag;
-              tag.style.cssText = 'font-size:9px;line-height:10px';
+              tag.style.cssText = 'flex:none;max-width:100%;overflow:hidden;white-space:nowrap;font-size:9px;line-height:10px';
               cellEl.appendChild(tag);
             }
             cellEl.style.flexDirection = 'column';
-            label.style.cssText = 'font-size:9px;line-height:10px';
+            label.style.cssText = 'flex:none;max-width:100%;font-size:9px;line-height:9px;text-align:center;overflow-wrap:anywhere;' +
+              'display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden';
           }
           cellEl.appendChild(label);
           if (config.clanMode) {
