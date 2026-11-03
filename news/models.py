@@ -1,12 +1,19 @@
 from django.conf import settings
 from django.db import models
 from django.core.validators import FileExtensionValidator
+from django.utils import timezone
 from django.utils.html import linebreaks, strip_tags
 from django.utils.safestring import mark_safe
 from django.utils.functional import cached_property
 
 from .content import sanitize_news_html
 from .images import get_embedded_image, get_preview_text, validate_news_image_size
+
+
+class NewsArticleQuerySet(models.QuerySet):
+    def visible(self):
+        """Für Gäste sichtbar: freigegeben und der Veröffentlichungszeitpunkt ist erreicht."""
+        return self.filter(is_published=True, publish_at__lte=timezone.now())
 
 
 class NewsArticle(models.Model):
@@ -43,7 +50,12 @@ class NewsArticle(models.Model):
     is_published = models.BooleanField(
         default=True,
         verbose_name="Veröffentlicht",
-        help_text="Nur veröffentlichte News werden Gästen im Frontend angezeigt.",
+        help_text="Nur veröffentlichte News werden Gästen im Frontend angezeigt, frühestens ab „Veröffentlichen ab“.",
+    )
+    publish_at = models.DateTimeField(
+        default=timezone.now,
+        verbose_name="Veröffentlichen ab",
+        help_text="Für eine geplante Veröffentlichung einen Zeitpunkt in der Zukunft eintragen. Zeitzone: Europe/Vienna.",
     )
     is_pinned = models.BooleanField(
         default=False,
@@ -51,13 +63,19 @@ class NewsArticle(models.Model):
         help_text="Wichtige Durchsage/Ankündigung oben auf dem Dashboard fixieren.",
     )
 
+    objects = NewsArticleQuerySet.as_manager()
+
     class Meta:
         verbose_name = "News-Beitrag"
         verbose_name_plural = "News-Beiträge"
-        ordering = ["-is_pinned", "-created_at", "-id"]  # Angepinnte Beiträge zuerst, dann neueste
+        ordering = ["-is_pinned", "-publish_at", "-id"]  # Angepinnte Beiträge zuerst, dann neueste
 
     def __str__(self):
         return self.title
+
+    @property
+    def is_scheduled(self):
+        return self.is_published and self.publish_at > timezone.now()
 
     def clean(self):
         super().clean()

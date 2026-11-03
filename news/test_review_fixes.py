@@ -18,6 +18,7 @@ class NewsXSSRegressionTests(TestCase):
         response = self.client.post(reverse('admin:news_newsarticle_add'), {
             'title': 'Review News', 'content': '<p>News<img src="/media/lan.png" onerror="alert(1)" alt="LAN"></p><script>alert(2)</script>',
             'image_fit': 'cover', 'is_published': 'on', '_save': 'Save',
+            'publish_at_0': '2026-01-01', 'publish_at_1': '12:00:00',
         })
         self.assertEqual(response.status_code, 302)
         article = NewsArticle.objects.get(title='Review News')

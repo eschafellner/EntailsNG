@@ -1,20 +1,22 @@
 from django.contrib import admin
 from django.db import models
+from django.urls import reverse
+from django.utils.html import format_html
 from tinymce.widgets import AdminTinyMCE
 from .models import NewsArticle
 
 
 @admin.register(NewsArticle)
 class NewsArticleAdmin(admin.ModelAdmin):
-    list_display = ("title", "author", "created_at", "is_published", "is_pinned")
+    list_display = ("title", "author", "publish_at", "publication_status", "is_published", "is_pinned")
     list_editable = ("is_published", "is_pinned")
-    list_filter = ("is_published", "is_pinned", "created_at")
+    list_filter = ("is_published", "is_pinned", "publish_at")
     search_fields = ("title", "content")
     readonly_fields = ("author", "created_at", "updated_at")
     fieldsets = (
         (None, {"fields": ("title", "content")}),
         ("Titelbild", {"fields": ("cover_image", "cover_image_alt", "image_fit")}),
-        ("Veröffentlichung", {"fields": ("is_published", "is_pinned")}),
+        ("Veröffentlichung", {"fields": ("is_published", "publish_at", "is_pinned")}),
         ("Beitragsinformationen", {"fields": ("author", "created_at", "updated_at")}),
     )
     formfield_overrides = {
@@ -35,6 +37,14 @@ class NewsArticleAdmin(admin.ModelAdmin):
             }),
         },
     }
+
+    @admin.display(description="Status")
+    def publication_status(self, obj):
+        if not obj.is_published:
+            return "Entwurf"
+        if obj.is_scheduled:
+            return format_html('Geplant · <a href="{}">Vorschau</a>', reverse("news_detail", args=[obj.pk]))
+        return "Veröffentlicht"
 
     def save_model(self, request, obj, form, change):
         # Wenn noch kein Autor zugewiesen ist, automatisch den angemeldeten User setzen

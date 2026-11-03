@@ -88,6 +88,7 @@ DEFAULT_TEXTS = {
     'news_position_of': 'von',
     'news_back_to_list': 'Zurück zu allen News',
     'news_author_by': 'von',
+    'news_scheduled_preview': 'Vorschau: Für Gäste sichtbar ab',
     **CLAN_SEAT_TEXTS,
     **BACKUP_TEXTS,
     **TEAM_TEXTS,

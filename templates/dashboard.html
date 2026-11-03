@@ -249,7 +249,7 @@
               {% include 'news/preview_image.html' with image=article.preview_image preview=True %}
               <div class="news-slide-body">
                 <div class="news-meta">
-                  <time datetime="{{ article.created_at|date:'c' }}">{{ article.created_at|date:"d.m.Y" }}</time>
+                  <time datetime="{{ article.publish_at|date:'c' }}">{{ article.publish_at|date:"d.m.Y" }}</time>
                   {% if article.is_pinned %}<span class="news-pinned">{% t "dash_news_pinned" %}</span>{% endif %}
                 </div>
                 <h4 id="news-title-{{ article.pk }}"><a href="{% url 'news_detail' article.pk %}" class="link-title">{{ article.title }}</a></h4>

@@ -1,7 +1,16 @@
+from datetime import timedelta
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.contrib.auth.models import Permission
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from news.models import NewsArticle
+
+PUBLISH_NOW = {'publish_at_0': '2026-01-01', 'publish_at_1': '12:00:00'}
 
 
 class NewsViewTests(TestCase):
@@ -55,7 +64,7 @@ class NewsAdminTests(TestCase):
 
         content = '<p><strong>Willkommen</strong> zur LAN!</p>'
         response = self.client.post(add_url, {
-            'title': 'LAN-News', 'content': content, 'image_fit': 'cover', 'is_published': 'on', '_save': 'Speichern',
+            'title': 'LAN-News', 'content': content, 'image_fit': 'cover', 'is_published': 'on', '_save': 'Speichern', **PUBLISH_NOW,
         })
         self.assertEqual(response.status_code, 302)
         article = NewsArticle.objects.get(title='LAN-News')
@@ -69,7 +78,7 @@ class NewsAdminTests(TestCase):
 
         updated_content = '<h2>Update</h2><p><em>Einlass ab 18 Uhr.</em></p>'
         response = self.client.post(change_url, {
-            'title': article.title, 'content': updated_content, 'image_fit': 'cover', 'is_published': 'on', '_save': 'Speichern',
+            'title': article.title, 'content': updated_content, 'image_fit': 'cover', 'is_published': 'on', '_save': 'Speichern', **PUBLISH_NOW,
         })
         self.assertEqual(response.status_code, 302)
         article.refresh_from_db()
@@ -108,7 +117,7 @@ class NewsServiceTests(TestCase):
         self.assertEqual(all_news[0].title, 'News 2')
 
     def test_get_latest_news_respects_ordering_by_pinned_and_date(self):
-        """Testet, dass get_latest_news nach -is_pinned, -created_at sortiert statt nach -id."""
+        """Testet, dass get_latest_news nach -is_pinned, -publish_at sortiert statt nach -id."""
         from news.services import get_latest_news
         news = get_latest_news(limit=2)
         # News 2 ist angepinnt -> muss an erster Stelle sein
@@ -199,6 +208,115 @@ class NewsCarouselTests(TestCase):
         self.assertContains(response, 'Tickets &amp; Check-in &lt;18 Uhr&gt; Turniere')
 
 
+class NewsSchedulingTests(TestCase):
+    def setUp(self):
+        self.now = timezone.now()
+        self.future = self.now + timedelta(days=2)
+        self.scheduled = NewsArticle.objects.create(title='Geplante News', content='C', publish_at=self.future)
+        self.detail_url = reverse('news_detail', args=[self.scheduled.pk])
+
+    def test_scheduled_article_hidden_everywhere_for_guests(self):
+        self.assertFalse(NewsArticle.objects.visible().exists())
+        self.assertNotContains(self.client.get(reverse('news_list')), 'Geplante News')
+        self.assertNotContains(self.client.get(reverse('dashboard')), 'Geplante News')
+        self.assertEqual(self.client.get(self.detail_url).status_code, 404)
+
+    def test_scheduled_article_appears_when_time_is_reached(self):
+        with patch('django.utils.timezone.now', return_value=self.future):
+            self.assertContains(self.client.get(reverse('news_list')), 'Geplante News')
+            self.assertContains(self.client.get(reverse('dashboard')), 'Geplante News')
+            response = self.client.get(self.detail_url)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, 'news-preview-notice')
+
+    def test_scheduled_pinned_article_has_no_banner_before_time(self):
+        NewsArticle.objects.filter(pk=self.scheduled.pk).update(is_pinned=True)
+        self.assertIsNone(self.client.get(reverse('dashboard')).context['pinned_news'])
+        with patch('django.utils.timezone.now', return_value=self.future):
+            self.assertEqual(self.client.get(reverse('dashboard')).context['pinned_news'], self.scheduled)
+
+    def test_draft_stays_hidden_after_publish_time(self):
+        NewsArticle.objects.filter(pk=self.scheduled.pk).update(is_published=False)
+        with patch('django.utils.timezone.now', return_value=self.future):
+            self.assertFalse(NewsArticle.objects.visible().exists())
+
+    def test_order_and_date_follow_publish_at(self):
+        NewsArticle.objects.filter(pk=self.scheduled.pk).update(publish_at=self.now - timedelta(days=5))
+        NewsArticle.objects.create(title='Neuer', content='C', publish_at=self.now - timedelta(days=1))
+        response = self.client.get(reverse('news_list'))
+        self.assertEqual([a.title for a in response.context['articles']], ['Neuer', 'Geplante News'])
+        shown = timezone.localtime(self.now - timedelta(days=5)).strftime('%d.%m.%Y %H:%M')
+        self.assertContains(response, shown)
+
+    def test_staff_with_news_permission_gets_marked_uncached_preview(self):
+        editor = get_user_model().objects.create_user('news-editor', is_staff=True)
+        editor.user_permissions.add(Permission.objects.get(codename='change_newsarticle'))
+        self.client.force_login(editor)
+        response = self.client.get(self.detail_url)
+        self.assertContains(response, 'Vorschau: Für Gäste sichtbar ab')
+        self.assertEqual(response['Cache-Control'], 'private, no-store')
+        self.assertNotContains(self.client.get(reverse('news_list')), 'Geplante News')
+
+    def test_preview_denied_without_staff_or_permission(self):
+        member = get_user_model().objects.create_user('news-member')
+        member.user_permissions.add(Permission.objects.get(codename='change_newsarticle'))
+        staff = get_user_model().objects.create_user('other-staff', is_staff=True)
+        for user in (member, staff):
+            with self.subTest(user=user.username):
+                self.client.force_login(user)
+                self.assertEqual(self.client.get(self.detail_url).status_code, 404)
+
+    def test_admin_schedules_article_and_lists_status(self):
+        admin_user = get_user_model().objects.create_superuser('schedule-admin', 'schedule@example.com', 'test-password')
+        self.client.force_login(admin_user)
+        local = timezone.localtime(self.future)
+        response = self.client.post(reverse('admin:news_newsarticle_add'), {
+            'title': 'Per Admin geplant', 'content': 'C', 'image_fit': 'cover', 'is_published': 'on', '_save': 'Speichern',
+            'publish_at_0': local.strftime('%Y-%m-%d'), 'publish_at_1': local.strftime('%H:%M:%S'),
+        })
+        self.assertEqual(response.status_code, 302)
+        article = NewsArticle.objects.get(title='Per Admin geplant')
+        self.assertTrue(article.is_scheduled)
+        NewsArticle.objects.create(title='Sofort', content='C')
+        NewsArticle.objects.create(title='Entwurf', content='C', is_published=False)
+        listing = self.client.get(reverse('admin:news_newsarticle_changelist'))
+        self.assertContains(listing, 'Vorschau</a>')
+        self.assertContains(listing, reverse('news_detail', args=[article.pk]))
+        self.assertContains(listing, 'Entwurf')
+        self.assertContains(listing, 'Veröffentlicht')
+
+    def test_admin_add_form_prefills_current_time(self):
+        admin_user = get_user_model().objects.create_superuser('prefill-admin', 'prefill@example.com', 'test-password')
+        self.client.force_login(admin_user)
+        response = self.client.get(reverse('admin:news_newsarticle_add'))
+        self.assertContains(response, 'name="publish_at_0"')
+        self.assertContains(response, f'value="{timezone.localtime().strftime("%d.%m.%Y")}"')
+
+
+class NewsPublishAtMigrationTests(TransactionTestCase):
+    before = [('news', '0004_newsarticle_cover_image_newsarticle_cover_image_alt_and_more')]
+    after = [('news', '0005_newsarticle_publish_at')]
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def test_existing_articles_keep_created_at_as_publish_date(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.before)
+        old_apps = executor.loader.project_state(self.before).apps
+        author = get_user_model().objects.create_user('migration-author', email='m@example.test')
+        article = old_apps.get_model('news', 'NewsArticle').objects.create(title='Alt', content='C', author_id=author.pk)
+        created = timezone.now() - timedelta(days=30)
+        old_apps.get_model('news', 'NewsArticle').objects.filter(pk=article.pk).update(created_at=created)
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.after)
+        migrated = NewsArticle.objects.get(pk=article.pk)
+        self.assertEqual(migrated.publish_at, created)
+        self.assertEqual(migrated.created_at, created)
+        self.assertIn(migrated, NewsArticle.objects.visible())
+
+
 class NewsCoverUploadTests(TestCase):
     def setUp(self):
         from tempfile import TemporaryDirectory
@@ -213,7 +331,7 @@ class NewsCoverUploadTests(TestCase):
     def post_image(self, image, **extra):
         return self.client.post(reverse('admin:news_newsarticle_add'), {
             'title': 'Bild-News', 'content': 'LAN', 'image_fit': 'contain', 'is_published': 'on',
-            'cover_image': image, 'cover_image_alt': 'LAN-Plakat', '_save': 'Speichern', **extra,
+            'cover_image': image, 'cover_image_alt': 'LAN-Plakat', '_save': 'Speichern', **PUBLISH_NOW, **extra,
         })
 
     def test_admin_uploads_valid_image_and_saves_display_options(self):

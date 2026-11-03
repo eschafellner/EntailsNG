@@ -36,6 +36,29 @@ enthält weiterhin sämtliche veröffentlichten Beiträge.
 oder unbekannte Beiträge liefern 404, auch für Mitarbeiter. Das Admin-Formular
 bleibt der Ort zur Bearbeitung von Entwürfen.
 
+## Geplante Veröffentlichung
+
+Das Feld **Veröffentlichen ab** (Zeitzone Europe/Vienna) legt fest, ab wann ein
+Beitrag mit gesetztem Häkchen **Veröffentlicht** erscheint. Es ist mit dem
+aktuellen Zeitpunkt vorbelegt; ohne Änderung erscheint der Beitrag also sofort.
+Die Sichtbarkeit wird bei jedem Seitenaufruf über
+`NewsArticle.objects.visible()` geprüft, ein Worker ist nicht nötig. Das gilt für
+Dashboard, angepinnten Banner, Übersicht und Detailseite. Sortierung und
+angezeigtes Datum richten sich nach diesem Feld.
+
+| Veröffentlicht | Veröffentlichen ab | Status | Für Gäste sichtbar |
+|---|---|---|---|
+| nein | beliebig | Entwurf | nein |
+| ja | in der Zukunft | Geplant | ab diesem Zeitpunkt |
+| ja | jetzt oder früher | Veröffentlicht | ja |
+
+Vor dem Termin liefert die Detailseite Gästen 404. Mitarbeiter mit Ansicht- oder
+Bearbeitungsrecht für News sehen sie als Vorschau mit Hinweis; der Link steht in
+der Statusspalte der Admin-Liste. Entwürfe bleiben auch für Mitarbeiter 404.
+Bilddateien unter `/media/` sind vor dem Termin nicht geschützt: Wer die genaue
+Adresse kennt, kann sie abrufen. Beim Erreichen des Termins wird keine
+Benachrichtigung versendet.
+
 ## Desktopdarstellung (6. Oktober 2026)
 
 Ab 901 Pixeln füllt das Karussell die verbleibende Höhe zwischen Kopfzeile und

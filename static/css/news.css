@@ -84,3 +84,4 @@
   .news-widget { padding: 16px; gap: 16px; }
   .news-slide h4 { font-size: 24px; }
 }
+.news-preview-notice { margin: 0; padding: 10px 14px; font-size: 14px; font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--signal); border-radius: 8px; }
