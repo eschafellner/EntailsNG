@@ -58,6 +58,46 @@ class ClanPaymentTests(TestCase):
         return assign_member(payment.pk, hold.pk, self.admin.pk, (user or self.member).pk,
             expected_registration_id=hold.funded_registration_id, confirmed=True, **kwargs)
 
+    def assert_manage_button(self, url_name, visible):
+        response = self.client.get(reverse(url_name, args=[self.clan.slug]))
+        self.assertEqual(response.status_code, 200)
+        (self.assertContains if visible else self.assertNotContains)(response, 'Clan-Sammelzahlung und Plätze verwalten')
+
+    def test_manage_button_visible_when_clan_seats_enabled(self):
+        self.client.force_login(self.admin)
+        self.assert_manage_button('clan_detail', True)
+        self.assert_manage_button('clan_seat_selection', True)
+
+    def test_manage_button_hidden_when_configuration_disabled(self):
+        self.config.enabled = False
+        self.config.save()
+        self.client.force_login(self.admin)
+        self.assert_manage_button('clan_detail', False)
+        self.assert_manage_button('clan_seat_selection', False)
+        response = self.client.get(reverse('clan_payment_detail', args=[self.clan.slug]))
+        self.assertNotContains(response, reverse('clan_seat_selection', args=[self.clan.slug]))
+
+    def test_manage_button_hidden_when_clan_quota_zero(self):
+        self.clan.seat_limit_override = 0
+        self.clan.save()
+        self.client.force_login(self.admin)
+        self.assert_manage_button('clan_detail', False)
+        self.assert_manage_button('clan_seat_selection', False)
+
+    def test_manage_button_hidden_for_non_admin_member(self):
+        self.client.force_login(self.member)
+        self.assert_manage_button('clan_detail', False)
+
+    def test_existing_payment_reachable_without_manage_button_when_disabled(self):
+        payment = self.create()
+        self.config.enabled = False
+        self.config.save()
+        self.client.force_login(self.admin)
+        self.assert_manage_button('clan_detail', False)
+        detail = self.client.get(reverse('clan_detail', args=[self.clan.slug]))
+        self.assertContains(detail, reverse('clan_payment_detail', args=[self.clan.slug]) + f'?event={self.event.pk}')
+        self.assertContains(self.client.get(reverse('clan_payment_detail', args=[self.clan.slug])), payment.reference)
+
     def test_exact_seats_price_bank_snapshot_and_deadlines(self):
         before = timezone.now()
         payment = self.create(self.seats[:3])

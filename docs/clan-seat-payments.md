@@ -11,6 +11,10 @@ Clans erstellen. Das Maximal-Kontingent wird nicht berechnet: Drei offene Plätz
 zu 30 € ergeben einen Auftrag über 90 €, auch bei einem Kontingent von acht.
 Persönlich übernommene Plätze und ihre Einzelzahlungen bleiben separat erhalten.
 
+Der Button erscheint nur, wenn die Clan-Sitzplatzvormerkung aktiv ist und der Clan
+ein Kontingent über 0 hat. Andernfalls bleiben bestehende Aufträge über den
+Abschnitt **Clan-Sammelzahlung** im Clanprofil erreichbar.
+
 Die Vorschau zeigt Plätze, Ticketkategorie, Einzelpreis, Gesamtbetrag und beide
 Fristen. Vor Erstellung bestätigt der Admin ausdrücklich die Unveränderbarkeit.
 Anschließend sind Anzahl, Plätze, Preis, Ticketkategorie, Bankdaten und

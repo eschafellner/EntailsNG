@@ -49,6 +49,11 @@ def effective_limit(clan, config=None):
     return config.default_limit if clan.seat_limit_override is None else clan.seat_limit_override
 
 
+def clan_seats_enabled(clan, config=None):
+    config = config or ClanSeatConfiguration.load()
+    return config.enabled and effective_limit(clan, config) > 0
+
+
 def live_holds(event_id=None, now=None):
     """CLAIMED holds become open again if their personal booking is released.
 

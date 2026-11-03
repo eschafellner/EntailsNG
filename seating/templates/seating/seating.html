@@ -16,7 +16,7 @@
     <p id="clan-seat-feedback" role="status" aria-live="polite"></p>
   </div>
   <div class="clan-seat-actions">
-  <a class="btn-action-blue" href="{% url 'clan_payment_detail' slug=selection_clan.slug %}">{% t "clan_payment_manage" %}</a>
+  {% if clan_payment_available %}<a class="btn-action-blue" href="{% url 'clan_payment_detail' slug=selection_clan.slug %}">{% t "clan_payment_manage" %}</a>{% endif %}
   <button type="button" class="btn-action-primary" id="clan-seat-confirm" disabled>{% t "clan_seat_confirm" %}</button>
   <button type="button" class="btn-action-blue" id="clan-seat-refresh">{% t "clan_seat_refresh" %}</button>
   <a class="btn-action-blue" href="{% url 'clan_detail' slug=selection_clan.slug %}">{% t "clan_seat_back" %}</a>

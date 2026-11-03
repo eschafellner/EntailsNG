@@ -9,7 +9,7 @@
     <h1>{% t 'clan_payment_title' %}: {{ clan.name }}</h1>
     <p>{{ event.title }}</p>
     {% if payment_error %}<p role="alert">{{ payment_error }}</p>
-      {% if event %}<a href="{% url 'clan_seat_selection' slug=clan.slug %}" class="btn-action-blue">{% t 'clan_seat_button' %}</a>{% endif %}
+      {% if event and clan_seats_enabled %}<a href="{% url 'clan_seat_selection' slug=clan.slug %}" class="btn-action-blue">{% t 'clan_seat_button' %}</a>{% endif %}
     {% endif %}
     {% if preview %}
       <p>{% t 'clan_payment_preview_hint' %}</p>

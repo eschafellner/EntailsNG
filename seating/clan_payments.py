@@ -21,7 +21,7 @@ from emails.services import queue_system_email
 from events.models import Event, EventRegistration, TicketType
 from events.services import RegistrationService, PaymentService
 from .models import ClanSeatPayment, ClanSeatPaymentLog, ClanSeatHold, SeatingCell
-from .clan_services import ClanSeatError, seating_write, selection_revision, open_holds, effective_limit
+from .clan_services import ClanSeatError, seating_write, selection_revision, open_holds, effective_limit, clan_seats_enabled
 
 
 SALT = 'clan-payment-preview-v1'
@@ -64,7 +64,7 @@ def payment_ticket(event, config):
 
 def payment_preview(clan, event):
     config = ClanSeatConfiguration.load()
-    if not config.enabled or effective_limit(clan, config) == 0:
+    if not clan_seats_enabled(clan, config):
         fail('clan_seat_disabled')
     if not event or not event.is_active or event.effective_status != Event.Status.REGISTRATION_OPEN:
         fail('clan_seat_event')

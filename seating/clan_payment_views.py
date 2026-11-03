@@ -13,7 +13,7 @@ from events.models import Event, EventRegistration
 from events.exceptions import RegistrationError
 from events.payment_qr import generate_transfer_qr_png
 from .models import ClanSeatPayment, ClanSeatHold
-from .clan_services import ClanSeatError
+from .clan_services import ClanSeatError, clan_seats_enabled
 from .clan_payment_forms import CreatePaymentForm, AssignmentForm
 from .clan_payments import payment_preview, create_payment, assign_member, can_manage_payments
 
@@ -57,7 +57,7 @@ def clan_payment_detail(request, slug):
     response = render(request, 'clans/clan_payment.html', {'clan': clan, 'event': event, 'payment': payment,
         'preview': preview, 'payment_error': error, 'create_form': form, 'holds': holds,
         'eligible_members': members, 'orga': can_manage_payments(request.user),
-        'now': timezone.now(),
+        'now': timezone.now(), 'clan_seats_enabled': clan_seats_enabled(clan),
         'payment_expired': bool(payment and payment.status == 'PENDING' and payment.release_at <= timezone.now()),
         'assignment_open': bool(event and event.is_active and (event.is_seat_selection_open or (
             event.effective_status == Event.Status.RUNNING and can_manage_payments(request.user)))),

@@ -16,7 +16,7 @@ from .models import SeatingCell, SeatingPlan
 from .services import SeatingPlanService, SeatingPlanValidationError
 
 from .clan_services import (ClanSeatError, seating_write, update_selection,
-    selection_status, open_holds, check_clan_access, release_holds)
+    selection_status, open_holds, check_clan_access, release_holds, clan_seats_enabled)
 from .models import ClanSeatHold
 
 logger = logging.getLogger(__name__)
@@ -700,7 +700,7 @@ def clan_seat_selection(request, slug):
         return HttpResponseForbidden(get_translation('clan_seat_permission'))
     event = Event.objects.get_active()
     from django.urls import reverse
-    context = {'event': event, 'selection_clan': clan, 'clan_selection_config': {
+    context = {'event': event, 'selection_clan': clan, 'clan_payment_available': clan_seats_enabled(clan), 'clan_selection_config': {
         'clanId': clan.pk, 'saveUrl': reverse('clan_seat_update', args=[clan.slug]),
         'counter': get_translation('clan_seat_counter'), 'until': get_translation('clan_seat_until'),
         'tooltip': get_translation('clan_seat_tooltip'),

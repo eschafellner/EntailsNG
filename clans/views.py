@@ -13,7 +13,7 @@ from users.rate_limits import reserve_rate_limit
 from configuration.translations import get_translation
 from events.models import Event, EventRegistration
 from seating.services import get_user_seat_map
-from seating.clan_services import selection_status
+from seating.clan_services import clan_seats_enabled, selection_status
 from .forms import ClanForm, ClanJoinPasswordForm
 from .models import Clan, ClanMembership
 from .services import ClanManagementError, leave_clan, locked_management, manage_member, manage_request
@@ -135,7 +135,7 @@ def clan_detail_view(request, slug):
         'current_clan_membership': current_clan_membership,
         'is_clan_admin': is_clan_admin,
         'clan_seats_available': bool(is_clan_admin and active_event and selection_status(clan, active_event)['enabled']),
-        'clan_payment_available': bool(is_clan_admin and (active_event or payment_history)),
+        'clan_payment_available': bool(is_clan_admin and (active_event or payment_history) and clan_seats_enabled(clan)),
         'clan_payment_history': payment_history,
         'clan_admins': clan_admins,
         'admin_count': admin_count,
