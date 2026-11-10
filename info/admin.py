@@ -1,6 +1,13 @@
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import JsonResponse
+from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from django.views.decorators.http import require_POST
+from tinymce.widgets import AdminTinyMCE
+
+from .content import store_image
 from .models import EmbedProvider, EventInfo
 
 
@@ -79,7 +86,36 @@ class EventInfoAdmin(admin.ModelAdmin):
     )
 
     class Media:
-        js = ('js/admin-info-embed.js',)
+        js = ('js/admin-info-embed.js', 'js/admin-info-images.js')
+
+    def get_urls(self):
+        upload = self.admin_site.admin_view(require_POST(self.upload_image_view))
+        return [path('upload-image/', upload, name='info_eventinfo_upload_image')] + super().get_urls()
+
+    def upload_image_view(self, request):
+        if not (self.has_add_permission(request) or self.has_change_permission(request)):
+            raise PermissionDenied
+        try:
+            location = store_image(request.FILES.get('file'))
+        except ValidationError as error:
+            return JsonResponse({'error': error.messages[0]}, status=400)
+        return JsonResponse({'location': location})
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == 'content':
+            kwargs['widget'] = AdminTinyMCE(mce_attrs={
+                'license_key': 'gpl', 'branding': False, 'promotion': False,
+                'toolbar': 'undo redo | blocks | bold italic backcolor | alignleft aligncenter '
+                           'alignright alignjustify | bullist numlist outdent indent | link image | '
+                           'removeformat | help',
+                # Eingefügte und ausgewählte Bilder werden hochgeladen; im Inhalt steht nur die lokale URL.
+                'images_upload_url': reverse('admin:info_eventinfo_upload_image'),
+                'images_upload_handler': 'infoUploadImage',
+                'images_file_types': 'png,jpg,jpeg,webp',
+                'image_uploadtab': True, 'paste_data_images': True, 'automatic_uploads': True,
+                'relative_urls': False, 'remove_script_host': True,
+            })
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
     @admin.display(description="Im Menü?")
     def show_in_nav_badge(self, obj):

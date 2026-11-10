@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load info_content %}
 
 {% block title %}{{ event_info.title|default:"Veranstaltungsinformationen" }} – {{ site_customization.site_name }}{{ site_customization.brand_accent_text }}{% endblock %}
 
@@ -49,7 +50,7 @@
 
       <div class="event-content" style="line-height: 1.7; color: var(--ink);">
         {% if event_info.content %}
-          {{ event_info.content|safe_html }}
+          {{ event_info.content|info_html }}
         {% elif not event_info.is_embed %}
           <p style="color: var(--muted);">{% t "info_empty" "Zu diesem Thema wurden noch keine Informationen hinterlegt." %}</p>
         {% endif %}

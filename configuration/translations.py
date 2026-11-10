@@ -795,6 +795,7 @@ DEFAULT_TEXTS = {
 
     # Info Modul
     'info_title': 'Event Information',
+    'info_image_invalid': 'Bitte ein PNG-, JPG- oder WebP-Bild mit höchstens 10 MB hochladen.',
     'info_embed_open': 'Externe Seite separat öffnen',
     'info_embed_help': 'Falls die externe Seite nicht angezeigt wird, kannst du sie über den Link separat öffnen.',
     'info_embed_unavailable': 'Diese externe Einbettung ist derzeit nicht freigegeben. Bitte wende dich an die Organisation.',

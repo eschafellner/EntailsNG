@@ -8,7 +8,8 @@ from django.utils.text import slugify
 from tinymce.models import HTMLField
 
 from configuration.cache import safe_cache_delete
-from configuration.models import SYSTEM_ICONS, NavigationItem, sanitize_html
+from configuration.models import SYSTEM_ICONS, NavigationItem
+from .content import sanitize_info_html
 from .embedding import https_origin, validate_embed_origin
 from configuration.translations import get_translation
 
@@ -199,7 +200,7 @@ class EventInfo(models.Model):
         if self.page_type == self.PageType.TEXT and not self.content:
             raise ValidationError({'content': get_translation('info_text_content_required')})
         if self.content:
-            self.content = sanitize_html(self.content)
+            self.content = sanitize_info_html(self.content)
 
         if not self.slug:
             self.slug = self._generate_unique_slug()
@@ -220,7 +221,7 @@ class EventInfo(models.Model):
     def save(self, *args, **kwargs):
         self.validate_embedding()
         if self.content:
-            self.content = sanitize_html(self.content)
+            self.content = sanitize_info_html(self.content)
 
         if not self.slug:
             self.slug = self._generate_unique_slug()
