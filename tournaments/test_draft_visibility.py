@@ -247,3 +247,43 @@ class TournamentDraftTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertNotContains(response, self.draft.title)
                 self.assertNotContains(response, self.published.title)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class TournamentAdminBulkOpenTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        now = timezone.now()
+        cls.admin = get_user_model().objects.create_superuser('bulk-open-admin', password='test-secret')
+        cls.event = Event.objects.create(
+            title='Bulk LAN', is_active=True, status=Event.Status.REGISTRATION_OPEN,
+            start_date=now, end_date=now + timedelta(days=2),
+        )
+        game = Game.objects.create(name='Bulk game', team_size=1)
+        window = {'registration_start': now - timedelta(hours=1), 'registration_end': now + timedelta(days=1)}
+        cls.drafts = [Tournament.objects.create(title=f'Entwurf {number}', game=game, event=cls.event, **window)
+                      for number in (1, 2)]
+        cls.running = Tournament.objects.create(title='Laufend', game=game, event=cls.event,
+                                                status=Tournament.Status.IN_PROGRESS, **window)
+
+    def run_action(self, tournaments):
+        self.client.force_login(self.admin)
+        return self.client.post(reverse('admin:tournaments_tournament_changelist'), {
+            'action': 'action_open_registration', '_selected_action': [t.pk for t in tournaments],
+        }, follow=True)
+
+    def test_action_is_offered_in_dropdown(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse('admin:tournaments_tournament_changelist'))
+        self.assertContains(response, 'value="action_open_registration"')
+
+    def test_opens_all_selected_drafts_and_reports_skipped(self):
+        response = self.run_action(self.drafts + [self.running])
+        for tournament in self.drafts:
+            tournament.refresh_from_db()
+            self.assertEqual(tournament.status, Tournament.Status.REGISTRATION_OPEN)
+        self.running.refresh_from_db()
+        self.assertEqual(self.running.status, Tournament.Status.IN_PROGRESS)
+        texts = [str(message) for message in response.context['messages']]
+        self.assertIn('Anmeldung für 2 Turnier(e) geöffnet: Entwurf 1, Entwurf 2', texts)
+        self.assertTrue(any(text.startswith('Laufend: ') for text in texts))

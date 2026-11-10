@@ -12,7 +12,7 @@ from tournaments.exceptions import TournamentError
 from tournaments.models import (
     Game, Team, TeamMember, Tournament, ExternalTournament, TournamentMatch, TournamentMatchParticipant, TournamentRegistration, SwissRound, TournamentResultLog, TournamentDraw
 )
-from tournaments.services import TournamentBracketService, TournamentRestartService
+from tournaments.services import TournamentBracketService, TournamentLifecycleService, TournamentRestartService
 from tournaments.forms import TournamentMatchAdminForm, TournamentRestartForm, MatchResultForm, TournamentAdminForm, ExternalTournamentAdminForm
 
 
@@ -114,6 +114,7 @@ class TournamentAdmin(admin.ModelAdmin):
     raw_id_fields = ('tournament_admin', 'tournament_support')
     inlines = [TournamentRegistrationInline, TournamentMatchInline]
     actions = [
+        'action_open_registration',
         'action_close_registration_and_generate_bracket',
         'action_generate_bracket_preview',
         'action_reset_bracket',
@@ -300,6 +301,21 @@ class TournamentAdmin(admin.ModelAdmin):
                 ]
             ]
         return super().formfield_for_choice_field(db_field, request, **kwargs)
+
+    @admin.action(permissions=['change'], description=lazy(get_translation, str)('tournament_admin_open_action'))
+    def action_open_registration(self, request, queryset):
+        opened = []
+        for tournament in queryset.order_by('title', 'pk'):
+            try:
+                TournamentLifecycleService.open_registration(tournament.pk, actor=request.user)
+            except (TournamentError, PermissionDenied) as exc:
+                self.message_user(request, f'{tournament.title}: {exc}', messages.ERROR)
+            else:
+                opened.append(tournament.title)
+        if opened:
+            self.message_user(request, get_translation(
+                'msg_tournament_open_bulk_success', count=len(opened), titles=', '.join(opened),
+            ), messages.SUCCESS)
 
     @admin.action(permissions=['change'], description=lazy(get_translation, str)('draw_prepare'))
     def action_close_registration_and_generate_bracket(self, request, queryset):

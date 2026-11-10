@@ -164,6 +164,8 @@ DEFAULT_TEXTS = {
     'msg_tournament_open_requires_draft': 'Nur ein Turnier im Status Entwurf ohne generierten Turnierbaum kann geöffnet werden.',
     'msg_tournament_open_event_closed': 'Die Veranstaltung ist beendet oder abgesagt. Die Turnieranmeldung kann nicht geöffnet werden.',
     'msg_tournament_open_success': 'Die Anmeldung für "{tournament_title}" wurde geöffnet.',
+    'msg_tournament_open_bulk_success': 'Anmeldung für {count} Turnier(e) geöffnet: {titles}',
+    'tournament_admin_open_action': 'Anmeldung für ausgewählte Turniere öffnen',
     # Interne Wissensbasis
     'knowledge_field_name': 'Bereich',
     'knowledge_field_description': 'Beschreibung',
