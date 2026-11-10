@@ -246,6 +246,24 @@ class KnowledgeTests(TestCase):
             'name': 'Turnierleitung', 'description': '', 'event': '', 'expected_version': 0})
         self.assertEqual(response.status_code, 302)
 
+    def test_spaces_follow_configured_order(self):
+        self.space.order = 50
+        self.space.save()
+        first = save_space(actor=self.staff, name='Zelt', order=10)
+        appended = save_space(actor=self.staff, name='Aufbau')
+        self.assertEqual(appended.order, 60)
+        edited = save_space(actor=self.staff, space_id=appended.pk, expected_version=1, name='Abbau')
+        self.assertEqual(edited.order, 60)
+        response = self.client.get(reverse('knowledge:home'))
+        self.assertEqual([item.pk for item in response.context['spaces']], [first.pk, self.space.pk, appended.pk])
+        response = self.client.post(reverse('knowledge:space_edit', args=[appended.pk]), {
+            'name': 'Abbau', 'description': '', 'event': '', 'order': 5, 'expected_version': 2})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(list(KnowledgeSpace.objects.values_list('pk', flat=True)), [appended.pk, first.pk, self.space.pk])
+        response = self.client.post(reverse('knowledge:space_edit', args=[appended.pk]), {
+            'name': 'Abbau', 'description': '', 'event': '', 'order': -1, 'expected_version': 3})
+        self.assertEqual(response.status_code, 400)
+
     def test_search_and_event_filters_use_accessible_current_documents(self):
         now = timezone.now()
         event = Event.objects.create(title='LAN Knowledge', start_date=now, end_date=now+timedelta(days=1))

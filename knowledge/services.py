@@ -24,7 +24,7 @@ def check_version(actual, expected):
 
 
 @transaction.atomic
-def save_space(*, actor, name, description='', event=None, space_id=None, expected_version=0):
+def save_space(*, actor, name, description='', event=None, order=None, space_id=None, expected_version=0):
     locked_actor(actor)
     if space_id:
         space = KnowledgeSpace.objects.select_for_update().get(pk=space_id)
@@ -32,7 +32,9 @@ def save_space(*, actor, name, description='', event=None, space_id=None, expect
         space.version += 1
     else:
         space = KnowledgeSpace()
-    space.name, space.description, space.event = name, description, event
+    if order is None:
+        order = space.order if space.pk else KnowledgeSpace.next_order()
+    space.name, space.description, space.event, space.order = name, description, event, order
     space.full_clean()
     space.save()
     return space

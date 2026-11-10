@@ -13,12 +13,13 @@ class KnowledgeSpace(models.Model):
     name = models.CharField('Bereich', max_length=150)
     description = models.CharField('Beschreibung', max_length=500, blank=True)
     event = models.ForeignKey('events.Event', on_delete=models.SET_NULL, null=True, blank=True, related_name='knowledge_spaces', verbose_name='Veranstaltung')
+    order = models.PositiveIntegerField('Reihenfolge', default=0)
     version = models.PositiveIntegerField(default=1, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['name', 'pk']
+        ordering = ['order', 'name', 'pk']
         verbose_name = 'Wissensbereich'
         verbose_name_plural = 'Wissensbereiche'
 
@@ -27,6 +28,11 @@ class KnowledgeSpace(models.Model):
 
     def get_absolute_url(self):
         return reverse('knowledge:space', args=[self.pk])
+
+    @classmethod
+    def next_order(cls):
+        highest = cls.objects.aggregate(highest=models.Max('order'))['highest']
+        return 10 if highest is None else highest + 10
 
 
 class KnowledgePage(models.Model):

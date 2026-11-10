@@ -244,6 +244,7 @@ DEFAULT_TEXTS = {
     'knowledge_search': 'Dokumentation durchsuchen',
     'knowledge_search_button': 'Suchen',
     'knowledge_space_hint': 'Ohne Veranstaltung bleibt dieser Bereich für alle LAN-Partys nutzbar. Der Zugriff ist immer auf Mitarbeiter beschränkt.',
+    'knowledge_space_order_help': 'Kleinere Zahlen stehen weiter vorne.',
     'knowledge_space_saved': 'Bereich gespeichert.',
     'knowledge_spaces': 'Wissensbereiche',
     'knowledge_start_text': 'Lege den ersten Bereich an, zum Beispiel Technik, Einlass oder Turnierleitung. Alle Mitarbeiter können die Dokumentation lesen und ergänzen.',

@@ -18,7 +18,7 @@ class ReadOnlyKnowledgeAdmin(admin.ModelAdmin):
 
 @admin.register(KnowledgeSpace)
 class SpaceAdmin(ReadOnlyKnowledgeAdmin):
-    list_display = ['name', 'event', 'updated_at']
+    list_display = ['name', 'order', 'event', 'updated_at']
     search_fields = ['name', 'description']
 
 

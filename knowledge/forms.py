@@ -21,11 +21,12 @@ def translate_labels(form):
 
 
 class SpaceForm(forms.ModelForm):
+    order = forms.IntegerField(label='Reihenfolge', min_value=0, max_value=100000, required=False)
     expected_version = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
 
     class Meta:
         model = KnowledgeSpace
-        fields = ['name', 'description', 'event']
+        fields = ['name', 'description', 'event', 'order']
         widgets = {'description': forms.Textarea(attrs={'rows': 3})}
 
     def __init__(self, *args, **kwargs):
@@ -34,6 +35,9 @@ class SpaceForm(forms.ModelForm):
         self.fields['event'].queryset = Event.objects.order_by('-start_date', 'pk')
         self.fields['event'].empty_label = get_translation('knowledge_global', 'Veranstaltungsübergreifend')
         self.fields['expected_version'].initial = self.instance.version if self.instance.pk else 0
+        self.fields['order'].help_text = get_translation('knowledge_space_order_help', 'Kleinere Zahlen stehen weiter vorne.')
+        if not self.instance.pk:
+            self.fields['order'].initial = KnowledgeSpace.next_order()
 
 
 class PageForm(forms.Form):

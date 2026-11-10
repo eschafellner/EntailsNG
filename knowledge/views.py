@@ -22,7 +22,8 @@ def page_queryset():
 
 
 def space_queryset():
-    return KnowledgeSpace.objects.select_related('event').annotate(page_count=Count('pages'))
+    # Aggregations drop Meta.ordering, so the order must be explicit here.
+    return KnowledgeSpace.objects.select_related('event').annotate(page_count=Count('pages')).order_by('order', 'name', 'pk')
 
 
 def scope_filter(queryset, scope, prefix=''):
@@ -86,7 +87,7 @@ def home(request):
             | Q(published_revision__search_text__icontains=query)
             | Q(published_revision__isnull=True, title__icontains=query)
             | Q(published_revision__isnull=True, search_text__icontains=query))
-        results = Paginator(pages.order_by('space__name', 'title', 'pk'), 30).get_page(request.GET.get('p'))
+        results = Paginator(pages.order_by('space__order', 'space__name', 'title', 'pk'), 30).get_page(request.GET.get('p'))
     return render(request, 'knowledge/home.html', {
         'spaces': spaces, 'scope': scope, 'query': query, 'results': results,
         'events': Event.objects.filter(knowledge_spaces__isnull=False).distinct().order_by('-start_date'),
@@ -105,7 +106,7 @@ def space_edit(request, pk=None):
         if form.is_valid():
             try:
                 space = save_space(actor=request.user, space_id=space.pk if space else None,
-                    **{key: form.cleaned_data[key] for key in ('name', 'description', 'event', 'expected_version')})
+                    **{key: form.cleaned_data[key] for key in ('name', 'description', 'event', 'order', 'expected_version')})
             except ValidationError as error:
                 form_errors(form, error)
                 status = 409 if isinstance(error, EditConflict) else 400
@@ -165,7 +166,7 @@ def page_edit(request, pk=None, space_id=None):
                 return redirect(saved.get_absolute_url() + ('?draft=1' if saved.has_draft else ''))
     context = context_for(space, page)
     context.update({'form': form, 'attachments': page.attachments.all() if page else [],
-        'link_pages': page_queryset().order_by('space__name', 'title'), 'attachment_form': AttachmentForm(),
+        'link_pages': page_queryset().order_by('space__order', 'space__name', 'title'), 'attachment_form': AttachmentForm(),
         'knowledge_js_texts': {key: get_translation('knowledge_' + key, text) for key, text in {
             'editor_wait': 'Der Editor wird noch geladen. Bitte einen Moment warten.',
             'insert_image': 'Bild einfügen', 'insert_link': 'Link einfügen',
